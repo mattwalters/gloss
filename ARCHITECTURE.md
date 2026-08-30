@@ -62,6 +62,8 @@ We seriously considered Rust; its three advantages dissolved under this project'
 
 Everything open lives in a single Apache-2.0 monorepo because the spec, engine, and clients are one contract with several expressions: a fold-rule change should be one atomic PR touching spec text, fixtures, engine, and CLI together. Split repos invite version skew between fixtures and implementation — the exact failure that erodes trust in a convention. Layout:
 
+One monorepo, one Go module: a single `go.mod` at the repo root, module path `github.com/mattwalters/gloss`, covering `/engine`, `/cmd/gloss`, `/tui`, and `/bridge/github`. Module graph pruning (Go 1.17+) already keeps a consumer that imports only `.../gloss/engine` from pulling in Bubble Tea or the GitHub client, and `engine/internal/` enforces the API boundary regardless of module shape — so a second module and a `go.work` file buy nothing today and are deferred until a real external consumer needs independent engine versioning (decision and full rationale: `docs/module-boundary-decision.md`, GLS-61).
+
 ```
 /spec          — convention doc, JSON schemas, conformance fixtures (the real standard)
 /engine        — codec, dag, fold, projection, sync (public Go API at the root package)
