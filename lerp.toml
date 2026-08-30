@@ -114,7 +114,7 @@ args = "--permission-mode bypassPermissions"
 # alternative.
 #
 # model/effort ride agy's own default rather than pin one: GLS-63 asked to
-# pin planning's, not implementing's, and picking a Gemini tier here would
+# pin planning's, not implementing's, and picking a model here would
 # be a guess with no implement run yet to weigh it against. Revisit once
 # the line below is no longer true.
 #
