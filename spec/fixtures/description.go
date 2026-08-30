@@ -79,15 +79,21 @@ func Load(data []byte) (*Description, error) {
 	// and a collision would make one silently overwrite another at
 	// generation time (git only has one namespace per ref name) while the
 	// manifest still recorded both writes as if they'd each landed.
-	seenRefNames := map[string]bool{}
+	// Maps a ref name already claimed to a description of where it came
+	// from, so a collision error can say which two things collided
+	// instead of just "seen twice" — a keep_as colliding with a
+	// differently-named ref reads very differently from an actual
+	// duplicate `name:` entry, and a fixture author debugging the
+	// rejection needs to know which one they're looking at.
+	seenRefNames := map[string]string{}
 	for _, r := range d.Refs {
 		if r.Name == "" {
 			return nil, fmt.Errorf("fixtures: description %q has a ref with no name", d.Name)
 		}
-		if seenRefNames[r.Name] {
-			return nil, fmt.Errorf("fixtures: description %q has ref %q more than once", d.Name, r.Name)
+		if src, dup := seenRefNames[r.Name]; dup {
+			return nil, fmt.Errorf("fixtures: description %q: ref %q collides with %s", d.Name, r.Name, src)
 		}
-		seenRefNames[r.Name] = true
+		seenRefNames[r.Name] = fmt.Sprintf("ref %q", r.Name)
 		if len(r.History) == 0 {
 			return nil, fmt.Errorf("fixtures: description %q ref %q has no history", d.Name, r.Name)
 		}
@@ -96,10 +102,10 @@ func Load(data []byte) (*Description, error) {
 				return nil, fmt.Errorf("fixtures: description %q ref %q generation %d has no commits", d.Name, r.Name, gi)
 			}
 			if g.KeptAs != "" {
-				if seenRefNames[g.KeptAs] {
-					return nil, fmt.Errorf("fixtures: description %q keep_as %q collides with another ref name", d.Name, g.KeptAs)
+				if src, dup := seenRefNames[g.KeptAs]; dup {
+					return nil, fmt.Errorf("fixtures: description %q: keep_as %q (ref %q generation %d) collides with %s", d.Name, g.KeptAs, r.Name, gi, src)
 				}
-				seenRefNames[g.KeptAs] = true
+				seenRefNames[g.KeptAs] = fmt.Sprintf("keep_as %q (ref %q generation %d)", g.KeptAs, r.Name, gi)
 			}
 			for ci, c := range g.Commits {
 				if c.Author == "" {
