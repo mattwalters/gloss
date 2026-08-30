@@ -1,9 +1,9 @@
 # Security Policy
 
-Gloss signs and stores SDLC data inside your git repository, so we take
-reports about signature verification, op-envelope handling, and anything
-that could let unsigned or forged data pass as authentic especially
-seriously.
+Gloss signs and stores SDLC data inside your git repository. We take
+reports about signature verification, op-envelope handling, and
+anything that could let unsigned or forged data pass as authentic
+especially seriously.
 
 ## Reporting a vulnerability
 
