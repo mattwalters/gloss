@@ -13,7 +13,7 @@ var keyFS embed.FS
 
 // sshNamespace is the reserved namespace git itself uses for commit
 // signing, so op-commits signed this way stay verifiable with plain
-// `git verify-commit`, not just gloss's own code.
+// `git verify-commit`, not just writ's own code.
 const sshNamespace = "git"
 
 // signer signs commit payloads with ssh-keygen -Y sign. go-git has no SSH
@@ -33,7 +33,7 @@ type signer struct {
 // executable bit — so every signing call needs its own known-good copy
 // rather than trusting the working tree's permissions.
 func newSigner() (*signer, error) {
-	dir, err := os.MkdirTemp("", "gloss-fixture-keys-")
+	dir, err := os.MkdirTemp("", "writ-fixture-keys-")
 	if err != nil {
 		return nil, fmt.Errorf("fixtures: create key scratch dir: %w", err)
 	}
@@ -68,7 +68,7 @@ func (s *signer) sign(id identity, payload []byte) (string, error) {
 		return "", fmt.Errorf("fixtures: signing key for %s: %w", id.Name, err)
 	}
 
-	scratch, err := os.MkdirTemp("", "gloss-fixture-sign-")
+	scratch, err := os.MkdirTemp("", "writ-fixture-sign-")
 	if err != nil {
 		return "", fmt.Errorf("fixtures: create sign scratch dir: %w", err)
 	}

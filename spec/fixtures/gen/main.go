@@ -22,7 +22,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/mattwalters/gloss/spec/fixtures"
+	"github.com/writtendev/writ/spec/fixtures"
 )
 
 func main() {

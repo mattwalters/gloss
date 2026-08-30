@@ -1,4 +1,4 @@
-# Fixture-repo storage & generation (GLS-59)
+# Fixture-repo storage & generation (WRIT-59)
 
 The conformance corpus's fixtures are *git repositories* — multi-writer
 DAGs, force-pushed histories, signed commits. A `.git` directory can't be
@@ -111,7 +111,7 @@ go run ./spec/fixtures/gen -update-golden
 `go test ./spec/fixtures/...` runs the same check (`TestCorpusMatchesGolden`)
 plus an explicit determinism test (`TestGenerationIsDeterministic`, which
 builds each description twice and diffs the manifests directly) — this is
-what a CI job should run; wiring an actual pipeline is GLS-55.
+what a CI job should run; wiring an actual pipeline is WRIT-55.
 
 ## Manifests
 
