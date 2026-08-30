@@ -52,13 +52,11 @@ public spaces.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may
-be reported by contacting the maintainers directly through their
-GitHub profiles. If you'd rather not raise it in the open and no other
-private channel is available, GitHub's
-[private vulnerability reporting](https://github.com/mattwalters/gloss/security/advisories/new)
-for this repository also reaches the maintainers directly and works
-for this too, even though its label says "security." All complaints
-will be reviewed and investigated promptly and fairly.
+be reported by contacting @mattwalters directly via GitHub. As this
+project grows past a single maintainer, a dedicated conduct-reporting
+channel — separate from security disclosure — should replace this
+line. All complaints will be reviewed and investigated promptly and
+fairly.
 
 All community leaders are obligated to respect the privacy and
 security of the reporter of any incident.
