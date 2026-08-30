@@ -26,7 +26,7 @@ the DoD's "top two backups."
 | Homebrew | Clean — no `gloss` formula. |
 | apt (Debian) | Taken — `libghc-gloss-dev` etc. package the Haskell `gloss` library, a well-known 2D graphics/animation package in the Haskell ecosystem. Different community, real exact-name use. |
 | GitHub | Org handle `gloss` is taken (GNU Linux Open Source Society, SASTRA University — small, low activity, one repo). Top-starred repos named "Gloss" are unrelated and mostly inactive (a deprecated Swift JSON library, a Clojure byte-handling library). |
-| Domains | `gloss.io` is registered and parked for sale. `gloss.dev` resolves (TLS succeeds, no content) — registered. `.sh` not directly confirmed. |
+| Domains | `gloss.io` is registered and parked for sale. `gloss.dev` resolves (TLS succeeds, no content) — registered. |
 | Trademark (web search only) | No exact "GLOSS" mark found in software/SaaS classes. "GLOSSGENIUS" is a live registered mark, but for salon/beauty booking software — different market, low confusion risk. **Not a substitute for a TESS search.** |
 
 **Risk: Medium.** No single blocking hit, but real exact-name use on npm,
@@ -78,13 +78,12 @@ adjacent corner of the same market Gloss is entering.
 
 **Keep.** Keep "Gloss" as the project name — neither backup clears the bar
 for a rename, since Scholia carries a real (if adjacent-domain) collision
-and Cairn's is worse than anything found for Gloss. Separately, treat the
-package/org registries where the bare name is already taken as a qualifier
-problem to solve at registration time, not a reason to rename the project:
-register package/org names like `gloss-scm`, `getgloss`, or `glossvcs`
-rather than assuming the bare string is available on npm/crates.io/GitHub,
-and avoid describing UI styling work as "gloss" in our own docs/changelogs
-to reduce day-to-day confusion with `lipgloss` in the Bubble Tea community
-we're already part of. No blocking trademark was found in this preliminary
-screen, but a professional USPTO/TESS search is recommended before any
-public launch, domain spend, or registration.
+and Cairn's is worse than anything found for Gloss. No blocking trademark
+was found in this preliminary screen, but a professional USPTO/TESS search
+is recommended before any public launch, domain spend, or registration.
+
+This verdict is about the project name only, and doesn't extend to every
+package/org registry: the bare string `gloss` is already taken on npm,
+crates.io, and the GitHub org handle, so those specific registrations will
+need a qualified name (e.g. `gloss-scm`, `getgloss`) regardless of the
+project-name decision above.
