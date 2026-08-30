@@ -1,16 +1,16 @@
 # Decision: Go module boundary — single module vs. engine module
 
-Spike for GLS-61. ARCHITECTURE.md commits to two things that pull gently
+Spike for WRIT-61. ARCHITECTURE.md commits to two things that pull gently
 against each other: "one language, one `go build ./...`" and the engine
 "consumed as an ordinary pinned Go module" by anything built on top,
 including a future hosted layer. This resolves that into one deliberate
-choice rather than leaving it to drift once code lands (GLS-53).
+choice rather than leaving it to drift once code lands (WRIT-53).
 
 ## Decision
 
 **Single module for the whole monorepo.** One `go.mod` at the repo root,
-module path `github.com/mattwalters/gloss`. The engine's public API lives
-at the `engine` subpackage — import path `github.com/mattwalters/gloss/engine`
+module path `github.com/writtendev/writ`. The engine's public API lives
+at the `engine` subpackage — import path `github.com/writtendev/writ/engine`
 — matching the layout ARCHITECTURE.md already lays out under Repo strategy.
 No `go.work` is needed yet; that tool solves multi-module local development,
 and there is only one module.
@@ -20,7 +20,7 @@ and there is only one module.
 **A single module doesn't leak Bubble Tea or the GitHub client into an
 engine-only consumer's build.** That was never module-boundary-dependent —
 Go has always resolved a build from the actual per-package import graph, so
-a service importing only `.../gloss/engine` and never reaching into `tui` or
+a service importing only `.../writ/engine` and never reaching into `tui` or
 `bridge/github` doesn't compile or link those packages in, single module or
 not (verified: `go mod why` reports an unused sibling package's dependency
 as not needed, and it never gets a `go.sum` entry, even when the providing
@@ -71,19 +71,20 @@ flag as scope growth to avoid without a concrete reason.
 
 ## Consequence: module path
 
-`github.com/mattwalters/gloss` is the current repo location and is what
-GLS-53 should use verbatim for the root `go.mod`. The naming-collision spike
-(GLS-5) kept "Gloss" as the project name but found the bare `gloss` GitHub
-org handle already taken by an unrelated party — so if this project ever
-moves to a dedicated org, the module path changes with it, same as any Go
-project that relocates. That's a separate, later decision (out of scope
-here) and not a reason to delay picking a path now: GLS-53 needs a concrete
-string to put in `go.mod`, and import-path renames are a mechanical
-`gofmt -r`-and-`go mod edit` exercise, not a design question.
+`github.com/writtendev/writ` is the current repo location and is what
+WRIT-53 should use verbatim for the root `go.mod`. (This decision was
+originally written against the pre-transfer location
+`github.com/mattwalters/gloss` and anticipated that a move to a dedicated
+org would change the module path with it; that move has since happened —
+the repo now lives at `writtendev/writ`, and the WRIT-65 rebrand carried
+the module path along, exactly the mechanical rename predicted here.)
+WRIT-53 needs a concrete string to put in `go.mod`, and import-path
+renames are a mechanical `gofmt -r`-and-`go mod edit` exercise, not a
+design question.
 
-## What this means for GLS-53
+## What this means for WRIT-53
 
-Root `go.mod` at module path `github.com/mattwalters/gloss`, covering
-`/engine`, `/cmd/gloss`, `/tui`, `/bridge/github` per the layout ARCHITECTURE.md
+Root `go.mod` at module path `github.com/writtendev/writ`, covering
+`/engine`, `/cmd/writ`, `/tui`, `/bridge/github` per the layout ARCHITECTURE.md
 already specifies. No second `go.mod`, no `go.work`, until a real external
 consumer motivates the split described above.
