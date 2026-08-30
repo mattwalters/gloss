@@ -33,9 +33,12 @@ func main() {
 }
 
 func run() error {
-	out := flag.String("out", filepath.Join("spec", "fixtures", "out"), "directory to generate fixture repos into")
-	updateGolden := flag.Bool("update-golden", false, "write golden manifests instead of checking against them")
-	flag.Parse()
+	fs := flag.NewFlagSet("gen", flag.ContinueOnError)
+	out := fs.String("out", filepath.Join("spec", "fixtures", "out"), "directory to generate fixture repos into")
+	updateGolden := fs.Bool("update-golden", false, "write golden manifests instead of checking against them")
+	if err := fs.Parse(os.Args[1:]); err != nil {
+		return err
+	}
 
 	descs, err := fixtures.LoadCorpus()
 	if err != nil {
@@ -62,10 +65,29 @@ func run() error {
 
 		goldenPath := filepath.Join("spec", "fixtures", "testdata", "golden", desc.Name+".json")
 		if *updateGolden {
+			want, err := os.ReadFile(goldenPath)
+			if os.IsNotExist(err) {
+				if err := os.MkdirAll(filepath.Dir(goldenPath), 0o755); err != nil {
+					return fmt.Errorf("mkdir for %s: %w", goldenPath, err)
+				}
+				if err := os.WriteFile(goldenPath, got, 0o644); err != nil {
+					return fmt.Errorf("write golden for %s: %w", desc.Name, err)
+				}
+				fmt.Printf("[NEW GOLDEN] %s (%d bytes)\n", desc.Name, len(got))
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("read existing golden %s: %w", desc.Name, err)
+			}
+			if string(got) == string(want) {
+				fmt.Printf("[UNCHANGED] %s\n", desc.Name)
+				continue
+			}
 			if err := os.WriteFile(goldenPath, got, 0o644); err != nil {
 				return fmt.Errorf("write golden for %s: %w", desc.Name, err)
 			}
-			fmt.Printf("updated golden: %s\n", desc.Name)
+			diff := fixtures.Diff(goldenPath+" (old)", want, goldenPath+" (new)", got)
+			fmt.Printf("[UPDATED GOLDEN] %s:\n%s\n", desc.Name, diff)
 			continue
 		}
 
@@ -74,7 +96,8 @@ func run() error {
 			return fmt.Errorf("read golden for %s (run with -update-golden if this is a new fixture): %w", desc.Name, err)
 		}
 		if string(got) != string(want) {
-			fmt.Printf("MISMATCH: %s does not match %s\n", desc.Name, goldenPath)
+			diff := fixtures.Diff(goldenPath+" (golden)", want, "generated output", got)
+			fmt.Printf("MISMATCH: %s does not match %s\n\n%s\n", desc.Name, goldenPath, diff)
 			mismatch = true
 			continue
 		}
