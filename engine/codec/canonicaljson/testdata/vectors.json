@@ -35,6 +35,11 @@
     "canonical": "{\"a\":2}"
   },
   {
+    "name": "key order: prefix keys tie-break on length",
+    "input": "{\"id2\":1,\"id\":2}",
+    "canonical": "{\"id\":2,\"id2\":1}"
+  },
+  {
     "name": "key order: supplementary-plane vs BMP (UTF-16 code unit order, not code point order)",
     "input": "{\"\\uffff\":1,\"\\ud83d\\ude00\":2}",
     "canonical": "{\"😀\":2,\"￿\":1}"
@@ -43,6 +48,11 @@
     "name": "string escaping: shorthand and control chars",
     "input": "{\"s\":\"a\\u0001b\\nc\\td\\\\e\\\"f\"}",
     "canonical": "{\"s\":\"a\\u0001b\\nc\\td\\\\e\\\"f\"}"
+  },
+  {
+    "name": "string escaping: remaining shorthand escapes (\\b \\f \\r)",
+    "input": "{\"s\":\"a\\bb\\fc\\rd\"}",
+    "canonical": "{\"s\":\"a\\bb\\fc\\rd\"}"
   },
   {
     "name": "string: forward slash is not escaped",
@@ -85,6 +95,11 @@
     "canonical": "1e-7"
   },
   {
+    "name": "number: exactly 1e-6 stays decimal (boundary is exclusive)",
+    "input": "0.000001",
+    "canonical": "0.000001"
+  },
+  {
     "name": "number: just below 1e21 stays decimal",
     "input": "100000000000000000000",
     "canonical": "100000000000000000000"
@@ -103,6 +118,16 @@
     "name": "number: negative exponential",
     "input": "-2.5e-8",
     "canonical": "-2.5e-8"
+  },
+  {
+    "name": "number: plain negative integer, fixed notation",
+    "input": "-42",
+    "canonical": "-42"
+  },
+  {
+    "name": "number: plain negative fraction, fixed notation",
+    "input": "-0.5",
+    "canonical": "-0.5"
   },
   {
     "name": "number: integer beyond 2^53 loses precision like any IEEE-754 double",

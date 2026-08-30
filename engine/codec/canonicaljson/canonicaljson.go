@@ -82,21 +82,26 @@ func encodeArray(buf *bytes.Buffer, arr []any) error {
 	return nil
 }
 
+type objectKey struct {
+	str   string
+	utf16 []uint16
+}
+
 func encodeObject(buf *bytes.Buffer, obj map[string]any) error {
-	keys := make([]string, 0, len(obj))
+	keys := make([]objectKey, 0, len(obj))
 	for k := range obj {
-		keys = append(keys, k)
+		keys = append(keys, objectKey{str: k, utf16: utf16.Encode([]rune(k))})
 	}
-	sort.Slice(keys, func(i, j int) bool { return lessUTF16(keys[i], keys[j]) })
+	sort.Slice(keys, func(i, j int) bool { return lessUTF16(keys[i].utf16, keys[j].utf16) })
 
 	buf.WriteByte('{')
 	for i, k := range keys {
 		if i > 0 {
 			buf.WriteByte(',')
 		}
-		encodeString(buf, k)
+		encodeString(buf, k.str)
 		buf.WriteByte(':')
-		if err := encodeValue(buf, obj[k]); err != nil {
+		if err := encodeValue(buf, obj[k.str]); err != nil {
 			return err
 		}
 	}
@@ -104,15 +109,14 @@ func encodeObject(buf *bytes.Buffer, obj map[string]any) error {
 	return nil
 }
 
-// lessUTF16 orders strings by their UTF-16 code unit sequence (RFC 8785
-// §3.2.3), which is not the same as Go's native UTF-8 byte order once a
-// key contains a character outside the Basic Multilingual Plane: UTF-16
-// encodes those as a surrogate pair in the D800-DFFF range, which sorts
-// before U+E000 even though the character it represents is above
-// U+FFFF. See the "supplementary-plane vs BMP" test vector.
-func lessUTF16(a, b string) bool {
-	ua := utf16.Encode([]rune(a))
-	ub := utf16.Encode([]rune(b))
+// lessUTF16 orders by UTF-16 code unit sequence (RFC 8785 §3.2.3), which
+// is not the same as Go's native UTF-8 byte order once a key contains a
+// character outside the Basic Multilingual Plane: UTF-16 encodes those
+// as a surrogate pair in the D800-DFFF range, which sorts before U+E000
+// even though the character it represents is above U+FFFF. See the
+// "supplementary-plane vs BMP" test vector. Callers encode each key's
+// UTF-16 form once up front rather than on every comparison.
+func lessUTF16(ua, ub []uint16) bool {
 	for i := 0; i < len(ua) && i < len(ub); i++ {
 		if ua[i] != ub[i] {
 			return ua[i] < ub[i]
@@ -121,6 +125,14 @@ func lessUTF16(a, b string) bool {
 	return len(ua) < len(ub)
 }
 
+// encodeString ranges over s as decoded runes, so any lone (unpaired)
+// UTF-16 surrogate in the source JSON has already become U+FFFD by the
+// time it gets here — that's encoding/json's decoding behavior, not a
+// choice made in this function. A verifier built against a JSON library
+// that preserves lone surrogates differently could disagree with this
+// package on the canonical bytes for such input; Gloss doesn't have one
+// today; GLS-6 should decide whether the op envelope schema needs to
+// rule on it.
 func encodeString(buf *bytes.Buffer, s string) {
 	buf.WriteByte('"')
 	for _, r := range s {

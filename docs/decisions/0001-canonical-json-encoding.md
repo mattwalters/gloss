@@ -90,10 +90,11 @@ Bespoke, implemented in `engine/codec/canonicaljson`. Reasoning:
 
 `engine/codec/canonicaljson/canonicaljson.go`, with
 `engine/codec/canonicaljson/testdata/vectors.json` covering key ordering
-(ASCII, nested, duplicate keys, the UTF-16-vs-UTF-8 surrogate-pair case),
-string escaping (control characters, shorthand escapes, unescaped forward
-slash, raw non-ASCII passthrough), and numbers (negative zero, decimal vs.
-exponential thresholds at 1e-6/1e21, scientific-notation input
+(ASCII, nested, duplicate keys, prefix-key tie-breaks, the UTF-16-vs-UTF-8
+surrogate-pair case), string escaping (all five shorthand escapes, other
+control characters, unescaped forward slash, raw non-ASCII passthrough),
+and numbers (negative zero, plain negatives, the 1e-6/1e21 notation
+thresholds exactly at the boundary, scientific-notation input
 normalization, precision loss beyond 2^53). `canonicaljson_test.go` checks
 each vector round-trips to its expected canonical form and that
 canonicalization is idempotent (canonical bytes are a fixed point), which
