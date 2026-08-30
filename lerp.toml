@@ -87,48 +87,27 @@ model = "claude-sonnet-5"
 effort = "medium"
 args = "--permission-mode bypassPermissions"
 
-# Implementing (GLS-63), on Antigravity. Lerp's built-in adapter is
-# claude-vendor only, so this steps outside it with the `command`/`resume`
-# escape hatch the claude runner above documents, rather than waiting on a
-# second built-in adapter. Everything below was checked by hand against
-# `agy` 1.1.22, not assumed from its --help text:
+# Implementing (GLS-63), on Antigravity. The ticket that sent us looking
+# assumed lerp's built-in adapter was claude-vendor only and asked for the
+# `command`/`resume` escape hatch to reach `agy`; the installed lerp
+# (v0.1.0-21-gde6ff93) turned out to already ship a built-in `antigravity`
+# vendor — checked against its source, not just its behavior — so this is a
+# vendor block, the same shape as the two above, not an escape hatch.
 #
-# `agy --print {{prompt}} --output-format stream-json` is the same shape of
-# thing as the claude adapter's invocation — one JSON object per line,
-# streamed while the run is live, so the board's log tail behaves the same
-# way here as it does for a claude runner. `--dangerously-skip-permissions`
-# is that adapter's `--permission-mode bypassPermissions`: same grant, same
-# reasoning, same worktree-is-tidiness-not-security caveat above.
-#
-# Resume is not a straight substitution, though. Claude accepts
-# `--session-id {{session}}` on a brand-new run, so the UUID lerp generates
-# becomes the session's real name from the very first invocation. `agy` does
-# not: pointed at an id it has never seen, `--conversation {{session}}` logs
-# a "conversation not found" warning and mints its own id anyway, silently
-# discarding the one lerp generated. Resuming with the id `agy` actually
-# minted does work — same conversation, turn count carried forward, checked
-# by running a two-turn exchange through it. So `command` below tees its
-# stream-json to a log file in the workspace and `resume` pulls the real id
-# back out of it; that log file is doing the job `{{session}}` does for the
-# claude adapter, and it is what `eject` hands you here: `cat
-# {{workdir}}/.agy-log.jsonl | grep -o -E
-# '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1`
-# for the id, then resume by hand from there.
-#
-# The implement queue's prompt below needed no fork for this runner: it
-# already says "the reviewer agent if your runner provides one, or any
-# subagent" rather than naming Claude Code's, and Antigravity has its own
-# (`invoke_subagent`/`define_subagent` among its tools); `gh` is a shell
-# command either way; and Linear access is MCP config, not a Claude Code
-# feature — `agy mcp list` already shows the same `linear` server enabled
-# for it. What is still open, and is not something a lerp.toml comment can
-# settle: the implementing queue has not yet run an actual ticket through
-# this runner end to end. That is a live, side-effecting dry run — a real
-# draft PR, a real ticket moved — worth a human's go-ahead rather than an
-# agent's, so it is next rather than done.
+# That adapter already carries the two things hand-rolling one here would
+# have had to get right: `--add-dir {{workdir}}`, because `agy` ignores the
+# directory it's started in and writes under its own scratch dir without it,
+# and a `--print-timeout` raised to 24h, because a real plan or implement run
+# routinely outlives agy's own five-minute default. Resume is handled too —
+# `agy` names its own conversation instead of accepting `--session-id` the
+# way claude does, so the adapter reads the id back off the run's own first
+# log line rather than lerp minting one upfront, the same seam codex's
+# adapter already uses for the same reason.
 [runners.antigravity]
-command = 'agy --print {{prompt}} --dangerously-skip-permissions --output-format stream-json | tee {{workdir}}/.agy-log.jsonl'
-resume = 'cd {{workdir}} && agy --conversation "$(grep -m1 -oE "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}" .agy-log.jsonl)" --print {{prompt}} --output-format stream-json | tee -a .agy-log.jsonl'
+vendor = "antigravity"
+# model = "gemini-3.1-pro-high"
+# effort = "high"
+args = "--dangerously-skip-permissions"
 
 # Each agent needs its own Linear access — lerp passes only the ticket
 # identifier, never the ticket body, and stage artifacts (the plan in the
