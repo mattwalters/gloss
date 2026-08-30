@@ -46,10 +46,18 @@ dispose = 'git worktree remove --force "$LERP_WORKSPACE"'
 # fails at the first tool it is not allowed to use, so the pipeline needs
 # either this grant — made deliberately, in review, where this file lives —
 # or an `--allowedTools` list you curate.
+#
+# Pinned rather than inherited (WRIT-63): this runner now serves only the
+# planning queue below — implementing moved to Antigravity, further down —
+# so what used to be "whatever the CLI defaults to today" is one queue's
+# worry instead of two's. Opus at high effort because a plan is scope
+# judgment (what to build, what to leave out, when to say the ticket is too
+# vague) with no mechanical fallback the way the merge runner's refusal
+# clause gives it.
 [runners.claude]
 vendor = "claude"
-# model = "opus"
-# effort = "high"
+model = "claude-opus-5"
+effort = "high"
 # The model's context window, in tokens, so the board can show how full a
 # run's fullest agent is. No value here means no percentage anywhere on the
 # board — lerp carries no model→window table, so this is the only honest
@@ -70,26 +78,67 @@ args = "--permission-mode bypassPermissions"
 # decision, so the capability it needs is the discipline to stop, not the
 # reach to solve. Lower effort should if anything make that clause easier to
 # honour: less appetite for treating a conflict as a puzzle. The runner
-# above deliberately pins nothing and rides the CLI's default; this one
-# pins, because the one queue that touches a branch a human has already
-# approved is the wrong place for whatever the default resolves to today.
+# above pins too now, opus at high, for planning's own reason; this one
+# pins a notch down — sonnet at medium — because the one queue that
+# touches a branch a human has already approved is the wrong place for
+# either pin to go stale without the same scrutiny that put it there.
 [runners.claude-merge]
 vendor = "claude"
 model = "claude-sonnet-5"
 effort = "medium"
 args = "--permission-mode bypassPermissions"
 
+# Implementing (WRIT-63), on Antigravity. lerp already ships a built-in
+# `antigravity` vendor (installed lerp v0.1.0-21-gde6ff93, confirmed against
+# internal/vendors/antigravity.go and its tests) — the ticket that sent us
+# looking assumed the built-in adapter was claude-vendor only and asked for
+# a `command`/`resume` escape hatch, but that assumption was stale, so this
+# is a vendor block, the same shape as the two above, not an escape hatch.
+#
+# The adapter's own source comments describe two things checked against a
+# running `agy`, not assumed from --help: `--add-dir {{workdir}}`, because
+# agy ignores the directory it's started in and writes under its own
+# scratch dir without it; and `--print-timeout` raised to 24h, because a
+# real plan or implement run routinely outlives agy's five-minute default.
+# Resume works the same way agy always has to: it names its own
+# conversation instead of taking claude's `--session-id`, so the adapter
+# reads the id back off the run's own first log line instead of lerp
+# minting one upfront — the same seam lerp's codex adapter uses for the
+# same reason. Checked directly rather than just read: `agy mcp list` on
+# this machine already shows the same `linear` server enabled that Claude
+# Code uses, so Linear access needs no separate setup here.
+#
+# PERMISSIONS: `--dangerously-skip-permissions` is agy's own equivalent of
+# claude's `--permission-mode bypassPermissions` above — same grant, same
+# tidiness-not-security caveat, same "or curate an allowlist yourself"
+# alternative.
+#
+# model/effort ride agy's own default rather than pin one: WRIT-63 asked to
+# pin planning's, not implementing's, and picking a model here would
+# be a guess with no implement run yet to weigh it against. Revisit once
+# the line below is no longer true.
+#
+# Not yet run end to end on a real ticket — provision, run, draft PR,
+# verdict comment, status move — against live GitHub and Linear. That is a
+# real side-effecting dry run and belongs to whoever reviews this PR to
+# greenlight, not to the run that wrote this file.
+[runners.antigravity]
+vendor = "antigravity"
+args = "--dangerously-skip-permissions"
+
 # Each agent needs its own Linear access — lerp passes only the ticket
 # identifier, never the ticket body, and stage artifacts (the plan in the
 # ticket, the pull request, the note a run leaves behind) are written by the
-# agent, not by lerp. Configure the Linear MCP server in Claude Code before
-# expecting these prompts to work. Lerp's own credentials (from `lerp login`
-# or LINEAR_API_KEY) are not a fallback: lerp never passes stored tokens down
-# and drops LINEAR_API_KEY once read, so nothing it starts inherits them. That
-# is hygiene, not containment — a command that reaches a login shell, and a
-# session you resume yourself with the command above, both pick an exported
-# key back up from wherever you exported it; that leak is not a supported
-# access path.
+# agent, not by lerp. Configure the Linear MCP server for whichever runner
+# you point a queue at — Claude Code and `agy` each keep their own MCP
+# config — before expecting these prompts to work. Lerp's own credentials
+# (from `lerp login` or LINEAR_API_KEY) are not a fallback: lerp never
+# passes stored tokens down and drops LINEAR_API_KEY once read, so nothing
+# it starts inherits them. That is hygiene, not containment — a command
+# that reaches a login shell, and a session you resume yourself with the
+# escape-hatch command shown under `[runners.claude]` above, both pick an
+# exported key back up from wherever you exported it; that leak is not a
+# supported access path.
 
 # --------------------------------------------------------------------------
 # Queues
@@ -132,7 +181,7 @@ guessing.
 
 [queues.implement]
 status = "Implementing"
-runner = "claude"
+runner = "antigravity"
 on_success = "In Review"
 on_failure = "Needs Attention"
 prompt = """
