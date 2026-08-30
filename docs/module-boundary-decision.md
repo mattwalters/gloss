@@ -17,15 +17,18 @@ and there is only one module.
 
 ## Why
 
-**Module graph pruning already buys most of what a split module would.**
-Since Go 1.17, a consumer's build list is computed from the packages it
-actually imports, not from everything the providing module's `go.mod`
-requires. A service that imports only `.../gloss/engine` and never reaches
-into `tui` or `bridge/github` does not pull Bubble Tea or the GitHub client
-into its build just because they live in the same module — as long as
-`engine` itself doesn't import them, which the layered design (engine has
-no dependency on its own consumers) already guarantees. Splitting the
-module would harden a property pruning already gives for free.
+**A single module doesn't leak Bubble Tea or the GitHub client into an
+engine-only consumer's build.** That was never module-boundary-dependent —
+Go has always resolved a build from the actual per-package import graph, so
+a service importing only `.../gloss/engine` and never reaching into `tui` or
+`bridge/github` doesn't compile or link those packages in, single module or
+not. What Go 1.17+ module graph pruning adds on top is narrower but still
+relevant to "dependency-surface hygiene": it avoids needing to load the
+`go.mod` files of a module's *unused* transitive dependencies to compute the
+build list, which keeps `go.sum` and MVS resolution for that consumer
+proportional to what it actually imports rather than to everything the
+monorepo's `go.mod` requires. Splitting the module would not improve on
+either property — both already hold for a single well-layered module.
 
 **`internal/` enforces the API boundary regardless of module shape.** The
 house rule that "no SHAs or refspecs leak to callers unless they ask" is a
@@ -49,9 +52,12 @@ one atomic PR across spec, fixtures, engine, and CLI) that does apply today.
 
 **The move is cheap to make later and expensive to unmake now.** If a real
 external consumer shows up wanting independent engine versioning, extracting
-`engine/go.mod` and adding a root `go.work` is mechanical and doesn't touch
-import paths for in-repo callers. Committing to two modules today, before
-any code exists, is exactly the "speculative abstraction" the house rules
+`engine/go.mod` and adding a root `go.work` is a mechanical file split that
+doesn't touch import paths for in-repo callers — though standing up
+independent tag/versioning discipline for the engine subtree afterward is a
+real, separate cost, not something the file split buys on its own.
+Committing to two modules today, before any code exists, is exactly the
+"speculative abstraction" the house rules
 flag as scope growth to avoid without a concrete reason.
 
 ## Consequence: module path
