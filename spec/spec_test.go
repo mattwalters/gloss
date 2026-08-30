@@ -3,7 +3,8 @@ package spec_test
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -14,36 +15,47 @@ import (
 
 const schemaPath = "schemas/op-envelope.schema.json"
 
-// compileEnvelopeSchema compiles the committed envelope schema. The
-// compiler validates the schema document against its declared
-// meta-schema as part of compilation, so a schema that is itself invalid
-// draft 2020-12 fails here.
-func compileEnvelopeSchema(t *testing.T) *jsonschema.Schema {
-	t.Helper()
+type compiledSchema struct {
+	sch *jsonschema.Schema
+	raw []byte
+	err error
+}
+
+// schemaOnce reads and compiles the committed envelope schema once for
+// the whole test binary. The compiler validates the schema document
+// against its declared meta-schema as part of compilation, so a schema
+// that is itself invalid draft 2020-12 fails here.
+var schemaOnce = sync.OnceValue(func() compiledSchema {
 	raw, err := spec.FS.ReadFile(schemaPath)
 	if err != nil {
-		t.Fatalf("reading %s: %v", schemaPath, err)
+		return compiledSchema{err: err}
 	}
 	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 	if err != nil {
-		t.Fatalf("parsing %s: %v", schemaPath, err)
+		return compiledSchema{err: err}
 	}
 	c := jsonschema.NewCompiler()
 	if err := c.AddResource(schemaPath, doc); err != nil {
-		t.Fatalf("adding schema resource: %v", err)
+		return compiledSchema{err: err}
 	}
 	sch, err := c.Compile(schemaPath)
 	if err != nil {
-		t.Fatalf("compiling %s: %v", schemaPath, err)
+		return compiledSchema{err: err}
 	}
-	return sch
+	return compiledSchema{sch: sch, raw: raw}
+})
+
+func envelopeSchema(t *testing.T) (*jsonschema.Schema, []byte) {
+	t.Helper()
+	c := schemaOnce()
+	if c.err != nil {
+		t.Fatalf("compiling %s: %v", schemaPath, c.err)
+	}
+	return c.sch, c.raw
 }
 
 func TestSchemaDeclaresDraft2020(t *testing.T) {
-	raw, err := spec.FS.ReadFile(schemaPath)
-	if err != nil {
-		t.Fatalf("reading %s: %v", schemaPath, err)
-	}
+	_, raw := envelopeSchema(t) // compile = meta-schema validation
 	var doc struct {
 		Schema string `json:"$schema"`
 	}
@@ -54,14 +66,13 @@ func TestSchemaDeclaresDraft2020(t *testing.T) {
 	if doc.Schema != want {
 		t.Errorf("$schema = %q, want %q", doc.Schema, want)
 	}
-	compileEnvelopeSchema(t) // meta-schema validation happens in Compile
 }
 
 // Every valid envelope instance must validate against the schema AND be
 // byte-identical to the canonical encoding of its own content — the
 // byte-equality rule from spec/op-envelope.md.
 func TestValidEnvelopes(t *testing.T) {
-	sch := compileEnvelopeSchema(t)
+	sch, _ := envelopeSchema(t)
 	entries, err := spec.FS.ReadDir("testdata/envelopes/valid")
 	if err != nil {
 		t.Fatalf("listing valid envelopes: %v", err)
@@ -94,19 +105,24 @@ func TestValidEnvelopes(t *testing.T) {
 }
 
 type invalidEntry struct {
-	File    string `json:"file"`
-	Rejects string `json:"rejects"`
-	Reason  string `json:"reason"`
+	File     string `json:"file"`
+	Rejects  string `json:"rejects"`
+	Category string `json:"category"`
+	Reason   string `json:"reason"`
 }
 
 // Every invalid envelope instance must be rejected by the check its
 // index entry records: "schema" means schema validation fails on the
 // parsed value; "canonicalization" means the file's bytes are not a
-// valid canonical encoding (Marshal errors, or returns different bytes).
-// The index and the directory must also agree exactly, so an instance
-// can't be added without recording why it is invalid.
+// valid canonical encoding, with the entry's category pinning how —
+// "not-canonical" (Marshal succeeds but returns different bytes) or an
+// error category ("duplicate-key", "lone-surrogate") that Marshal's
+// rejection must actually match, so a lost rejection rule can't hide
+// behind a mere byte difference. The index and the directory must also
+// agree exactly, so an instance can't be added without recording why it
+// is invalid.
 func TestInvalidEnvelopes(t *testing.T) {
-	sch := compileEnvelopeSchema(t)
+	sch, _ := envelopeSchema(t)
 
 	rawIndex, err := spec.FS.ReadFile("testdata/envelopes/invalid/index.json")
 	if err != nil {
@@ -119,6 +135,9 @@ func TestInvalidEnvelopes(t *testing.T) {
 
 	indexed := map[string]bool{}
 	for _, entry := range index {
+		if indexed[entry.File] {
+			t.Errorf("index lists %s more than once", entry.File)
+		}
 		indexed[entry.File] = true
 	}
 	entries, err := spec.FS.ReadDir("testdata/envelopes/invalid")
@@ -154,8 +173,27 @@ func TestInvalidEnvelopes(t *testing.T) {
 				}
 			case "canonicalization":
 				canon, err := canonicaljson.Marshal(raw)
-				if err == nil && bytes.Equal(canon, raw) {
-					t.Errorf("bytes are canonical; expected rejection: %s", entry.Reason)
+				switch entry.Category {
+				case "not-canonical":
+					if err != nil {
+						t.Fatalf("Marshal errored (%v); a not-canonical instance must canonicalize to different bytes", err)
+					}
+					if bytes.Equal(canon, raw) {
+						t.Errorf("bytes are canonical; expected rejection: %s", entry.Reason)
+					}
+				case "duplicate-key", "lone-surrogate":
+					if err == nil {
+						t.Fatalf("Marshal accepted the instance; expected a %s rejection: %s", entry.Category, entry.Reason)
+					}
+					want := map[string]string{
+						"duplicate-key":  "duplicate object key",
+						"lone-surrogate": "lone surrogate",
+					}[entry.Category]
+					if !strings.Contains(err.Error(), want) {
+						t.Errorf("Marshal rejected with %q, want a %s rejection (containing %q)", err, entry.Category, want)
+					}
+				default:
+					t.Errorf("canonicalization entry has unknown category %q", entry.Category)
 				}
 			default:
 				t.Errorf("index entry has unknown rejects value %q", entry.Rejects)
@@ -164,43 +202,12 @@ func TestInvalidEnvelopes(t *testing.T) {
 	}
 }
 
-// The canonicalization vector file must be well-formed: unique names,
-// and exactly one of canonical/error per vector. The byte-level behavior
-// of each vector is enforced in engine/codec/canonicaljson's tests,
-// which read this same embedded copy.
-func TestCanonicalizationVectorsWellFormed(t *testing.T) {
-	raw, err := spec.FS.ReadFile("testdata/canonicalization/vectors.json")
-	if err != nil {
-		t.Fatalf("reading vectors: %v", err)
-	}
-	var vecs []struct {
-		Name      string  `json:"name"`
-		Input     *string `json:"input"`
-		Canonical *string `json:"canonical"`
-		Error     string  `json:"error"`
-	}
-	if err := json.Unmarshal(raw, &vecs); err != nil {
-		t.Fatalf("parsing vectors: %v", err)
-	}
-	if len(vecs) == 0 {
-		t.Fatal("no vectors")
-	}
-	seen := map[string]bool{}
-	for i, v := range vecs {
-		name := v.Name
-		if name == "" {
-			name = fmt.Sprintf("vector %d", i)
-			t.Errorf("%s has no name", name)
-		}
-		if seen[name] {
-			t.Errorf("duplicate vector name %q", name)
-		}
-		seen[name] = true
-		if v.Input == nil {
-			t.Errorf("%s has no input", name)
-		}
-		if (v.Canonical == nil) == (v.Error == "") {
-			t.Errorf("%s must have exactly one of canonical or error", name)
-		}
+// The vector corpus loads and passes the shape validation the loader in
+// vectors.go enforces (unique names, exactly one of canonical/error).
+// The byte-level behavior of each vector is enforced in
+// engine/codec/canonicaljson's tests, which read this same loader.
+func TestCanonicalizationVectorsLoad(t *testing.T) {
+	if _, err := spec.CanonicalizationVectors(); err != nil {
+		t.Fatal(err)
 	}
 }

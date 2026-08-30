@@ -1,8 +1,9 @@
 // Package spec exposes the machine-readable half of the Writ
 // specification — the JSON Schemas under schemas/ and the conformance
 // test data under testdata/ — as one embedded filesystem, so the engine's
-// tests, the fixture tooling, and anything else that needs the corpus all
-// read the single committed copy instead of carrying their own.
+// tests and any other consumer read the single committed copy instead of
+// carrying their own. (The fixture-repo corpus under fixtures/testdata is
+// separate and read by the fixtures package directly.)
 //
 // The prose halves live alongside as op-envelope.md, canonicalization.md,
 // and README.md in this directory; the fixture-repo generator and golden

@@ -1,35 +1,36 @@
-package canonicaljson
+// External test package on purpose: it imports the spec package for the
+// vector corpus, and spec's own external tests import canonicaljson —
+// keeping this file out of package canonicaljson means the spec package
+// stays free to grow non-test engine imports without creating a test
+// import cycle.
+package canonicaljson_test
 
 import (
-	"bytes"
-	"encoding/json"
+	"strings"
 	"testing"
 
+	"github.com/writtendev/writ/engine/codec/canonicaljson"
 	"github.com/writtendev/writ/spec"
 )
 
-// vector mirrors an entry of spec/testdata/canonicalization/vectors.json:
-// either a valid case (canonical holds the expected bytes) or a rejection
-// case (error names the rejection category from spec/canonicalization.md).
-type vector struct {
-	Name      string `json:"name"`
-	Input     string `json:"input"`
-	Canonical string `json:"canonical"`
-	Error     string `json:"error"`
+// rejectionSubstring maps each normative rejection category from
+// spec/canonicalization.md to a substring this implementation's error
+// for it must contain. Matching the category — not just "some error" —
+// keeps a vector from silently passing for the wrong reason (e.g. a
+// typo'd lone-surrogate input failing as a syntax error while the
+// surrogate scan goes unexercised).
+var rejectionSubstring = map[string]string{
+	"duplicate-key":     "duplicate object key",
+	"lone-surrogate":    "lone surrogate",
+	"non-finite-number": "invalid number",
+	"not-one-value":     "trailing data",
 }
 
-func loadVectors(t *testing.T) []vector {
+func loadVectors(t *testing.T) []spec.Vector {
 	t.Helper()
-	data, err := spec.FS.ReadFile("testdata/canonicalization/vectors.json")
+	vecs, err := spec.CanonicalizationVectors()
 	if err != nil {
-		t.Fatalf("reading canonicalization vectors from spec embed: %v", err)
-	}
-	var vecs []vector
-	if err := json.Unmarshal(data, &vecs); err != nil {
-		t.Fatalf("parsing canonicalization vectors: %v", err)
-	}
-	if len(vecs) == 0 {
-		t.Fatal("canonicalization vector file has no vectors")
+		t.Fatal(err)
 	}
 	return vecs
 }
@@ -37,18 +38,25 @@ func loadVectors(t *testing.T) []vector {
 func TestMarshalVectors(t *testing.T) {
 	for _, v := range loadVectors(t) {
 		t.Run(v.Name, func(t *testing.T) {
-			got, err := Marshal([]byte(v.Input))
+			got, err := canonicaljson.Marshal([]byte(v.Input))
 			if v.Error != "" {
+				want, known := rejectionSubstring[v.Error]
+				if !known {
+					t.Fatalf("vector has unknown rejection category %q", v.Error)
+				}
 				if err == nil {
 					t.Fatalf("Marshal(%q) = %q, want %s rejection", v.Input, got, v.Error)
+				}
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("Marshal(%q) rejected with %q, want a %s rejection (containing %q)", v.Input, err, v.Error, want)
 				}
 				return
 			}
 			if err != nil {
 				t.Fatalf("Marshal(%q): %v", v.Input, err)
 			}
-			if string(got) != v.Canonical {
-				t.Errorf("Marshal(%q) = %q, want %q", v.Input, got, v.Canonical)
+			if string(got) != *v.Canonical {
+				t.Errorf("Marshal(%q) = %q, want %q", v.Input, got, *v.Canonical)
 			}
 		})
 	}
@@ -62,25 +70,27 @@ func TestMarshalIdempotent(t *testing.T) {
 			continue
 		}
 		t.Run(v.Name, func(t *testing.T) {
-			again, err := Marshal([]byte(v.Canonical))
+			again, err := canonicaljson.Marshal([]byte(*v.Canonical))
 			if err != nil {
-				t.Fatalf("Marshal(%q): %v", v.Canonical, err)
+				t.Fatalf("Marshal(%q): %v", *v.Canonical, err)
 			}
-			if string(again) != v.Canonical {
-				t.Errorf("Marshal(%q) = %q, want %q (not idempotent)", v.Canonical, again, v.Canonical)
+			if string(again) != *v.Canonical {
+				t.Errorf("Marshal(%q) = %q, want %q (not idempotent)", *v.Canonical, again, *v.Canonical)
 			}
 		})
 	}
 }
 
 func TestMarshalRejectsTrailingData(t *testing.T) {
-	if _, err := Marshal([]byte(`{"a":1} garbage`)); err == nil {
-		t.Fatal("Marshal accepted trailing data after the JSON value")
+	for _, in := range []string{`{"a":1} garbage`, `{"a":1}}`, `[1]]`, `1]`, `null}`} {
+		if _, err := canonicaljson.Marshal([]byte(in)); err == nil {
+			t.Errorf("Marshal(%q) accepted trailing data after the JSON value", in)
+		}
 	}
 }
 
 func TestMarshalRejectsInvalidJSON(t *testing.T) {
-	if _, err := Marshal([]byte(`{"a":`)); err == nil {
+	if _, err := canonicaljson.Marshal([]byte(`{"a":`)); err == nil {
 		t.Fatal("Marshal accepted truncated JSON")
 	}
 }
@@ -89,7 +99,7 @@ func TestMarshalRejectsInvalidJSON(t *testing.T) {
 // only carry valid text), so the rule that Marshal rejects it rather than
 // letting encoding/json substitute U+FFFD is exercised directly here.
 func TestMarshalRejectsInvalidUTF8(t *testing.T) {
-	if _, err := Marshal([]byte("{\"s\":\"a\xff b\"}")); err == nil {
+	if _, err := canonicaljson.Marshal([]byte("{\"s\":\"a\xff b\"}")); err == nil {
 		t.Fatal("Marshal accepted input that is not valid UTF-8")
 	}
 }
@@ -98,24 +108,26 @@ func TestMarshalRejectsInvalidUTF8(t *testing.T) {
 // json.Number.Float64 reports that overflow as an error, so Marshal
 // rejects it before encodeNumber's own IsNaN/IsInf check ever runs.
 func TestMarshalRejectsNonFiniteNumbers(t *testing.T) {
-	if _, err := Marshal([]byte(`1e400`)); err == nil {
+	if _, err := canonicaljson.Marshal([]byte(`1e400`)); err == nil {
 		t.Fatal("Marshal accepted a number that overflows to +Inf")
 	}
 }
 
-// encodeNumber's IsNaN/IsInf guard is unreachable through Marshal, since
-// the JSON grammar has no NaN/Infinity literal and Float64 always errors
-// on the numeric literals that would overflow to one. But strconv's
-// ParseFloat also accepts the literal strings "NaN"/"Inf" and returns
-// them without error, so a json.Number built by any means other than
-// the decoder (e.g. a future caller of encodeNumber directly) can still
-// reach the guard — exercise it directly so that path stays covered.
-func TestEncodeNumberRejectsNaNAndInfDirectly(t *testing.T) {
-	for _, s := range []string{"NaN", "Inf", "+Inf", "-Inf"} {
-		var buf bytes.Buffer
-		if err := encodeNumber(&buf, json.Number(s)); err == nil {
-			t.Errorf("encodeNumber(%q) = %q, want error", s, buf.String())
-		}
+// Nesting depth is capped so a long run of '[' bytes returns an error
+// instead of overflowing the goroutine stack (a fatal, unrecoverable
+// crash). encoding/json's own Decode enforces the same 10000-level cap;
+// the token walk has to enforce it itself.
+func TestMarshalRejectsExcessiveNesting(t *testing.T) {
+	in := strings.Repeat("[", 20_000)
+	if _, err := canonicaljson.Marshal([]byte(in)); err == nil {
+		t.Fatal("Marshal accepted input nested beyond the depth cap")
+	}
+	// Just inside the cap parses fine (and then fails only on EOF,
+	// since the brackets are unclosed — close them to prove the depth
+	// itself is accepted).
+	ok := strings.Repeat("[", 9_000) + strings.Repeat("]", 9_000)
+	if _, err := canonicaljson.Marshal([]byte(ok)); err != nil {
+		t.Fatalf("Marshal rejected nesting within the depth cap: %v", err)
 	}
 }
 
@@ -123,7 +135,7 @@ func TestEncodeNumberRejectsNaNAndInfDirectly(t *testing.T) {
 // appear outside a string's escape structure — an escaped backslash
 // followed by literal "ud800" text is not an escape.
 func TestSurrogateScanIgnoresEscapedBackslash(t *testing.T) {
-	got, err := Marshal([]byte(`{"s":"\\ud800"}`))
+	got, err := canonicaljson.Marshal([]byte(`{"s":"\\ud800"}`))
 	if err != nil {
 		t.Fatalf("Marshal rejected a literal backslash followed by text: %v", err)
 	}

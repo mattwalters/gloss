@@ -45,8 +45,10 @@ A canonicalizer MUST reject:
   that overflows to infinity (e.g. `1e400`). `NaN` and `Infinity` have
   no JSON representation to begin with. (Rejection category:
   `non-finite-number`.)
-- Anything that is not exactly one JSON value: syntax errors, and
-  trailing non-whitespace after the value.
+- **Anything that is not exactly one JSON value**: syntax errors, and
+  any trailing non-whitespace after the value — including a stray `}` or
+  `]`, which some streaming decoders treat as end-of-input rather than
+  as trailing data. (Rejection category: `not-one-value`.)
 
 ## Output
 
@@ -103,5 +105,13 @@ one of two forms:
 A conforming canonicalizer MUST produce exactly `canonical` for every
 entry of the first form and MUST reject every entry of the second form.
 Rejection categories (`duplicate-key`, `lone-surrogate`,
-`non-finite-number`) classify the reason for human readers; the error
-surface (message text, error codes) is implementation-defined.
+`non-finite-number`, `not-one-value`) classify the reason; the error
+surface (message text, error codes) is implementation-defined, but a
+test harness SHOULD verify its implementation rejects each entry for the
+categorized reason, not merely that it rejects — the reference
+implementation's tests do.
+
+One rejection rule is not expressible as a vector: invalid UTF-8, since
+the vector file's `input` is itself a JSON string and can only carry
+valid text. Implementations MUST cover that rule with their own direct
+tests, as the reference implementation does.

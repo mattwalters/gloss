@@ -215,6 +215,16 @@
     "error": "non-finite-number"
   },
   {
+    "name": "trailing close brace after the value is rejected",
+    "input": "{\"a\":1}}",
+    "error": "not-one-value"
+  },
+  {
+    "name": "trailing close bracket after the value is rejected",
+    "input": "[1]]",
+    "error": "not-one-value"
+  },
+  {
     "name": "deep nesting with independent key ordering per object",
     "input": "{\"outer\":{\"list\":[{\"b\":1,\"a\":2},{\"d\":4,\"c\":3}]}}",
     "canonical": "{\"outer\":{\"list\":[{\"a\":2,\"b\":1},{\"c\":3,\"d\":4}]}}"

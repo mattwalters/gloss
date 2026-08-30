@@ -1,7 +1,7 @@
 # Spec & Conformance Fixtures
 
 Per ARCHITECTURE.md ("Spec = fixtures"), the conformance fixtures are the
-ground truth for the Writ specification. prose describes intent, but
+ground truth for the Writ specification. Prose describes intent, but
 the conformance corpus defines observable correctness byte-for-byte.
 
 ## Spec Files

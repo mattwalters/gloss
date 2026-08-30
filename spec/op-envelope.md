@@ -28,7 +28,11 @@ parents, author, and timestamp inside the JSON payload — was considered
 and rejected: it creates two sources of truth that can disagree (payload
 parents vs. commit parents), and it is incoherent at the edges, since a
 payload cannot contain its own content-derived op id, nor a signature
-that covers the payload the signature lives inside.
+that covers the payload the signature lives inside. Producers MUST NOT
+mirror commit-carried fields into the payload; a reader that encounters
+payload fields shadowing commit data (a `parents`, an `author`) treats
+them as ordinary unknown fields — preserved and ignored — and the commit
+remains the sole source of truth for what they appear to name.
 
 The cost of the split is stated outright: **the payload alone is not
 self-describing**. A conforming reader always needs the commit; handing
@@ -63,11 +67,14 @@ same signing key then mint the same op id.
   interpret any offset as the UTC instant it denotes rather than
   rejecting non-zero offsets — the instant, not the spelling, is the
   datum.
-- **Message.** The commit message MUST be exactly one line,
+- **Message.** Producers MUST write exactly one line,
   `writ: <op_type> <object_type>/<object_id>`, followed by a single
   newline. The message is derived entirely from payload fields and
-  exists so `git log` over a writ ref is legible; readers MUST NOT parse
-  it as data.
+  exists only so `git log` over a writ ref is legible. It is a
+  producer-side rule, pinned because the message bytes feed the op id:
+  readers MUST ignore the message entirely — never parse it as data, and
+  never validate it against the payload, which would make the message a
+  second source of truth for fields the payload owns.
 - **Signature.** Ops are signed with git's commit-signature machinery:
   the signature rides the `gpgsig` header, and SSH signatures use the
   namespace `git` — the same bytes `git commit -S` produces with
@@ -144,8 +151,10 @@ why) if any of the following fail:
 3. The payload fails schema validation: a required field is missing or
    a defined field violates its type or form. Unknown *additional*
    fields are not a violation.
-4. The commit message, author/committer equality, or timestamp-offset
-   rules above are violated.
+4. The committer identity and timestamp are not byte-identical to the
+   author's. (The message and timestamp-offset rules above bind
+   producers, not readers: readers ignore the message, and interpret any
+   offset as its UTC instant.)
 
 Signature verification is a separate, later concern (WRIT-22) — it
 cannot live in fold, and this document does not define when it runs.

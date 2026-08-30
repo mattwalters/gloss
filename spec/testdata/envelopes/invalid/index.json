@@ -25,9 +25,19 @@
     "reason": "op_version must be a JSON integer, not a string"
   },
   {
+    "file": "op-version-beyond-2-53.json",
+    "rejects": "schema",
+    "reason": "op_version must not exceed 2^53-1, the largest exactly-representable double"
+  },
+  {
     "file": "object-id-empty.json",
     "rejects": "schema",
     "reason": "object_id must be a non-empty string"
+  },
+  {
+    "file": "object-id-space.json",
+    "rejects": "schema",
+    "reason": "object_id must be printable non-space ASCII; a space violates the pattern"
   },
   {
     "file": "object-type-uppercase.json",
@@ -42,26 +52,31 @@
   {
     "file": "pretty-printed.json",
     "rejects": "canonicalization",
+    "category": "not-canonical",
     "reason": "insignificant whitespace: the bytes are not the canonical encoding of the value"
   },
   {
     "file": "unsorted-keys.json",
     "rejects": "canonicalization",
+    "category": "not-canonical",
     "reason": "object members are not in UTF-16 code unit order of their keys"
   },
   {
     "file": "trailing-newline.json",
     "rejects": "canonicalization",
+    "category": "not-canonical",
     "reason": "trailing newline after the JSON value; canonical encoding ends at the closing brace"
   },
   {
     "file": "duplicate-key.json",
     "rejects": "canonicalization",
+    "category": "duplicate-key",
     "reason": "duplicate object key object_id; canonicalization rejects duplicate keys outright"
   },
   {
     "file": "lone-surrogate.json",
     "rejects": "canonicalization",
+    "category": "lone-surrogate",
     "reason": "lone high surrogate escape \\ud800 in a string; canonicalization rejects unpaired surrogates"
   }
 ]

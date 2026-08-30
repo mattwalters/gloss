@@ -11,10 +11,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf16"
 	"unicode/utf8"
 )
@@ -50,34 +52,44 @@ func Marshal(src []byte) ([]byte, error) {
 	}
 	dec := json.NewDecoder(bytes.NewReader(src))
 	dec.UseNumber()
-	v, err := decodeValue(dec)
+	v, err := decodeValue(dec, 0)
 	if err != nil {
 		return nil, err
 	}
-	if dec.More() {
+	// dec.More() cannot serve as the trailing-data check: it peeks one
+	// byte and reports false for '}' and ']', so `{"a":1}}` would look
+	// like clean EOF. Asking for one more token distinguishes real EOF
+	// from any trailing byte.
+	if _, err := dec.Token(); err != io.EOF {
 		return nil, fmt.Errorf("canonicaljson: trailing data after JSON value")
 	}
 	var buf bytes.Buffer
+	buf.Grow(len(src))
 	if err := encodeValue(&buf, v); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
 }
 
+// maxNestingDepth caps decodeValue's recursion. encoding/json enforces
+// the same limit inside Decode, but Decoder.Token — which the walk below
+// uses instead — does not, and without a cap a long run of `[` bytes
+// drives one stack frame per byte until the process dies.
+const maxNestingDepth = 10000
+
 // decodeValue builds the value tree token by token rather than through
 // json.Decoder.Decode into map[string]any, because the map decode
 // collapses duplicate object keys (last value wins) before they can be
 // detected. Walking tokens lets each object reject a repeated key the
 // moment it appears.
-func decodeValue(dec *json.Decoder) (any, error) {
+func decodeValue(dec *json.Decoder, depth int) (any, error) {
+	if depth > maxNestingDepth {
+		return nil, fmt.Errorf("canonicaljson: exceeded max nesting depth of %d", maxNestingDepth)
+	}
 	tok, err := dec.Token()
 	if err != nil {
 		return nil, fmt.Errorf("canonicaljson: %w", err)
 	}
-	return valueFromToken(dec, tok)
-}
-
-func valueFromToken(dec *json.Decoder, tok json.Token) (any, error) {
 	delim, ok := tok.(json.Delim)
 	if !ok {
 		// nil, bool, string, or json.Number — already the final value.
@@ -98,7 +110,7 @@ func valueFromToken(dec *json.Decoder, tok json.Token) (any, error) {
 			if _, dup := obj[key]; dup {
 				return nil, fmt.Errorf("canonicaljson: duplicate object key %q", key)
 			}
-			val, err := decodeValue(dec)
+			val, err := decodeValue(dec, depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -111,7 +123,7 @@ func valueFromToken(dec *json.Decoder, tok json.Token) (any, error) {
 	case '[':
 		arr := []any{}
 		for dec.More() {
-			val, err := decodeValue(dec)
+			val, err := decodeValue(dec, depth+1)
 			if err != nil {
 				return nil, err
 			}
@@ -129,8 +141,9 @@ func valueFromToken(dec *json.Decoder, tok json.Token) (any, error) {
 // checkSurrogateEscapes scans the raw JSON text for \uXXXX escapes in
 // the surrogate range (U+D800–U+DFFF) that do not form a high+low pair,
 // and rejects them. It tracks just enough string structure to find
-// escapes; on input that is not well-formed JSON it may return nil and
-// leave the syntax error to the decoder, which runs next.
+// escapes; a malformed escape is skipped rather than trusted, so the
+// scan keeps checking the rest of the input and the decoder (which runs
+// next) reports the syntax error.
 func checkSurrogateEscapes(src []byte) error {
 	inString := false
 	for i := 0; i < len(src); i++ {
@@ -145,7 +158,7 @@ func checkSurrogateEscapes(src []byte) error {
 			inString = false
 		case '\\':
 			if i+1 >= len(src) {
-				return nil // truncated; decoder reports the syntax error
+				return nil // truncated input; decoder reports the syntax error
 			}
 			if src[i+1] != 'u' {
 				i++ // skip the escaped character (covers \\ and \")
@@ -153,22 +166,22 @@ func checkSurrogateEscapes(src []byte) error {
 			}
 			u, ok := hex4(src[i+2:])
 			if !ok {
-				return nil // malformed escape; decoder reports it
+				i++ // malformed \u escape; decoder rejects it — keep scanning
+				continue
 			}
 			i += 5 // now at the escape's last hex digit
-			switch {
-			case u >= 0xDC00 && u <= 0xDFFF:
-				return fmt.Errorf(`canonicaljson: lone low surrogate \u%04x in string`, u)
-			case u >= 0xD800 && u <= 0xDBFF:
-				u2, ok := uint16(0), false
-				if i+2 < len(src) && src[i+1] == '\\' && src[i+2] == 'u' {
-					u2, ok = hex4(src[i+3:])
-				}
-				if !ok || u2 < 0xDC00 || u2 > 0xDFFF {
-					return fmt.Errorf(`canonicaljson: lone high surrogate \u%04x in string`, u)
-				}
-				i += 6 // consume the low half of the pair
+			if !utf16.IsSurrogate(rune(u)) {
+				continue
 			}
+			u2, ok2 := uint16(0), false
+			if i+2 < len(src) && src[i+1] == '\\' && src[i+2] == 'u' {
+				u2, ok2 = hex4(src[i+3:])
+			}
+			if ok2 && utf16.DecodeRune(rune(u), rune(u2)) != unicode.ReplacementChar {
+				i += 6 // a valid high+low pair; consume the low half
+				continue
+			}
+			return fmt.Errorf(`canonicaljson: lone surrogate \u%04x in string`, u)
 		}
 	}
 	return nil
@@ -179,22 +192,11 @@ func hex4(b []byte) (uint16, bool) {
 	if len(b) < 4 {
 		return 0, false
 	}
-	var u uint16
-	for _, c := range b[:4] {
-		var d uint16
-		switch {
-		case c >= '0' && c <= '9':
-			d = uint16(c - '0')
-		case c >= 'a' && c <= 'f':
-			d = uint16(c-'a') + 10
-		case c >= 'A' && c <= 'F':
-			d = uint16(c-'A') + 10
-		default:
-			return 0, false
-		}
-		u = u<<4 | d
+	u, err := strconv.ParseUint(string(b[:4]), 16, 16)
+	if err != nil {
+		return 0, false
 	}
-	return u, true
+	return uint16(u), true
 }
 
 func encodeValue(buf *bytes.Buffer, v any) error {
