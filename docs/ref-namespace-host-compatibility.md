@@ -132,8 +132,11 @@ too) treats `refs/heads/*` as unrestricted:
 - Verify GitLab (needs a GitLab.com account or self-hosted GitLab CE with a
   longer time budget than this run had).
 - Verify Bitbucket Cloud (needs an account — no viable self-host exists).
+- Verify Codeberg directly (needs an account on codeberg.org — the Gitea
+  result only stands in for the underlying software, not Codeberg's own
+  policy/hooks).
 - Revisit GitHub GC-survival after the ref has sat unfetched for longer than
   one session, or find GitHub documentation that speaks to it directly
   instead of inferring from general git-backend behavior.
 - Feed these findings into GLS-7 (Spec: ref layout & writer-id convention)
-  once the remaining two hosts are checked.
+  once the remaining three hosts are checked.
