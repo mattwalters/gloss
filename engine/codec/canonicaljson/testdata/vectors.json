@@ -1,0 +1,117 @@
+[
+  {
+    "name": "empty object",
+    "input": "{}",
+    "canonical": "{}"
+  },
+  {
+    "name": "empty array",
+    "input": "[]",
+    "canonical": "[]"
+  },
+  {
+    "name": "null literal",
+    "input": "null",
+    "canonical": "null"
+  },
+  {
+    "name": "booleans",
+    "input": "[true,false]",
+    "canonical": "[true,false]"
+  },
+  {
+    "name": "key order ascii",
+    "input": "{\"b\":1,\"a\":2}",
+    "canonical": "{\"a\":2,\"b\":1}"
+  },
+  {
+    "name": "key order nested independently",
+    "input": "{\"z\":{\"y\":1,\"x\":2},\"a\":3}",
+    "canonical": "{\"a\":3,\"z\":{\"x\":2,\"y\":1}}"
+  },
+  {
+    "name": "duplicate keys, last value wins",
+    "input": "{\"a\":1,\"a\":2}",
+    "canonical": "{\"a\":2}"
+  },
+  {
+    "name": "key order: supplementary-plane vs BMP (UTF-16 code unit order, not code point order)",
+    "input": "{\"\\uffff\":1,\"\\ud83d\\ude00\":2}",
+    "canonical": "{\"😀\":2,\"￿\":1}"
+  },
+  {
+    "name": "string escaping: shorthand and control chars",
+    "input": "{\"s\":\"a\\u0001b\\nc\\td\\\\e\\\"f\"}",
+    "canonical": "{\"s\":\"a\\u0001b\\nc\\td\\\\e\\\"f\"}"
+  },
+  {
+    "name": "string: forward slash is not escaped",
+    "input": "{\"s\":\"a\\/b\"}",
+    "canonical": "{\"s\":\"a/b\"}"
+  },
+  {
+    "name": "string: non-ASCII passes through as raw UTF-8",
+    "input": "{\"s\":\"caf\\u00e9 \\u4e2d\\u6587\"}",
+    "canonical": "{\"s\":\"café 中文\"}"
+  },
+  {
+    "name": "number: plain integer",
+    "input": "100",
+    "canonical": "100"
+  },
+  {
+    "name": "number: negative zero integer literal",
+    "input": "-0",
+    "canonical": "0"
+  },
+  {
+    "name": "number: negative zero float literal",
+    "input": "-0.0",
+    "canonical": "0"
+  },
+  {
+    "name": "number: simple fraction",
+    "input": "0.1",
+    "canonical": "0.1"
+  },
+  {
+    "name": "number: small fraction, decimal notation",
+    "input": "0.0001",
+    "canonical": "0.0001"
+  },
+  {
+    "name": "number: below 1e-6 switches to exponential",
+    "input": "0.0000001",
+    "canonical": "1e-7"
+  },
+  {
+    "name": "number: just below 1e21 stays decimal",
+    "input": "100000000000000000000",
+    "canonical": "100000000000000000000"
+  },
+  {
+    "name": "number: 1e21 switches to exponential",
+    "input": "1000000000000000000000",
+    "canonical": "1e+21"
+  },
+  {
+    "name": "number: scientific input is normalized",
+    "input": "1.5E+2",
+    "canonical": "150"
+  },
+  {
+    "name": "number: negative exponential",
+    "input": "-2.5e-8",
+    "canonical": "-2.5e-8"
+  },
+  {
+    "name": "number: integer beyond 2^53 loses precision like any IEEE-754 double",
+    "input": "9007199254740993",
+    "canonical": "9007199254740992"
+  },
+  {
+    "name": "deep nesting with independent key ordering per object",
+    "input": "{\"outer\":{\"list\":[{\"b\":1,\"a\":2},{\"d\":4,\"c\":3}]}}",
+    "canonical": "{\"outer\":{\"list\":[{\"a\":2,\"b\":1},{\"c\":3,\"d\":4}]}}"
+  }
+]
