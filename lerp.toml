@@ -47,7 +47,7 @@ dispose = 'git worktree remove --force "$LERP_WORKSPACE"'
 # either this grant — made deliberately, in review, where this file lives —
 # or an `--allowedTools` list you curate.
 #
-# Pinned rather than inherited (GLS-63): this runner now serves only the
+# Pinned rather than inherited (WRIT-63): this runner now serves only the
 # planning queue below — implementing moved to Antigravity, further down —
 # so what used to be "whatever the CLI defaults to today" is one queue's
 # worry instead of two's. Opus at high effort because a plan is scope
@@ -88,7 +88,7 @@ model = "claude-sonnet-5"
 effort = "medium"
 args = "--permission-mode bypassPermissions"
 
-# Implementing (GLS-63), on Antigravity. lerp already ships a built-in
+# Implementing (WRIT-63), on Antigravity. lerp already ships a built-in
 # `antigravity` vendor (installed lerp v0.1.0-21-gde6ff93, confirmed against
 # internal/vendors/antigravity.go and its tests) — the ticket that sent us
 # looking assumed the built-in adapter was claude-vendor only and asked for
@@ -113,7 +113,7 @@ args = "--permission-mode bypassPermissions"
 # tidiness-not-security caveat, same "or curate an allowlist yourself"
 # alternative.
 #
-# model/effort ride agy's own default rather than pin one: GLS-63 asked to
+# model/effort ride agy's own default rather than pin one: WRIT-63 asked to
 # pin planning's, not implementing's, and picking a model here would
 # be a guess with no implement run yet to weigh it against. Revisit once
 # the line below is no longer true.
