@@ -30,19 +30,34 @@
     "canonical": "{\"a\":3,\"z\":{\"x\":2,\"y\":1}}"
   },
   {
-    "name": "duplicate keys, last value wins",
-    "input": "{\"a\":1,\"a\":2}",
-    "canonical": "{\"a\":2}"
-  },
-  {
     "name": "key order: prefix keys tie-break on length",
     "input": "{\"id2\":1,\"id\":2}",
     "canonical": "{\"id\":2,\"id2\":1}"
   },
   {
+    "name": "key order: empty-string key sorts first",
+    "input": "{\"a\":1,\"\":2}",
+    "canonical": "{\"\":2,\"a\":1}"
+  },
+  {
     "name": "key order: supplementary-plane vs BMP (UTF-16 code unit order, not code point order)",
     "input": "{\"\\uffff\":1,\"\\ud83d\\ude00\":2}",
     "canonical": "{\"😀\":2,\"￿\":1}"
+  },
+  {
+    "name": "duplicate keys are rejected",
+    "input": "{\"a\":1,\"a\":2}",
+    "error": "duplicate-key"
+  },
+  {
+    "name": "duplicate keys spelled with different escapes are rejected",
+    "input": "{\"a\":1,\"\\u0061\":2}",
+    "error": "duplicate-key"
+  },
+  {
+    "name": "duplicate keys in a nested object are rejected",
+    "input": "{\"x\":{\"b\":1,\"b\":2}}",
+    "error": "duplicate-key"
   },
   {
     "name": "string escaping: shorthand and control chars",
@@ -65,9 +80,49 @@
     "canonical": "{\"s\":\"café 中文\"}"
   },
   {
-    "name": "string: lone surrogate decodes to U+FFFD",
-    "input": "{\"s\":\"a\\ud800b\"}",
+    "name": "string: DEL (U+007F) is not a JSON control character and passes through raw",
+    "input": "{\"s\":\"a\\u007fb\"}",
+    "canonical": "{\"s\":\"a\u007fb\"}"
+  },
+  {
+    "name": "string: escaped surrogate pair decodes to raw supplementary-plane UTF-8",
+    "input": "{\"s\":\"\\ud83d\\ude00\"}",
+    "canonical": "{\"s\":\"😀\"}"
+  },
+  {
+    "name": "string: literal U+FFFD is a legal character and passes through",
+    "input": "{\"s\":\"a\\ufffdb\"}",
     "canonical": "{\"s\":\"a�b\"}"
+  },
+  {
+    "name": "string: lone high surrogate is rejected",
+    "input": "{\"s\":\"a\\ud800b\"}",
+    "error": "lone-surrogate"
+  },
+  {
+    "name": "string: lone low surrogate is rejected",
+    "input": "{\"s\":\"a\\udc00b\"}",
+    "error": "lone-surrogate"
+  },
+  {
+    "name": "string: reversed surrogate pair is rejected",
+    "input": "{\"s\":\"\\udc00\\ud800\"}",
+    "error": "lone-surrogate"
+  },
+  {
+    "name": "string: high surrogate followed by a non-surrogate escape is rejected",
+    "input": "{\"s\":\"\\ud800\\n\"}",
+    "error": "lone-surrogate"
+  },
+  {
+    "name": "string: high surrogate at end of string is rejected",
+    "input": "{\"s\":\"abc\\ud83d\"}",
+    "error": "lone-surrogate"
+  },
+  {
+    "name": "key: lone surrogate in an object key is rejected",
+    "input": "{\"\\ud800\":1}",
+    "error": "lone-surrogate"
   },
   {
     "name": "number: plain integer",
@@ -83,6 +138,11 @@
     "name": "number: negative zero float literal",
     "input": "-0.0",
     "canonical": "0"
+  },
+  {
+    "name": "number: integer-valued fraction collapses to integer form",
+    "input": "5.0",
+    "canonical": "5"
   },
   {
     "name": "number: simple fraction",
@@ -140,13 +200,28 @@
     "canonical": "-0.5"
   },
   {
+    "name": "number: 2^53 is exactly representable",
+    "input": "9007199254740992",
+    "canonical": "9007199254740992"
+  },
+  {
     "name": "number: integer beyond 2^53 loses precision like any IEEE-754 double",
     "input": "9007199254740993",
     "canonical": "9007199254740992"
   },
   {
+    "name": "number: overflows IEEE-754 double and is rejected",
+    "input": "1e400",
+    "error": "non-finite-number"
+  },
+  {
     "name": "deep nesting with independent key ordering per object",
     "input": "{\"outer\":{\"list\":[{\"b\":1,\"a\":2},{\"d\":4,\"c\":3}]}}",
     "canonical": "{\"outer\":{\"list\":[{\"a\":2,\"b\":1},{\"c\":3,\"d\":4}]}}"
+  },
+  {
+    "name": "envelope-shaped payload canonicalizes with sorted top-level fields",
+    "input": "{\"op_version\":1,\"op_type\":\"create\",\"object_type\":\"review\",\"object_id\":\"r-7f3a\",\"body\":{\"head\":\"cafe\",\"base\":\"beef\"}}",
+    "canonical": "{\"body\":{\"base\":\"beef\",\"head\":\"cafe\"},\"object_id\":\"r-7f3a\",\"object_type\":\"review\",\"op_type\":\"create\",\"op_version\":1}"
   }
 ]

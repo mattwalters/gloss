@@ -1,9 +1,10 @@
 // Package canonicaljson encodes arbitrary JSON as byte-stable canonical
 // JSON: the same logical value always produces the same bytes, which is
-// what op signing and content-addressing need. See
+// what op signing and content-addressing need. The normative definition
+// of the encoding is spec/canonicalization.md; this package is the
+// reference implementation. See
 // docs/decisions/0001-canonical-json-encoding.md for why this is a small
-// bespoke encoder rather than an RFC 8785 library, and what it
-// deliberately does not guarantee.
+// bespoke encoder rather than an RFC 8785 library.
 package canonicaljson
 
 import (
@@ -15,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // Marshal parses src as a single JSON value and re-encodes it in
@@ -22,17 +24,35 @@ import (
 // their keys, numbers formatted per the ECMAScript Number::toString
 // algorithm, and strings re-escaped with the minimal required escapes.
 //
+// Per spec/canonicalization.md, three classes of input are rejected
+// rather than silently normalized, because Go's decoder would otherwise
+// erase them before the encoder could see them and a differently-built
+// verifier could disagree on the bytes:
+//
+//   - input that is not valid UTF-8 (encoding/json substitutes U+FFFD),
+//   - objects with duplicate member keys (the map decode keeps the last),
+//   - lone (unpaired) UTF-16 surrogate escapes in strings (decoded to
+//     U+FFFD, indistinguishable afterwards from a legal literal U+FFFD).
+//
 // Numbers are decoded as IEEE 754 double-precision floats, so integers
 // beyond 2^53 lose precision exactly as they would in JavaScript or any
-// other double-based JSON consumer — see the decision doc for why op
-// payload fields that need exact large integers should carry them as
-// strings instead.
+// other double-based JSON consumer — see spec/canonicalization.md for
+// why op payload fields that need exact large integers must carry them
+// as strings instead.
 func Marshal(src []byte) ([]byte, error) {
+	if !utf8.Valid(src) {
+		return nil, fmt.Errorf("canonicaljson: input is not valid UTF-8")
+	}
+	// Lone surrogates are only detectable in the raw text: by the time
+	// encoding/json hands us a string they are already U+FFFD.
+	if err := checkSurrogateEscapes(src); err != nil {
+		return nil, err
+	}
 	dec := json.NewDecoder(bytes.NewReader(src))
 	dec.UseNumber()
-	var v any
-	if err := dec.Decode(&v); err != nil {
-		return nil, fmt.Errorf("canonicaljson: %w", err)
+	v, err := decodeValue(dec)
+	if err != nil {
+		return nil, err
 	}
 	if dec.More() {
 		return nil, fmt.Errorf("canonicaljson: trailing data after JSON value")
@@ -42,6 +62,139 @@ func Marshal(src []byte) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// decodeValue builds the value tree token by token rather than through
+// json.Decoder.Decode into map[string]any, because the map decode
+// collapses duplicate object keys (last value wins) before they can be
+// detected. Walking tokens lets each object reject a repeated key the
+// moment it appears.
+func decodeValue(dec *json.Decoder) (any, error) {
+	tok, err := dec.Token()
+	if err != nil {
+		return nil, fmt.Errorf("canonicaljson: %w", err)
+	}
+	return valueFromToken(dec, tok)
+}
+
+func valueFromToken(dec *json.Decoder, tok json.Token) (any, error) {
+	delim, ok := tok.(json.Delim)
+	if !ok {
+		// nil, bool, string, or json.Number — already the final value.
+		return tok, nil
+	}
+	switch delim {
+	case '{':
+		obj := map[string]any{}
+		for dec.More() {
+			keyTok, err := dec.Token()
+			if err != nil {
+				return nil, fmt.Errorf("canonicaljson: %w", err)
+			}
+			key, ok := keyTok.(string)
+			if !ok {
+				return nil, fmt.Errorf("canonicaljson: object key is %T, not string", keyTok)
+			}
+			if _, dup := obj[key]; dup {
+				return nil, fmt.Errorf("canonicaljson: duplicate object key %q", key)
+			}
+			val, err := decodeValue(dec)
+			if err != nil {
+				return nil, err
+			}
+			obj[key] = val
+		}
+		if _, err := dec.Token(); err != nil { // consume '}'
+			return nil, fmt.Errorf("canonicaljson: %w", err)
+		}
+		return obj, nil
+	case '[':
+		arr := []any{}
+		for dec.More() {
+			val, err := decodeValue(dec)
+			if err != nil {
+				return nil, err
+			}
+			arr = append(arr, val)
+		}
+		if _, err := dec.Token(); err != nil { // consume ']'
+			return nil, fmt.Errorf("canonicaljson: %w", err)
+		}
+		return arr, nil
+	default:
+		return nil, fmt.Errorf("canonicaljson: unexpected delimiter %v", delim)
+	}
+}
+
+// checkSurrogateEscapes scans the raw JSON text for \uXXXX escapes in
+// the surrogate range (U+D800–U+DFFF) that do not form a high+low pair,
+// and rejects them. It tracks just enough string structure to find
+// escapes; on input that is not well-formed JSON it may return nil and
+// leave the syntax error to the decoder, which runs next.
+func checkSurrogateEscapes(src []byte) error {
+	inString := false
+	for i := 0; i < len(src); i++ {
+		if !inString {
+			if src[i] == '"' {
+				inString = true
+			}
+			continue
+		}
+		switch src[i] {
+		case '"':
+			inString = false
+		case '\\':
+			if i+1 >= len(src) {
+				return nil // truncated; decoder reports the syntax error
+			}
+			if src[i+1] != 'u' {
+				i++ // skip the escaped character (covers \\ and \")
+				continue
+			}
+			u, ok := hex4(src[i+2:])
+			if !ok {
+				return nil // malformed escape; decoder reports it
+			}
+			i += 5 // now at the escape's last hex digit
+			switch {
+			case u >= 0xDC00 && u <= 0xDFFF:
+				return fmt.Errorf(`canonicaljson: lone low surrogate \u%04x in string`, u)
+			case u >= 0xD800 && u <= 0xDBFF:
+				u2, ok := uint16(0), false
+				if i+2 < len(src) && src[i+1] == '\\' && src[i+2] == 'u' {
+					u2, ok = hex4(src[i+3:])
+				}
+				if !ok || u2 < 0xDC00 || u2 > 0xDFFF {
+					return fmt.Errorf(`canonicaljson: lone high surrogate \u%04x in string`, u)
+				}
+				i += 6 // consume the low half of the pair
+			}
+		}
+	}
+	return nil
+}
+
+// hex4 parses exactly four hex digits from the front of b.
+func hex4(b []byte) (uint16, bool) {
+	if len(b) < 4 {
+		return 0, false
+	}
+	var u uint16
+	for _, c := range b[:4] {
+		var d uint16
+		switch {
+		case c >= '0' && c <= '9':
+			d = uint16(c - '0')
+		case c >= 'a' && c <= 'f':
+			d = uint16(c-'a') + 10
+		case c >= 'A' && c <= 'F':
+			d = uint16(c-'A') + 10
+		default:
+			return 0, false
+		}
+		u = u<<4 | d
+	}
+	return u, true
 }
 
 func encodeValue(buf *bytes.Buffer, v any) error {
@@ -125,14 +278,11 @@ func lessUTF16(ua, ub []uint16) bool {
 	return len(ua) < len(ub)
 }
 
-// encodeString ranges over s as decoded runes, so any lone (unpaired)
-// UTF-16 surrogate in the source JSON has already become U+FFFD by the
-// time it gets here — that's encoding/json's decoding behavior, not a
-// choice made in this function. A verifier built against a JSON library
-// that preserves lone surrogates differently could disagree with this
-// package on the canonical bytes for such input; Writ doesn't have one
-// today; WRIT-6 should decide whether the op envelope schema needs to
-// rule on it.
+// encodeString ranges over s as decoded runes. Lone (unpaired) UTF-16
+// surrogates never reach it: Marshal rejects them in the raw input
+// (checkSurrogateEscapes) before decoding, as spec/canonicalization.md
+// requires, so a U+FFFD here is always a literal U+FFFD from the source
+// and passes through as such.
 func encodeString(buf *bytes.Buffer, s string) {
 	buf.WriteByte('"')
 	for _, r := range s {

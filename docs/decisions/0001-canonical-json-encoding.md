@@ -1,7 +1,10 @@
 # 0001: Canonical JSON encoding approach
 
-Status: decided (spike). Feeds WRIT-6 (op envelope schema & canonicalization
-rules), which owns the actual spec text and fixture corpus.
+Status: decided (spike); promoted to normative by WRIT-6. The spec text
+is `spec/canonicalization.md`, the vectors live at
+`spec/testdata/canonicalization/vectors.json`, and the three questions
+this document deferred to WRIT-6 are resolved — see the annotations in
+"What this does and doesn't guarantee" below.
 
 ## Problem
 
@@ -68,28 +71,31 @@ Bespoke, implemented in `engine/codec/canonicaljson`. Reasoning:
 
 - Numbers are IEEE-754 doubles, per JSON's (and RFC 8785's) numeric model.
   Integers beyond 2^53 silently lose precision — see the `9007199254740993`
-  test vector. **Recommendation for WRIT-6:** any op envelope field needing
-  an exact large integer (sequence numbers, anything used as a tiebreak)
-  should be typed as a JSON string, not a JSON number, in the schema —
-  sidesteps this rather than relying on producers never overflowing 2^53.
-- Duplicate object keys collapse to the last value during decode (Go's
-  `encoding/json` behavior), before canonicalization ever sees them. That
-  means canonical bytes can't distinguish "no duplicate keys in the
-  original" from "duplicate keys, last one implicitly chosen." If the op
-  envelope's signature is meant to attest to the *original* producer-side
-  bytes rather than just the canonical form, WRIT-6 should decide whether
-  op decoding rejects duplicate keys outright rather than silently
-  resolving them.
+  test vector. **Resolved (WRIT-6):** the spec adopts the recommendation —
+  any op envelope field needing an exact large integer is typed as a JSON
+  string, not a JSON number (`spec/canonicalization.md` "Consequences to
+  design around"; `op_version` stays a small JSON integer).
+- Duplicate object keys used to collapse to the last value during decode
+  (Go's `encoding/json` behavior), before canonicalization ever saw them.
+  **Resolved (WRIT-6): duplicate keys are rejected outright**, at any
+  nesting depth — the canonical bytes must attest to one unambiguous
+  value. `Marshal` now decodes token-by-token so duplicates are caught
+  before the map collapse can hide them.
 - Non-finite numbers (`NaN`, `Infinity`) are rejected — they have no JSON
-  or RFC 8785 representation.
-- No opinion yet on where canonicalization sits relative to signing in the
-  op envelope pipeline (that's WRIT-6's schema to define); this package's
-  contract is just `Marshal(json []byte) (canonical []byte, error)`.
+  or RFC 8785 representation. WRIT-6 additionally rules that lone UTF-16
+  surrogates and invalid UTF-8 are rejected rather than U+FFFD-substituted,
+  for the same one-unambiguous-value reason.
+- **Resolved (WRIT-6):** where canonicalization sits relative to signing is
+  defined by `spec/op-envelope.md` — the `op.json` payload blob must be
+  byte-identical to the canonical encoding of its own content, and the
+  signature covers the commit (which names that blob through its tree),
+  so canonicalization happens before the commit is built and signed. This
+  package's contract is still just
+  `Marshal(json []byte) (canonical []byte, error)`.
 
 ## Prototype and test vectors
 
-`engine/codec/canonicaljson/canonicaljson.go`, with
-`engine/codec/canonicaljson/testdata/vectors.json` covering key ordering
+`engine/codec/canonicaljson/canonicaljson.go`, with vectors covering key ordering
 (ASCII, nested, duplicate keys, prefix-key tie-breaks, the UTF-16-vs-UTF-8
 surrogate-pair case), string escaping (all five shorthand escapes, other
 control characters, unescaped forward slash, raw non-ASCII passthrough),
@@ -100,6 +106,7 @@ each vector round-trips to its expected canonical form and that
 canonicalization is idempotent (canonical bytes are a fixed point), which
 is what signing depends on.
 
-These vectors are meant to seed WRIT-6's fixture corpus directly; the
-`{name, input, canonical}` shape was chosen so they can be lifted in
-largely as-is.
+These vectors seeded WRIT-6's fixture corpus as intended: they now live
+at `spec/testdata/canonicalization/vectors.json` (extended with rejection
+cases in a `{name, input, error}` variant of the same shape), embedded by
+package `spec`, and the canonicaljson tests read that one committed copy.

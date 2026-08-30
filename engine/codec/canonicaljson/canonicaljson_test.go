@@ -3,28 +3,33 @@ package canonicaljson
 import (
 	"bytes"
 	"encoding/json"
-	"os"
 	"testing"
+
+	"github.com/writtendev/writ/spec"
 )
 
+// vector mirrors an entry of spec/testdata/canonicalization/vectors.json:
+// either a valid case (canonical holds the expected bytes) or a rejection
+// case (error names the rejection category from spec/canonicalization.md).
 type vector struct {
 	Name      string `json:"name"`
 	Input     string `json:"input"`
 	Canonical string `json:"canonical"`
+	Error     string `json:"error"`
 }
 
 func loadVectors(t *testing.T) []vector {
 	t.Helper()
-	data, err := os.ReadFile("testdata/vectors.json")
+	data, err := spec.FS.ReadFile("testdata/canonicalization/vectors.json")
 	if err != nil {
-		t.Fatalf("reading testdata/vectors.json: %v", err)
+		t.Fatalf("reading canonicalization vectors from spec embed: %v", err)
 	}
 	var vecs []vector
 	if err := json.Unmarshal(data, &vecs); err != nil {
-		t.Fatalf("parsing testdata/vectors.json: %v", err)
+		t.Fatalf("parsing canonicalization vectors: %v", err)
 	}
 	if len(vecs) == 0 {
-		t.Fatal("testdata/vectors.json has no vectors")
+		t.Fatal("canonicalization vector file has no vectors")
 	}
 	return vecs
 }
@@ -33,6 +38,12 @@ func TestMarshalVectors(t *testing.T) {
 	for _, v := range loadVectors(t) {
 		t.Run(v.Name, func(t *testing.T) {
 			got, err := Marshal([]byte(v.Input))
+			if v.Error != "" {
+				if err == nil {
+					t.Fatalf("Marshal(%q) = %q, want %s rejection", v.Input, got, v.Error)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("Marshal(%q): %v", v.Input, err)
 			}
@@ -47,6 +58,9 @@ func TestMarshalVectors(t *testing.T) {
 // already-canonical bytes changes nothing. Signing relies on this.
 func TestMarshalIdempotent(t *testing.T) {
 	for _, v := range loadVectors(t) {
+		if v.Error != "" {
+			continue
+		}
 		t.Run(v.Name, func(t *testing.T) {
 			again, err := Marshal([]byte(v.Canonical))
 			if err != nil {
@@ -68,6 +82,15 @@ func TestMarshalRejectsTrailingData(t *testing.T) {
 func TestMarshalRejectsInvalidJSON(t *testing.T) {
 	if _, err := Marshal([]byte(`{"a":`)); err == nil {
 		t.Fatal("Marshal accepted truncated JSON")
+	}
+}
+
+// Invalid UTF-8 can't be expressed in the vector file (a JSON string can
+// only carry valid text), so the rule that Marshal rejects it rather than
+// letting encoding/json substitute U+FFFD is exercised directly here.
+func TestMarshalRejectsInvalidUTF8(t *testing.T) {
+	if _, err := Marshal([]byte("{\"s\":\"a\xff b\"}")); err == nil {
+		t.Fatal("Marshal accepted input that is not valid UTF-8")
 	}
 }
 
@@ -93,5 +116,18 @@ func TestEncodeNumberRejectsNaNAndInfDirectly(t *testing.T) {
 		if err := encodeNumber(&buf, json.Number(s)); err == nil {
 			t.Errorf("encodeNumber(%q) = %q, want error", s, buf.String())
 		}
+	}
+}
+
+// checkSurrogateEscapes must not flag surrogate-range \u sequences that
+// appear outside a string's escape structure — an escaped backslash
+// followed by literal "ud800" text is not an escape.
+func TestSurrogateScanIgnoresEscapedBackslash(t *testing.T) {
+	got, err := Marshal([]byte(`{"s":"\\ud800"}`))
+	if err != nil {
+		t.Fatalf("Marshal rejected a literal backslash followed by text: %v", err)
+	}
+	if want := `{"s":"\\ud800"}`; string(got) != want {
+		t.Errorf("Marshal = %q, want %q", got, want)
 	}
 }

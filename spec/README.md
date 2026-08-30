@@ -4,11 +4,39 @@ Per ARCHITECTURE.md ("Spec = fixtures"), the conformance fixtures are the
 ground truth for the Writ specification. prose describes intent, but
 the conformance corpus defines observable correctness byte-for-byte.
 
+## Spec Files
+
+What lives here, and with what force. **Normative** files define
+conformance: an implementation that disagrees with them is wrong.
+**Informative** files explain, index, or generate; disagreeing with them
+is a documentation bug, not a conformance failure. Machine-readable
+files are the stronger half of the spec — when prose and fixtures
+disagree, the fixtures win and the prose gets fixed.
+
+| File | Force | Contents |
+| --- | --- | --- |
+| `op-envelope.md` | Normative | The op envelope: which fields live on the op commit vs. in the `op.json` payload, op-id derivation, reader validation rules |
+| `canonicalization.md` | Normative | Byte-stable canonical JSON encoding: ordering, escaping, number formatting, rejection rules |
+| `schemas/op-envelope.schema.json` | Normative | JSON Schema (draft 2020-12) for the payload half of the envelope |
+| `testdata/canonicalization/vectors.json` | Normative | Canonicalization test vectors: input → exact canonical bytes, or input → rejection |
+| `testdata/envelopes/` | Normative | Envelope payload instances, valid and invalid; `invalid/index.json` records each expected rejection |
+| `spec.go` | Informative | Go embedding of `schemas/` and `testdata/` so every consumer reads the one committed copy |
+| `fixtures/` | Mixed | The fixture-repo generator and golden harness (informative tooling) producing the golden corpus under `fixtures/testdata/` (normative) |
+| `README.md` | Informative | This document: index, conformance model, independent-implementation guide |
+
 ## Repository Layout
 
 ```
 spec/
 ├── README.md               — this document: conformance model & independent implementation guide
+├── op-envelope.md          — normative: the op envelope, field by field
+├── canonicalization.md     — normative: canonical JSON encoding rules
+├── spec.go                 — go:embed of schemas/ and testdata/ (package spec)
+├── schemas/
+│   └── op-envelope.schema.json — draft 2020-12 schema for the op payload
+├── testdata/
+│   ├── canonicalization/   — encoding vectors (valid and rejected inputs)
+│   └── envelopes/          — payload instances: valid/ and invalid/ with index.json
 └── fixtures/
     ├── README.md           — fixture storage, repo generation, and test harness details
     ├── corpus.go           — loads descriptions from testdata/descriptions/
