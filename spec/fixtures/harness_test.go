@@ -238,6 +238,18 @@ func TestHarness_ResolveGoldenDir(t *testing.T) {
 	}
 }
 
+type mockTestRunner struct {
+	spyReporter
+	subtestCount int
+}
+
+func (m *mockTestRunner) Run(name string, f func(t *testing.T)) bool {
+	m.subtestCount++
+	return true
+}
+
+func (m *mockTestRunner) Skip(args ...any) {}
+
 func TestHarness_FilterMatchesZeroFails(t *testing.T) {
 	family := Family{
 		Name: "test-zero-match",
@@ -249,17 +261,16 @@ func TestHarness_FilterMatchesZeroFails(t *testing.T) {
 		},
 	}
 
-	corpus, err := LoadCorpus()
-	if err != nil {
-		t.Fatalf("LoadCorpus: %v", err)
+	mock := &mockTestRunner{spyReporter: spyReporter{tempDir: t.TempDir()}}
+	runFamily(mock, family)
+
+	if !mock.failed {
+		t.Fatal("expected runFamily to fail when 0 fixtures match the filter, but it succeeded")
 	}
-	matched := 0
-	for _, desc := range corpus {
-		if family.Filter(desc) {
-			matched++
-		}
+	if len(mock.fatals) == 0 || !strings.Contains(mock.fatals[0], "no fixtures matched the specified filter") {
+		t.Errorf("expected fatal error about 0 matching fixtures, got: %v", mock.fatals)
 	}
-	if matched != 0 {
-		t.Errorf("expected 0 matches for non-existent fixture name, got %d", matched)
+	if mock.subtestCount != 0 {
+		t.Errorf("expected 0 subtests to run, got %d", mock.subtestCount)
 	}
 }

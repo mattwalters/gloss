@@ -109,7 +109,7 @@ type Family struct {
 	Filter func(desc *Description) bool
 
 	// GoldenDir is the directory where golden files are stored.
-	// Defaults to "testdata/golden" (or "testdata/golden/<Name>" if it exists).
+	// Defaults to "testdata/golden/<Name>" (or "testdata/golden" for manifest).
 	GoldenDir string
 
 	// GoldenExt is the file extension for golden files. Defaults to ".json".
@@ -123,13 +123,26 @@ type Family struct {
 	Runner RunnerFunc
 }
 
+// TestRunner is the interface subset of *testing.T that supports subtests and reports.
+type TestRunner interface {
+	TestReporter
+	Run(name string, f func(t *testing.T)) bool
+	Skip(args ...any)
+}
+
 // Run executes all fixtures in the family as subtests of t, comparing
 // runner output byte-for-byte against golden files.
 func Run(t *testing.T, family Family) {
 	t.Helper()
+	runFamily(t, family)
+}
+
+func runFamily(t TestRunner, family Family) {
+	t.Helper()
 
 	if family.Runner == nil {
-		t.Fatal("fixtures: Family.Runner must not be nil")
+		t.Fatalf("fixtures: Family.Runner must not be nil")
+		return
 	}
 
 	if _, err := exec.LookPath("ssh-keygen"); err != nil {
@@ -149,7 +162,8 @@ func Run(t *testing.T, family Family) {
 		}
 	}
 	if len(corpus) == 0 {
-		t.Fatal("fixtures: no fixture descriptions found")
+		t.Fatalf("fixtures: no fixture descriptions found")
+		return
 	}
 
 	goldenDir := resolveGoldenDir(family.GoldenDir, family.Name)
@@ -173,7 +187,7 @@ func Run(t *testing.T, family Family) {
 	}
 
 	if matchedCount == 0 {
-		t.Fatal("fixtures: no fixtures matched the specified filter")
+		t.Fatalf("fixtures: no fixtures matched the specified filter")
 	}
 }
 
