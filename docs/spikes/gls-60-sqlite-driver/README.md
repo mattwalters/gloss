@@ -2,9 +2,10 @@
 
 Benchmark and findings for the projection layer's SQLite driver:
 `mattn/go-sqlite3` (cgo, canonical) vs `modernc.org/sqlite` (pure Go). Run the
-benchmark with `go test ./... -run xxx -bench . -benchtime 50x` from this
-directory; `BenchmarkIndexedRead*` alone is noisy at low iteration counts, so
-prefer `-bench BenchmarkIndexedRead -benchtime 2000x -count 3` for that one.
+benchmark with `go test ./... -run xxx -bench BenchmarkBulkInsert -benchtime
+20x -count 5` and `go test ./... -run xxx -bench BenchmarkIndexedRead
+-benchtime 2000x -count 5` from this directory — both benchmarks are noisy
+enough at low iteration/repeat counts to give a misleading single number.
 
 Answer: pure Go, `modernc.org/sqlite`. Recorded in ARCHITECTURE.md under
 "SQLite driver: pure Go".
@@ -19,18 +20,24 @@ Sized at 5,000 reviews × 20 comments/review (100,000 comments) to sit in the
 neighborhood of an imported PR history for an active repo, per the ticket's
 "imported PR history scale" (`schema.go`'s `numReviews`/`commentsPerReview`).
 
-On an Apple M2 Max (three runs each, `go test -bench`):
+On an Apple M2 Max (5 repeats each, `go test -bench -count 5`, insert timing
+isolated from connection-open/schema/close with `b.StopTimer`/`b.StartTimer`
+so setup cost doesn't leak into the number):
 
 | | bulk insert (100k comments, 1 tx) | indexed read (20 rows by index, 2000x/run) |
 |---|---|---|
-| `mattn/go-sqlite3` (cgo) | 355–396 ms | 35–42 µs |
-| `modernc.org/sqlite` (pure Go) | 646–691 ms | 48–83 µs |
+| `mattn/go-sqlite3` (cgo) | 330–450 ms | 42–56 µs |
+| `modernc.org/sqlite` (pure Go) | 635–725 ms | 49–63 µs (one outlier at 194 µs, likely GC-related) |
 
-cgo is consistently ~1.7–1.9x faster on bulk insert; ~1.3–2x faster on
-indexed reads, with pure Go showing more run-to-run variance there. Both are
-comfortably fast in absolute terms: a from-scratch refold of 100k ops is
-sub-second either way, and both drivers serve the point-lookup a review view
-needs in well under a millisecond. This is the only axis where cgo wins.
+cgo is consistently faster on bulk insert, by roughly 1.4–2.2x with no
+overlap across any of the 10 runs — the one clear, reproducible gap. Indexed
+reads are a different story: the ranges overlap almost entirely, neither
+driver wins consistently, and pure Go's one outlier looks like a GC pause
+rather than a structural cost. Both are comfortably fast in absolute terms:
+a from-scratch refold of 100k ops is sub-second either way, and both drivers
+serve the point-lookup a review view needs in well under a tenth of a
+millisecond. Bulk insert is the only axis where cgo has a real, measured
+edge.
 
 ## Findings
 
@@ -88,9 +95,10 @@ are active; neither is the risk here — the transport story in finding 1 is.
 Rust rests on "the CLI in `--json` plumbing mode is the universal API ...
 which Go distributes exceptionally well" — a promise a cgo dependency in
 the projection layer would compromise for every release, on every target,
-forever. The performance gap this spike measured is real (roughly 1.3–1.9x)
-but stays well inside "fast enough for a local single-user cache" at every
-scale tried, including a 100k-comment from-scratch refold. The
+forever. The performance gap this spike measured is real on bulk insert
+(roughly 1.4–2.2x) and negligible on indexed reads, but stays well inside
+"fast enough for a local single-user cache" at every scale tried, including
+a 100k-comment from-scratch refold. The
 cross-compilation and static-linking cost (findings 1–2) has no comparable
 "fine in practice" answer and compounds with every release target GLS-58
 adds. No CGO exception needs writing into the release pipeline as a result

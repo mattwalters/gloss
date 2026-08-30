@@ -72,17 +72,29 @@ func bulkInsert(b *testing.B, db *sql.DB, driverName string) {
 
 func BenchmarkBulkInsert_Mattn(b *testing.B) {
 	for i := 0; i < b.N; i++ {
+		b.StopTimer()
 		db := openDB(b, "sqlite3")
+		b.StartTimer()
+
 		bulkInsert(b, db, "sqlite3")
+
+		b.StopTimer()
 		db.Close()
+		b.StartTimer()
 	}
 }
 
 func BenchmarkBulkInsert_Modernc(b *testing.B) {
 	for i := 0; i < b.N; i++ {
+		b.StopTimer()
 		db := openDB(b, "sqlite")
+		b.StartTimer()
+
 		bulkInsert(b, db, "sqlite")
+
+		b.StopTimer()
 		db.Close()
+		b.StartTimer()
 	}
 }
 

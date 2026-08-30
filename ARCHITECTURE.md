@@ -61,12 +61,13 @@ We seriously considered Rust; its three advantages dissolved under this project'
 ## SQLite driver: pure Go (decided; rationale preserved)
 
 The projection (five machines, #4) uses `modernc.org/sqlite`, not
-`mattn/go-sqlite3`. `mattn` is faster — a spike benchmark on a
-projection-shaped workload (5k reviews, 100k comments, one bulk-insert
-transaction plus indexed reads by review) measured cgo at roughly 1.3–1.9x
-on both bulk insert and indexed read — but both are comfortably fast in
-absolute terms (sub-second full refold, sub-millisecond point lookups), and
-cgo would compromise the reason Go was chosen over Rust in the first place:
+`mattn/go-sqlite3`. `mattn` is faster on bulk insert — a spike benchmark on
+a projection-shaped workload (5k reviews, 100k comments, one bulk-insert
+transaction plus indexed reads by review) measured cgo at roughly 1.4–2.2x
+there, with indexed reads too close to call (overlapping ranges across 10
+runs) — but both are comfortably fast in absolute terms (sub-second full
+refold, sub-tenth-millisecond point lookups), and cgo would compromise the
+reason Go was chosen over Rust in the first place:
 "the CLI in `--json` plumbing mode is the universal API ... which Go
 distributes exceptionally well" (see Language section above). A cgo
 dependency in the projection means the release matrix (GLS-58: linux/macos/
