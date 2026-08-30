@@ -8,9 +8,13 @@ reachable by automated tooling, so trademark findings below are best-effort
 web search only.
 
 Channels checked per name: npm, crates.io, pkg.go.dev, Homebrew (brew), apt
-(Debian package search), GitHub (org/user handles + repos), a small domain
-sample (`.dev`, `.io`), and general/trademark web search. Checked "Gloss"
-plus the top two backups from VISION.md: **Scholia** and **Cairn**.
+(Debian package search), GitHub (org/user handles + repos), a light,
+non-exhaustive domain sample (`.dev`, plus `.io` for Gloss only), and
+general/trademark web search. VISION.md lists five alternatives in this
+order: Scholia, Cairn, Rings, Grain, Plumb; that list isn't stated to be
+ranked, but absent other signal this report reads list order as priority
+order and checks "Gloss" plus the first two, **Scholia** and **Cairn**, per
+the DoD's "top two backups."
 
 ## Gloss
 
@@ -27,9 +31,11 @@ plus the top two backups from VISION.md: **Scholia** and **Cairn**.
 
 **Risk: Medium.** No single blocking hit, but real exact-name use on npm,
 crates.io, Debian/Haskell, and the GitHub org handle means the bare name
-won't be available everywhere. The sharpest issue isn't any of those — it's
-that our own planned TUI stack (Bubble Tea) already has a famous "Lip Gloss"
-in its immediate orbit.
+won't be available everywhere. Of Gloss's own findings, the most concerning
+is that our own planned TUI stack (Bubble Tea) already has a famous "Lip
+Gloss" in its immediate orbit — a naming-adjacency risk, not a competing
+product, which is why this still rates below Cairn's finding (an active
+company shipping a competing kind of product under the exact name).
 
 ## Scholia
 
@@ -63,21 +69,22 @@ domains (academic tooling vs. dev tooling) differ.
 | Domains | `cairn.dev` did not resolve — appears available. |
 | Trademark | No hit found; unresearched via TESS. An operating company using the name in dev tooling is a common-law risk regardless of federal registration status. |
 
-**Risk: High.** This is the sharpest conflict found in the whole survey: an
-active, named company is currently shipping a developer CLI/agent product
-called Cairn, in an adjacent corner of the same market Gloss is entering.
+**Risk: High.** This is the sharpest conflict found across the whole survey
+— sharper than anything found for Gloss itself: an active, named company is
+currently shipping a developer CLI/agent product called Cairn, in an
+adjacent corner of the same market Gloss is entering.
 
 ## Recommendation
 
-**Keep "Gloss," with a qualifier for namespaces where the bare name is
-already taken** — register package/org names like `gloss-scm`, `getgloss`,
-or `glossvcs` rather than assuming the bare string is available on
-npm/crates.io/GitHub, and avoid describing UI styling work as "gloss" in our
-own docs/changelogs to reduce day-to-day confusion with `lipgloss` in the
-Bubble Tea community we're already part of. No blocking trademark was found
-in this preliminary screen, but a professional USPTO/TESS search is
-recommended before any public launch, domain spend, or registration.
-
-Stated once: neither backup is a clear improvement. Scholia carries a real
-but adjacent-domain collision; Cairn's collision is worse — an active
-company already shipping developer tooling under that exact name.
+**Keep.** Keep "Gloss" as the project name — neither backup clears the bar
+for a rename, since Scholia carries a real (if adjacent-domain) collision
+and Cairn's is worse than anything found for Gloss. Separately, treat the
+package/org registries where the bare name is already taken as a qualifier
+problem to solve at registration time, not a reason to rename the project:
+register package/org names like `gloss-scm`, `getgloss`, or `glossvcs`
+rather than assuming the bare string is available on npm/crates.io/GitHub,
+and avoid describing UI styling work as "gloss" in our own docs/changelogs
+to reduce day-to-day confusion with `lipgloss` in the Bubble Tea community
+we're already part of. No blocking trademark was found in this preliminary
+screen, but a professional USPTO/TESS search is recommended before any
+public launch, domain spend, or registration.
