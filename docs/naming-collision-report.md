@@ -35,7 +35,8 @@ won't be available everywhere. Of Gloss's own findings, the most concerning
 is that our own planned TUI stack (Bubble Tea) already has a famous "Lip
 Gloss" in its immediate orbit — a naming-adjacency risk, not a competing
 product, which is why this still rates below Cairn's finding (an active
-company shipping a competing kind of product under the exact name).
+company shipping developer tooling — not the same product category as
+Gloss, but the same broad market — under the exact name).
 
 ## Scholia
 
@@ -71,19 +72,23 @@ domains (academic tooling vs. dev tooling) differ.
 
 **Risk: High.** This is the sharpest conflict found across the whole survey
 — sharper than anything found for Gloss itself: an active, named company is
-currently shipping a developer CLI/agent product called Cairn, in an
-adjacent corner of the same market Gloss is entering.
+currently shipping developer tooling (a terminal-based coding agent) called
+Cairn — an adjacent product category, in the same broad market Gloss is
+entering, under the exact name.
 
 ## Recommendation
 
-**Keep.** Keep "Gloss" as the project name — neither backup clears the bar
-for a rename, since Scholia carries a real (if adjacent-domain) collision
-and Cairn's is worse than anything found for Gloss. No blocking trademark
-was found in this preliminary screen, but a professional USPTO/TESS search
-is recommended before any public launch, domain spend, or registration.
+**Keep.** Keep "Gloss" as the project name — this is the one recommendation
+this report makes. Neither backup clears the bar for a rename: Scholia
+carries a real (if adjacent-domain) collision, and Cairn's is worse than
+anything found for Gloss. No blocking trademark was found in this
+preliminary screen, but a professional USPTO/TESS search is recommended
+before any public launch, domain spend, or registration.
 
-This verdict is about the project name only, and doesn't extend to every
-package/org registry: the bare string `gloss` is already taken on npm,
-crates.io, and the GitHub org handle, so those specific registrations will
-need a qualified name (e.g. `gloss-scm`, `getgloss`) regardless of the
-project-name decision above.
+Note, separate from the recommendation above: this "keep" verdict is about
+the project name, not about every package/org registry. The bare string
+`gloss` is already taken on npm, crates.io, and the GitHub org handle
+(figures for these and other exact-name hits above are as read directly
+from each registry's own API/site at the time of this report), so those
+specific registrations will need a qualified name (e.g. `gloss-scm`,
+`getgloss`) no matter what the project itself is called.
