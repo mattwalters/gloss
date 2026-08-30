@@ -156,11 +156,13 @@ func Run(t *testing.T, family Family) {
 	goldenExt := resolveGoldenExt(family.GoldenExt)
 	isUpdating := family.UpdateGolden || UpdateGolden()
 
+	matchedCount := 0
 	for _, desc := range corpus {
 		desc := desc
 		if family.Filter != nil && !family.Filter(desc) {
 			continue
 		}
+		matchedCount++
 
 		t.Run(desc.Name, func(t *testing.T) {
 			runner := func(tr TestReporter, fix *Fixture) ([]byte, error) {
@@ -168,6 +170,10 @@ func Run(t *testing.T, family Family) {
 			}
 			runSingleFixture(t, desc, goldenDir, goldenExt, isUpdating, runner)
 		})
+	}
+
+	if matchedCount == 0 {
+		t.Fatal("fixtures: no fixtures matched the specified filter")
 	}
 }
 
@@ -185,11 +191,8 @@ func resolveGoldenDir(configuredDir, familyName string) string {
 	if configuredDir != "" {
 		return configuredDir
 	}
-	if familyName != "" {
-		familyGolden := filepath.Join("testdata", "golden", familyName)
-		if info, err := os.Stat(familyGolden); err == nil && info.IsDir() {
-			return familyGolden
-		}
+	if familyName != "" && familyName != "manifest" {
+		return filepath.Join("testdata", "golden", familyName)
 	}
 	return filepath.Join("testdata", "golden")
 }

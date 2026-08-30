@@ -36,7 +36,21 @@ func DiffText(oldName, oldText, newName, newText string) string {
 	ops := computeDiff(oldLines, newLines)
 	hunks := createHunks(ops, 3)
 	if len(hunks) == 0 {
-		return ""
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("--- %s\n", oldName))
+		sb.WriteString(fmt.Sprintf("+++ %s\n", newName))
+		if strings.HasSuffix(oldText, "\n") && !strings.HasSuffix(newText, "\n") {
+			sb.WriteString("@@ -1 +1 @@\n")
+			sb.WriteString(" " + strings.TrimRight(oldText, "\r\n") + "\n")
+			sb.WriteString("\\ No newline at end of file\n")
+		} else if !strings.HasSuffix(oldText, "\n") && strings.HasSuffix(newText, "\n") {
+			sb.WriteString("@@ -1 +1 @@\n")
+			sb.WriteString(" " + strings.TrimRight(newText, "\r\n") + "\n")
+			sb.WriteString("\\ No newline at end of old file\n")
+		} else {
+			sb.WriteString(fmt.Sprintf("@@ files differ in trailing whitespace or line endings (old: %d bytes, new: %d bytes) @@\n", len(oldText), len(newText)))
+		}
+		return sb.String()
 	}
 
 	var sb strings.Builder

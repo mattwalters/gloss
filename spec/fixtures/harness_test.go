@@ -164,8 +164,9 @@ func TestHarness_CustomCorpusAndFilter(t *testing.T) {
 
 	ranCount := 0
 	family := Family{
-		Name:   "custom",
-		Corpus: corpus,
+		Name:      "custom",
+		GoldenDir: "testdata/golden",
+		Corpus:    corpus,
 		Filter: func(desc *Description) bool {
 			return desc.Name == "multi-writer-refs"
 		},
@@ -188,6 +189,7 @@ func TestHarness_CustomCorpusAndFilter(t *testing.T) {
 func TestHarness_CustomCorpusDir(t *testing.T) {
 	family := Family{
 		Name:      "from-dir",
+		GoldenDir: "testdata/golden",
 		CorpusDir: "testdata/descriptions",
 		Filter: func(desc *Description) bool {
 			return desc.Name == "linear-history"
@@ -212,4 +214,52 @@ func TestUpdateGoldenFlag(t *testing.T) {
 		t.Error("expected UpdateGolden() to be true when UPDATE_GOLDEN=true")
 	}
 	os.Unsetenv("UPDATE_GOLDEN")
+}
+
+func TestHarness_ResolveGoldenDir(t *testing.T) {
+	// Manifest family defaults to testdata/golden
+	if got := resolveGoldenDir("", "manifest"); got != filepath.Join("testdata", "golden") {
+		t.Errorf("expected manifest to resolve to testdata/golden, got: %s", got)
+	}
+
+	// Empty family name defaults to testdata/golden
+	if got := resolveGoldenDir("", ""); got != filepath.Join("testdata", "golden") {
+		t.Errorf("expected empty name to resolve to testdata/golden, got: %s", got)
+	}
+
+	// New family name (non-manifest) resolves to testdata/golden/<name> even if directory does not exist
+	if got := resolveGoldenDir("", "fold"); got != filepath.Join("testdata", "golden", "fold") {
+		t.Errorf("expected fold to resolve to testdata/golden/fold, got: %s", got)
+	}
+
+	// Configured directory overrides family name
+	if got := resolveGoldenDir("custom/golden/path", "fold"); got != "custom/golden/path" {
+		t.Errorf("expected configured dir override, got: %s", got)
+	}
+}
+
+func TestHarness_FilterMatchesZeroFails(t *testing.T) {
+	family := Family{
+		Name: "test-zero-match",
+		Filter: func(desc *Description) bool {
+			return desc.Name == "non-existent-fixture-typo"
+		},
+		Runner: func(t *testing.T, fix *Fixture) ([]byte, error) {
+			return []byte("output"), nil
+		},
+	}
+
+	corpus, err := LoadCorpus()
+	if err != nil {
+		t.Fatalf("LoadCorpus: %v", err)
+	}
+	matched := 0
+	for _, desc := range corpus {
+		if family.Filter(desc) {
+			matched++
+		}
+	}
+	if matched != 0 {
+		t.Errorf("expected 0 matches for non-existent fixture name, got %d", matched)
+	}
 }

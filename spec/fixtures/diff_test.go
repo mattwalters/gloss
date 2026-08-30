@@ -73,3 +73,25 @@ func TestDiff_EmptyInputs(t *testing.T) {
 		t.Errorf("expected addition of first line, got:\n%s", diff)
 	}
 }
+
+func TestDiff_TrailingNewlineDifference(t *testing.T) {
+	oldData := []byte("line1\nline2\n")
+	newData := []byte("line1\nline2")
+
+	diff := Diff("old", oldData, "new", newData)
+	if diff == "" {
+		t.Fatal("expected non-empty diff for missing trailing newline, got empty string")
+	}
+	if !strings.Contains(diff, "No newline at end of file") {
+		t.Errorf("expected newline notice in diff, got:\n%s", diff)
+	}
+
+	diffRev := Diff("old", newData, "new", oldData)
+	if diffRev == "" {
+		t.Fatal("expected non-empty diff for added trailing newline, got empty string")
+	}
+	if !strings.Contains(diffRev, "No newline at end of old file") {
+		t.Errorf("expected old newline notice in diff, got:\n%s", diffRev)
+	}
+}
+

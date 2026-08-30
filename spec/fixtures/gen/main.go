@@ -67,6 +67,9 @@ func run() error {
 		if *updateGolden {
 			want, err := os.ReadFile(goldenPath)
 			if os.IsNotExist(err) {
+				if err := os.MkdirAll(filepath.Dir(goldenPath), 0o755); err != nil {
+					return fmt.Errorf("mkdir for %s: %w", goldenPath, err)
+				}
 				if err := os.WriteFile(goldenPath, got, 0o644); err != nil {
 					return fmt.Errorf("write golden for %s: %w", desc.Name, err)
 				}
