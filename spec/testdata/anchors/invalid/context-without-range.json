@@ -5,19 +5,11 @@
     "path": "a/b.go",
     "blob": "b7e23ec29af22b0b4e41da31e868d57226121c84",
     "context": {
-      "before": [
-        "\tif err != nil {",
-        "\t\treturn nil, err",
-        "\t}"
-      ],
+      "before": [],
       "lines": [
-        "\tstate.Status = next"
+        "x"
       ],
-      "after": [
-        "}",
-        "",
-        "// fold folds one op into state."
-      ]
+      "after": []
     }
   }
 }

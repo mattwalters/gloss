@@ -4,18 +4,18 @@
     "subject_type": "file",
     "side": "RIGHT",
     "line": null,
-    "original_commit_id": "2ae787a3e353251a99120a6935bfd6b807e60d5a",
+    "original_commit_id": "7c5d9e1f3a2b4c6d8e0f1a2b3c4d5e6f7a8b9c0d",
     "diff_hunk": ""
   },
   "pr": {
-    "base_sha": "0f61c1a9f3f64b6f7d33f2b3a2c5d9e8b7a6c5d4",
     "base_ref": "main",
-    "head_ref": "feature/sync-retry"
+    "head_ref": "feature/sync-retry",
+    "merge_base_sha": "0f61c1a9f3f64b6f7d33f2b3a2c5d9e8b7a6c5d4"
   },
   "anchor": {
     "version": 1,
     "new": {
-      "commit": "2ae787a3e353251a99120a6935bfd6b807e60d5a",
+      "commit": "7c5d9e1f3a2b4c6d8e0f1a2b3c4d5e6f7a8b9c0d",
       "path": "docs/assets/flow.png",
       "blob": "8f7d3a2b1c0e9f8d7c6b5a4938271605f4e3d2c1"
     }

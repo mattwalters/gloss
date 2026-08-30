@@ -43,6 +43,14 @@
     "kind": "schema",
     "reason": "line numbers are 1-based; start must be >= 1"
   },
+  "long-range-missing-omitted.json": {
+    "kind": "invariant",
+    "reason": "a 65-line range with 64 stored lines must carry omitted = 1"
+  },
+  "long-range-not-elided.json": {
+    "kind": "schema",
+    "reason": "ranges over 64 lines must be elided; context.lines holds at most 64 entries"
+  },
   "missing-blob.json": {
     "kind": "schema",
     "reason": "side anchors require commit, path, and blob"

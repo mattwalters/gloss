@@ -157,10 +157,10 @@ it, decoded and truncated per the rules above:
 
 | Field     | Type             | Required | Meaning |
 | --------- | ---------------- | -------- | ------- |
-| `before`  | array of strings | yes      | Up to 3 lines immediately preceding `range.start`, in file order. Fewer when the range starts near the top of the file; MAY be empty when the producer has no access to them (see the GitHub appendix). |
+| `before`  | array of strings | yes      | The lines immediately preceding `range.start`, in file order. A producer that can read the blob MUST capture exactly 3 — fewer only when the file boundary leaves fewer. A producer without access to the surrounding content MAY capture fewer, including none. |
 | `lines`   | array of strings | yes      | The anchored lines themselves. Never empty. |
 | `omitted` | integer          | no       | Count of elided middle lines, present only on truncated captures of long ranges (below). MUST be ≥ 1 when present. |
-| `after`   | array of strings | yes      | Up to 3 lines immediately following `range.end`, in file order. Same allowances as `before`. |
+| `after`   | array of strings | yes      | The lines immediately following `range.end`, in file order. Same capture rule and allowances as `before`. |
 
 `before` and `after` are always present, as possibly-empty arrays — absent
 and empty would be two encodings of one meaning, which canonical encoding
@@ -170,9 +170,9 @@ exists to avoid.
 contain the complete content of the range and `omitted` MUST be absent.
 When it spans more, `lines` MUST contain exactly the first 32 and last 32
 lines of the range (64 entries) and `omitted` MUST equal
-`(end − start + 1) − 64`. These are cross-field invariants the JSON Schema
-cannot express; validators enforce them alongside it, and the invalid
-vectors pin them.
+`(end − start + 1) − 64`. The schema pins the 64-entry ceiling on `lines`;
+the rest is cross-field arithmetic JSON Schema cannot express — validators
+enforce it alongside the schema, and the invalid vectors pin it.
 
 The collar width (3) matches unified-diff default context: enough signal
 for fuzzy re-anchoring to distinguish the range from similar code
@@ -212,12 +212,14 @@ move also edited the file. Vector: `rename-both-sides.json`.
 ### Cross-side ranges
 
 A range that starts in deleted content and ends in added content carries
-both sides with partial ranges: `old.range` covers the deleted lines
-(starting at the range's old-side start), `new.range` the added lines
-(ending at the range's new-side end). The anchor does not record how the
-two interleave in any particular diff rendering — that is derivable from
-the two commits, and rendering is a client concern. Vector:
-`cross-side-range.json`.
+both sides with partial ranges: `old.range` runs from the span's old-side
+start line through the **last old-side line within the span**, and
+`new.range` from the **first new-side line within the span** through its
+new-side end — so when a hunk interleaves deleted and added runs, two
+converters of the same span produce the same two ranges. The anchor does
+not record how the sides interleave in any particular diff rendering —
+that is derivable from the two commits, and rendering is a client concern.
+Vector: `cross-side-range.json`.
 
 ## Versioning and evolution
 
@@ -277,11 +279,11 @@ A GitHub review comment's position fields, and where each lands:
 
 | GitHub field | Disposition |
 | ------------ | ----------- |
-| `path` | `new.path` when `side` is `RIGHT`, `old.path` when `LEFT`. For the other side of a renamed file the bridge reads the file pairing from the commit diff. |
+| `path` | Names the file on the **head side** of the diff regardless of `side` (the old side only when the file was deleted), so it feeds `new.path` directly; `old.path` comes from the diff's file pairing (rename detection) between the two commits — the same computation that locates the old-side blob. |
 | `side`, `start_side` | Encoded structurally: `RIGHT` positions produce `new`, `LEFT` positions produce `old`; a `start_side` ≠ `side` range produces both ([cross-side ranges](#cross-side-ranges)). |
 | `line`, `start_line` | `range.end` and `range.start` on the corresponding side (`start_line` absent means a single-line comment: `start` = `end` = `line`). |
-| `original_commit_id`, `original_line`, `original_start_line` | The anchor is captured at the comment's *original* position: `commit` is `original_commit_id` (for `RIGHT`; for `LEFT` the PR's base at that time, which the PR context supplies), and the original line fields feed `range`. GitHub's *current* `commit_id`/`line` are that platform's own re-anchoring output — derived state Writ's resolver recomputes rather than imports. |
-| `diff_hunk` | Redundant with the blobs: the bridge holds the repository, so `context` is captured from the blob at the recorded commit per the [capture rules](#context-capture). When the original commit is no longer fetchable, `diff_hunk` is the fallback source — it contains the selected lines and the in-hunk lines before them, but nothing after the comment's last line, which is why `after` MAY be empty. |
+| `original_commit_id`, `original_line`, `original_start_line` | The anchor is captured at the comment's *original* position: for `RIGHT`, `commit` is `original_commit_id`; for `LEFT` it is the diff's base — the merge-base of the PR's base branch and `original_commit_id`, which the bridge computes from the repository (GitHub's API reports only the *current* `base_sha`, not the base at comment time; the merge-base against the original head recovers it unless the base branch itself was rewritten, in which case the current-position fallback below applies). The original line fields feed `range`. GitHub's *current* `commit_id`/`line` are that platform's own re-anchoring output — derived state Writ's resolver recomputes rather than imports. |
+| `diff_hunk` | Informative excerpt, redundant for capture: the bridge holds the repository, so `context` is captured from the blob at the recorded commit per the [capture rules](#context-capture), never parsed out of the hunk. |
 | `position`, `original_position` | Legacy hunk offsets, derivable from `diff_hunk` + line numbers; carried by nothing, reconstructible by the bridge on the write path from the diff itself. |
 | `subject_type` | `"line"` produces ranged sides; `"file"` produces a [whole-file anchor](#whole-file-anchors). |
 | `commit_id`, `in_reply_to_id`, `body`, reactions, author, timestamps | Not position data — they map to the comment op and envelope (WRIT-9), not the anchor. |
@@ -289,6 +291,16 @@ A GitHub review comment's position fields, and where each lands:
 Every position field is thus either carried structurally, carried as
 content, or derived state recomputable from what is carried — which is the
 lossless-convertibility claim of this ticket's definition of done.
+
+One honest boundary: capture needs the blobs, so it needs the recorded
+commits to be fetchable. When they are not — the original head was
+force-pushed away and the platform garbage-collected it — a v1 anchor for
+the *original* position cannot be captured. The bridge then anchors at the
+comment's **current** position instead (`commit_id`, `line`, `side` —
+GitHub's own re-anchoring output, whose commit is the live head and always
+fetchable): a faithful anchor for where the platform itself says the
+comment now points, rather than a fabricated one for a position whose
+content is gone.
 
 Worked examples, as vectors:
 

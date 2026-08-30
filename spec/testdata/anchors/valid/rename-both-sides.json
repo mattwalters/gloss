@@ -1,9 +1,9 @@
 {
   "version": 1,
   "old": {
-    "commit": "9d5c1f4be9adf7db64a1b7404bd82ffd2f2fb7a1",
+    "commit": "0f61c1a9f3f64b6f7d33f2b3a2c5d9e8b7a6c5d4",
     "path": "engine/fold.go",
-    "blob": "b7e23ec29af22b0b4e41da31e868d57226121c84",
+    "blob": "6a4c8e0b2d5f6a4c8e0b2d5f6a4c8e0b2d5f6a4c",
     "range": {
       "start": 12,
       "end": 12
@@ -25,9 +25,9 @@
     }
   },
   "new": {
-    "commit": "2ae787a3e353251a99120a6935bfd6b807e60d5a",
+    "commit": "7c5d9e1f3a2b4c6d8e0f1a2b3c4d5e6f7a8b9c0d",
     "path": "engine/fold/fold.go",
-    "blob": "b7e23ec29af22b0b4e41da31e868d57226121c84",
+    "blob": "6a4c8e0b2d5f6a4c8e0b2d5f6a4c8e0b2d5f6a4c",
     "range": {
       "start": 12,
       "end": 12

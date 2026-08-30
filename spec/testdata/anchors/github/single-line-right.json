@@ -5,21 +5,21 @@
     "side": "RIGHT",
     "line": 8,
     "start_line": null,
-    "original_commit_id": "2ae787a3e353251a99120a6935bfd6b807e60d5a",
+    "original_commit_id": "7c5d9e1f3a2b4c6d8e0f1a2b3c4d5e6f7a8b9c0d",
     "original_line": 8,
-    "diff_hunk": "@@ -5,4 +5,8 @@ import (\n \t\"fmt\"\n \n-\toldTransport(remote)\n+\tif err := gitFetch(remote); err != nil {\n+\t\treturn err\n+\t}\n+\treturn gitPush(remote)"
+    "diff_hunk": "@@ -2,6 +2,8 @@\n \n func sync(remote string) error {\n \tlog(remote)\n-\toldTransport(remote)\n-\treturn nil\n+\tif err := gitFetch(remote); err != nil {\n+\t\treturn err\n+\t}\n+\treturn gitPush(remote)"
   },
   "pr": {
-    "base_sha": "0f61c1a9f3f64b6f7d33f2b3a2c5d9e8b7a6c5d4",
     "base_ref": "main",
-    "head_ref": "feature/sync-retry"
+    "head_ref": "feature/sync-retry",
+    "merge_base_sha": "0f61c1a9f3f64b6f7d33f2b3a2c5d9e8b7a6c5d4"
   },
   "anchor": {
     "version": 1,
     "new": {
-      "commit": "2ae787a3e353251a99120a6935bfd6b807e60d5a",
+      "commit": "7c5d9e1f3a2b4c6d8e0f1a2b3c4d5e6f7a8b9c0d",
       "path": "cmd/writ/sync.go",
-      "blob": "b7e23ec29af22b0b4e41da31e868d57226121c84",
+      "blob": "4e2b6c8da1f3579bdf02468ace13579bdf02468a",
       "range": {
         "start": 8,
         "end": 8
@@ -33,7 +33,9 @@
         "lines": [
           "\treturn gitPush(remote)"
         ],
-        "after": []
+        "after": [
+          "}"
+        ]
       }
     }
   }

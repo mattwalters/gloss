@@ -9,19 +9,11 @@
       "end": 1
     },
     "context": {
-      "before": [
-        "\tif err != nil {",
-        "\t\treturn nil, err",
-        "\t}"
-      ],
+      "before": [],
       "lines": [
-        "\tstate.Status = next"
+        "x"
       ],
-      "after": [
-        "}",
-        "",
-        "// fold folds one op into state."
-      ]
+      "after": []
     }
   }
 }

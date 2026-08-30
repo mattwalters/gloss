@@ -3,40 +3,39 @@
     "path": "cmd/writ/sync.go",
     "subject_type": "line",
     "side": "LEFT",
-    "line": 6,
+    "line": 5,
     "start_line": null,
-    "original_commit_id": "2ae787a3e353251a99120a6935bfd6b807e60d5a",
-    "original_line": 6,
-    "diff_hunk": "@@ -5,4 +5,8 @@ import (\n \t\"fmt\"\n \n-\toldTransport(remote)"
+    "original_commit_id": "7c5d9e1f3a2b4c6d8e0f1a2b3c4d5e6f7a8b9c0d",
+    "original_line": 5,
+    "diff_hunk": "@@ -2,6 +2,8 @@\n \n func sync(remote string) error {\n \tlog(remote)\n-\toldTransport(remote)"
   },
   "pr": {
-    "base_sha": "0f61c1a9f3f64b6f7d33f2b3a2c5d9e8b7a6c5d4",
     "base_ref": "main",
-    "head_ref": "feature/sync-retry"
+    "head_ref": "feature/sync-retry",
+    "merge_base_sha": "0f61c1a9f3f64b6f7d33f2b3a2c5d9e8b7a6c5d4"
   },
   "anchor": {
     "version": 1,
     "old": {
       "commit": "0f61c1a9f3f64b6f7d33f2b3a2c5d9e8b7a6c5d4",
       "path": "cmd/writ/sync.go",
-      "blob": "5c3eb80066420002bc3dcc7ca4ab6efad7ed4ae5",
+      "blob": "3d1a5b7c9e0f2468ace13579bdf02468ace13579",
       "range": {
-        "start": 6,
-        "end": 6
+        "start": 5,
+        "end": 5
       },
       "context": {
         "before": [
-          "import (",
-          "\t\"fmt\"",
-          ""
+          "",
+          "func sync(remote string) error {",
+          "\tlog(remote)"
         ],
         "lines": [
           "\toldTransport(remote)"
         ],
         "after": [
           "\treturn nil",
-          "}",
-          ""
+          "}"
         ]
       }
     }

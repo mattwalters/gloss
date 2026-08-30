@@ -18,9 +18,9 @@
         "\tstate.Status = next"
       ],
       "after": [
-        "}",
-        "",
-        "// fold folds one op into state."
+        "\tstate.UpdatedAt = op.Time",
+        "\treturn state, nil",
+        "}"
       ]
     }
   }
