@@ -1,0 +1,66 @@
+{
+  "github": {
+    "path": "engine/parse/parse.go",
+    "subject_type": "line",
+    "side": "LEFT",
+    "start_side": "RIGHT",
+    "line": 4,
+    "start_line": 3,
+    "original_commit_id": "7c5d9e1f3a2b4c6d8e0f1a2b3c4d5e6f7a8b9c0d",
+    "original_line": 4,
+    "original_start_line": 3,
+    "diff_hunk": "@@ -1,5 +1,5 @@\n package parse\n \n+var added = 1\n var keep = true\n-var removeMe = false"
+  },
+  "pr": {
+    "base_ref": "main",
+    "head_ref": "feature/sync-retry",
+    "merge_base_sha": "0f61c1a9f3f64b6f7d33f2b3a2c5d9e8b7a6c5d4"
+  },
+  "anchor": {
+    "version": 1,
+    "old": {
+      "commit": "0f61c1a9f3f64b6f7d33f2b3a2c5d9e8b7a6c5d4",
+      "path": "engine/parse/parse.go",
+      "blob": "2b4d6f8a0c2e4f6a8c0e2a4c6e8f0a2c4e6a8c0e",
+      "range": {
+        "start": 3,
+        "end": 4
+      },
+      "context": {
+        "before": [
+          "package parse",
+          ""
+        ],
+        "lines": [
+          "var keep = true",
+          "var removeMe = false"
+        ],
+        "after": [
+          "func parse() {}"
+        ]
+      }
+    },
+    "new": {
+      "commit": "7c5d9e1f3a2b4c6d8e0f1a2b3c4d5e6f7a8b9c0d",
+      "path": "engine/parse/parse.go",
+      "blob": "3c5e7a9b1d3f5a7b9d1f3b5d7f9a1b3d5f7b9d1f",
+      "range": {
+        "start": 3,
+        "end": 4
+      },
+      "context": {
+        "before": [
+          "package parse",
+          ""
+        ],
+        "lines": [
+          "var added = 1",
+          "var keep = true"
+        ],
+        "after": [
+          "func parse() {}"
+        ]
+      }
+    }
+  }
+}

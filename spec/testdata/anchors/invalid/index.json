@@ -39,6 +39,10 @@
     "kind": "schema",
     "reason": "stored lines never contain LF; splitting happens before storage"
   },
+  "line-with-trailing-lf.json": {
+    "kind": "schema",
+    "reason": "a trailing LF is still an LF; the schema pattern is anchored with end-of-text semantics (ECMA-262/RE2), not before-final-newline semantics"
+  },
   "line-zero.json": {
     "kind": "schema",
     "reason": "line numbers are 1-based; start must be >= 1"

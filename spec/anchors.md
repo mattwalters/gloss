@@ -211,15 +211,22 @@ move also edited the file. Vector: `rename-both-sides.json`.
 
 ### Cross-side ranges
 
-A range that starts in deleted content and ends in added content carries
-both sides with partial ranges: `old.range` runs from the span's old-side
-start line through the **last old-side line within the span**, and
-`new.range` from the **first new-side line within the span** through its
-new-side end — so when a hunk interleaves deleted and added runs, two
-converters of the same span produce the same two ranges. The anchor does
-not record how the sides interleave in any particular diff rendering —
-that is derivable from the two commits, and rendering is a client concern.
-Vector: `cross-side-range.json`.
+A comment can select a contiguous span of *diff rows* — each row a
+context line (present in both files), a deletion (old only), or an
+addition (new only) — and such a span need not live in one file's
+content. The representation is the span's **projection onto each file**:
+each side's `range` runs from the first through the last line of that
+side's file appearing in the span (context rows count for both sides),
+and a side with no lines in the span is absent. The projection is total
+and direction-agnostic, so two converters of the same span produce the
+same two ranges regardless of how the hunk interleaves its runs or which
+side the span starts and ends on (GitHub permits both `start_side: LEFT`
+→ `side: RIGHT` and the reverse). The anchor does not record how the
+sides interleave in any particular diff rendering — that is derivable
+from the two commits, and rendering is a client concern. Vectors:
+`cross-side-range.json`, `github/multi-line-cross-side.json`,
+`github/reverse-cross-side.json` (a reverse-direction span crossing an
+interior context row).
 
 ## Versioning and evolution
 
@@ -308,4 +315,7 @@ Worked examples, as vectors:
 - `github/deleted-line-left.json` — `side: "LEFT"`, old-side anchor.
 - `github/multi-line-cross-side.json` — `start_side: "LEFT"`,
   `side: "RIGHT"`, dual-sided anchor.
+- `github/reverse-cross-side.json` — `start_side: "RIGHT"`,
+  `side: "LEFT"`, spanning an interior context row: both projections
+  include the unchanged line.
 - `github/file-level.json` — `subject_type: "file"`, whole-file anchor.
