@@ -36,3 +36,7 @@ go.work.sum
 
 # Local build output of the spike bench tool
 spike/gogit/gogit
+
+# generated fixture repos (spec/fixtures/README.md) — built on demand,
+# never committed; the description + golden manifest are the artifacts
+spec/fixtures/out/

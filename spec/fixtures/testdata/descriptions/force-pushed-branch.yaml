@@ -1,0 +1,32 @@
+name: force-pushed-branch
+description: >
+  refs/heads/main is pushed once, then force-pushed to unrelated history.
+  The first generation is kept reachable under
+  refs/fixture-history/main/gen-0 so a fixture consumer can still resolve
+  the pre-rewrite blob a comment might have anchored to — the "orphaned
+  but preserved" case ARCHITECTURE.md's anchoring section calls for.
+  Without keep_as, gen-0's commits would still be written (and covered by
+  determinism) but unreachable from any ref, matching a real force-push
+  before GC.
+
+refs:
+  - name: refs/heads/main
+    history:
+      - keep_as: refs/fixture-history/main/gen-0
+        commits:
+          - author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: "initial state"
+            files:
+              state.json: '{"n":1}'
+          - author: alice
+            timestamp: 2026-01-01T00:01:00Z
+            message: "second commit, about to be force-pushed away"
+            files:
+              state.json: '{"n":2}'
+      - commits:
+          - author: bob
+            timestamp: 2026-01-01T00:02:00Z
+            message: "rewritten history after force-push"
+            files:
+              state.json: '{"n":2,"rewritten":true}'
