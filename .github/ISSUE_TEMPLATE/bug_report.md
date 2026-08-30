@@ -18,6 +18,6 @@ fixture (or a pointer to the closest existing one under
 
 **Environment**
 
-- Gloss version / commit:
+- Writ version / commit:
 - OS:
 - Git version (`git version`):

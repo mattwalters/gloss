@@ -1,6 +1,6 @@
 # Security Policy
 
-Gloss signs and stores SDLC data inside your git repository. We take
+Writ signs and stores SDLC data inside your git repository. We take
 reports about signature verification, op-envelope handling, and
 anything that could let unsigned or forged data pass as authentic
 especially seriously.
@@ -8,7 +8,7 @@ especially seriously.
 ## Reporting a vulnerability
 
 Please report suspected vulnerabilities privately, using GitHub's
-[private vulnerability reporting](https://github.com/mattwalters/gloss/security/advisories/new)
+[private vulnerability reporting](https://github.com/writtendev/writ/security/advisories/new)
 for this repository, rather than opening a public issue. This lets us
 confirm the report, work on a fix, and coordinate disclosure before
 details are public.
