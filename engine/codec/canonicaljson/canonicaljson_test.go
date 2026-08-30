@@ -122,19 +122,36 @@ func TestMarshalRejectsNonFiniteNumbers(t *testing.T) {
 // The boundary can't live in the vector file (it would be tens of
 // kilobytes of brackets), so this test is its enforcement.
 func TestMarshalNestingDepthBoundary(t *testing.T) {
-	ok := strings.Repeat("[", 10_000) + strings.Repeat("]", 10_000)
-	got, err := canonicaljson.Marshal([]byte(ok))
-	if err != nil {
-		t.Fatalf("Marshal rejected 10000 nesting levels, the spec'd maximum: %v", err)
-	}
-	var v any
-	if err := json.Unmarshal(got, &v); err != nil {
-		t.Fatalf("json.Unmarshal rejected canonical bytes Marshal accepted: %v", err)
+	// Both shapes at exactly the maximum: an empty innermost array, and
+	// one holding a scalar. The second is the case that catches a cap
+	// that counts leaves — scalars don't nest, so a leaf inside 10000
+	// brackets is still 10000 levels, and json.Unmarshal accepts it.
+	for name, in := range map[string]string{
+		"empty innermost":  strings.Repeat("[", 10_000) + strings.Repeat("]", 10_000),
+		"scalar innermost": strings.Repeat("[", 10_000) + "1" + strings.Repeat("]", 10_000),
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := canonicaljson.Marshal([]byte(in))
+			if err != nil {
+				t.Fatalf("Marshal rejected 10000 nesting levels, the spec'd maximum: %v", err)
+			}
+			var v any
+			if err := json.Unmarshal(got, &v); err != nil {
+				t.Fatalf("json.Unmarshal rejected canonical bytes Marshal accepted: %v", err)
+			}
+		})
 	}
 	// One level deeper is rejected before EOF even matters — the check
 	// fires at the 10001st open bracket.
 	if _, err := canonicaljson.Marshal([]byte(strings.Repeat("[", 10_001))); err == nil {
 		t.Fatal("Marshal accepted input nested beyond the 10000-level cap")
+	}
+	// ...and encoding/json agrees the 10001st level is too deep, which
+	// is the property the shared bound exists to preserve.
+	var v any
+	tooDeep := strings.Repeat("[", 10_001) + strings.Repeat("]", 10_001)
+	if err := json.Unmarshal([]byte(tooDeep), &v); err == nil {
+		t.Fatal("encoding/json accepted 10001 nesting levels; the cap no longer matches it")
 	}
 }
 

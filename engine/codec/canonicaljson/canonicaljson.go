@@ -87,12 +87,6 @@ const maxNestingDepth = 10000
 // detected. Walking tokens lets each object reject a repeated key the
 // moment it appears.
 func decodeValue(dec *json.Decoder, depth int) (any, error) {
-	// depth is the number of enclosing brackets, so the outermost value
-	// runs at 0 and the value inside the 10001st bracket would run at
-	// 10000 — the first depth to reject.
-	if depth >= maxNestingDepth {
-		return nil, fmt.Errorf("canonicaljson: exceeded max nesting depth of %d", maxNestingDepth)
-	}
 	tok, err := dec.Token()
 	if err != nil {
 		return nil, fmt.Errorf("canonicaljson: %w", err)
@@ -100,7 +94,16 @@ func decodeValue(dec *json.Decoder, depth int) (any, error) {
 	delim, ok := tok.(json.Delim)
 	if !ok {
 		// nil, bool, string, or json.Number — already the final value.
+		// Scalars are not depth-checked: only containers nest, and
+		// encoding/json counts brackets the same way, so checking here
+		// too would reject a leaf inside 10000 brackets that
+		// json.Unmarshal accepts.
 		return tok, nil
+	}
+	// depth is the number of enclosing brackets, so this container is
+	// the (depth+1)th. The 10000th is the last one accepted.
+	if depth >= maxNestingDepth {
+		return nil, fmt.Errorf("canonicaljson: exceeded max nesting depth of %d", maxNestingDepth)
 	}
 	switch delim {
 	case '{':

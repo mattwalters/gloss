@@ -54,8 +54,10 @@ A canonicalizer MUST reject:
   implementation canonicalizes is one another cannot even parse (Go's
   `encoding/json` enforces this same 10000-level ceiling), so validity
   would disagree exactly where signing needs agreement. The 10000th
-  nesting level MUST be accepted and the 10001st rejected. (Rejection
-  category: `max-depth`.)
+  nesting level MUST be accepted and the 10001st rejected; only arrays
+  and objects nest, so a scalar inside the 10000th bracket is still at
+  the 10000th level and MUST be accepted. This rule has no vector
+  category — see "Test vectors" below.
 - **Input that is not well-formed JSON** (syntax errors). These carry no
   rejection category and are not vectored; they are ordinary parse
   failures.
@@ -115,7 +117,7 @@ one of two forms:
 A conforming canonicalizer MUST produce exactly `canonical` for every
 entry of the first form and MUST reject every entry of the second form.
 Rejection categories (`duplicate-key`, `lone-surrogate`,
-`non-finite-number`, `not-one-value`, `max-depth`) classify the reason;
+`non-finite-number`, `not-one-value`) classify the reason;
 the error surface (message text, error codes) is implementation-defined,
 but a test harness SHOULD verify its implementation rejects each entry
 for the categorized reason, not merely that it rejects — the reference
