@@ -2,7 +2,6 @@ package fixtures
 
 import (
 	"encoding/json"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -23,37 +22,11 @@ func requireSSHKeygen(t *testing.T) {
 // and compares its manifest against the committed golden file. This is
 // the check that CI runs: a mismatch means either the generator changed
 // behavior or a description changed without its golden being updated
-// (via `go run ./spec/fixtures/gen -update-golden`).
+// (via `go run ./spec/fixtures/gen -update-golden` or `go test ./spec/fixtures -update-golden`).
 func TestCorpusMatchesGolden(t *testing.T) {
-	requireSSHKeygen(t)
-
-	descs, err := LoadCorpus()
-	if err != nil {
-		t.Fatalf("LoadCorpus: %v", err)
-	}
-	if len(descs) == 0 {
-		t.Fatal("no fixture descriptions found")
-	}
-
-	for _, desc := range descs {
-		desc := desc
-		t.Run(desc.Name, func(t *testing.T) {
-			manifest, err := Generate(desc, filepath.Join(t.TempDir(), "repo"))
-			if err != nil {
-				t.Fatalf("Generate: %v", err)
-			}
-			got := marshalManifest(t, manifest)
-
-			goldenPath := filepath.Join("testdata", "golden", desc.Name+".json")
-			want, err := os.ReadFile(goldenPath)
-			if err != nil {
-				t.Fatalf("read golden %s: %v (run `go run ./spec/fixtures/gen -update-golden` if this fixture is new)", goldenPath, err)
-			}
-			if string(got) != string(want) {
-				t.Errorf("manifest for %s does not match %s\n\ngot:\n%s\n\nwant:\n%s", desc.Name, goldenPath, got, want)
-			}
-		})
-	}
+	RunFamily(t, "manifest", func(t *testing.T, fix *Fixture) ([]byte, error) {
+		return marshalManifest(t, fix.Manifest), nil
+	})
 }
 
 // TestGenerationIsDeterministic builds each description twice, into
