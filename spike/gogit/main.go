@@ -48,7 +48,7 @@ func main() {
 
 	fmt.Println()
 	fmt.Println("== Many-refs behavior ==")
-	benchRefScale(repo, *repoPath, *nRefs, tip)
+	benchRefScale(repo, *repoPath, *nOps, *nRefs, tip)
 
 	fmt.Println()
 	fmt.Println("== Cleanup ==")
@@ -160,11 +160,13 @@ func writeObject(store storer.EncodedObjectStorer, typ plumbing.ObjectType, enc 
 
 // --- Many-refs behavior -------------------------------------------------
 
-func benchRefScale(repo *git.Repository, repoPath string, n int, tip plumbing.Hash) {
-	// Extend the write-throughput refs to the requested scale, chaining
-	// further commits onto the same synthetic writer history.
-	extra := benchWriteThroughputSilent(repo, n, tip)
-	_ = extra
+func benchRefScale(repo *git.Repository, repoPath string, opsCount, refsCount int, tip plumbing.Hash) {
+	// Extend the write-throughput refs to the requested scale, continuing
+	// the index range so these are genuinely additional refs (opsCount..
+	// opsCount+refsCount-1) rather than overwriting the ones --ops already
+	// created at indices 0..opsCount-1.
+	benchWriteThroughputSilent(repo, refsCount, opsCount, tip)
+	n := opsCount + refsCount
 
 	t0 := time.Now()
 	count := 0
@@ -240,10 +242,12 @@ func benchRefScale(repo *git.Repository, repoPath string, n int, tip plumbing.Ha
 	fmt.Printf("random ref lookup (packed):              %s total, %s/lookup avg (n=%d)\n", lookup2.Round(time.Millisecond), (lookup2 / time.Duration(sample)).Round(time.Microsecond), sample)
 }
 
-// benchWriteThroughputSilent writes n more chained op-commits with refs,
-// without printing, returning the new tip. Used to grow the ref count for
-// the many-refs benchmark without duplicating the write-throughput report.
-func benchWriteThroughputSilent(repo *git.Repository, n int, parent plumbing.Hash) plumbing.Hash {
+// benchWriteThroughputSilent writes n more chained op-commits with refs
+// named starting at startIndex, without printing. Used to grow the ref
+// count for the many-refs benchmark without duplicating the
+// write-throughput report or colliding with the ref names --ops already
+// created at indices [0, startIndex).
+func benchWriteThroughputSilent(repo *git.Repository, n, startIndex int, parent plumbing.Hash) {
 	emptyTree := &object.Tree{}
 	treeHash, err := writeObject(repo.Storer, plumbing.TreeObject, emptyTree)
 	must(err)
@@ -259,11 +263,10 @@ func benchWriteThroughputSilent(repo *git.Repository, n int, parent plumbing.Has
 		}
 		hash, err := writeObject(repo.Storer, plumbing.CommitObject, commit)
 		must(err)
-		refName := plumbing.ReferenceName(fmt.Sprintf("%s%d", refPrefix, i))
+		refName := plumbing.ReferenceName(fmt.Sprintf("%s%d", refPrefix, startIndex+i))
 		must(repo.Storer.SetReference(plumbing.NewHashReference(refName, hash)))
 		last = hash
 	}
-	return last
 }
 
 // --- Cleanup --------------------------------------------------------------

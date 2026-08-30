@@ -70,7 +70,7 @@ answer depends on whether refs are loose or packed — which is not
 something Gloss controls; git's own `gc.packRefs`/`gc.auto` decide that on
 a schedule Gloss doesn't own.
 
-Measured at 5,000 and 20,200 refs under a single writer's namespace.
+Measured at 5,000 and 20,000 refs under a single writer's namespace.
 
 | Operation | Loose | Packed |
 |---|---|---|
@@ -104,7 +104,7 @@ the *entire* packed-refs file, scans it, writes a filtered copy to a temp
 file, and renames it into place — for that one ref. Removing k of n
 packed refs is O(k·n) file I/O. Measured directly: cleaning up 5,000 already-packed refs (removing them
 one at a time, as `RemoveReference` requires) took ~42s (~8.4ms/removal
-average); cleaning up 20,200 took ~7m16s / 436s (~21.6ms/removal average)
+average); cleaning up 20,000 took ~7m16s / 436s (~21.6ms/removal average)
 — a **~10x wall-clock cost for a 4x increase in ref count**, and the
 per-removal average itself grew 2.6x along with it. Both are consistent
 with the O(k·n) mechanism found in source, not linear scaling (which would
