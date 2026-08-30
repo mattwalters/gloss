@@ -29,7 +29,8 @@ any branch), then
 | Host | Push | Fetch by refspec | Survives forced GC | How verified |
 |---|---|---|---|---|
 | **GitHub** | ✅ accepted | ✅ | Not observed directly (see below) | **Empirical**, live against `mattwalters/gloss` |
-| **Gitea** (stand-in for **Forgejo** and, more weakly, **Codeberg** — Forgejo is a Gitea fork and Codeberg runs Forgejo) | ✅ accepted | ✅ | ✅ ref and object intact after `git gc --prune=now --aggressive` | **Empirical**, self-hosted `gitea/gitea:latest` in Docker |
+| **Gitea** (stand-in for **Forgejo**) | ✅ accepted | ✅ | ✅ ref and object intact after `git gc --prune=now --aggressive` | **Empirical**, self-hosted `gitea/gitea:latest` in Docker |
+| **Codeberg** | — | — | — | **Not verified directly.** Codeberg runs Forgejo, so the Gitea result above is weak, software-only evidence — no push was ever made to Codeberg itself, and Codeberg could layer its own server-side hooks/policy on top of stock Forgejo. |
 | **bare git-over-SSH** (no forge software) | ✅ accepted | ✅ | ✅ | **Empirical**, `linuxserver/openssh-server` + `git init --bare` in Docker, real `ssh://` push/fetch |
 | **GitLab** | — | — | — | **Not verified.** No GitLab.com account and no credentials were available to this run, and self-hosting GitLab CE was judged too heavy to bring up reliably in one session (multi-GB image, multi-minute first-boot reconfigure). Documentation-only: GitLab denies pushes into its own internal namespaces (`refs/merge-requests/*`, `refs/pipelines/*`, `refs/environments/*` — "deny updating a hidden ref"), the same mechanism GitHub uses for `refs/pull/*`. Nothing in GitLab's docs or issue tracker suggests it extends that denial to arbitrary third-party namespaces like `refs/gloss/*`, but that is a documentation read, not a push we made. |
 | **Bitbucket** (Cloud) | — | — | — | **Not verified.** No Bitbucket account. Bitbucket Server/Data Center — which would have been self-hostable — was discontinued for new deployments, so there is no viable free self-host path either. Documentation-only: Bitbucket Cloud reserves `refs/pull-requests/*` for its own PR refs; no documented general restriction on arbitrary namespaces. |
@@ -73,24 +74,26 @@ repo reached over SSH regardless of which machine hosts it.
 ## Go/no-go
 
 **Conditional go.** Every target this run could actually reach —
-GitHub, Gitea (and by strong inference Forgejo), and bare SSH — accepts,
-fetches, and GC-survives an arbitrary `refs/gloss/*` namespace with no special
-handling. The one host-specific restriction pattern that shows up everywhere
-it's checkable (GitHub's `refs/pull/*`, GitLab's `refs/merge-requests/*`,
-Gitea's `refs/pull/*`, Bitbucket's `refs/pull-requests/*`) is always scoped to
-the host's *own* generated refs, never to arbitrary third-party namespaces —
-which is consistent with `refs/gloss/*` being safe on the two remaining hosts
-too, but "consistent with" is not "verified," and GitLab and Bitbucket are
-both named explicitly in VISION.md's risk list.
+GitHub, Gitea (and by strong inference Forgejo), and bare SSH — accepts and
+fetches an arbitrary `refs/gloss/*` namespace with no special handling, and
+Gitea and bare SSH also confirmed GC-survival directly (GitHub's GC-survival
+was not observed — see below). The one host-specific restriction pattern that
+shows up everywhere it's checkable (GitHub's `refs/pull/*`, GitLab's
+`refs/merge-requests/*`, Gitea's `refs/pull/*`, Bitbucket's
+`refs/pull-requests/*`) is always scoped to the host's *own* generated refs,
+never to arbitrary third-party namespaces — which is consistent with
+`refs/gloss/*` being safe on the remaining unverified hosts too, but
+"consistent with" is not "verified," and GitLab and Bitbucket are both named
+explicitly in VISION.md's risk list.
 
-Do not close this ticket's DoD as met — two of the six named targets
-(**GitLab**, **Bitbucket**) have zero empirical evidence, and GitHub's
-GC-survival specifically is also unverified. Recommend: proceed with spec and
-engine work that depends on the ref-namespace approach (it is not blocked by
-anything found here), but keep this ticket, or a follow-up, open until
-someone with GitLab.com/Bitbucket credentials — or willing to wait out
-GitHub's own GC cycle — can run the same six-step probe against the
-remaining gaps.
+Do not close this ticket's DoD as met — three of the six named targets
+(**GitLab**, **Bitbucket**, **Codeberg**) have zero direct empirical
+evidence, and GitHub's GC-survival specifically is also unverified. Recommend:
+proceed with spec and engine work that depends on the ref-namespace approach
+(it is not blocked by anything found here), but keep this ticket, or a
+follow-up, open until someone with GitLab.com/Bitbucket/Codeberg credentials
+— or willing to wait out GitHub's own GC cycle — can run the same six-step
+probe against the remaining gaps.
 
 ## Fallback sketch (branch-namespace encoding)
 
@@ -102,9 +105,20 @@ too) treats `refs/heads/*` as unrestricted:
 - Prefix-encode: `refs/heads/gloss/<writer-id>/cobs/<type>/<object-id>`
   instead of `refs/gloss/<writer-id>/cobs/<type>/<object-id>`. Same tree
   shape, same per-writer-namespace non-fast-forward-freedom property
-  (ARCHITECTURE.md), the only cost is these op-commits now show up in
-  branch-listing UI unless clients filter the `gloss/` prefix out — a client
-  concern, not a protocol one.
+  (ARCHITECTURE.md). Costs: these op-commits now show up in branch-listing
+  UI unless clients filter the `gloss/` prefix out (a client concern, not a
+  protocol one) — and, more seriously, `refs/heads/*` is exactly the
+  namespace most hosts hang CI triggers (`on: push`) and branch-protection
+  rules on, including wildcard patterns that could match `gloss/**`. Landing
+  in `refs/heads/*` to dodge one host's restriction on `refs/gloss/*` risks
+  walking into a *different* restriction, or firing unwanted CI on every
+  op-commit, in that same repo. Check for branch-protection rules and CI
+  triggers before adopting this fallback on a given host, not just ref
+  acceptance.
+- A repo could already have a real branch named `gloss/...`, colliding with
+  the encoded namespace; the writer-id/object-id segments make accidental
+  collision unlikely but not impossible, worth a guard if this is ever
+  implemented.
 - This is a mechanical rename at the spec level (one prefix constant), not a
   redesign — canonical encoding, the op envelope, and fold are unaffected
   since none of them inspect the ref name beyond the writer-id/object-id
