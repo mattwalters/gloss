@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "new": {
+    "commit": "2ae787a3e353251a99120a6935bfd6b807e60d5a",
+    "path": "scripts/build.bat",
+    "blob": "5c3eb80066420002bc3dcc7ca4ab6efad7ed4ae5",
+    "range": {
+      "start": 2,
+      "end": 2
+    },
+    "context": {
+      "before": [
+        "@echo off\r"
+      ],
+      "lines": [
+        "set WRIT_HOME=%~dp0\r"
+      ],
+      "after": [
+        "writ.exe sync\r"
+      ]
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "github": {
+    "path": "cmd/writ/sync.go",
+    "subject_type": "line",
+    "side": "RIGHT",
+    "start_side": "LEFT",
+    "line": 8,
+    "start_line": 5,
+    "original_commit_id": "2ae787a3e353251a99120a6935bfd6b807e60d5a",
+    "original_line": 8,
+    "original_start_line": 5,
+    "diff_hunk": "@@ -5,4 +5,8 @@ import (\n-\toldTransport(remote)\n-\treturn nil\n+\tif err := gitFetch(remote); err != nil {\n+\t\treturn err\n+\t}\n+\treturn gitPush(remote)"
+  },
+  "pr": {
+    "base_sha": "0f61c1a9f3f64b6f7d33f2b3a2c5d9e8b7a6c5d4",
+    "base_ref": "main",
+    "head_ref": "feature/sync-retry"
+  },
+  "anchor": {
+    "version": 1,
+    "old": {
+      "commit": "0f61c1a9f3f64b6f7d33f2b3a2c5d9e8b7a6c5d4",
+      "path": "cmd/writ/sync.go",
+      "blob": "5c3eb80066420002bc3dcc7ca4ab6efad7ed4ae5",
+      "range": {
+        "start": 5,
+        "end": 6
+      },
+      "context": {
+        "before": [
+          "import (",
+          "\t\"fmt\"",
+          ""
+        ],
+        "lines": [
+          "\toldTransport(remote)",
+          "\treturn nil"
+        ],
+        "after": []
+      }
+    },
+    "new": {
+      "commit": "2ae787a3e353251a99120a6935bfd6b807e60d5a",
+      "path": "cmd/writ/sync.go",
+      "blob": "b7e23ec29af22b0b4e41da31e868d57226121c84",
+      "range": {
+        "start": 5,
+        "end": 8
+      },
+      "context": {
+        "before": [
+          "import (",
+          "\t\"fmt\"",
+          ""
+        ],
+        "lines": [
+          "\tif err := gitFetch(remote); err != nil {",
+          "\t\treturn err",
+          "\t}",
+          "\treturn gitPush(remote)"
+        ],
+        "after": []
+      }
+    }
+  }
+}

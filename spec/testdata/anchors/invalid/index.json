@@ -1,0 +1,94 @@
+{
+  "absolute-path.json": {
+    "kind": "schema",
+    "reason": "paths are repo-relative and must not start with /"
+  },
+  "before-too-long.json": {
+    "kind": "schema",
+    "reason": "before holds at most 3 lines"
+  },
+  "context-length-mismatch.json": {
+    "kind": "invariant",
+    "reason": "when omitted is absent, len(context.lines) must equal the range size"
+  },
+  "context-without-range.json": {
+    "kind": "schema",
+    "reason": "range is required whenever context is present (dependentRequired)"
+  },
+  "dotdot-path.json": {
+    "kind": "invariant",
+    "reason": "paths must not contain . or .. segments"
+  },
+  "empty-lines-array.json": {
+    "kind": "schema",
+    "reason": "context.lines is never empty; a range spans at least one line"
+  },
+  "empty-path.json": {
+    "kind": "schema",
+    "reason": "path must be non-empty"
+  },
+  "end-before-start.json": {
+    "kind": "invariant",
+    "reason": "range.end must be >= range.start"
+  },
+  "line-too-long.json": {
+    "kind": "schema",
+    "reason": "stored lines are truncated to 1000 code points before storage"
+  },
+  "line-with-lf.json": {
+    "kind": "schema",
+    "reason": "stored lines never contain LF; splitting happens before storage"
+  },
+  "line-zero.json": {
+    "kind": "schema",
+    "reason": "line numbers are 1-based; start must be >= 1"
+  },
+  "missing-blob.json": {
+    "kind": "schema",
+    "reason": "side anchors require commit, path, and blob"
+  },
+  "missing-context-lines.json": {
+    "kind": "schema",
+    "reason": "context requires before, lines, and after"
+  },
+  "missing-version.json": {
+    "kind": "schema",
+    "reason": "version is required"
+  },
+  "mixed-oid-lengths.json": {
+    "kind": "invariant",
+    "reason": "all OIDs within one anchor must use the same length; the containing repo has one object format"
+  },
+  "no-sides.json": {
+    "kind": "schema",
+    "reason": "at least one of old/new is required"
+  },
+  "non-hex-blob.json": {
+    "kind": "schema",
+    "reason": "OIDs are lowercase hexadecimal"
+  },
+  "odd-length-oid.json": {
+    "kind": "schema",
+    "reason": "OIDs are exactly 40 or 64 hex characters"
+  },
+  "omitted-arithmetic-wrong.json": {
+    "kind": "invariant",
+    "reason": "omitted must equal (end - start + 1) - 64; a 100-line range omits 36"
+  },
+  "omitted-with-short-lines.json": {
+    "kind": "invariant",
+    "reason": "when omitted is present, context.lines must hold exactly 64 entries (first 32 + last 32)"
+  },
+  "range-without-context.json": {
+    "kind": "schema",
+    "reason": "context is required whenever range is present (dependentRequired)"
+  },
+  "trailing-slash-path.json": {
+    "kind": "invariant",
+    "reason": "paths must not contain empty segments (no trailing slash)"
+  },
+  "unsupported-version.json": {
+    "kind": "schema",
+    "reason": "the v1 schema validates version 1 exactly; readers treat other versions as opaque but preserved, per spec/anchors.md 'Versioning and evolution'"
+  }
+}

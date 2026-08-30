@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "old": {
+    "commit": "9d5c1f4be9adf7db64a1b7404bd82ffd2f2fb7a1",
+    "path": "cmd/writ/sync.go",
+    "blob": "5c3eb80066420002bc3dcc7ca4ab6efad7ed4ae5",
+    "range": {
+      "start": 5,
+      "end": 6
+    },
+    "context": {
+      "before": [
+        "import (",
+        "\t\"fmt\"",
+        ""
+      ],
+      "lines": [
+        "\toldTransport(remote)",
+        "\treturn nil"
+      ],
+      "after": []
+    }
+  },
+  "new": {
+    "commit": "2ae787a3e353251a99120a6935bfd6b807e60d5a",
+    "path": "cmd/writ/sync.go",
+    "blob": "b7e23ec29af22b0b4e41da31e868d57226121c84",
+    "range": {
+      "start": 5,
+      "end": 8
+    },
+    "context": {
+      "before": [
+        "import (",
+        "\t\"fmt\"",
+        ""
+      ],
+      "lines": [
+        "\tif err := gitFetch(remote); err != nil {",
+        "\t\treturn err",
+        "\t}",
+        "\treturn gitPush(remote)"
+      ],
+      "after": []
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "new": {
+    "commit": "2ae787a3e353251a99120a6935bfd6b807e60d5a",
+    "path": "a/b.go",
+    "blob": "B7E23EC29AF22B0B4E41DA31E868D57226121C84",
+    "range": {
+      "start": 1,
+      "end": 1
+    },
+    "context": {
+      "before": [
+        "\tif err != nil {",
+        "\t\treturn nil, err",
+        "\t}"
+      ],
+      "lines": [
+        "\tstate.Status = next"
+      ],
+      "after": [
+        "}",
+        "",
+        "// fold folds one op into state."
+      ]
+    }
+  }
+}

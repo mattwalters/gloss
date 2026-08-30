@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "old": {
+    "commit": "9d5c1f4be9adf7db64a1b7404bd82ffd2f2fb7a1",
+    "path": "engine/legacy/notes.go",
+    "blob": "5c3eb80066420002bc3dcc7ca4ab6efad7ed4ae5",
+    "range": {
+      "start": 7,
+      "end": 7
+    },
+    "context": {
+      "before": [
+        "func readNotes() error {",
+        "\tvar out []Note",
+        ""
+      ],
+      "lines": [
+        "\tpanic(\"unreachable\")"
+      ],
+      "after": [
+        "\treturn nil",
+        "}",
+        ""
+      ]
+    }
+  }
+}

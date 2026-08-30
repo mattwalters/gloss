@@ -1,0 +1,23 @@
+{
+  "github": {
+    "path": "docs/assets/flow.png",
+    "subject_type": "file",
+    "side": "RIGHT",
+    "line": null,
+    "original_commit_id": "2ae787a3e353251a99120a6935bfd6b807e60d5a",
+    "diff_hunk": ""
+  },
+  "pr": {
+    "base_sha": "0f61c1a9f3f64b6f7d33f2b3a2c5d9e8b7a6c5d4",
+    "base_ref": "main",
+    "head_ref": "feature/sync-retry"
+  },
+  "anchor": {
+    "version": 1,
+    "new": {
+      "commit": "2ae787a3e353251a99120a6935bfd6b807e60d5a",
+      "path": "docs/assets/flow.png",
+      "blob": "8f7d3a2b1c0e9f8d7c6b5a4938271605f4e3d2c1"
+    }
+  }
+}
