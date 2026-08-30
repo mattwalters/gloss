@@ -24,11 +24,11 @@ any yet. Add one the day a dependency's own NOTICE requires it — not before.
 
 ## House style
 
-Boring, small, direct. Prefer the standard library; go-git for local object
-I/O, system git for all transport, Bubble Tea for the TUI. New dependencies
-need a reason — "it's convenient" is not one. Scope growth, speculative
-abstraction, and framework-building are treated as bugs, not ambition. Match
-the style of the surrounding code rather than introducing a new one.
+The house rules — the dependency policy, what counts as scope creep, how to
+match surrounding style — live in AGENTS.md's "House rules" section, not
+here. AGENTS.md set up CLAUDE.md and GEMINI.md as one-line imports of itself
+specifically so there's a single copy to keep current; this file follows
+the same principle by linking instead of restating.
 
 ## The fixture-first workflow
 
@@ -77,8 +77,9 @@ to enforce:
 
 ## Developer Certificate of Origin (DCO)
 
-Every commit must be signed off, certifying you wrote it or otherwise have
-the right to submit it under the project's license (Apache-2.0):
+Starting with the first external PR, every commit must be signed off,
+certifying you wrote it or otherwise have the right to submit it under the
+project's license (Apache-2.0):
 
 ```
 git commit -s
