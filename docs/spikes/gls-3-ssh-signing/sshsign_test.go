@@ -7,6 +7,7 @@ package sshsignspike
 import (
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -104,9 +105,14 @@ func TestSignInGo_VerifyWithSystemGit(t *testing.T) {
 	runGit(t, repoDir, "config", "gpg.format", "ssh")
 	runGit(t, repoDir, "config", "gpg.ssh.allowedSignersFile", allowedSigners)
 
-	out := runGit(t, repoDir, "verify-commit", commitHash.String())
-	if !strings.Contains(out, "Good \"git\" signature") {
-		t.Fatalf("verify-commit did not report a good signature:\n%s", out)
+	// Assert on the exit code alone: verify-commit's human-readable message
+	// is localized (LANG/LC_ALL), so matching English text here would make
+	// the test's pass/fail depend on the environment's locale rather than
+	// on whether the signature actually verified.
+	cmd := exec.Command("git", "verify-commit", commitHash.String())
+	cmd.Dir = repoDir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("verify-commit failed: %v\n%s", err, out)
 	}
 }
 

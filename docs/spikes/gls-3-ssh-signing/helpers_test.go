@@ -116,7 +116,12 @@ func (e *verifyError) Error() string { return e.err.Error() + ": " + e.out }
 // parallel without sharing agent state.
 func startSSHAgent(t *testing.T) (sock string) {
 	t.Helper()
-	out, err := exec.Command("ssh-agent", "-s").Output()
+	cmd := exec.Command("ssh-agent", "-s")
+	// -s already forces Bourne-shell output regardless of $SHELL, but pin it
+	// explicitly so the regexes below can't silently stop matching on a
+	// system where that guess ever changes.
+	cmd.Env = append(os.Environ(), "SHELL=/bin/sh")
+	out, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("ssh-agent -s: %v", err)
 	}
