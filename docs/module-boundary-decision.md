@@ -22,13 +22,22 @@ engine-only consumer's build.** That was never module-boundary-dependent —
 Go has always resolved a build from the actual per-package import graph, so
 a service importing only `.../gloss/engine` and never reaching into `tui` or
 `bridge/github` doesn't compile or link those packages in, single module or
-not. What Go 1.17+ module graph pruning adds on top is narrower but still
+not (verified: `go mod why` reports an unused sibling package's dependency
+as not needed, and it never gets a `go.sum` entry, even when the providing
+module is a real, checksummed dependency rather than a local `replace`).
+What Go 1.17+ module graph pruning adds on top is narrower but still
 relevant to "dependency-surface hygiene": it avoids needing to load the
-`go.mod` files of a module's *unused* transitive dependencies to compute the
-build list, which keeps `go.sum` and MVS resolution for that consumer
-proportional to what it actually imports rather than to everything the
-monorepo's `go.mod` requires. Splitting the module would not improve on
-either property — both already hold for a single well-layered module.
+`go.mod` files of a module's *unused* transitive dependencies, which keeps
+`go.sum` for that consumer proportional to what it actually imports rather
+than to everything the monorepo's `go.mod` requires. One caveat: `go list -m
+all` still lists Bubble Tea and the GitHub client themselves as resolved
+versions in the module graph, since MVS operates module-by-module rather
+than package-by-package — that bookkeeping entry is harmless (nothing
+downloads, verifies, or links them) but it's why the claim above is scoped
+to `go.sum`, not the whole module graph. Splitting the module wouldn't
+improve on the `go.sum` property, which already holds for a single
+well-layered module — it would only trim that harmless `go list -m all`
+bookkeeping entry.
 
 **`internal/` enforces the API boundary regardless of module shape.** The
 house rule that "no SHAs or refspecs leak to callers unless they ask" is a
