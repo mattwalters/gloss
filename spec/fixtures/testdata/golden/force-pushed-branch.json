@@ -1,0 +1,56 @@
+{
+  "refs": [
+    {
+      "name": "refs/fixture-history/main/gen-0",
+      "commit": "cb1fa407083fd05381208186e0adb6b57d8b6d8e"
+    },
+    {
+      "name": "refs/heads/main",
+      "commit": "998972b56658075b85949be28280869e0e201f52"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/heads/main",
+      "index": 0,
+      "kept_as": "refs/fixture-history/main/gen-0",
+      "commits": [
+        {
+          "sha": "8e40fbf496a5f671674696b53b55ee90ab6e9fe0",
+          "tree": "ab860a74696c379b6b6445b478aa8f0190ab44ba",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "initial state",
+          "signed": true
+        },
+        {
+          "sha": "cb1fa407083fd05381208186e0adb6b57d8b6d8e",
+          "tree": "64b59c0c758ae83d418d083b08762d606c140b71",
+          "parents": [
+            "8e40fbf496a5f671674696b53b55ee90ab6e9fe0"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "second commit, about to be force-pushed away",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/heads/main",
+      "index": 1,
+      "commits": [
+        {
+          "sha": "998972b56658075b85949be28280869e0e201f52",
+          "tree": "28461fdc7f02d2d0d4119a0848001b521dbf2176",
+          "parents": [],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "rewritten history after force-push",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

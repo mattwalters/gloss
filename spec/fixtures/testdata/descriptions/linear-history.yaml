@@ -1,0 +1,25 @@
+name: linear-history
+description: >
+  Baseline fixture: a single writer, a single ref, three commits with no
+  force-push. Exercises the generator's core path (commit, tree, signing,
+  ref) with nothing else going on.
+
+refs:
+  - name: refs/heads/main
+    history:
+      - commits:
+          - author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: "initial state"
+            files:
+              state.json: '{"n":1}'
+          - author: alice
+            timestamp: 2026-01-01T00:01:00Z
+            message: "increment"
+            files:
+              state.json: '{"n":2}'
+          - author: alice
+            timestamp: 2026-01-01T00:02:00Z
+            message: "increment again"
+            files:
+              state.json: '{"n":3}'

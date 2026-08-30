@@ -1,0 +1,47 @@
+{
+  "refs": [
+    {
+      "name": "refs/heads/main",
+      "commit": "0ccbae8f3e0195e702b33f7938a3f54876c36966"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/heads/main",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "8e40fbf496a5f671674696b53b55ee90ab6e9fe0",
+          "tree": "ab860a74696c379b6b6445b478aa8f0190ab44ba",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "initial state",
+          "signed": true
+        },
+        {
+          "sha": "033a670b3fba6c023175d4aecb5b7b60b528e2d1",
+          "tree": "64b59c0c758ae83d418d083b08762d606c140b71",
+          "parents": [
+            "8e40fbf496a5f671674696b53b55ee90ab6e9fe0"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "increment",
+          "signed": true
+        },
+        {
+          "sha": "0ccbae8f3e0195e702b33f7938a3f54876c36966",
+          "tree": "918003d61491e8748d5bd1841b93c4eda1e74dee",
+          "parents": [
+            "033a670b3fba6c023175d4aecb5b7b60b528e2d1"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "increment again",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

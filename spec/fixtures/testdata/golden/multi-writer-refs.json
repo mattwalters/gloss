@@ -1,0 +1,55 @@
+{
+  "refs": [
+    {
+      "name": "refs/heads/writer-alice",
+      "commit": "ece287012f481d19a0a576c36b792de70cdc37e5"
+    },
+    {
+      "name": "refs/heads/writer-bob",
+      "commit": "3f851624c39cbd033b2ddd1300adbcaf03e32810"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/heads/writer-alice",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "611d447ed39a03e5dd70d46c7655e4d7322468c0",
+          "tree": "1cca3b882f62564c7b90c0a58b013a7466745d1e",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "alice's first commit",
+          "signed": true
+        },
+        {
+          "sha": "ece287012f481d19a0a576c36b792de70cdc37e5",
+          "tree": "fc98610ebf50f2ba629fb72de72b729306133720",
+          "parents": [
+            "611d447ed39a03e5dd70d46c7655e4d7322468c0"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:30Z",
+          "message": "alice's second commit",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/heads/writer-bob",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "3f851624c39cbd033b2ddd1300adbcaf03e32810",
+          "tree": "7ba33ff7964976106dd7d32e3c67dae48ede5cdc",
+          "parents": [],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:10Z",
+          "message": "bob's first commit",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

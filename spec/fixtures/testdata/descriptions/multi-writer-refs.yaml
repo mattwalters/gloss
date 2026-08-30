@@ -1,0 +1,31 @@
+name: multi-writer-refs
+description: >
+  Two independent refs, each written by a different identity, standing in
+  for the per-writer-ref shape ARCHITECTURE.md's ref layout uses
+  (refs/gloss/<writer-id>/...): concurrent writers never share a ref, so
+  there's nothing here for a fold to reconcile at the git level — this
+  fixture is about proving the generator can build more than one ref with
+  more than one signer in a single repo, not about fold semantics.
+
+refs:
+  - name: refs/heads/writer-alice
+    history:
+      - commits:
+          - author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: "alice's first commit"
+            files:
+              writer.json: '{"writer":"alice","seq":1}'
+          - author: alice
+            timestamp: 2026-01-01T00:00:30Z
+            message: "alice's second commit"
+            files:
+              writer.json: '{"writer":"alice","seq":2}'
+  - name: refs/heads/writer-bob
+    history:
+      - commits:
+          - author: bob
+            timestamp: 2026-01-01T00:00:10Z
+            message: "bob's first commit"
+            files:
+              writer.json: '{"writer":"bob","seq":1}'
