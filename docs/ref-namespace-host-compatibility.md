@@ -77,7 +77,7 @@ repo reached over SSH regardless of which machine hosts it.
 GitHub, Gitea (and by strong inference Forgejo), and bare SSH — accepts and
 fetches an arbitrary `refs/gloss/*` namespace with no special handling, and
 Gitea and bare SSH also confirmed GC-survival directly (GitHub's GC-survival
-was not observed — see below). The one host-specific restriction pattern that
+was not observed — see the GitHub detail section above). The one host-specific restriction pattern that
 shows up everywhere it's checkable (GitHub's `refs/pull/*`, GitLab's
 `refs/merge-requests/*`, Gitea's `refs/pull/*`, Bitbucket's
 `refs/pull-requests/*`) is always scoped to the host's *own* generated refs,
@@ -100,7 +100,7 @@ probe against the remaining gaps.
 If a host is later found to reject or hide `refs/gloss/*`, the fallback is to
 encode the same information inside an *allowed* namespace instead of a new
 top-level one — since every host tested (and, per docs, GitLab and Bitbucket
-too) treats `refs/heads/*` as unrestricted:
+too — Codeberg untested either way) treats `refs/heads/*` as unrestricted:
 
 - Prefix-encode: `refs/heads/gloss/<writer-id>/cobs/<type>/<object-id>`
   instead of `refs/gloss/<writer-id>/cobs/<type>/<object-id>`. Same tree
