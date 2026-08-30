@@ -1,8 +1,8 @@
 # Agent brief
 
-Gloss is an open SDLC layer that stores code review — and eventually
+Writ is an open SDLC layer that stores code review — and eventually
 issues, projects, and cycles — inside the git repository itself, as
-signed, append-only operations under `refs/gloss/*`. Written in Go,
+signed, append-only operations under `refs/writ/*`. Written in Go,
 Apache-2.0, one monorepo.
 
 Before proposing or implementing anything, read `VISION.md` (what this
@@ -48,7 +48,7 @@ Planned monorepo layout (see `ARCHITECTURE.md` for the rationale):
 ```
 /spec          — convention doc, JSON schemas, conformance fixtures
 /engine        — codec, dag, fold, projection, sync
-/cmd/gloss     — CLI: porcelain for humans, --json for scripts/agents
+/cmd/writ      — CLI: porcelain for humans, --json for scripts/agents
 /tui           — Bubble Tea client
 /bridge/github — bidirectional PR/comment ⇄ ops sync
 /docs
@@ -56,7 +56,7 @@ Planned monorepo layout (see `ARCHITECTURE.md` for the rationale):
 
 ## Workflow
 
-`lerp.toml` is this repo's pipeline: Linear team `GLS`, lanes
+`lerp.toml` is this repo's pipeline: Linear team `WRIT`, lanes
 provisioned as detached git worktrees. Read it before changing how runs
 are queued or what a stage is expected to produce.
 

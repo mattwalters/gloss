@@ -1,6 +1,6 @@
 # 0001: Canonical JSON encoding approach
 
-Status: decided (spike). Feeds GLS-6 (op envelope schema & canonicalization
+Status: decided (spike). Feeds WRIT-6 (op envelope schema & canonicalization
 rules), which owns the actual spec text and fixture corpus.
 
 ## Problem
@@ -52,7 +52,7 @@ Bespoke, implemented in `engine/codec/canonicaljson`. Reasoning:
   where it matters) and which the stdlib-only implementation passes.
 - **We don't need JS interop.** RFC 8785's number-formatting fidelity to
   `Number::toString` exists so a canonicalizer can agree with a JavaScript
-  engine byte-for-byte. Gloss has no JS runtime canonicalizing payloads
+  engine byte-for-byte. Writ has no JS runtime canonicalizing payloads
   anywhere in its architecture — every producer and verifier is this same
   Go package. Matching the RFC's algorithm is still useful (it's a
   well-specified, already-debugged design to copy), but strict RFC 8785
@@ -68,7 +68,7 @@ Bespoke, implemented in `engine/codec/canonicaljson`. Reasoning:
 
 - Numbers are IEEE-754 doubles, per JSON's (and RFC 8785's) numeric model.
   Integers beyond 2^53 silently lose precision — see the `9007199254740993`
-  test vector. **Recommendation for GLS-6:** any op envelope field needing
+  test vector. **Recommendation for WRIT-6:** any op envelope field needing
   an exact large integer (sequence numbers, anything used as a tiebreak)
   should be typed as a JSON string, not a JSON number, in the schema —
   sidesteps this rather than relying on producers never overflowing 2^53.
@@ -77,13 +77,13 @@ Bespoke, implemented in `engine/codec/canonicaljson`. Reasoning:
   means canonical bytes can't distinguish "no duplicate keys in the
   original" from "duplicate keys, last one implicitly chosen." If the op
   envelope's signature is meant to attest to the *original* producer-side
-  bytes rather than just the canonical form, GLS-6 should decide whether
+  bytes rather than just the canonical form, WRIT-6 should decide whether
   op decoding rejects duplicate keys outright rather than silently
   resolving them.
 - Non-finite numbers (`NaN`, `Infinity`) are rejected — they have no JSON
   or RFC 8785 representation.
 - No opinion yet on where canonicalization sits relative to signing in the
-  op envelope pipeline (that's GLS-6's schema to define); this package's
+  op envelope pipeline (that's WRIT-6's schema to define); this package's
   contract is just `Marshal(json []byte) (canonical []byte, error)`.
 
 ## Prototype and test vectors
@@ -100,6 +100,6 @@ each vector round-trips to its expected canonical form and that
 canonicalization is idempotent (canonical bytes are a fixed point), which
 is what signing depends on.
 
-These vectors are meant to seed GLS-6's fixture corpus directly; the
+These vectors are meant to seed WRIT-6's fixture corpus directly; the
 `{name, input, canonical}` shape was chosen so they can be lifted in
 largely as-is.

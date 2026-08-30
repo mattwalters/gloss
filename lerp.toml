@@ -14,7 +14,7 @@
 
 # Linear team keys this repo serves. One repo may serve several teams (the
 # monorepo case); two repos may never claim the same team.
-teams = ["GLS"]
+teams = ["WRIT"]
 
 # Commands that create and destroy a lane's workspace, run from the repo
 # root. Lerp invokes them with a unique lane/run identity and otherwise knows

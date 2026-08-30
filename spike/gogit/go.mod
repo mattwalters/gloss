@@ -1,4 +1,4 @@
-module gloss/spike/gogit
+module writ/spike/gogit
 
 go 1.25.3
 

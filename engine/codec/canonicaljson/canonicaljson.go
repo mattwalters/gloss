@@ -130,8 +130,8 @@ func lessUTF16(ua, ub []uint16) bool {
 // time it gets here — that's encoding/json's decoding behavior, not a
 // choice made in this function. A verifier built against a JSON library
 // that preserves lone surrogates differently could disagree with this
-// package on the canonical bytes for such input; Gloss doesn't have one
-// today; GLS-6 should decide whether the op envelope schema needs to
+// package on the canonical bytes for such input; Writ doesn't have one
+// today; WRIT-6 should decide whether the op envelope schema needs to
 // rule on it.
 func encodeString(buf *bytes.Buffer, s string) {
 	buf.WriteByte('"')

@@ -1,6 +1,6 @@
-// Command gogit-bench is the GLS-4 spike tool: it measures whether go-git's
-// local object I/O is adequate for Gloss's write pattern (one op = one
-// commit, one ref per collaborative object, refs/gloss/* at scale) against
+// Command gogit-bench is the WRIT-4 spike tool: it measures whether go-git's
+// local object I/O is adequate for Writ's write pattern (one op = one
+// commit, one ref per collaborative object, refs/writ/* at scale) against
 // a real, large repository's existing object store.
 //
 // It is throwaway spike tooling, not part of the engine. Run it by pointing
@@ -23,7 +23,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/storer"
 )
 
-const refPrefix = "refs/gloss/bench-writer/cobs/spike/"
+const refPrefix = "refs/writ/bench-writer/cobs/spike/"
 
 func main() {
 	repoPath := flag.String("repo", "", "path to a bare git repo to use as the guinea pig")
@@ -104,7 +104,7 @@ func benchDAGWalk(repo *git.Repository) {
 // --- Op-write throughput ----------------------------------------------
 
 // benchWriteThroughput writes n synthetic op-commits, each with its own ref
-// under refs/gloss/*, chained into a single writer's history (parent ==
+// under refs/writ/*, chained into a single writer's history (parent ==
 // previous op), the way one COB accumulates ops from one writer. It returns
 // the hash of the last commit written.
 func benchWriteThroughput(repo *git.Repository, n int) plumbing.Hash {
@@ -123,8 +123,8 @@ func benchWriteThroughput(repo *git.Repository, n int) plumbing.Hash {
 	for i := 0; i < n; i++ {
 		payload := fmt.Sprintf(`{"op_id":"bench-%d","type":"comment.create","object_id":"spike-review","body":"benchmark op payload %d","ts":%d}`, i, i, time.Now().UnixNano())
 		commit := &object.Commit{
-			Author:    object.Signature{Name: "gls-4-bench", Email: "bench@example.invalid", When: time.Now()},
-			Committer: object.Signature{Name: "gls-4-bench", Email: "bench@example.invalid", When: time.Now()},
+			Author:    object.Signature{Name: "writ-4-bench", Email: "bench@example.invalid", When: time.Now()},
+			Committer: object.Signature{Name: "writ-4-bench", Email: "bench@example.invalid", When: time.Now()},
 			Message:   payload,
 			TreeHash:  treeHash,
 		}
@@ -173,12 +173,12 @@ func benchRefScale(repo *git.Repository, repoPath string, opsCount, refsCount in
 	iter, err := repo.Storer.IterReferences()
 	must(err)
 	must(iter.ForEach(func(r *plumbing.Reference) error {
-		if strings.HasPrefix(string(r.Name()), "refs/gloss/") {
+		if strings.HasPrefix(string(r.Name()), "refs/writ/") {
 			count++
 		}
 		return nil
 	}))
-	fmt.Printf("enumerate all refs (loose, unpacked):  %s, found %d refs/gloss/* of %d requested\n", time.Since(t0).Round(time.Millisecond), count, n)
+	fmt.Printf("enumerate all refs (loose, unpacked):  %s, found %d refs/writ/* of %d requested\n", time.Since(t0).Round(time.Millisecond), count, n)
 
 	// Random-access lookup of specific refs by name.
 	sample := 200
@@ -225,12 +225,12 @@ func benchRefScale(repo *git.Repository, repoPath string, opsCount, refsCount in
 	iter2, err := repo2.Storer.IterReferences()
 	must(err)
 	must(iter2.ForEach(func(r *plumbing.Reference) error {
-		if strings.HasPrefix(string(r.Name()), "refs/gloss/") {
+		if strings.HasPrefix(string(r.Name()), "refs/writ/") {
 			count2++
 		}
 		return nil
 	}))
-	fmt.Printf("enumerate all refs (packed):             %s, found %d refs/gloss/*\n", time.Since(t3).Round(time.Millisecond), count2)
+	fmt.Printf("enumerate all refs (packed):             %s, found %d refs/writ/*\n", time.Since(t3).Round(time.Millisecond), count2)
 
 	t4 := time.Now()
 	for i := 0; i < sample; i++ {
@@ -255,8 +255,8 @@ func benchWriteThroughputSilent(repo *git.Repository, n, startIndex int, parent 
 	last := parent
 	for i := 0; i < n; i++ {
 		commit := &object.Commit{
-			Author:       object.Signature{Name: "gls-4-bench", Email: "bench@example.invalid", When: time.Now()},
-			Committer:    object.Signature{Name: "gls-4-bench", Email: "bench@example.invalid", When: time.Now()},
+			Author:       object.Signature{Name: "writ-4-bench", Email: "bench@example.invalid", When: time.Now()},
+			Committer:    object.Signature{Name: "writ-4-bench", Email: "bench@example.invalid", When: time.Now()},
 			Message:      fmt.Sprintf(`{"op_id":"bench-ref-%d"}`, i),
 			TreeHash:     treeHash,
 			ParentHashes: []plumbing.Hash{last},
@@ -278,7 +278,7 @@ func cleanup(repo *git.Repository, repoPath string) {
 	must(err)
 	var names []plumbing.ReferenceName
 	must(iter.ForEach(func(r *plumbing.Reference) error {
-		if strings.HasPrefix(string(r.Name()), "refs/gloss/") {
+		if strings.HasPrefix(string(r.Name()), "refs/writ/") {
 			names = append(names, r.Name())
 		}
 		return nil

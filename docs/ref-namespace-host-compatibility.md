@@ -1,10 +1,19 @@
-# Ref-namespace host compatibility (GLS-1)
+# Ref-namespace host compatibility (WRIT-1)
 
 The host-agnostic thesis (VISION.md §Risks #1) assumes major git hosts accept
-pushes to a custom ref namespace (`refs/gloss/*`), let it be fetched by exact
-refspec, and don't GC or hide it destructively. This spike tests that,
+pushes to a custom ref namespace (now `refs/writ/*`), let it be fetched by
+exact refspec, and don't GC or hide it destructively. This spike tests that,
 empirically, against as many of the six named targets as this run had
 credentials or infrastructure for.
+
+> **Historical note.** These probes were run before the project was renamed
+> from Gloss to Writ, so the recorded commands and results below use the
+> pre-rename namespace `refs/gloss/*` against the pre-transfer repo
+> `mattwalters/gloss` (now `writtendev/writ`). They are deliberately kept
+> as-run. The findings are namespace-agnostic — every restriction observed is
+> scoped to a host's *own* reserved namespaces, never to arbitrary
+> third-party ones — so they carry over to `refs/writ/*` unchanged. Future
+> probes (WRIT-64) should use `refs/writ/*`.
 
 ## Method
 
@@ -15,7 +24,7 @@ any branch), then
 2. `git ls-remote <remote> 'refs/gloss/*'` — is the ref visible/enumerable
 3. `git fetch <remote> '+refs/gloss/_spike-test/probe:refs/remotes/x'` — fetch
    by exact refspec (this is what a fetch/push refspec written into
-   `.git/config` by `gloss init` relies on)
+   `.git/config` by `writ init` relies on)
 4. Force a GC on the remote side (`git gc --prune=now --aggressive`) and
    re-check the ref/object survive
 5. `git push <remote> :refs/gloss/_spike-test/probe` — delete, confirm honored
@@ -97,25 +106,25 @@ probe against the remaining gaps.
 
 ## Fallback sketch (branch-namespace encoding)
 
-If a host is later found to reject or hide `refs/gloss/*`, the fallback is to
+If a host is later found to reject or hide `refs/writ/*`, the fallback is to
 encode the same information inside an *allowed* namespace instead of a new
 top-level one — since every host tested (and, per docs, GitLab and Bitbucket
 too — Codeberg untested either way) treats `refs/heads/*` as unrestricted:
 
-- Prefix-encode: `refs/heads/gloss/<writer-id>/cobs/<type>/<object-id>`
-  instead of `refs/gloss/<writer-id>/cobs/<type>/<object-id>`. Same tree
+- Prefix-encode: `refs/heads/writ/<writer-id>/cobs/<type>/<object-id>`
+  instead of `refs/writ/<writer-id>/cobs/<type>/<object-id>`. Same tree
   shape, same per-writer-namespace non-fast-forward-freedom property
   (ARCHITECTURE.md). Costs: these op-commits now show up in branch-listing
-  UI unless clients filter the `gloss/` prefix out (a client concern, not a
+  UI unless clients filter the `writ/` prefix out (a client concern, not a
   protocol one) — and, more seriously, `refs/heads/*` is exactly the
   namespace most hosts hang CI triggers (`on: push`) and branch-protection
-  rules on, including wildcard patterns that could match `gloss/**`. Landing
-  in `refs/heads/*` to dodge one host's restriction on `refs/gloss/*` risks
+  rules on, including wildcard patterns that could match `writ/**`. Landing
+  in `refs/heads/*` to dodge one host's restriction on `refs/writ/*` risks
   walking into a *different* restriction, or firing unwanted CI on every
   op-commit, in that same repo. Check for branch-protection rules and CI
   triggers before adopting this fallback on a given host, not just ref
   acceptance.
-- A repo could already have a real branch named `gloss/...`, colliding with
+- A repo could already have a real branch named `writ/...`, colliding with
   the encoded namespace; the writer-id/object-id segments make accidental
   collision unlikely but not impossible, worth a guard if this is ever
   implemented.
@@ -124,7 +133,7 @@ too — Codeberg untested either way) treats `refs/heads/*` as unrestricted:
   since none of them inspect the ref name beyond the writer-id/object-id
   segments.
 - Only adopt this for the specific host(s) found to need it; don't pay the
-  branch-namespace-pollution cost on hosts where the plain `refs/gloss/*`
+  branch-namespace-pollution cost on hosts where the plain `refs/writ/*`
   namespace already works.
 
 ## Open follow-up
@@ -138,5 +147,5 @@ too — Codeberg untested either way) treats `refs/heads/*` as unrestricted:
 - Revisit GitHub GC-survival after the ref has sat unfetched for longer than
   one session, or find GitHub documentation that speaks to it directly
   instead of inferring from general git-backend behavior.
-- Feed these findings into GLS-7 (Spec: ref layout & writer-id convention)
+- Feed these findings into WRIT-7 (Spec: ref layout & writer-id convention)
   once the remaining three hosts are checked.

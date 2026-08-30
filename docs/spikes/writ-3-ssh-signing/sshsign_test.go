@@ -1,4 +1,4 @@
-// Package sshsignspike is the GLS-3 spike prototype: can we sign gloss ops
+// Package sshsignspike is the WRIT-3 spike prototype: can we sign writ ops
 // with a user's existing SSH key via go-git, and verify portably against
 // system git and vice versa? See README.md for the findings this prototype
 // backs; this file is the evidence, not documentation of intent.
@@ -56,11 +56,11 @@ func TestSignInGo_VerifyWithSystemGit(t *testing.T) {
 		t.Fatalf("store tree: %v", err)
 	}
 
-	sig := object.Signature{Name: "Gloss Spike", Email: principal, When: time.Now()}
+	sig := object.Signature{Name: "Writ Spike", Email: principal, When: time.Now()}
 	commit := &object.Commit{
 		Author:    sig,
 		Committer: sig,
-		Message:   "gls-3 spike: sign-in-go\n",
+		Message:   "writ-3 spike: sign-in-go\n",
 		TreeHash:  treeHash,
 	}
 
@@ -139,16 +139,16 @@ func TestSignWithSystemGit_VerifyInGo(t *testing.T) {
 		t.Fatal(err)
 	}
 	runGit(t, repoDir, "init", "-q")
-	runGit(t, repoDir, "config", "user.name", "Gloss Spike")
+	runGit(t, repoDir, "config", "user.name", "Writ Spike")
 	runGit(t, repoDir, "config", "user.email", principal)
 	runGit(t, repoDir, "config", "gpg.format", "ssh")
 	runGit(t, repoDir, "config", "user.signingkey", pub)
 
-	if err := os.WriteFile(filepath.Join(repoDir, "op.txt"), []byte("gls-3 spike op\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(repoDir, "op.txt"), []byte("writ-3 spike op\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	runGit(t, repoDir, "add", "op.txt")
-	runGit(t, repoDir, "commit", "-q", "-S", "-m", "gls-3 spike: sign-with-system-git")
+	runGit(t, repoDir, "commit", "-q", "-S", "-m", "writ-3 spike: sign-with-system-git")
 
 	headOut := runGit(t, repoDir, "rev-parse", "HEAD")
 	commitHash := plumbing.NewHash(strings.TrimSpace(headOut))
@@ -209,7 +209,7 @@ func TestAgentHeldKeySigning(t *testing.T) {
 		t.Fatalf("private key still on disk: %v", err)
 	}
 
-	payload := []byte("gls-3 spike: agent-held key\n")
+	payload := []byte("writ-3 spike: agent-held key\n")
 	armored := signSSH(t, pub, namespace, payload, []string{"SSH_AUTH_SOCK=" + sock})
 
 	allowedSigners := writeAllowedSigners(t, tmp, principal, pub)

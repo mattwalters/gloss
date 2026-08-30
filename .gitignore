@@ -33,3 +33,6 @@ go.work.sum
 
 # lerp's run records, workspaces and logs
 .lerp/
+
+# Local build output of the spike bench tool
+spike/gogit/gogit

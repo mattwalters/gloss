@@ -2,7 +2,7 @@
 
 ## License
 
-Gloss is Apache-2.0 (see `LICENSE`). By contributing, you agree your
+Writ is Apache-2.0 (see `LICENSE`). By contributing, you agree your
 contribution is provided under that license.
 
 No per-file license headers: `LICENSE` at the repository root governs the

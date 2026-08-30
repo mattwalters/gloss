@@ -1,18 +1,18 @@
-# Gloss — Architecture & Design Decisions
+# Writ — Architecture & Design Decisions
 
 _Companion to VISION.md. This is the technical record: what we're building, how it's shaped, and — most importantly — why each decision went the way it did, so contributors (human or agent) don't have to relitigate settled questions without new information._
 
 ## Core model
 
-Gloss is an **event-sourcing engine that uses git as its storage and transport substrate**. Git supplies a content-addressed object store, a sync protocol, and credential/transport infrastructure; Gloss supplies the semantics. Every SDLC artifact (review, issue, project, cycle) is a **collaborative object**: a DAG of small, signed, immutable **operations**, each stored as a git commit under a dedicated ref. Current state is never stored authoritatively; it is _derived_ by deterministically folding an object's operations. Concurrent writes don't conflict — they coexist as sibling ops in the DAG and are reconciled at fold time by spec-defined rules.
+Writ is an **event-sourcing engine that uses git as its storage and transport substrate**. Git supplies a content-addressed object store, a sync protocol, and credential/transport infrastructure; Writ supplies the semantics. Every SDLC artifact (review, issue, project, cycle) is a **collaborative object**: a DAG of small, signed, immutable **operations**, each stored as a git commit under a dedicated ref. Current state is never stored authoritatively; it is _derived_ by deterministically folding an object's operations. Concurrent writes don't conflict — they coexist as sibling ops in the DAG and are reconciled at fold time by spec-defined rules.
 
-Design lineage, with gratitude: the op-log + per-writer refs + signing + fold-to-SQLite pattern is inspired by Radicle's collaborative objects (COBs); the refs-not-notes and meta-ref patterns are validated by Gerrit NoteDb; the line-oriented mergeability insight comes from git-appraise. Where Radicle pairs this data model with a peer-to-peer network in service of its sovereignty mission, Gloss targets hub-and-spoke sync through whatever git remote a team already uses — a narrower goal that lets us omit the networking layer entirely.
+Design lineage, with gratitude: the op-log + per-writer refs + signing + fold-to-SQLite pattern is inspired by Radicle's collaborative objects (COBs); the refs-not-notes and meta-ref patterns are validated by Gerrit NoteDb; the line-oriented mergeability insight comes from git-appraise. Where Radicle pairs this data model with a peer-to-peer network in service of its sovereignty mission, Writ targets hub-and-spoke sync through whatever git remote a team already uses — a narrower goal that lets us omit the networking layer entirely.
 
 ### Ref layout
 
-Per-writer namespaces are load-bearing: `refs/gloss/<writer-id>/cobs/<type>/<object-id>`. A writer only ever pushes to their own namespace, so pushes cannot non-fast-forward against another writer — the entire class of push conflicts disappears, which is what keeps the sync layer simple. `writer-id` is (user, device) so multi-device self-races also dissolve into the DAG instead of ref conflicts. Reading an object means enumerating its ops across _all_ writer namespaces and folding.
+Per-writer namespaces are load-bearing: `refs/writ/<writer-id>/cobs/<type>/<object-id>`. A writer only ever pushes to their own namespace, so pushes cannot non-fast-forward against another writer — the entire class of push conflicts disappears, which is what keeps the sync layer simple. `writer-id` is (user, device) so multi-device self-races also dissolve into the DAG instead of ref conflicts. Reading an object means enumerating its ops across _all_ writer namespaces and folding.
 
-We use plain refs rather than git-notes: notes don't fetch by default, and notes attached to commits are orphaned when commits are rewritten by rebase — limitations git-appraise's design had to work around. A one-time `gloss init` writes fetch/push refspecs into `.git/config` so ordinary `git fetch` carries gloss data; that config edit is the entire deployment story.
+We use plain refs rather than git-notes: notes don't fetch by default, and notes attached to commits are orphaned when commits are rewritten by rebase — limitations git-appraise's design had to work around. A one-time `writ init` writes fetch/push refspecs into `.git/config` so ordinary `git fetch` carries writ data; that config edit is the entire deployment story.
 
 ### The op envelope
 
@@ -44,7 +44,7 @@ Line comments anchor to **content** (blob hash + hunk context), not line numbers
 Domain-shaped, never git-shaped — callers see no SHAs or refspecs unless they ask:
 
 ```
-store := gloss.Open(path)            // any git dir: clone, bare, worktree; fully offline
+store := writ.Open(path)             // any git dir: clone, bare, worktree; fully offline
 store.Reviews.Create(base, head) / .Comment(id, anchor, body) / .Approve(id)
 store.Issues.Create(...) / .SetStatus(...)
 store.Query(filters...)              // served from projection
@@ -65,13 +65,13 @@ Everything open lives in a single Apache-2.0 monorepo because the spec, engine, 
 ```
 /spec          — convention doc, JSON schemas, conformance fixtures (the real standard)
 /engine        — codec, dag, fold, projection, sync (public Go API at the root package)
-/cmd/gloss     — CLI: porcelain for humans, --json plumbing for scripts/agents
+/cmd/writ      — CLI: porcelain for humans, --json plumbing for scripts/agents
 /tui           — Bubble Tea client
 /bridge/github — bidirectional PR/comment ⇄ ops sync (the migration path)
 /docs
 ```
 
-Any hosted service built on Gloss — by us or anyone — should consume the engine's public API as an ordinary pinned Go module, with no reach into internals. Keeping the public API strong enough that _we_ never need private hooks is a deliberate design constraint: it keeps the convention honest. `spec/` can graduate to a neutral home once independent implementations exist and governance is worth formalizing.
+Any hosted service built on Writ — by us or anyone — should consume the engine's public API as an ordinary pinned Go module, with no reach into internals. Keeping the public API strong enough that _we_ never need private hooks is a deliberate design constraint: it keeps the convention honest. `spec/` can graduate to a neutral home once independent implementations exist and governance is worth formalizing.
 
 ## Spec = fixtures
 
@@ -79,4 +79,4 @@ The standard is not the markdown; it's the conformance corpus: fixture repos exe
 
 ## Known-hard list (tracked, not feared)
 
-Anchoring across force-pushes; canonical encoding; compaction/GC for unbounded op history; workspace-repo permission semantics; identity mapping (signing key → directory identity), which is deliberately out of spec scope; host ref-namespace compatibility (the foundational spike — some namespaces like `refs/pull/*` are read-only on some hosts; verify `refs/gloss/*` across GitHub, GitLab, Bitbucket, Gitea/Forgejo, Codeberg, and bare-SSH before anything else, with a branch-namespace-encoding fallback sketched in case any major host is restrictive).
+Anchoring across force-pushes; canonical encoding; compaction/GC for unbounded op history; workspace-repo permission semantics; identity mapping (signing key → directory identity), which is deliberately out of spec scope; host ref-namespace compatibility (the foundational spike — some namespaces like `refs/pull/*` are read-only on some hosts; verify `refs/writ/*` across GitHub, GitLab, Bitbucket, Gitea/Forgejo, Codeberg, and bare-SSH before anything else, with a branch-namespace-encoding fallback sketched in case any major host is restrictive).
