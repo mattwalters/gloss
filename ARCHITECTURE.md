@@ -58,6 +58,26 @@ store.Watch() <-chan Event           // reactive clients
 
 We seriously considered Rust; its three advantages dissolved under this project's constraints. (1) Bindings: the CLI in `--json` plumbing mode is the universal API — every language and agent can shell out to one static binary, which Go distributes exceptionally well; cgo-exported shared libraries remain a later option if in-process bindings are ever needed. (2) Git libraries: we take a **hybrid approach** — go-git (mature, pure Go) for local object I/O; **system git for all transport**, which is also git-appraise's approach and is quietly the right engineering call, because SSH agents, credential helpers, gitconfig, proxies, and enterprise auth setups all work for free. (3) Type-safety-for-correctness: the conformance fixture suite is the correctness story, not the compiler. Meanwhile the costs of splitting languages were real: Bubble Tea commits the TUI to Go; a Rust core underneath means a cgo seam, two toolchains, and a higher barrier for the contributor who starts in the TUI and ends up fixing an engine bug. One language, one `go build ./...`. A Rust (or Python, or TypeScript) implementation of the _spec_ by others would be genuinely welcome — an independent second implementation is the best proof a convention stands on its own.
 
+## SQLite driver: pure Go (decided; rationale preserved)
+
+The projection (five machines, #4) uses `modernc.org/sqlite`, not
+`mattn/go-sqlite3`. `mattn` is faster on bulk insert — a spike benchmark on
+a projection-shaped workload (5k reviews, 100k comments, one bulk-insert
+transaction plus indexed reads by review) measured cgo at roughly 1.4–2.2x
+there, with indexed reads too close to call (overlapping ranges across 10
+runs) — but both are comfortably fast in absolute terms (sub-second full
+refold, sub-tenth-millisecond point lookups), and cgo would compromise the
+reason Go was chosen over Rust in the first place:
+"the CLI in `--json` plumbing mode is the universal API ... which Go
+distributes exceptionally well" (see Language section above). A cgo
+dependency in the projection means the release matrix (WRIT-58: linux/macos/
+windows × amd64/arm64) needs either a from-scratch build host per target or
+a C cross-compiler toolchain wired into CI and kept working, plus musl for
+genuinely static Linux binaries since static-linking cgo against glibc
+breaks NSS lookups at runtime. `CGO_ENABLED=0` cross-compilation has none of
+that: it's `GOOS`/`GOARCH` and nothing else, from any host. Full benchmark,
+method, and reproduction steps: `docs/spikes/writ-60-sqlite-driver/`.
+
 ## Repo strategy: one monorepo
 
 Everything open lives in a single Apache-2.0 monorepo because the spec, engine, and clients are one contract with several expressions: a fold-rule change should be one atomic PR touching spec text, fixtures, engine, and CLI together. Split repos invite version skew between fixtures and implementation — the exact failure that erodes trust in a convention. Layout:
