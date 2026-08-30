@@ -74,6 +74,15 @@ func Generate(desc *Description, outDir string) (*Manifest, error) {
 		}
 	}
 
+	// PlainInit leaves HEAD pointing at the conventional refs/heads/master,
+	// which none of these fixtures populate — left alone, a plain `git
+	// clone` of the generated repo checks out nothing and prints a
+	// "remote HEAD refers to nonexistent ref" warning. Point it at the
+	// description's first ref so the repo is inspectable the obvious way.
+	if err := repo.Storer.SetReference(plumbing.NewSymbolicReference(plumbing.HEAD, plumbing.ReferenceName(desc.Refs[0].Name))); err != nil {
+		return nil, fmt.Errorf("fixtures: set HEAD: %w", err)
+	}
+
 	return manifest, nil
 }
 

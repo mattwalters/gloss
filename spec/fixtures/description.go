@@ -74,16 +74,32 @@ func Load(data []byte) (*Description, error) {
 	if len(d.Refs) == 0 {
 		return nil, fmt.Errorf("fixtures: description %q has no refs", d.Name)
 	}
+	// Every ref name and every keep_as must be unique across the whole
+	// description: they all become real refs written into the same repo,
+	// and a collision would make one silently overwrite another at
+	// generation time (git only has one namespace per ref name) while the
+	// manifest still recorded both writes as if they'd each landed.
+	seenRefNames := map[string]bool{}
 	for _, r := range d.Refs {
 		if r.Name == "" {
 			return nil, fmt.Errorf("fixtures: description %q has a ref with no name", d.Name)
 		}
+		if seenRefNames[r.Name] {
+			return nil, fmt.Errorf("fixtures: description %q has ref %q more than once", d.Name, r.Name)
+		}
+		seenRefNames[r.Name] = true
 		if len(r.History) == 0 {
 			return nil, fmt.Errorf("fixtures: description %q ref %q has no history", d.Name, r.Name)
 		}
 		for gi, g := range r.History {
 			if len(g.Commits) == 0 {
 				return nil, fmt.Errorf("fixtures: description %q ref %q generation %d has no commits", d.Name, r.Name, gi)
+			}
+			if g.KeptAs != "" {
+				if seenRefNames[g.KeptAs] {
+					return nil, fmt.Errorf("fixtures: description %q keep_as %q collides with another ref name", d.Name, g.KeptAs)
+				}
+				seenRefNames[g.KeptAs] = true
 			}
 			for ci, c := range g.Commits {
 				if c.Author == "" {

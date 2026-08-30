@@ -44,6 +44,14 @@ func insertPath(node *treeNode, parts []string, content string) error {
 		return fmt.Errorf("empty path segment")
 	}
 	if len(parts) == 1 {
+		// This check and the symmetric one below make collision detection
+		// independent of insertion order, even though buildTree's sorted
+		// insertion currently means a leaf/directory collision on the same
+		// name is always caught by the other branch first (a leaf path is
+		// always a lexicographic prefix of, and so always sorts before,
+		// any deeper path through a directory of the same name). Kept
+		// order-independent on purpose so this doesn't silently break if
+		// that sort ever changes.
 		if existing, ok := node.children[name]; ok && existing.isDir {
 			return fmt.Errorf("collides with directory %q", name)
 		}
