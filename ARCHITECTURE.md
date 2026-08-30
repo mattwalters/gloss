@@ -93,6 +93,8 @@ Everything open lives in a single Apache-2.0 monorepo because the spec, engine, 
 
 Any hosted service built on Writ — by us or anyone — should consume the engine's public API as an ordinary pinned Go module, with no reach into internals. Keeping the public API strong enough that _we_ never need private hooks is a deliberate design constraint: it keeps the convention honest. `spec/` can graduate to a neutral home once independent implementations exist and governance is worth formalizing.
 
+That "ordinary pinned Go module" is one monorepo-wide `go.mod` at the repo root, module path `github.com/writtendev/writ`, covering `/engine`, `/cmd/writ`, `/tui`, and `/bridge/github` — not a separate module for the engine. A consumer that imports only `.../writ/engine` never compiles or links Bubble Tea or the GitHub client into its own build regardless, since only actually-imported packages get built, independent of which module they live in; `engine/internal/` enforces the API boundary the same way whether `engine` sits in its own `go.mod` or as a subtree of one. A second module and a `go.work` file are deferred until a real external consumer needs independent engine versioning (decision and full rationale: `docs/module-boundary-decision.md`, WRIT-61).
+
 ## Spec = fixtures
 
 The standard is not the markdown; it's the conformance corpus: fixture repos exercising every tricky configuration (concurrent edits on every type, multi-device writers, orphaned anchors, unknown op types, future versions, malformed signatures) plus golden folded outputs any implementation must reproduce. Fixtures are the ground truth that lets an independent implementation claim compatibility. Fold determinism is fixture-enforced byte-for-byte.
