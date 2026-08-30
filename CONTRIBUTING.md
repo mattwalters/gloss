@@ -7,7 +7,8 @@ decisions and the reasoning behind them. If a decision you'd relitigate is
 already in one of those two documents, the document wins — bring new
 information or drop it, but don't reopen it from scratch in a PR. This file
 is about how work turns into a merged change, not what we're building; for
-day-to-day agent-facing conventions see [AGENTS.md](AGENTS.md).
+the house rules and repo layout that apply to agents and humans alike, see
+[AGENTS.md](AGENTS.md).
 
 ## License
 
