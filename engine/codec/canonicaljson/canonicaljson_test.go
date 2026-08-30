@@ -6,6 +6,7 @@
 package canonicaljson_test
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -115,19 +116,25 @@ func TestMarshalRejectsNonFiniteNumbers(t *testing.T) {
 
 // Nesting depth is capped so a long run of '[' bytes returns an error
 // instead of overflowing the goroutine stack (a fatal, unrecoverable
-// crash). encoding/json's own Decode enforces the same 10000-level cap;
-// the token walk has to enforce it itself.
-func TestMarshalRejectsExcessiveNesting(t *testing.T) {
-	in := strings.Repeat("[", 20_000)
-	if _, err := canonicaljson.Marshal([]byte(in)); err == nil {
-		t.Fatal("Marshal accepted input nested beyond the depth cap")
+// crash). The boundary is pinned exactly: 10000 levels accepted, 10001
+// rejected — the same ceiling encoding/json's Decode enforces, so
+// canonical bytes are never something json.Unmarshal refuses to parse.
+// The boundary can't live in the vector file (it would be tens of
+// kilobytes of brackets), so this test is its enforcement.
+func TestMarshalNestingDepthBoundary(t *testing.T) {
+	ok := strings.Repeat("[", 10_000) + strings.Repeat("]", 10_000)
+	got, err := canonicaljson.Marshal([]byte(ok))
+	if err != nil {
+		t.Fatalf("Marshal rejected 10000 nesting levels, the spec'd maximum: %v", err)
 	}
-	// Just inside the cap parses fine (and then fails only on EOF,
-	// since the brackets are unclosed — close them to prove the depth
-	// itself is accepted).
-	ok := strings.Repeat("[", 9_000) + strings.Repeat("]", 9_000)
-	if _, err := canonicaljson.Marshal([]byte(ok)); err != nil {
-		t.Fatalf("Marshal rejected nesting within the depth cap: %v", err)
+	var v any
+	if err := json.Unmarshal(got, &v); err != nil {
+		t.Fatalf("json.Unmarshal rejected canonical bytes Marshal accepted: %v", err)
+	}
+	// One level deeper is rejected before EOF even matters — the check
+	// fires at the 10001st open bracket.
+	if _, err := canonicaljson.Marshal([]byte(strings.Repeat("[", 10_001))); err == nil {
+		t.Fatal("Marshal accepted input nested beyond the 10000-level cap")
 	}
 }
 

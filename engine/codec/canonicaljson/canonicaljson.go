@@ -71,10 +71,14 @@ func Marshal(src []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// maxNestingDepth caps decodeValue's recursion. encoding/json enforces
-// the same limit inside Decode, but Decoder.Token — which the walk below
-// uses instead — does not, and without a cap a long run of `[` bytes
-// drives one stack frame per byte until the process dies.
+// maxNestingDepth caps decodeValue's recursion at the spec'd 10000
+// levels (spec/canonicalization.md): the 10000th open bracket is
+// accepted, the 10001st rejected, exactly matching what encoding/json
+// enforces inside Decode — so a payload this package accepts is never
+// one json.Unmarshal chokes on. Decoder.Token, which the walk below
+// uses instead of Decode, enforces no limit of its own, and without a
+// cap a long run of `[` bytes drives one stack frame per byte until the
+// process dies.
 const maxNestingDepth = 10000
 
 // decodeValue builds the value tree token by token rather than through
@@ -83,7 +87,10 @@ const maxNestingDepth = 10000
 // detected. Walking tokens lets each object reject a repeated key the
 // moment it appears.
 func decodeValue(dec *json.Decoder, depth int) (any, error) {
-	if depth > maxNestingDepth {
+	// depth is the number of enclosing brackets, so the outermost value
+	// runs at 0 and the value inside the 10001st bracket would run at
+	// 10000 — the first depth to reject.
+	if depth >= maxNestingDepth {
 		return nil, fmt.Errorf("canonicaljson: exceeded max nesting depth of %d", maxNestingDepth)
 	}
 	tok, err := dec.Token()

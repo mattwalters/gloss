@@ -23,7 +23,10 @@ across two carriers, and each field has exactly one home:
 | signature | the commit signature header (`gpgsig`) |
 | object id, object type, op type, op version, body | a canonical JSON blob at a fixed path in the commit's tree |
 
-Nothing is mirrored between the carriers. The alternative — repeating
+No commit-carried field is mirrored into the payload. (The one restatement
+that runs the other way — the commit message, derived from payload fields
+purely so `git log` reads — is covered under the commit carrier below.)
+The alternative — repeating
 parents, author, and timestamp inside the JSON payload — was considered
 and rejected: it creates two sources of truth that can disagree (payload
 parents vs. commit parents), and it is incoherent at the edges, since a
@@ -74,7 +77,13 @@ same signing key then mint the same op id.
   producer-side rule, pinned because the message bytes feed the op id:
   readers MUST ignore the message entirely — never parse it as data, and
   never validate it against the payload, which would make the message a
-  second source of truth for fields the payload owns.
+  second source of truth for fields the payload owns. The message is
+  therefore the one place the payload's own fields are restated, and it
+  is deliberately unverifiable: two commits with identical payloads and
+  different messages are both valid ops, with different op ids. Op-id
+  reproducibility across producers rests on producers following this
+  rule, not on readers enforcing it — which is the trade the no-mirroring
+  principle accepts to keep `git log` legible.
 - **Signature.** Ops are signed with git's commit-signature machinery:
   the signature rides the `gpgsig` header, and SSH signatures use the
   namespace `git` — the same bytes `git commit -S` produces with

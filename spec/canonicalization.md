@@ -45,10 +45,20 @@ A canonicalizer MUST reject:
   that overflows to infinity (e.g. `1e400`). `NaN` and `Infinity` have
   no JSON representation to begin with. (Rejection category:
   `non-finite-number`.)
-- **Anything that is not exactly one JSON value**: syntax errors, and
-  any trailing non-whitespace after the value — including a stray `}` or
-  `]`, which some streaming decoders treat as end-of-input rather than
-  as trailing data. (Rejection category: `not-one-value`.)
+- **Trailing data**: any non-whitespace after the single JSON value —
+  including a stray `}` or `]`, which some streaming decoders treat as
+  end-of-input rather than as trailing data. (Rejection category:
+  `not-one-value`.)
+- **Values nested deeper than 10000 levels** of arrays and objects.
+  A shared bound is part of the contract: without one, a payload one
+  implementation canonicalizes is one another cannot even parse (Go's
+  `encoding/json` enforces this same 10000-level ceiling), so validity
+  would disagree exactly where signing needs agreement. The 10000th
+  nesting level MUST be accepted and the 10001st rejected. (Rejection
+  category: `max-depth`.)
+- **Input that is not well-formed JSON** (syntax errors). These carry no
+  rejection category and are not vectored; they are ordinary parse
+  failures.
 
 ## Output
 
@@ -105,13 +115,16 @@ one of two forms:
 A conforming canonicalizer MUST produce exactly `canonical` for every
 entry of the first form and MUST reject every entry of the second form.
 Rejection categories (`duplicate-key`, `lone-surrogate`,
-`non-finite-number`, `not-one-value`) classify the reason; the error
-surface (message text, error codes) is implementation-defined, but a
-test harness SHOULD verify its implementation rejects each entry for the
-categorized reason, not merely that it rejects — the reference
-implementation's tests do.
+`non-finite-number`, `not-one-value`, `max-depth`) classify the reason;
+the error surface (message text, error codes) is implementation-defined,
+but a test harness SHOULD verify its implementation rejects each entry
+for the categorized reason, not merely that it rejects — the reference
+implementation's tests do. Plain syntax errors carry no category and are
+not vectored, so `not-one-value` means trailing data specifically.
 
-One rejection rule is not expressible as a vector: invalid UTF-8, since
-the vector file's `input` is itself a JSON string and can only carry
-valid text. Implementations MUST cover that rule with their own direct
-tests, as the reference implementation does.
+Two rejection rules are not expressible as vectors, and implementations
+MUST cover both with their own direct tests, as the reference
+implementation does: **invalid UTF-8**, because the vector file's `input`
+is itself a JSON string and can only carry valid text; and the
+**10000-level depth limit**, whose boundary cases would be tens of
+kilobytes of brackets apiece.
