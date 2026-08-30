@@ -1,4 +1,4 @@
-module github.com/mattwalters/gloss/docs/spikes/gls-60-sqlite-driver
+module github.com/writtendev/writ/docs/spikes/writ-60-sqlite-driver
 
 go 1.25.3
 

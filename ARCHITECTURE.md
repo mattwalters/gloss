@@ -70,13 +70,13 @@ refold, sub-tenth-millisecond point lookups), and cgo would compromise the
 reason Go was chosen over Rust in the first place:
 "the CLI in `--json` plumbing mode is the universal API ... which Go
 distributes exceptionally well" (see Language section above). A cgo
-dependency in the projection means the release matrix (GLS-58: linux/macos/
+dependency in the projection means the release matrix (WRIT-58: linux/macos/
 windows × amd64/arm64) needs either a from-scratch build host per target or
 a C cross-compiler toolchain wired into CI and kept working, plus musl for
 genuinely static Linux binaries since static-linking cgo against glibc
 breaks NSS lookups at runtime. `CGO_ENABLED=0` cross-compilation has none of
 that: it's `GOOS`/`GOARCH` and nothing else, from any host. Full benchmark,
-method, and reproduction steps: `docs/spikes/gls-60-sqlite-driver/`.
+method, and reproduction steps: `docs/spikes/writ-60-sqlite-driver/`.
 
 ## Repo strategy: one monorepo
 

@@ -1,5 +1,5 @@
 // Package sqlitedriver holds a throwaway benchmark comparing mattn/go-sqlite3
-// (cgo) against modernc.org/sqlite (pure Go) on a schema shaped like Gloss's
+// (cgo) against modernc.org/sqlite (pure Go) on a schema shaped like Writ's
 // projection: reviews with an indexed set of comments, bulk-loaded the way a
 // from-scratch refold would, then read back by the index a live query would
 // use.

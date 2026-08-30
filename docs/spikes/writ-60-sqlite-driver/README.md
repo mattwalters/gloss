@@ -1,4 +1,4 @@
-# GLS-60 spike: SQLite driver — CGO vs pure Go
+# WRIT-60 spike: SQLite driver — CGO vs pure Go
 
 Benchmark and findings for the projection layer's SQLite driver:
 `mattn/go-sqlite3` (cgo, canonical) vs `modernc.org/sqlite` (pure Go). Run the
@@ -45,7 +45,7 @@ edge.
 Cross-compiling this spike's test binary from this darwin host to
 `linux/arm64` with `CGO_ENABLED=1` fails outright — no linux C toolchain on
 a mac, so `runtime/cgo`'s C sources don't build (`setresgid`/`setresuid`
-undeclared under the macOS SDK headers). Producing GLS-58's six release
+undeclared under the macOS SDK headers). Producing WRIT-58's six release
 targets (linux/macos/windows × amd64/arm64) from one CI host with `mattn`
 in the dependency graph means either a from-scratch matrix of per-target
 build hosts, or a C cross-compiler toolchain (e.g. `zig cc`) wired into the
@@ -85,7 +85,7 @@ long-established hand-maintained cgo wrapper most Go projects reach for
 first. `modernc.org/sqlite` is at v1.57.0, requires Go ≥1.25 — its much
 faster version churn tracks a from-C-source transpilation (via `ccgo`) of
 each upstream SQLite release rather than a hand-maintained binding, and its
-Go-version floor has moved fast enough to be worth rechecking if gloss ever
+Go-version floor has moved fast enough to be worth rechecking if writ ever
 needs to support an older toolchain in some contributor's environment. Both
 are active; neither is the risk here — the transport story in finding 1 is.
 
@@ -100,7 +100,7 @@ forever. The performance gap this spike measured is real on bulk insert
 "fast enough for a local single-user cache" at every scale tried, including
 a 100k-comment from-scratch refold. The
 cross-compilation and static-linking cost (findings 1–2) has no comparable
-"fine in practice" answer and compounds with every release target GLS-58
+"fine in practice" answer and compounds with every release target WRIT-58
 adds. No CGO exception needs writing into the release pipeline as a result
-— that line item in GLS-58's definition of done is now moot rather than
+— that line item in WRIT-58's definition of done is now moot rather than
 satisfied.
