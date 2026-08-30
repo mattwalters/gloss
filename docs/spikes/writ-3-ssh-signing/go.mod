@@ -1,4 +1,4 @@
-module gls-3-ssh-signing-spike
+module writ-3-ssh-signing-spike
 
 go 1.25.3
 

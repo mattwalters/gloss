@@ -1,6 +1,13 @@
 # Naming collision report: "Gloss" and backups
 
-Spike for GLS-5. Preliminary screen using free, publicly reachable search
+> **Historical record.** This report surveys "Gloss", the project's original
+> name, and its backup candidates. The project has since been renamed to
+> **Writ** (org `writtendev`, repo `writtendev/writ`), which supersedes the
+> "keep Gloss" recommendation below. The occurrences of "gloss" in this
+> document are the subject of the survey and are deliberately retained.
+> An equivalent collision screen for "Writ" has not been run.
+
+Spike for WRIT-5. Preliminary screen using free, publicly reachable search
 surfaces (npm/crates.io registry APIs, pkg.go.dev, Homebrew's formula API,
 Debian's package search, GitHub, and general web search). This is not a
 substitute for a paid trademark search or legal opinion — USPTO TESS is not

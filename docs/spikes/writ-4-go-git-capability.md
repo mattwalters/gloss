@@ -1,11 +1,11 @@
-# GLS-4: go-git capability check on a large real repo
+# WRIT-4: go-git capability check on a large real repo
 
 Spike for the hybrid Go/git approach settled in `ARCHITECTURE.md` (go-git
 for local object I/O, system git for all transport). This does not
 relitigate that decision — it checks whether go-git's local half is
-adequate for Gloss's actual write pattern: one op = one signed commit, one
+adequate for Writ's actual write pattern: one op = one signed commit, one
 ref per collaborative object under a per-writer namespace
-(`refs/gloss/<writer-id>/cobs/<type>/<object-id>`), at a scale a real
+(`refs/writ/<writer-id>/cobs/<type>/<object-id>`), at a scale a real
 project's op history will eventually reach.
 
 Tool: `spike/gogit/` (throwaway spike code, not engine code — see its
@@ -63,18 +63,18 @@ again. That's bounded by 256 occurrences per repo, not something that
 scales with op count — not a cliff, just a note for anyone reading raw
 percentile output and wondering about the tail.
 
-## 3. Many-refs behavior at `refs/gloss/*` scale
+## 3. Many-refs behavior at `refs/writ/*` scale
 
 This is where go-git's behavior stops being uniformly good, and the
 answer depends on whether refs are loose or packed — which is not
-something Gloss controls; git's own `gc.packRefs`/`gc.auto` decide that on
-a schedule Gloss doesn't own.
+something Writ controls; git's own `gc.packRefs`/`gc.auto` decide that on
+a schedule Writ doesn't own.
 
 Measured at 5,000 and 20,000 refs under a single writer's namespace.
 
 | Operation | Loose | Packed |
 |---|---|---|
-| Enumerate all `refs/gloss/*` | 309ms (5k) / 1.87s (20k) | 5ms (5k) / 18ms (20k) |
+| Enumerate all `refs/writ/*` | 309ms (5k) / 1.87s (20k) | 5ms (5k) / 18ms (20k) |
 | Single-name lookup, avg | ~37–42µs | ~2.7–2.95ms |
 | Update existing ref (fast-forward) | p50 69–77µs, p99 94–395µs | (not separately measured; see removal below) |
 | `git pack-refs --all` | — | 2.4s (5k) / 8.1s (20k) |
@@ -91,7 +91,7 @@ the file each time. There's no in-memory index and no cache between calls.
 Enumeration (`IterReferences`, one scan, iterate in memory) is fast for
 exactly the reason repeated single lookups are slow: it pays the scan cost
 once. **Mitigation:** never call `Storer.Reference(name)` in a loop over
-many refs — enumerate once into a map instead. Gloss's actual access
+many refs — enumerate once into a map instead. Writ's actual access
 pattern (enumerate an object's ops across all writer namespaces) is
 already shaped this way; the risk is a future code path that does
 one-off lookups against a large shared ref space and inherits this

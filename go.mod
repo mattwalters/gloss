@@ -1,3 +1,3 @@
-module github.com/mattwalters/gloss
+module github.com/writtendev/writ
 
 go 1.25
