@@ -65,6 +65,11 @@
     "canonical": "{\"s\":\"café 中文\"}"
   },
   {
+    "name": "string: lone surrogate decodes to U+FFFD",
+    "input": "{\"s\":\"a\\ud800b\"}",
+    "canonical": "{\"s\":\"a�b\"}"
+  },
+  {
     "name": "number: plain integer",
     "input": "100",
     "canonical": "100"
@@ -113,6 +118,11 @@
     "name": "number: scientific input is normalized",
     "input": "1.5E+2",
     "canonical": "150"
+  },
+  {
+    "name": "number: many significant digits, full shortest round-trip",
+    "input": "3.141592653589793",
+    "canonical": "3.141592653589793"
   },
   {
     "name": "number: negative exponential",

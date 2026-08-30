@@ -1,6 +1,7 @@
 package canonicaljson
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"testing"
@@ -70,10 +71,27 @@ func TestMarshalRejectsInvalidJSON(t *testing.T) {
 	}
 }
 
+// 1e400 is valid JSON number syntax; it overflows float64 to +Inf, and
+// json.Number.Float64 reports that overflow as an error, so Marshal
+// rejects it before encodeNumber's own IsNaN/IsInf check ever runs.
 func TestMarshalRejectsNonFiniteNumbers(t *testing.T) {
-	// Not valid JSON syntax, but exercise the guard directly in case a
-	// future caller feeds decoded values through a different path.
 	if _, err := Marshal([]byte(`1e400`)); err == nil {
 		t.Fatal("Marshal accepted a number that overflows to +Inf")
+	}
+}
+
+// encodeNumber's IsNaN/IsInf guard is unreachable through Marshal, since
+// the JSON grammar has no NaN/Infinity literal and Float64 always errors
+// on the numeric literals that would overflow to one. But strconv's
+// ParseFloat also accepts the literal strings "NaN"/"Inf" and returns
+// them without error, so a json.Number built by any means other than
+// the decoder (e.g. a future caller of encodeNumber directly) can still
+// reach the guard — exercise it directly so that path stays covered.
+func TestEncodeNumberRejectsNaNAndInfDirectly(t *testing.T) {
+	for _, s := range []string{"NaN", "Inf", "+Inf", "-Inf"} {
+		var buf bytes.Buffer
+		if err := encodeNumber(&buf, json.Number(s)); err == nil {
+			t.Errorf("encodeNumber(%q) = %q, want error", s, buf.String())
+		}
 	}
 }
