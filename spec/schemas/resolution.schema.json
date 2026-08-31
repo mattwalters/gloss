@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://writ.dev/spec/resolution.schema.json",
+  "title": "Writ resolution outcome (v1)",
+  "description": "Deterministic outcome of resolving a content-based anchor against a target tree: per-side resolved position or orphan degradation. Normative text: spec/resolution.md. The $id is an identifier, not a network location. additionalProperties is deliberately never false: unknown fields are preserved and ignored.",
+  "type": "object",
+  "properties": {
+    "anchor": {
+      "type": "object",
+      "description": "The verbatim anchor object as presented to the resolver."
+    },
+    "old": { "$ref": "#/$defs/sideResult" },
+    "new": { "$ref": "#/$defs/sideResult" }
+  },
+  "required": ["anchor"],
+  "anyOf": [{ "required": ["old"] }, { "required": ["new"] }],
+  "$defs": {
+    "sideResult": {
+      "oneOf": [
+        { "$ref": "#/$defs/resolvedSide" },
+        { "$ref": "#/$defs/orphanedSide" }
+      ]
+    },
+    "resolvedSide": {
+      "type": "object",
+      "properties": {
+        "outcome": { "const": "resolved" },
+        "match": {
+          "type": "string",
+          "enum": [
+            "exact-path-blob",
+            "exact-blob-moved",
+            "context-exact",
+            "context-fuzzy"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^/]"
+        },
+        "range": { "$ref": "#/$defs/range" }
+      },
+      "required": ["outcome", "match", "path"]
+    },
+    "orphanedSide": {
+      "type": "object",
+      "properties": {
+        "outcome": { "const": "orphaned" },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "path-absent",
+            "no-candidate",
+            "below-threshold",
+            "ambiguous",
+            "unsupported-version"
+          ]
+        }
+      },
+      "required": ["outcome", "reason"]
+    },
+    "range": {
+      "type": "object",
+      "properties": {
+        "start": { "type": "integer", "minimum": 1 },
+        "end": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["start", "end"]
+    }
+  }
+}

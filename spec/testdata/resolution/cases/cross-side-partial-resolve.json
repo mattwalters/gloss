@@ -1,0 +1,119 @@
+{
+  "name": "cross-side-partial-resolve",
+  "description": "Dual-sided anchor where new side resolves and old side orphans",
+  "anchor": {
+    "version": 1,
+    "old": {
+      "commit": "1111111111111111111111111111111111111111",
+      "path": "runner.go",
+      "blob": "5937979c7971c0cb20bb250c1ff2a493233362d5",
+      "range": {
+        "start": 2,
+        "end": 2
+      },
+      "context": {
+        "before": [
+          "func Run() {"
+        ],
+        "lines": [
+          "\toldWork()"
+        ],
+        "after": [
+          "\tcommonWork()",
+          "}"
+        ]
+      }
+    },
+    "new": {
+      "commit": "2222222222222222222222222222222222222222",
+      "path": "runner.go",
+      "blob": "a80b170f9de307e5cfadd9a133f2b18edadb533d",
+      "range": {
+        "start": 2,
+        "end": 2
+      },
+      "context": {
+        "before": [
+          "func Run() {"
+        ],
+        "lines": [
+          "\tnewWork()"
+        ],
+        "after": [
+          "\tcommonWork()",
+          "}"
+        ]
+      }
+    }
+  },
+  "target": {
+    "files": {
+      "runner.go": "func Run() {\n\tnewWork()\n\tcommonWork()\n}\n"
+    }
+  },
+  "expect": {
+    "anchor": {
+      "version": 1,
+      "old": {
+        "commit": "1111111111111111111111111111111111111111",
+        "path": "runner.go",
+        "blob": "5937979c7971c0cb20bb250c1ff2a493233362d5",
+        "range": {
+          "start": 2,
+          "end": 2
+        },
+        "context": {
+          "before": [
+            "func Run() {"
+          ],
+          "lines": [
+            "\toldWork()"
+          ],
+          "after": [
+            "\tcommonWork()",
+            "}"
+          ]
+        }
+      },
+      "new": {
+        "commit": "2222222222222222222222222222222222222222",
+        "path": "runner.go",
+        "blob": "a80b170f9de307e5cfadd9a133f2b18edadb533d",
+        "range": {
+          "start": 2,
+          "end": 2
+        },
+        "context": {
+          "before": [
+            "func Run() {"
+          ],
+          "lines": [
+            "\tnewWork()"
+          ],
+          "after": [
+            "\tcommonWork()",
+            "}"
+          ]
+        }
+      }
+    },
+    "old": {
+      "outcome": "resolved",
+      "match": "context-fuzzy",
+      "path": "runner.go",
+      "range": {
+        "start": 2,
+        "end": 2
+      }
+    },
+    "new": {
+      "outcome": "resolved",
+      "match": "exact-path-blob",
+      "path": "runner.go",
+      "range": {
+        "start": 2,
+        "end": 2
+      }
+    }
+  }
+}

@@ -24,11 +24,13 @@ disagree, the fixtures win and the prose gets fixed.
 | `identifiers.md` | Normative | Workspace-global IDs, repo designators, cross-repo references, workspace repo, and reference resolution |
 | `review-ops.md` | Normative | The review family operation vocabulary (v1): review creation, revisions, status transitions, approvals, and CI statuses |
 | `comments.md` | Normative | Comment op vocabulary (v1): object model, create/edit/delete ops, threading, anchor reference, GitHub shapes |
+| `resolution.md` | Normative | Re-anchoring & orphan degradation (v1): the `resolve(anchor, tree)` ladder, tiebreaks, thresholds, and orphan semantics |
 | `schemas/op-envelope.schema.json` | Normative | JSON Schema (draft 2020-12) for the payload half of the envelope |
 | `schemas/anchor.schema.json` | Normative | JSON Schema (draft 2020-12) for the anchor object |
 | `schemas/identifiers.schema.json` | Normative | JSON Schema (draft 2020-12) for identifiers, references, and the repo registry |
 | `schemas/review-ops.schema.json` | Normative | JSON Schema (draft 2020-12) for the review operations family |
 | `schemas/comment.schema.json` | Normative | JSON Schema (draft 2020-12) for comment op payloads |
+| `schemas/resolution.schema.json` | Normative | JSON Schema (draft 2020-12) for the resolution outcome object |
 | `testdata/canonicalization/vectors.json` | Normative | Canonicalization test vectors: input → exact canonical bytes, or input → rejection |
 | `testdata/ref-names/vectors.json` | Normative | Ref-naming test vectors (valid/invalid) and pinned refspecs |
 | `testdata/envelopes/` | Normative | Envelope payload instances, valid and invalid; `invalid/index.json` records each expected rejection |
@@ -42,6 +44,7 @@ disagree, the fixtures win and the prose gets fixed.
 | `testdata/review-ops/github/` | Informative | GitHub PR, review, status, and check-run conversion vectors |
 | `testdata/comments/valid/`, `testdata/comments/invalid/` | Normative | Comment op payload instances; `invalid/index.json` records each expected rejection |
 | `testdata/comments/github/` | Informative | GitHub comment conversion vectors (top-level, inline, reply) |
+| `testdata/resolution/` | Normative | Resolution test vectors (`cases/*.json`) and outcome index (`index.json`) |
 | `spec.go` | Informative | Go embedding of `schemas/` and `testdata/` so every consumer reads the one committed copy |
 | `foldvectors.go` | Informative | Go loader and structural validation for fold ordering and merge test vectors |
 | `fixtures/` | Mixed | The fixture-repo generator and golden harness (informative tooling) producing the golden corpus under `fixtures/testdata/` (normative) |
@@ -61,6 +64,7 @@ spec/
 ├── identifiers.md          — normative: workspace-global IDs, references & workspace repo
 ├── review-ops.md           — normative: review family operation vocabulary (v1)
 ├── comments.md             — normative: comment op vocabulary (v1)
+├── resolution.md           — normative: re-anchoring & orphan degradation (v1)
 ├── spec.go                 — go:embed of schemas/ and testdata/ (package spec)
 ├── foldvectors.go          — loader and structural validation for fold test vectors
 ├── schemas/
@@ -68,7 +72,8 @@ spec/
 │   ├── anchor.schema.json  — draft 2020-12 schema for the anchor object
 │   ├── identifiers.schema.json — draft 2020-12 schema for identifiers & references
 │   ├── review-ops.schema.json  — draft 2020-12 schema for review operations
-│   └── comment.schema.json — draft 2020-12 schema for comment op payloads
+│   ├── comment.schema.json — draft 2020-12 schema for comment op payloads
+│   └── resolution.schema.json — draft 2020-12 schema for the resolution outcome object
 ├── testdata/
 │   ├── canonicalization/   — encoding vectors (valid and rejected inputs)
 │   ├── ref-names/          — ref-naming vectors (valid/invalid) and pinned refspecs
@@ -89,10 +94,13 @@ spec/
 │   │   ├── invalid/        — review op instances that must be rejected (+ index.json)
 │   │   ├── field-rules.json — fold merge strategies per field
 │   │   └── github/         — informative GitHub PR/review/status conversion vectors
-│   └── comments/
-│       ├── valid/          — comment payloads that must validate
-│       ├── invalid/        — comment payloads that must be rejected (+ index.json of reasons)
-│       └── github/         — informative GitHub comment conversion vectors
+│   ├── comments/
+│   │   ├── valid/          — comment payloads that must validate
+│   │   ├── invalid/        — comment payloads that must be rejected (+ index.json of reasons)
+│   │   └── github/         — informative GitHub comment conversion vectors
+│   └── resolution/
+│       ├── cases/          — resolution test cases (anchor + target tree -> outcome)
+│       └── index.json      — case -> outcome/rung mapping
 └── fixtures/
     ├── README.md           — fixture storage, repo generation, and test harness details
     ├── corpus.go           — loads descriptions from testdata/descriptions/

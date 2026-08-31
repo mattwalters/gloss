@@ -1,0 +1,32 @@
+{
+  "name": "whole-file-resolve",
+  "description": "Whole-file anchor on file whose blob matches target tree",
+  "anchor": {
+    "version": 1,
+    "new": {
+      "commit": "1111111111111111111111111111111111111111",
+      "path": "README.md",
+      "blob": "ae8b75a71007d46abd625c3e2a2895f474c83653"
+    }
+  },
+  "target": {
+    "files": {
+      "README.md": "# Project Documentation\n\nThis is a readme file.\n"
+    }
+  },
+  "expect": {
+    "anchor": {
+      "version": 1,
+      "new": {
+        "commit": "1111111111111111111111111111111111111111",
+        "path": "README.md",
+        "blob": "ae8b75a71007d46abd625c3e2a2895f474c83653"
+      }
+    },
+    "new": {
+      "outcome": "resolved",
+      "match": "exact-path-blob",
+      "path": "README.md"
+    }
+  }
+}

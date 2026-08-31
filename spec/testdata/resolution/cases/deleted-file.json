@@ -1,0 +1,55 @@
+{
+  "name": "deleted-file",
+  "description": "Recorded path absent from target tree and no content candidate found",
+  "anchor": {
+    "version": 1,
+    "new": {
+      "commit": "1111111111111111111111111111111111111111",
+      "path": "deleted.txt",
+      "blob": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "range": {
+        "start": 1,
+        "end": 2
+      },
+      "context": {
+        "before": [],
+        "lines": [
+          "line 1",
+          "line 2"
+        ],
+        "after": []
+      }
+    }
+  },
+  "target": {
+    "files": {
+      "other.txt": "completely different content\n"
+    }
+  },
+  "expect": {
+    "anchor": {
+      "version": 1,
+      "new": {
+        "commit": "1111111111111111111111111111111111111111",
+        "path": "deleted.txt",
+        "blob": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "range": {
+          "start": 1,
+          "end": 2
+        },
+        "context": {
+          "before": [],
+          "lines": [
+            "line 1",
+            "line 2"
+          ],
+          "after": []
+        }
+      }
+    },
+    "new": {
+      "outcome": "orphaned",
+      "reason": "path-absent"
+    }
+  }
+}

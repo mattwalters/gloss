@@ -1,0 +1,65 @@
+{
+  "name": "threshold-just-below",
+  "description": "Best candidate window scores below the 60% threshold (5/10)",
+  "anchor": {
+    "version": 1,
+    "new": {
+      "commit": "1111111111111111111111111111111111111111",
+      "path": "logic.go",
+      "blob": "e3dc174205dc312f76cd6fde19a0371973f87f92",
+      "range": {
+        "start": 4,
+        "end": 6
+      },
+      "context": {
+        "before": [
+          "func Evaluate() {"
+        ],
+        "lines": [
+          "\tstep1()",
+          "\tstep2_old()",
+          "\tstep3_old()"
+        ],
+        "after": [
+          "\tend()"
+        ]
+      }
+    }
+  },
+  "target": {
+    "files": {
+      "logic.go": "package logic\n\nfunc Evaluate() {\n\tstep1()\n\tstep2_new()\n\tstep3_new()\n\tend_other()\n}\n"
+    }
+  },
+  "expect": {
+    "anchor": {
+      "version": 1,
+      "new": {
+        "commit": "1111111111111111111111111111111111111111",
+        "path": "logic.go",
+        "blob": "e3dc174205dc312f76cd6fde19a0371973f87f92",
+        "range": {
+          "start": 4,
+          "end": 6
+        },
+        "context": {
+          "before": [
+            "func Evaluate() {"
+          ],
+          "lines": [
+            "\tstep1()",
+            "\tstep2_old()",
+            "\tstep3_old()"
+          ],
+          "after": [
+            "\tend()"
+          ]
+        }
+      }
+    },
+    "new": {
+      "outcome": "orphaned",
+      "reason": "below-threshold"
+    }
+  }
+}

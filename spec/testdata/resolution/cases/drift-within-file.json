@@ -1,0 +1,70 @@
+{
+  "name": "drift-within-file",
+  "description": "File edited with inserted lines: range shifted to new line numbers",
+  "anchor": {
+    "version": 1,
+    "new": {
+      "commit": "1111111111111111111111111111111111111111",
+      "path": "src/service.go",
+      "blob": "b1327c9205ba25e97642e0d009d4558ec8db8993",
+      "range": {
+        "start": 5,
+        "end": 7
+      },
+      "context": {
+        "before": [
+          "package service",
+          "",
+          "type Service struct{}"
+        ],
+        "lines": [
+          "func (s *Service) Run() error {",
+          "\treturn nil",
+          "}"
+        ],
+        "after": []
+      }
+    }
+  },
+  "target": {
+    "files": {
+      "src/service.go": "package service\n\nimport \"context\"\n\ntype Config struct{}\n\ntype Service struct{\n\tcfg Config\n}\n\nfunc (s *Service) Run() error {\n\treturn nil\n}\n"
+    }
+  },
+  "expect": {
+    "anchor": {
+      "version": 1,
+      "new": {
+        "commit": "1111111111111111111111111111111111111111",
+        "path": "src/service.go",
+        "blob": "b1327c9205ba25e97642e0d009d4558ec8db8993",
+        "range": {
+          "start": 5,
+          "end": 7
+        },
+        "context": {
+          "before": [
+            "package service",
+            "",
+            "type Service struct{}"
+          ],
+          "lines": [
+            "func (s *Service) Run() error {",
+            "\treturn nil",
+            "}"
+          ],
+          "after": []
+        }
+      }
+    },
+    "new": {
+      "outcome": "resolved",
+      "match": "context-exact",
+      "path": "src/service.go",
+      "range": {
+        "start": 11,
+        "end": 13
+      }
+    }
+  }
+}

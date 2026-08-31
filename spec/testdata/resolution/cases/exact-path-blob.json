@@ -1,0 +1,74 @@
+{
+  "name": "exact-path-blob",
+  "description": "File untouched at recorded path: range and context carry over verbatim",
+  "anchor": {
+    "version": 1,
+    "new": {
+      "commit": "1111111111111111111111111111111111111111",
+      "path": "src/hello.go",
+      "blob": "0cc2e641a87621d0393ee3325d6c0198efb0be8d",
+      "range": {
+        "start": 5,
+        "end": 7
+      },
+      "context": {
+        "before": [
+          "package main",
+          "",
+          "import \"fmt\""
+        ],
+        "lines": [
+          "func Hello() string {",
+          "\tmsg := \"hello world\"",
+          "\treturn msg"
+        ],
+        "after": [
+          "}"
+        ]
+      }
+    }
+  },
+  "target": {
+    "files": {
+      "src/hello.go": "package main\n\nimport \"fmt\"\n\nfunc Hello() string {\n\tmsg := \"hello world\"\n\treturn msg\n}\n"
+    }
+  },
+  "expect": {
+    "anchor": {
+      "version": 1,
+      "new": {
+        "commit": "1111111111111111111111111111111111111111",
+        "path": "src/hello.go",
+        "blob": "0cc2e641a87621d0393ee3325d6c0198efb0be8d",
+        "range": {
+          "start": 5,
+          "end": 7
+        },
+        "context": {
+          "before": [
+            "package main",
+            "",
+            "import \"fmt\""
+          ],
+          "lines": [
+            "func Hello() string {",
+            "\tmsg := \"hello world\"",
+            "\treturn msg"
+          ],
+          "after": [
+            "}"
+          ]
+        }
+      }
+    },
+    "new": {
+      "outcome": "resolved",
+      "match": "exact-path-blob",
+      "path": "src/hello.go",
+      "range": {
+        "start": 5,
+        "end": 7
+      }
+    }
+  }
+}

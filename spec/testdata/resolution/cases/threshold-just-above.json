@@ -1,0 +1,72 @@
+{
+  "name": "threshold-just-above",
+  "description": "Fuzzy match scoring exactly 60% (6/10) passes threshold",
+  "anchor": {
+    "version": 1,
+    "new": {
+      "commit": "1111111111111111111111111111111111111111",
+      "path": "logic.go",
+      "blob": "fd99716bc7d57ef9b9dca380006e38362dca354c",
+      "range": {
+        "start": 2,
+        "end": 4
+      },
+      "context": {
+        "before": [
+          "func Evaluate() {"
+        ],
+        "lines": [
+          "\tstep1()",
+          "\tstep2_old()",
+          "\tstep3()"
+        ],
+        "after": [
+          "\tend()",
+          "}"
+        ]
+      }
+    }
+  },
+  "target": {
+    "files": {
+      "logic.go": "func Evaluate() {\n\tstep1()\n\tstep2_new()\n\tstep3()\n\tend()\n}\n"
+    }
+  },
+  "expect": {
+    "anchor": {
+      "version": 1,
+      "new": {
+        "commit": "1111111111111111111111111111111111111111",
+        "path": "logic.go",
+        "blob": "fd99716bc7d57ef9b9dca380006e38362dca354c",
+        "range": {
+          "start": 2,
+          "end": 4
+        },
+        "context": {
+          "before": [
+            "func Evaluate() {"
+          ],
+          "lines": [
+            "\tstep1()",
+            "\tstep2_old()",
+            "\tstep3()"
+          ],
+          "after": [
+            "\tend()",
+            "}"
+          ]
+        }
+      }
+    },
+    "new": {
+      "outcome": "resolved",
+      "match": "context-fuzzy",
+      "path": "logic.go",
+      "range": {
+        "start": 2,
+        "end": 4
+      }
+    }
+  }
+}

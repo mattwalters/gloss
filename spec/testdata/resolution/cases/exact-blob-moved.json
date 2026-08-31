@@ -1,0 +1,68 @@
+{
+  "name": "exact-blob-moved",
+  "description": "File moved to new path with identical content",
+  "anchor": {
+    "version": 1,
+    "new": {
+      "commit": "1111111111111111111111111111111111111111",
+      "path": "pkg/old_util.go",
+      "blob": "64007be68400bd55979c8db1475248c488d14280",
+      "range": {
+        "start": 3,
+        "end": 5
+      },
+      "context": {
+        "before": [
+          "package util",
+          ""
+        ],
+        "lines": [
+          "func Add(a, b int) int {",
+          "\treturn a + b",
+          "}"
+        ],
+        "after": []
+      }
+    }
+  },
+  "target": {
+    "files": {
+      "pkg/new_util.go": "package util\n\nfunc Add(a, b int) int {\n\treturn a + b\n}\n"
+    }
+  },
+  "expect": {
+    "anchor": {
+      "version": 1,
+      "new": {
+        "commit": "1111111111111111111111111111111111111111",
+        "path": "pkg/old_util.go",
+        "blob": "64007be68400bd55979c8db1475248c488d14280",
+        "range": {
+          "start": 3,
+          "end": 5
+        },
+        "context": {
+          "before": [
+            "package util",
+            ""
+          ],
+          "lines": [
+            "func Add(a, b int) int {",
+            "\treturn a + b",
+            "}"
+          ],
+          "after": []
+        }
+      }
+    },
+    "new": {
+      "outcome": "resolved",
+      "match": "exact-blob-moved",
+      "path": "pkg/new_util.go",
+      "range": {
+        "start": 3,
+        "end": 5
+      }
+    }
+  }
+}

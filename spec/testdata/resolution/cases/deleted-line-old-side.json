@@ -1,0 +1,63 @@
+{
+  "name": "deleted-line-old-side",
+  "description": "Old-side anchor on deleted line evaluated against tree where content has 0 matching score",
+  "anchor": {
+    "version": 1,
+    "old": {
+      "commit": "1111111111111111111111111111111111111111",
+      "path": "proc.go",
+      "blob": "c69a772269e8fab7661cb56ab6d3405edda9c6d4",
+      "range": {
+        "start": 2,
+        "end": 3
+      },
+      "context": {
+        "before": [
+          "func OldLogic() {"
+        ],
+        "lines": [
+          "\talpha()",
+          "\tbeta()"
+        ],
+        "after": [
+          "}"
+        ]
+      }
+    }
+  },
+  "target": {
+    "files": {
+      "proc.go": "package completely_new\n\ntype NewType int\n"
+    }
+  },
+  "expect": {
+    "anchor": {
+      "version": 1,
+      "old": {
+        "commit": "1111111111111111111111111111111111111111",
+        "path": "proc.go",
+        "blob": "c69a772269e8fab7661cb56ab6d3405edda9c6d4",
+        "range": {
+          "start": 2,
+          "end": 3
+        },
+        "context": {
+          "before": [
+            "func OldLogic() {"
+          ],
+          "lines": [
+            "\talpha()",
+            "\tbeta()"
+          ],
+          "after": [
+            "}"
+          ]
+        }
+      }
+    },
+    "old": {
+      "outcome": "orphaned",
+      "reason": "no-candidate"
+    }
+  }
+}
