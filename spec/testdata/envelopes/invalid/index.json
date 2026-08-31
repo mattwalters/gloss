@@ -78,5 +78,21 @@
     "rejects": "canonicalization",
     "category": "lone-surrogate",
     "reason": "lone high surrogate escape \\ud800 in a string; canonicalization rejects unpaired surrogates"
+  },
+  {
+    "file": "trailing-data.json",
+    "rejects": "canonicalization",
+    "category": "not-one-value",
+    "reason": "trailing data after the JSON value"
+  },
+  {
+    "file": "payload-array.json",
+    "rejects": "schema",
+    "reason": "envelope payload must be a JSON object, not an array"
+  },
+  {
+    "file": "op-type-uppercase.json",
+    "rejects": "schema",
+    "reason": "op_type must match ^[a-z][a-z0-9-]*$; uppercase is not allowed"
   }
 ]

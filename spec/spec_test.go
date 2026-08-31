@@ -181,13 +181,14 @@ func TestInvalidEnvelopes(t *testing.T) {
 					if bytes.Equal(canon, raw) {
 						t.Errorf("bytes are canonical; expected rejection: %s", entry.Reason)
 					}
-				case "duplicate-key", "lone-surrogate":
+				case "duplicate-key", "lone-surrogate", "not-one-value":
 					if err == nil {
 						t.Fatalf("Marshal accepted the instance; expected a %s rejection: %s", entry.Category, entry.Reason)
 					}
 					want := map[string]string{
 						"duplicate-key":  "duplicate object key",
 						"lone-surrogate": "lone surrogate",
+						"not-one-value":  "trailing data",
 					}[entry.Category]
 					if !strings.Contains(err.Error(), want) {
 						t.Errorf("Marshal rejected with %q, want a %s rejection (containing %q)", err, entry.Category, want)
