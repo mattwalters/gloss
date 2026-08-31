@@ -1,6 +1,7 @@
 package codec
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/storage"
 )
 
 // FromGitCommit converts a go-git object.Commit into a pure, repository-independent Commit
@@ -109,7 +111,7 @@ func FromGitCommit(repo *git.Repository, commit *object.Commit) (Commit, error) 
 // ToGitCommit converts a pure, repository-independent Commit into a go-git object.Commit,
 // reconstructing the tree and blob objects in memory to derive the TreeHash and commit Hash.
 func ToGitCommit(c Commit) (*object.Commit, error) {
-	treeHash, err := buildTreeFromEntries(c.Tree)
+	treeHash, err := buildTreeFromEntries(c.Tree, nil)
 	if err != nil {
 		return nil, fmt.Errorf("codec: build commit tree: %w", err)
 	}
@@ -149,7 +151,10 @@ func ToGitCommit(c Commit) (*object.Commit, error) {
 	return gitCommit, nil
 }
 
-func buildTreeFromEntries(entries []TreeEntry) (plumbing.Hash, error) {
+// buildTreeFromEntries derives the tree hash for entries. When s is non-nil
+// the blob and tree objects are also persisted into it, so a caller that writes
+// objects and a caller that only computes hashes agree by construction.
+func buildTreeFromEntries(entries []TreeEntry, s storage.Storer) (plumbing.Hash, error) {
 	tree := &object.Tree{}
 
 	for _, entry := range entries {
@@ -165,7 +170,7 @@ func buildTreeFromEntries(entries []TreeEntry) (plumbing.Hash, error) {
 
 		var hash plumbing.Hash
 		if len(entry.Entries) > 0 {
-			subHash, err := buildTreeFromEntries(entry.Entries)
+			subHash, err := buildTreeFromEntries(entry.Entries, s)
 			if err != nil {
 				return plumbing.ZeroHash, err
 			}
@@ -187,6 +192,11 @@ func buildTreeFromEntries(entries []TreeEntry) (plumbing.Hash, error) {
 				return plumbing.ZeroHash, err
 			}
 			hash = blobObj.Hash()
+			if s != nil {
+				if _, err := s.SetEncodedObject(blobObj); err != nil {
+					return plumbing.ZeroHash, fmt.Errorf("store blob: %w", err)
+				}
+			}
 		} else if entry.Hash != "" {
 			hash = plumbing.NewHash(entry.Hash)
 		}
@@ -203,5 +213,49 @@ func buildTreeFromEntries(entries []TreeEntry) (plumbing.Hash, error) {
 	if err := tree.Encode(treeObj); err != nil {
 		return plumbing.ZeroHash, fmt.Errorf("encode tree: %w", err)
 	}
+	if s != nil {
+		if _, err := s.SetEncodedObject(treeObj); err != nil {
+			return plumbing.ZeroHash, fmt.Errorf("store tree: %w", err)
+		}
+	}
 	return treeObj.Hash(), nil
+}
+
+// WriteCommit persists a Commit — its blobs, tree, and the commit object — into s,
+// signing it first when signer is non-nil. The written commit's hash is recorded in
+// commit.ID and returned. Object hashes are derived by the same builder ToGitCommit
+// uses, so a written commit and a computed one agree.
+func WriteCommit(ctx context.Context, s storage.Storer, commit *Commit, signer Signer) (plumbing.Hash, error) {
+	if s == nil {
+		return plumbing.ZeroHash, errors.New("codec: nil storer")
+	}
+	if commit == nil {
+		return plumbing.ZeroHash, errors.New("codec: nil commit")
+	}
+
+	if _, err := buildTreeFromEntries(commit.Tree, s); err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("codec: write commit tree: %w", err)
+	}
+
+	if signer != nil {
+		if err := SignCommit(ctx, signer, commit); err != nil {
+			return plumbing.ZeroHash, err
+		}
+	}
+
+	gitCommit, err := ToGitCommit(*commit)
+	if err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("codec: build commit object: %w", err)
+	}
+	commitObj := s.NewEncodedObject()
+	if err := gitCommit.Encode(commitObj); err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("codec: encode commit: %w", err)
+	}
+	commitHash, err := s.SetEncodedObject(commitObj)
+	if err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("codec: store commit: %w", err)
+	}
+
+	commit.ID = commitHash.String()
+	return commitHash, nil
 }

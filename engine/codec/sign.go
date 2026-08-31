@@ -22,6 +22,14 @@ type Signer interface {
 	Sign(ctx context.Context, payload []byte) (string, error)
 }
 
+// SignerFunc adapts an ordinary function to the Signer interface.
+type SignerFunc func(ctx context.Context, payload []byte) (string, error)
+
+// Sign calls f(ctx, payload).
+func (f SignerFunc) Sign(ctx context.Context, payload []byte) (string, error) {
+	return f(ctx, payload)
+}
+
 // SSHSigner implements Signer using ssh-keygen -Y sign -n git.
 type SSHSigner struct {
 	key identity.SigningKey
