@@ -50,18 +50,23 @@ Alongside the machines sits one small shared component: **writer identity** — 
 
 Domain-shaped, never git-shaped — callers see no SHAs or refspecs unless they ask:
 
-```
-store := writ.Open(path)             // any git dir: clone, bare, worktree; fully offline
-store.Reviews.Create(base, head) / .Comment(id, anchor, body) / .Approve(id)
-store.Issues.Create(...) / .SetStatus(...)
-store.Query(filters...)              // served from projection
-store.Sync(remote)                   // explicit, separate concern
-store.Watch() <-chan Event           // reactive clients
+```go
+store, err := writ.Open(path, opts...)    // any git dir: clone, bare, worktree; fully offline
+store.Reviews.Create(ctx, newReview)     // .Update / .PushRevision / .Comment / .Approve / .SetStatus
+store.Issues.Create(ctx, newIssue)       // .Update / .SetState / .Assign / .Label / .Link / .Comment
+store.Comments.Edit(ctx, id, text)       // .Delete(ctx, id)
+store.Query.Reviews(filter)              // .Issues / .Comments / .Objects / .Threads / .GroupIssues / .Review / .Issue
+store.Sync(ctx, remote)                  // ensures refspecs, fetches, pushes, refreshes
+store.SyncStatus(ctx, remote)            // per-remote unsynced op count
+store.Refresh(ctx)                       // explicit projection refresh
+// store.Watch() <-chan Event            // reserved for reactive event bus milestone
 ```
 
-The domain types themselves (`Review`, `Comment`, `Issue`, `Anchor`, …) are public from day one: defined in the root `engine` package as the fold's output types, so the folded state _is_ the domain object callers receive — one set of types shared by the public API, the projection, the golden fixtures, and `--json` output (each of the latter two pinned as its own independent serialization). The reducers and machinery that produce them stay in `engine/internal/`.
+The domain types themselves (`Review`, `Comment`, `Issue`, `Anchor`, …) are public from day one: defined in the leaf package `engine/state` (preventing cyclic dependencies with `engine/projection`) and re-exported from the root `writ` package via type aliases (`type Review = state.Review`), so the folded state _is_ the domain object callers receive — one set of types shared by the public API, the projection, the golden fixtures, and `--json` output (each of the latter two pinned as its own independent serialization).
 
-`Watch()` is what makes the TUI reactive instead of polling, and it is the seam any event-relay service plugs into. Everything above the engine — CLI, TUI, localhost web view, GitHub bridge, any hosted service — is a consumer of this one interface, distinguished only by rendering surface. Nothing gets private powers.
+`store.Query` exposes typed query methods (`Reviews`, `Issues`, `Comments`, `Objects`, `Threads`, `GroupIssues`, `Review`, `Issue`) served directly from the SQLite projection cache. All operations automatically refresh the projection unless disabled via `writ.WithoutAutoRefresh()`.
+
+Everything above the engine — CLI, TUI, localhost web view, GitHub bridge, any hosted service — is a consumer of this one interface, distinguished only by rendering surface. Nothing gets private powers.
 
 ## Language: Go (decided; rationale preserved)
 

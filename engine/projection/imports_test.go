@@ -14,6 +14,7 @@ import (
 var allowedImports = map[string]bool{
 	`"database/sql"`:                               true,
 	`"encoding/json"`:                              true,
+	`"errors"`:                                     true,
 	`"fmt"`:                                        true,
 	`"sort"`:                                       true,
 	`"strconv"`:                                    true,
@@ -23,10 +24,10 @@ var allowedImports = map[string]bool{
 	`"github.com/go-git/go-git/v5"`:                true,
 	`"github.com/go-git/go-git/v5/plumbing"`:       true,
 	`"github.com/go-git/go-git/v5/plumbing/object"`: true,
-	`"github.com/writtendev/writ/engine"`:          true,
 	`"github.com/writtendev/writ/engine/codec"`:    true,
 	`"github.com/writtendev/writ/engine/dag"`:      true,
 	`"github.com/writtendev/writ/engine/resolve"`:  true,
+	`"github.com/writtendev/writ/engine/state"`:    true,
 }
 
 func TestImportsAllowlist(t *testing.T) {
