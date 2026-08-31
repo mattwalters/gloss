@@ -49,6 +49,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 0
 	case "init":
 		return runInit(ctx, defaultDir, args[1:], stdout, stderr)
+	case "sync":
+		return runSync(ctx, defaultDir, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "writ: unknown command %q\n\n", args[0])
 		printUsage(stderr)
@@ -61,7 +63,9 @@ func printUsage(w io.Writer) {
 
 Commands:
   init    Initialize writ configuration (writer ID and remote fetch refspecs)
+  sync    Synchronize operations with git remotes
 
 Run 'writ <command> -h' for more information on a command.
 `)
 }
+
