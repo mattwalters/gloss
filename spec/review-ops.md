@@ -237,7 +237,6 @@ specific revision head.
   - `"request-changes"`: Requests changes before merging.
   - `"none"`: Retracts or dismisses any existing verdict for the `(subject, revision)` pair.
 - `subject` (string, optional): Writer or user identity whose vote is recorded.
-  If omitted, defaults to the author identity of the op commit.
 - `message` (string, optional): Text summary or review message explaining the
   verdict.
 
