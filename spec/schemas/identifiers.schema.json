@@ -37,21 +37,25 @@
       "pattern": "^([0-9a-f]{32}#)?[0-9a-f]{32}$",
       "description": "Canonical reference: bare <object-id> (32 hex) or <repo-id>#<object-id> (32 hex # 32 hex)."
     },
+    "repo-slug": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^\\s]+$",
+      "description": "Repository slug in the registry: non-empty string without whitespace."
+    },
+    "remote-url": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Remote URL string for discovery: non-empty string."
+    },
     "repo-entry": {
       "type": "object",
       "properties": {
         "repo_id": { "$ref": "#/$defs/repo-id" },
-        "slug": {
-          "type": "string",
-          "minLength": 1,
-          "pattern": "^[^\\s]+$"
-        },
+        "slug": { "$ref": "#/$defs/repo-slug" },
         "remotes": {
           "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
+          "items": { "$ref": "#/$defs/remote-url" }
         },
         "is_workspace": {
           "type": "boolean"
