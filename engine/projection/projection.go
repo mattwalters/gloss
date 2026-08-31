@@ -1,0 +1,216 @@
+// Package projection provides a versioned SQLite cache of collaborative objects
+// and ref tips for Writ.
+package projection
+
+import (
+	"database/sql"
+	"fmt"
+	"strconv"
+	"strings"
+
+	_ "modernc.org/sqlite"
+)
+
+// DB represents a handle to the projection SQLite cache.
+type DB struct {
+	db   *sql.DB
+	path string
+}
+
+// Open opens or creates a projection SQLite database at path, validating the schema version.
+// If the database is missing or the schema version does not match SchemaVersion(),
+// all existing tables are dropped and recreated cleanly without migration heroics.
+func Open(path string) (*DB, error) {
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return nil, fmt.Errorf("projection: open sqlite %q: %w", path, err)
+	}
+
+	// Configure pragmas
+	_, _ = db.Exec("PRAGMA journal_mode = WAL;")
+	if _, err := db.Exec("PRAGMA busy_timeout = 5000;"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("projection: set busy_timeout: %w", err)
+	}
+	if _, err := db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("projection: set foreign_keys: %w", err)
+	}
+
+	proj := &DB{
+		db:   db,
+		path: path,
+	}
+
+	if err := proj.ensureSchema(); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	return proj, nil
+}
+
+// Close closes the underlying SQLite database connection.
+func (d *DB) Close() error {
+	if d == nil || d.db == nil {
+		return nil
+	}
+	return d.db.Close()
+}
+
+// DB returns the underlying *sql.DB connection pool for custom queries.
+func (d *DB) DB() *sql.DB {
+	if d == nil {
+		return nil
+	}
+	return d.db
+}
+
+// SchemaVersion returns the current expected schema version integer.
+func SchemaVersion() int {
+	return schemaVersion
+}
+
+func (d *DB) ensureSchema() error {
+	var versionStr string
+	err := d.db.QueryRow("SELECT value FROM meta WHERE key = 'schema_version'").Scan(&versionStr)
+	if err != nil || versionStr != strconv.Itoa(schemaVersion) {
+		// Version mismatch or missing: reset everything
+		if err := d.resetSchema(); err != nil {
+			return fmt.Errorf("projection: reset schema: %w", err)
+		}
+	}
+	return nil
+}
+
+func (d *DB) resetSchema() error {
+	// 1. Query and drop all existing user tables and views
+	rows, err := d.db.Query("SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'")
+	if err != nil {
+		return fmt.Errorf("projection: query sqlite_master: %w", err)
+	}
+
+	var drops []string
+	for rows.Next() {
+		var name, objType string
+		if err := rows.Scan(&name, &objType); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		if objType == "view" {
+			drops = append(drops, fmt.Sprintf("DROP VIEW IF EXISTS %s", name))
+		} else {
+			drops = append(drops, fmt.Sprintf("DROP TABLE IF EXISTS %s", name))
+		}
+	}
+	_ = rows.Close()
+
+	for _, dropStmt := range drops {
+		if _, err := d.db.Exec(dropStmt); err != nil {
+			return fmt.Errorf("projection: exec %s: %w", dropStmt, err)
+		}
+	}
+
+	// 2. Execute schema SQL
+	if _, err := d.db.Exec(schemaSQL); err != nil {
+		return fmt.Errorf("projection: exec schemaSQL: %w", err)
+	}
+
+	// 3. Set schema_version in meta
+	if _, err := d.db.Exec("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', ?)", strconv.Itoa(schemaVersion)); err != nil {
+		return fmt.Errorf("projection: record schema_version: %w", err)
+	}
+
+	return nil
+}
+
+// DumpTables returns a deterministic dump of all projection tables and their rows.
+// Used primarily for asserting byte-for-byte equality across incremental vs cold builds.
+func (d *DB) DumpTables() (map[string][]map[string]any, error) {
+	tableQueries := map[string]string{
+		"meta":               "SELECT * FROM meta ORDER BY key ASC",
+		"chain_tips":         "SELECT * FROM chain_tips ORDER BY ref_name ASC",
+		"code_tips":          "SELECT * FROM code_tips ORDER BY ref_name ASC",
+		"ops":                "SELECT * FROM ops ORDER BY op_id ASC",
+		"objects":            "SELECT * FROM objects ORDER BY object_id ASC",
+		"unknown_ops":        "SELECT * FROM unknown_ops ORDER BY object_id ASC, op_id ASC",
+		"reviews":            "SELECT * FROM reviews ORDER BY object_id ASC",
+		"review_revisions":   "SELECT * FROM review_revisions ORDER BY review_object_id ASC, revision_index ASC",
+		"approvals":          "SELECT * FROM approvals ORDER BY review_object_id ASC, subject ASC, revision ASC",
+		"ci_statuses":        "SELECT * FROM ci_statuses ORDER BY review_object_id ASC, revision ASC, name ASC",
+		"comments":           "SELECT * FROM comments ORDER BY object_id ASC",
+		"anchor_resolutions": "SELECT * FROM anchor_resolutions ORDER BY comment_object_id ASC, target_commit ASC, side ASC",
+	}
+
+	tables := []string{
+		"meta",
+		"chain_tips",
+		"code_tips",
+		"ops",
+		"objects",
+		"unknown_ops",
+		"reviews",
+		"review_revisions",
+		"approvals",
+		"ci_statuses",
+		"comments",
+		"anchor_resolutions",
+	}
+
+	dump := make(map[string][]map[string]any)
+
+	for _, table := range tables {
+		query := tableQueries[table]
+		rows, err := d.db.Query(query)
+		if err != nil {
+			return nil, fmt.Errorf("query table %s: %w", table, err)
+		}
+
+		cols, err := rows.Columns()
+		if err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("get columns for %s: %w", table, err)
+		}
+
+		var tableRows []map[string]any
+		for rows.Next() {
+			values := make([]any, len(cols))
+			valuePtrs := make([]any, len(cols))
+			for i := range values {
+				valuePtrs[i] = &values[i]
+			}
+
+			if err := rows.Scan(valuePtrs...); err != nil {
+				_ = rows.Close()
+				return nil, fmt.Errorf("scan row in %s: %w", table, err)
+			}
+
+			rowMap := make(map[string]any, len(cols))
+			for i, col := range cols {
+				val := values[i]
+				if b, ok := val.([]byte); ok {
+					rowMap[col] = string(b)
+				} else {
+					rowMap[col] = val
+				}
+			}
+			tableRows = append(tableRows, rowMap)
+		}
+		_ = rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("iterate %s rows: %w", table, err)
+		}
+
+		dump[table] = tableRows
+	}
+
+	return dump, nil
+}
+
+// String returns a brief representation of the DB connection path.
+func (d *DB) String() string {
+	if strings.Contains(d.path, ":memory:") {
+		return "projection:memory"
+	}
+	return "projection:" + d.path
+}
