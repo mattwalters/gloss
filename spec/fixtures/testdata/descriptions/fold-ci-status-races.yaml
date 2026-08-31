@@ -1,0 +1,102 @@
+name: fold-ci-status-races
+description: >
+  Concurrent ci-status ops for the same [revision, name] key and for distinct
+  names (keyed-lww per key). A later write under one key leaves other keys untouched.
+
+refs:
+  - name: refs/writ/0123456789abcdef/review
+    history:
+      - commits:
+          - id: alice-create
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            op:
+              object_id: r-ci
+              object_type: review
+              op_type: create
+              op_version: 1
+              body:
+                title: "CI Status Races Review"
+            expect: accept
+
+          - id: alice-ci-pending
+            parents: [alice-create]
+            author: alice
+            timestamp: 2026-01-01T00:01:00Z
+            op:
+              object_id: r-ci
+              object_type: review
+              op_type: ci-status
+              op_version: 1
+              body:
+                revision: "1111111111111111111111111111111111111111"
+                name: "ci/test"
+                state: "pending"
+                url: "https://ci.example.com/builds/101"
+                description: "Running unit tests"
+                started_at: "2026-01-01T00:01:00Z"
+                external_id: "101"
+            expect: accept
+
+          - id: alice-ci-success
+            parents: [alice-ci-pending]
+            author: alice
+            timestamp: 2026-01-01T00:03:00Z
+            op:
+              object_id: r-ci
+              object_type: review
+              op_type: ci-status
+              op_version: 1
+              body:
+                revision: "1111111111111111111111111111111111111111"
+                name: "ci/test"
+                state: "success"
+                url: "https://ci.example.com/builds/101-retry"
+                description: "All unit tests passed"
+                started_at: "2026-01-01T00:02:30Z"
+                completed_at: "2026-01-01T00:02:55Z"
+                external_id: "103"
+            expect: accept
+
+  - name: refs/writ/fedcba9876543210/review
+    history:
+      - commits:
+          - id: bob-ci-lint
+            parents: [alice-create]
+            author: bob
+            timestamp: 2026-01-01T00:01:30Z
+            op:
+              object_id: r-ci
+              object_type: review
+              op_type: ci-status
+              op_version: 1
+              body:
+                revision: "1111111111111111111111111111111111111111"
+                name: "ci/lint"
+                state: "success"
+                url: "https://ci.example.com/builds/lint-1"
+                description: "Lint checks clean"
+                started_at: "2026-01-01T00:01:00Z"
+                completed_at: "2026-01-01T00:01:25Z"
+                external_id: "102"
+            expect: accept
+
+          - id: bob-ci-test-failure
+            parents: [bob-ci-lint]
+            author: bob
+            timestamp: 2026-01-01T00:02:00Z
+            op:
+              object_id: r-ci
+              object_type: review
+              op_type: ci-status
+              op_version: 1
+              body:
+                revision: "1111111111111111111111111111111111111111"
+                name: "ci/test"
+                state: "failure"
+                url: "https://ci.example.com/builds/101"
+                description: "1 test failed"
+                started_at: "2026-01-01T00:01:00Z"
+                completed_at: "2026-01-01T00:01:50Z"
+                external_id: "101"
+            expect: accept

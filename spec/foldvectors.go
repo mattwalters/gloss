@@ -47,12 +47,13 @@ type StrategyConfig struct {
 
 // MergeOp represents a single synthetic operation in a merge vector.
 type MergeOp struct {
-	ID       string         `json:"id"`
-	Parents  []string       `json:"parents"`
-	Time     int64          `json:"time"`
-	ObjectID string         `json:"object_id"`
-	OpType   string         `json:"op_type,omitempty"`
-	Body     map[string]any `json:"body"`
+	ID        string         `json:"id"`
+	Parents   []string       `json:"parents"`
+	Time      int64          `json:"time"`
+	ObjectID  string         `json:"object_id"`
+	OpType    string         `json:"op_type,omitempty"`
+	OpVersion int64          `json:"op_version,omitempty"`
+	Body      map[string]any `json:"body"`
 }
 
 // MergeVector represents one merge strategy test case under testdata/fold/merge/.

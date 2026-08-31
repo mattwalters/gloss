@@ -1,0 +1,56 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/fedcba9876543210/comment",
+      "commit": "c3b8d26a07b828925b8ca7f2b4567d8fb322456c"
+    },
+    {
+      "name": "refs/writ/0123456789abcdef/review",
+      "commit": "ea7b05e84a21e27fad16c418cd9d9e09078788f7"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/fedcba9876543210/comment",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "c3b8d26a07b828925b8ca7f2b4567d8fb322456c",
+          "tree": "1876a7386cab9acd660bc13c0ae38f880babee4d",
+          "parents": [],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: create comment/c-other\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "38cc46f5e92c76495267be720bec14abd1014ac9",
+          "tree": "1a78af19ca2023df4c0cfb3d7ac181dc3eaf47d3",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create review/r-truncated\n",
+          "signed": true
+        },
+        {
+          "sha": "ea7b05e84a21e27fad16c418cd9d9e09078788f7",
+          "tree": "569ceb227df12ea7809549814b667c67dd3f93d6",
+          "parents": [
+            "38cc46f5e92c76495267be720bec14abd1014ac9",
+            "c3b8d26a07b828925b8ca7f2b4567d8fb322456c"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: update review/r-truncated\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

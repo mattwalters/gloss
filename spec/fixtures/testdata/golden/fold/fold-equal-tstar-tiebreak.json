@@ -1,0 +1,39 @@
+{
+  "objects": [
+    {
+      "object_id": "r-tiebreak",
+      "object_type": "review",
+      "total_order": [
+        {
+          "commit": "2b36751a1943ff121ae84f266df959a03b3f87df",
+          "label": "alice-create",
+          "t_star": 1767225600
+        },
+        {
+          "commit": "8754c34c76baf652fe8a6ee43bd5aed60c7fbfe0",
+          "label": "bob-eq",
+          "t_star": 1767225660
+        },
+        {
+          "commit": "e5b56c7fc8ed9c7bae21ad8ff123c6656af7995d",
+          "label": "alice-eq",
+          "t_star": 1767225660
+        },
+        {
+          "commit": "001969180285c551c657f80d2b5c40955b4c454d",
+          "label": "bob-parent",
+          "t_star": 1767225900
+        },
+        {
+          "commit": "d467bbf01f1e4703c9d5517bfa9704e45b871bb3",
+          "label": "bob-child-skewed",
+          "t_star": 1767225900
+        }
+      ],
+      "state": {
+        "status": "open",
+        "title": "Alice Equal Timestamp"
+      }
+    }
+  ]
+}

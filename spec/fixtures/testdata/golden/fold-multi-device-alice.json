@@ -1,0 +1,69 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/550e8400e29b41d4/review",
+      "commit": "40169c558f452eb05cce16cf76fab8d904be2349"
+    },
+    {
+      "name": "refs/writ/0123456789abcdef/review",
+      "commit": "ee88f24407830923cbf8da9f43929fa6d22aed45"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/550e8400e29b41d4/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "321c525ac182cb3184c0762756e3b456084c084b",
+          "tree": "9b47fcffea4ca4599d5018d4a0e7c26d93c72288",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create review/r-multi-device\n",
+          "signed": true
+        },
+        {
+          "sha": "40169c558f452eb05cce16cf76fab8d904be2349",
+          "tree": "815a5245f3a73c7d43693afb01588f08b4f78850",
+          "parents": [
+            "321c525ac182cb3184c0762756e3b456084c084b"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: update review/r-multi-device\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "b94c377802da3f595ec998d97e0b886545d405f2",
+          "tree": "3fd8582d956e80daf1c10b1a88b6a5940798f961",
+          "parents": [
+            "321c525ac182cb3184c0762756e3b456084c084b"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:30Z",
+          "message": "writ: update review/r-multi-device\n",
+          "signed": true
+        },
+        {
+          "sha": "ee88f24407830923cbf8da9f43929fa6d22aed45",
+          "tree": "47ce64fdb2f4e6fb684498568fd7e74f18a80d05",
+          "parents": [
+            "b94c377802da3f595ec998d97e0b886545d405f2",
+            "40169c558f452eb05cce16cf76fab8d904be2349"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: set-status review/r-multi-device\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

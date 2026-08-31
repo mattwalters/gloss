@@ -1,0 +1,79 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/0123456789abcdef/review",
+      "commit": "e5b56c7fc8ed9c7bae21ad8ff123c6656af7995d"
+    },
+    {
+      "name": "refs/writ/fedcba9876543210/review",
+      "commit": "d467bbf01f1e4703c9d5517bfa9704e45b871bb3"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/0123456789abcdef/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "2b36751a1943ff121ae84f266df959a03b3f87df",
+          "tree": "e67f7e985ac734564641223f3eeea0fd673b8bcb",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create review/r-tiebreak\n",
+          "signed": true
+        },
+        {
+          "sha": "e5b56c7fc8ed9c7bae21ad8ff123c6656af7995d",
+          "tree": "7298f1ad77a32c605db08588e51de2495ee789c6",
+          "parents": [
+            "2b36751a1943ff121ae84f266df959a03b3f87df"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: update review/r-tiebreak\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/fedcba9876543210/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "8754c34c76baf652fe8a6ee43bd5aed60c7fbfe0",
+          "tree": "8e760637109950e79342712611fb1110ce1e5c03",
+          "parents": [
+            "2b36751a1943ff121ae84f266df959a03b3f87df"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: update review/r-tiebreak\n",
+          "signed": true
+        },
+        {
+          "sha": "001969180285c551c657f80d2b5c40955b4c454d",
+          "tree": "89386408a429158ff5b930f25553c43ca3dfc971",
+          "parents": [
+            "8754c34c76baf652fe8a6ee43bd5aed60c7fbfe0"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:05:00Z",
+          "message": "writ: set-status review/r-tiebreak\n",
+          "signed": true
+        },
+        {
+          "sha": "d467bbf01f1e4703c9d5517bfa9704e45b871bb3",
+          "tree": "ce41745b17938d7aaf1f29aadd50c753ab6a6c19",
+          "parents": [
+            "001969180285c551c657f80d2b5c40955b4c454d"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: set-status review/r-tiebreak\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}
