@@ -91,18 +91,19 @@ func (e *ExpectDesc) UnmarshalYAML(value *yaml.Node) error {
 // an identity naming a signer from the keyring in keys/, a fixed timestamp,
 // and optional parent labels, committer override, signing override, or tamper instruction.
 type CommitDesc struct {
-	ID        string            `yaml:"id,omitempty"`
-	Parents   []string          `yaml:"parents,omitempty"`
-	Author    string            `yaml:"author"`
-	Committer string            `yaml:"committer,omitempty"`
-	Timestamp time.Time         `yaml:"timestamp"`
-	Message   string            `yaml:"message,omitempty"`
-	Files     map[string]string `yaml:"files,omitempty"`
-	Op        *OpDesc           `yaml:"op,omitempty"`
-	SignAs    string            `yaml:"sign_as,omitempty"`
-	Tamper    string            `yaml:"tamper,omitempty"`
-	Unsigned  bool              `yaml:"unsigned,omitempty"`
-	Expect    *ExpectDesc       `yaml:"expect,omitempty"`
+	ID          string            `yaml:"id,omitempty"`
+	Parents     []string          `yaml:"parents,omitempty"`
+	Author      string            `yaml:"author"`
+	Committer   string            `yaml:"committer,omitempty"`
+	Timestamp   time.Time         `yaml:"timestamp"`
+	Message     string            `yaml:"message,omitempty"`
+	Files       map[string]string `yaml:"files,omitempty"`
+	Op          *OpDesc           `yaml:"op,omitempty"`
+	SignAs      string            `yaml:"sign_as,omitempty"`
+	Tamper      string            `yaml:"tamper,omitempty"`
+	Unsigned    bool              `yaml:"unsigned,omitempty"`
+	Expect      *ExpectDesc       `yaml:"expect,omitempty"`
+	Disposition string            `yaml:"disposition,omitempty"`
 }
 
 var validRejectReasons = map[string]bool{
@@ -208,6 +209,14 @@ func Load(data []byte) (*Description, error) {
 				if c.Expect != nil && c.Expect.Reject != "" {
 					if !validRejectReasons[c.Expect.Reject] {
 						return nil, fmt.Errorf("fixtures: description %q ref %q generation %d commit %d invalid reject reason %q (must be closed enum)", d.Name, r.Name, gi, ci, c.Expect.Reject)
+					}
+				}
+				if c.Disposition != "" {
+					if c.Op == nil {
+						return nil, fmt.Errorf("fixtures: description %q ref %q generation %d commit %d specifies disposition without 'op'", d.Name, r.Name, gi, ci)
+					}
+					if c.Disposition != "interpretable" && c.Disposition != "opaque" {
+						return nil, fmt.Errorf("fixtures: description %q ref %q generation %d commit %d invalid disposition %q (must be closed enum: 'interpretable' or 'opaque')", d.Name, r.Name, gi, ci, c.Disposition)
 					}
 				}
 			}

@@ -1,0 +1,67 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/alice/review",
+      "commit": "031ccbad9958a3002d7804e396c211d74fc85987"
+    },
+    {
+      "name": "refs/writ/bob/review",
+      "commit": "96b61359722a6af55cb69ae70727e74ef1da0da7"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/alice/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "290ce1cb31c68170262856dc1fe93a0ac940e62a",
+          "tree": "8d715e11af6c74bcfa352171efe13868c0945152",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create review/review-01\n",
+          "signed": true
+        },
+        {
+          "sha": "031ccbad9958a3002d7804e396c211d74fc85987",
+          "tree": "4f95769ed6be767e63359884b7d61854c3dda4a5",
+          "parents": [
+            "290ce1cb31c68170262856dc1fe93a0ac940e62a"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: create review/review-02\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/bob/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "eafb2d5323ec8ed03657b2e9776e68970e567bcf",
+          "tree": "f52f899a7270a850a5f06833c2d843eba720021e",
+          "parents": [],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:30Z",
+          "message": "writ: post comment/review-01\n",
+          "signed": true
+        },
+        {
+          "sha": "96b61359722a6af55cb69ae70727e74ef1da0da7",
+          "tree": "e8c932c258c8ca4c3e4ce6456d9871739a6c13f9",
+          "parents": [
+            "eafb2d5323ec8ed03657b2e9776e68970e567bcf",
+            "031ccbad9958a3002d7804e396c211d74fc85987"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: post comment/review-01\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

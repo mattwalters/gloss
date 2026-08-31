@@ -1,0 +1,78 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/alice/review",
+      "commit": "637142a214438e299cd8b145809fc2ec28a5c315"
+    },
+    {
+      "name": "refs/writ/bob/review",
+      "commit": "5fc45d99af1ec746b9f684b96bd18b4af431ad0a"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/alice/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "30b3bdb6b8c3f3dceeb7e96e45ea9f2408d5c623",
+          "tree": "531d2cd8abc509db0b22be2292117e41ea903e15",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create review/review-01\n",
+          "signed": true
+        },
+        {
+          "sha": "c82adc77f0882af189ed84b86a09208375a785c1",
+          "tree": "b201618c9cce7f37387be873cffe580241fbb19b",
+          "parents": [
+            "30b3bdb6b8c3f3dceeb7e96e45ea9f2408d5c623"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: emit telemetry/telem-01\n",
+          "signed": true
+        },
+        {
+          "sha": "637142a214438e299cd8b145809fc2ec28a5c315",
+          "tree": "2ab1985cf22011d8977f1e7065574a468fdcf6b3",
+          "parents": [
+            "c82adc77f0882af189ed84b86a09208375a785c1"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: post comment/review-01\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/bob/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "a23e174bb43ce3a520727918eed325dd11ad4c5a",
+          "tree": "1c63a186008c576459bd3cf0225b8b3fcdc983eb",
+          "parents": [],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:30Z",
+          "message": "writ: archive review/review-01\n",
+          "signed": true
+        },
+        {
+          "sha": "5fc45d99af1ec746b9f684b96bd18b4af431ad0a",
+          "tree": "7ab1d12f5e6632bda4fe2cfc21804d030c1dc42c",
+          "parents": [
+            "a23e174bb43ce3a520727918eed325dd11ad4c5a",
+            "637142a214438e299cd8b145809fc2ec28a5c315"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:03:00Z",
+          "message": "writ: close review/review-01\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

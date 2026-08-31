@@ -1,0 +1,129 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/alice/review",
+      "commit": "7e440b19a86317f08137120af2b39c063ddb1cf0"
+    },
+    {
+      "name": "refs/writ/bob/review",
+      "commit": "af4ca081fea9b3db3360894c8958ad8cf699b2c7"
+    },
+    {
+      "name": "refs/writ/alice/review-control",
+      "commit": "0d454a6c7b1823e4743b6c1762a78307a7c983ce"
+    },
+    {
+      "name": "refs/writ/bob/review-control",
+      "commit": "607c4a2101962c2ea15f759cd140ab67a8a43806"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/alice/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "6589046cba37ca71ff7c11eef2babe5498945d01",
+          "tree": "bddc04e067881a8d987f5d75260f7d92918eb76d",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create review/review-mixed-01\n",
+          "signed": true
+        },
+        {
+          "sha": "c41f48c534a9ef87ae10bd4331ca7ced6868015a",
+          "tree": "80b52b7565ec25619ea845369d119f32a03e45fa",
+          "parents": [
+            "6589046cba37ca71ff7c11eef2babe5498945d01"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: emit telemetry/review-mixed-01\n",
+          "signed": true
+        },
+        {
+          "sha": "7e440b19a86317f08137120af2b39c063ddb1cf0",
+          "tree": "067077dd9ef9c384cd27e0ec7dcdc87008c0d5db",
+          "parents": [
+            "c41f48c534a9ef87ae10bd4331ca7ced6868015a"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: post comment/review-mixed-01\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/bob/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "6dd9f5605c5b7abcf3a8f4280ae41087508d304e",
+          "tree": "cea6fa65f74c0e9a0d10a496a89b080611e91b1c",
+          "parents": [],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:30Z",
+          "message": "writ: create review/review-mixed-01\n",
+          "signed": true
+        },
+        {
+          "sha": "af4ca081fea9b3db3360894c8958ad8cf699b2c7",
+          "tree": "0e28f5f9281686a4e9c19efce819a7c366dd2269",
+          "parents": [
+            "6dd9f5605c5b7abcf3a8f4280ae41087508d304e",
+            "7e440b19a86317f08137120af2b39c063ddb1cf0"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:03:00Z",
+          "message": "writ: close review/review-mixed-01\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/alice/review-control",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "6589046cba37ca71ff7c11eef2babe5498945d01",
+          "tree": "bddc04e067881a8d987f5d75260f7d92918eb76d",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create review/review-mixed-01\n",
+          "signed": true
+        },
+        {
+          "sha": "0d454a6c7b1823e4743b6c1762a78307a7c983ce",
+          "tree": "067077dd9ef9c384cd27e0ec7dcdc87008c0d5db",
+          "parents": [
+            "6589046cba37ca71ff7c11eef2babe5498945d01"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: post comment/review-mixed-01\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/bob/review-control",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "607c4a2101962c2ea15f759cd140ab67a8a43806",
+          "tree": "0e28f5f9281686a4e9c19efce819a7c366dd2269",
+          "parents": [
+            "0d454a6c7b1823e4743b6c1762a78307a7c983ce"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:03:00Z",
+          "message": "writ: close review/review-mixed-01\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}
