@@ -78,11 +78,12 @@ type CIStatus struct {
 // Comment represents the materialized state of a comment collaborative object (v1).
 // Reducer implementation is in WRIT-27.
 type Comment struct {
-	Subject   CommentSubject `json:"subject,omitzero"`
-	Text      string         `json:"text,omitempty"`
-	InReplyTo string         `json:"in_reply_to,omitempty"`
-	Anchor    *Anchor        `json:"anchor,omitempty"`
-	Deleted   bool           `json:"deleted,omitempty"`
+	Subject    CommentSubject `json:"subject,omitzero"`
+	Text       string         `json:"text,omitempty"`
+	InReplyTo  string         `json:"in_reply_to,omitempty"`
+	Anchor     *Anchor        `json:"anchor,omitempty"`
+	Deleted    bool           `json:"deleted,omitempty"`
+	UnknownOps []UnknownOp    `json:"unknown_ops,omitempty"`
 }
 
 // CommentSubject identifies the collaborative object a comment is attached to.

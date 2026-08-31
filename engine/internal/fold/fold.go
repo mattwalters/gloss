@@ -72,15 +72,26 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 	reach := BuildReachability(orderedOps)
 
 	bodyMap := make(map[string]map[string]any, len(orderedOps))
+	rawBodyMap := make(map[string]map[string]json.RawMessage, len(orderedOps))
 	for _, o := range orderedOps {
 		var bm map[string]any
+		var rbm map[string]json.RawMessage
 		if len(o.Op.Body) > 0 {
-			_ = json.Unmarshal(o.Op.Body, &bm)
+			if err := json.Unmarshal(o.Op.Body, &bm); err != nil {
+				return ObjectState{}, fmt.Errorf("fold: unmarshaling op %s body: %w", o.Op.ID, err)
+			}
+			if err := json.Unmarshal(o.Op.Body, &rbm); err != nil {
+				return ObjectState{}, fmt.Errorf("fold: unmarshaling op %s raw body: %w", o.Op.ID, err)
+			}
 		}
 		if bm == nil {
 			bm = make(map[string]any)
 		}
+		if rbm == nil {
+			rbm = make(map[string]json.RawMessage)
+		}
 		bodyMap[o.Op.ID] = bm
+		rawBodyMap[o.Op.ID] = rbm
 	}
 
 	// Identify unknown ops: ops matching no declared rule
@@ -130,11 +141,12 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 	// Walk total order L once, dispatching to matching field accumulators
 	for _, o := range orderedOps {
 		bm := bodyMap[o.Op.ID]
+		rbm := rawBodyMap[o.Op.ID]
 		for fieldName, fieldRules := range matchedRulesByField {
 			for _, r := range fieldRules {
 				if opMatchesRule(o.Op, r) {
 					acc := accumulators[fieldName]
-					if err := acc.Apply(o.Op, bm); err != nil {
+					if err := acc.Apply(o.Op, bm, rbm); err != nil {
 						return ObjectState{}, fmt.Errorf("fold: applying op %s to field %q: %w", o.Op.ID, fieldName, err)
 					}
 					break

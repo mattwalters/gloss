@@ -56,46 +56,22 @@ func FoldComment(ops []codec.Op) (CommentFold, error) {
 	if t, ok := res.State["text"].(string); ok {
 		cf.Text = t
 	}
-	if p, ok := res.State["in_reply_to"].(string); ok {
+	if raw, ok := res.State["in_reply_to"].(json.RawMessage); ok {
+		var s string
+		if err := json.Unmarshal(raw, &s); err == nil {
+			cf.InReplyTo = s
+		}
+	} else if p, ok := res.State["in_reply_to"].(string); ok {
 		cf.InReplyTo = p
 	}
 	if d, ok := res.State["deleted"].(bool); ok {
 		cf.Deleted = d
 	}
-
-	// Map ops by ID for fast lookup
-	opMap := make(map[string]codec.Op, len(ops))
-	for _, op := range ops {
-		opMap[op.ID] = op
+	if raw, ok := res.State["subject"].(json.RawMessage); ok && len(raw) > 0 && string(raw) != "null" {
+		cf.SubjectRaw = append([]byte(nil), raw...)
 	}
-
-	// Replay create-once against TotalOrder on raw bodies for subject and anchor
-	createRule := Rule{OpType: "create", OpVersion: 1}
-	for _, ref := range res.TotalOrder {
-		op, ok := opMap[ref.Commit]
-		if !ok || !opMatchesRule(op, createRule) {
-			continue
-		}
-		if len(op.Body) == 0 {
-			continue
-		}
-		var rawFields map[string]json.RawMessage
-		if err := json.Unmarshal(op.Body, &rawFields); err != nil {
-			continue
-		}
-		if cf.SubjectRaw == nil {
-			if sub, ok := rawFields["subject"]; ok && len(sub) > 0 && string(sub) != "null" {
-				cf.SubjectRaw = append([]byte(nil), sub...)
-			}
-		}
-		if cf.AnchorRaw == nil {
-			if anc, ok := rawFields["anchor"]; ok && len(anc) > 0 && string(anc) != "null" {
-				cf.AnchorRaw = append([]byte(nil), anc...)
-			}
-		}
-		if cf.SubjectRaw != nil && cf.AnchorRaw != nil {
-			break
-		}
+	if raw, ok := res.State["anchor"].(json.RawMessage); ok && len(raw) > 0 && string(raw) != "null" {
+		cf.AnchorRaw = append([]byte(nil), raw...)
 	}
 
 	return cf, nil

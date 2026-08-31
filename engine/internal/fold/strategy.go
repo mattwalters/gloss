@@ -1,6 +1,7 @@
 package fold
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -10,7 +11,7 @@ import (
 // Accumulator defines the interface for state reducers in the closed strategy catalogue.
 type Accumulator interface {
 	// Apply updates the accumulator with an operation in total order L.
-	Apply(op codec.Op, body map[string]any) error
+	Apply(op codec.Op, body map[string]any, rawBody map[string]json.RawMessage) error
 	// HasValue returns true if at least one operation has contributed to this accumulator.
 	HasValue() bool
 	// Result returns the folded value for this field in serialized representation.
@@ -51,7 +52,7 @@ func newLWWAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 	return &lwwAccumulator{field: rule.Field}, nil
 }
 
-func (a *lwwAccumulator) Apply(_ codec.Op, body map[string]any) error {
+func (a *lwwAccumulator) Apply(_ codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	if val, ok := body[a.field]; ok && val != nil {
 		a.val = val
 		a.hasVal = true
@@ -73,9 +74,12 @@ func newCreateOnceAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 	return &createOnceAccumulator{field: rule.Field}, nil
 }
 
-func (a *createOnceAccumulator) Apply(_ codec.Op, body map[string]any) error {
+func (a *createOnceAccumulator) Apply(_ codec.Op, body map[string]any, rawBody map[string]json.RawMessage) error {
 	if !a.hasVal {
-		if val, ok := body[a.field]; ok && val != nil {
+		if raw, ok := rawBody[a.field]; ok && len(raw) > 0 && string(raw) != "null" {
+			a.val = raw
+			a.hasVal = true
+		} else if val, ok := body[a.field]; ok && val != nil {
 			a.val = val
 			a.hasVal = true
 		}
@@ -100,7 +104,7 @@ func newSetUnionAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 	}, nil
 }
 
-func (a *setUnionAccumulator) Apply(_ codec.Op, body map[string]any) error {
+func (a *setUnionAccumulator) Apply(_ codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	raw, ok := body[a.field]
 	if !ok || raw == nil {
 		return nil
@@ -159,7 +163,7 @@ func newSetObservedRemoveAccumulator(rule Rule, reach ReachOracle) (Accumulator,
 	}, nil
 }
 
-func (a *setObservedRemoveAccumulator) Apply(op codec.Op, body map[string]any) error {
+func (a *setObservedRemoveAccumulator) Apply(op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	raw, ok := body[a.field]
 	if !ok || raw == nil {
 		return nil
@@ -224,7 +228,7 @@ func newAppendAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 	return &appendAccumulator{field: rule.Field}, nil
 }
 
-func (a *appendAccumulator) Apply(_ codec.Op, body map[string]any) error {
+func (a *appendAccumulator) Apply(_ codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	raw, ok := body[a.field]
 	if !ok || raw == nil {
 		return nil
@@ -257,7 +261,7 @@ func newTombstoneAccumulator(rule Rule, reach ReachOracle) (Accumulator, error) 
 	}, nil
 }
 
-func (a *tombstoneAccumulator) Apply(op codec.Op, body map[string]any) error {
+func (a *tombstoneAccumulator) Apply(op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	val, hasField := body[a.field]
 	if op.OpType == "delete" || (hasField && val == true) {
 		a.deletes = append(a.deletes, op.ID)
@@ -312,7 +316,7 @@ func newLatticeAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 	}, nil
 }
 
-func (a *latticeAccumulator) Apply(_ codec.Op, body map[string]any) error {
+func (a *latticeAccumulator) Apply(_ codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	raw, ok := body[a.field]
 	if !ok || raw == nil {
 		return nil
@@ -355,7 +359,7 @@ func newKeyedLWWAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 	}, nil
 }
 
-func (a *keyedLWWAccumulator) Apply(_ codec.Op, body map[string]any) error {
+func (a *keyedLWWAccumulator) Apply(_ codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	val, ok := body[a.field]
 	if !ok {
 		return nil

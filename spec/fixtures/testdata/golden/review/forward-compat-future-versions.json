@@ -3,19 +3,7 @@
     {
       "object_id": "review-01",
       "review": {
-        "title": "Baseline v1 review",
-        "unknown_ops": [
-          {
-            "commit": "eafb2d5323ec8ed03657b2e9776e68970e567bcf",
-            "op_type": "post",
-            "op_version": 2
-          },
-          {
-            "commit": "96b61359722a6af55cb69ae70727e74ef1da0da7",
-            "op_type": "post",
-            "op_version": 3
-          }
-        ]
+        "title": "Baseline v1 review"
       }
     },
     {

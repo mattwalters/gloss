@@ -140,3 +140,59 @@ func TestFoldCommentsThreadsFixture(t *testing.T) {
 		}
 	}
 }
+
+func TestFoldCommentUnknownOps(t *testing.T) {
+	baseTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	ops := []codec.Op{
+		{
+			ID: "c1-create",
+			Envelope: codec.Envelope{
+				ObjectID:   "c-1",
+				ObjectType: "comment",
+				OpType:     "create",
+				OpVersion:  1,
+				Body:       []byte(`{"subject":{"object_type":"review","object_id":"r-1"},"text":"Initial text"}`),
+			},
+			Author: codec.Identity{When: baseTime},
+		},
+		{
+			ID:      "c1-future",
+			Parents: []string{"c1-create"},
+			Envelope: codec.Envelope{
+				ObjectID:   "c-1",
+				ObjectType: "comment",
+				OpType:     "react",
+				OpVersion:  2,
+				Body:       []byte(`{"reaction":"thumbs_up"}`),
+			},
+			Author: codec.Identity{When: baseTime.Add(time.Minute)},
+		},
+	}
+
+	c, err := writ.FoldComment(ops)
+	if err != nil {
+		t.Fatalf("writ.FoldComment failed: %v", err)
+	}
+
+	if len(c.UnknownOps) != 1 {
+		t.Fatalf("expected 1 UnknownOp on Comment, got %d", len(c.UnknownOps))
+	}
+	if c.UnknownOps[0].Commit != "c1-future" || c.UnknownOps[0].OpType != "react" || c.UnknownOps[0].OpVersion != 2 {
+		t.Errorf("unexpected UnknownOp: %+v", c.UnknownOps[0])
+	}
+
+	threads, err := writ.FoldComments(ops)
+	if err != nil {
+		t.Fatalf("writ.FoldComments failed: %v", err)
+	}
+	if len(threads) != 1 {
+		t.Fatalf("expected 1 thread root, got %d", len(threads))
+	}
+	if len(threads[0].UnknownOps) != 1 {
+		t.Fatalf("expected 1 UnknownOp on CommentThread, got %d", len(threads[0].UnknownOps))
+	}
+	if threads[0].UnknownOps[0].Commit != "c1-future" {
+		t.Errorf("unexpected thread UnknownOp: %+v", threads[0].UnknownOps[0])
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/codec/canonicaljson"
@@ -68,9 +69,46 @@ func runReviewFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 
 	var golden ReviewGolden
 
+	opsByObject := enumRes.Ops
+	if len(opsByObject) == 0 {
+		opsByObject = make(map[string][]codec.Op)
+		seenCommits := make(map[string]bool)
+		cIdx := 0
+		for _, ref := range fix.Description.Refs {
+			isControl := strings.HasSuffix(ref.Name, "-control")
+			for _, gen := range ref.History {
+				gs := fix.Manifest.Generations[cIdx]
+				cIdx++
+				if isControl {
+					continue
+				}
+				for ci := range gen.Commits {
+					cState := gs.Commits[ci]
+					if seenCommits[cState.SHA] {
+						continue
+					}
+					seenCommits[cState.SHA] = true
+					commitObj, err := fix.Repo.CommitObject(plumbing.NewHash(cState.SHA))
+					if err != nil {
+						return nil, fmt.Errorf("lookup commit %s: %w", cState.SHA, err)
+					}
+					pureCommit, err := codec.FromGitCommit(fix.Repo, commitObj)
+					if err != nil {
+						return nil, fmt.Errorf("from git commit %s: %w", cState.SHA, err)
+					}
+					op, err := codec.DecodeCommit(pureCommit)
+					if err != nil {
+						continue
+					}
+					opsByObject[op.ObjectID] = append(opsByObject[op.ObjectID], op)
+				}
+			}
+		}
+	}
+
 	// Sort object IDs for deterministic golden output
 	var objectIDs []string
-	for objID := range enumRes.Ops {
+	for objID := range opsByObject {
 		objectIDs = append(objectIDs, objID)
 	}
 	sort.Strings(objectIDs)
@@ -78,23 +116,18 @@ func runReviewFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 	r := rand.New(rand.NewSource(42))
 
 	for _, objID := range objectIDs {
-		codecOps := enumRes.Ops[objID]
-		if len(codecOps) == 0 {
-			continue
-		}
-
-		hasReviewOp := false
+		codecOps := opsByObject[objID]
+		var reviewOps []codec.Op
 		for _, op := range codecOps {
 			if op.ObjectType == "review" {
-				hasReviewOp = true
-				break
+				reviewOps = append(reviewOps, op)
 			}
 		}
-		if !hasReviewOp {
+		if len(reviewOps) == 0 {
 			continue
 		}
 
-		reviewState, err := writ.FoldReview(codecOps)
+		reviewState, err := writ.FoldReview(reviewOps)
 		if err != nil {
 			return nil, fmt.Errorf("writ.FoldReview for object %s in %s: %w", objID, fix.Name, err)
 		}
@@ -106,8 +139,8 @@ func runReviewFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 
 		// Commutativity verification: shuffle input ops 100 times and verify identical output
 		for i := 0; i < 100; i++ {
-			shuffled := make([]codec.Op, len(codecOps))
-			copy(shuffled, codecOps)
+			shuffled := make([]codec.Op, len(reviewOps))
+			copy(shuffled, reviewOps)
 			r.Shuffle(len(shuffled), func(i, j int) {
 				shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 			})

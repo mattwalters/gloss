@@ -10,9 +10,10 @@ import (
 
 // CommentThread represents a node in the comment reply forest.
 type CommentThread struct {
-	ObjectID string          `json:"object_id"`
-	Comment  Comment         `json:"comment"`
-	Replies  []CommentThread `json:"replies,omitempty"`
+	ObjectID   string          `json:"object_id"`
+	Comment    Comment         `json:"comment"`
+	Replies    []CommentThread `json:"replies,omitempty"`
+	UnknownOps []UnknownOp     `json:"unknown_ops,omitempty"`
 }
 
 // FoldComment reduces operations for a single comment object into a typed Comment.
@@ -48,9 +49,10 @@ func FoldComments(ops []codec.Op) ([]CommentThread, error) {
 			replies = append(replies, ct)
 		}
 		return CommentThread{
-			ObjectID: n.ObjectID,
-			Comment:  c,
-			Replies:  replies,
+			ObjectID:   n.ObjectID,
+			Comment:    c,
+			Replies:    replies,
+			UnknownOps: c.UnknownOps,
 		}, nil
 	}
 
@@ -67,10 +69,23 @@ func FoldComments(ops []codec.Op) ([]CommentThread, error) {
 }
 
 func convertCommentFold(cf fold.CommentFold) (Comment, error) {
+	var unknownOps []UnknownOp
+	if len(cf.UnknownOps) > 0 {
+		unknownOps = make([]UnknownOp, len(cf.UnknownOps))
+		for i, u := range cf.UnknownOps {
+			unknownOps[i] = UnknownOp{
+				Commit:    u.Commit,
+				OpType:    u.OpType,
+				OpVersion: u.OpVersion,
+			}
+		}
+	}
+
 	c := Comment{
-		Text:      cf.Text,
-		InReplyTo: cf.InReplyTo,
-		Deleted:   cf.Deleted,
+		Text:       cf.Text,
+		InReplyTo:  cf.InReplyTo,
+		Deleted:    cf.Deleted,
+		UnknownOps: unknownOps,
 	}
 
 	if len(cf.SubjectRaw) > 0 {

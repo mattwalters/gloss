@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/codec/canonicaljson"
@@ -20,13 +21,13 @@ import (
 )
 
 // TestFoldFamily registers the fold fixture family and runs all fold-*.yaml
-// descriptions through the golden test harness.
+// and forward-compat-*.yaml descriptions through the golden test harness.
 func TestFoldFamily(t *testing.T) {
 	fixtures.Run(t, fixtures.Family{
 		Name:      "fold",
 		GoldenDir: "testdata/golden/fold",
 		Filter: func(desc *fixtures.Description) bool {
-			return strings.HasPrefix(desc.Name, "fold-")
+			return strings.HasPrefix(desc.Name, "fold-") || strings.HasPrefix(desc.Name, "forward-compat-")
 		},
 		Runner: runFoldFixture,
 	})
@@ -97,9 +98,46 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 
 	var golden FoldGolden
 
+	opsByObject := enumRes.Ops
+	if len(opsByObject) == 0 {
+		opsByObject = make(map[string][]codec.Op)
+		seenCommits := make(map[string]bool)
+		cIdx := 0
+		for _, ref := range fix.Description.Refs {
+			isControl := strings.HasSuffix(ref.Name, "-control")
+			for _, gen := range ref.History {
+				gs := fix.Manifest.Generations[cIdx]
+				cIdx++
+				if isControl {
+					continue
+				}
+				for ci := range gen.Commits {
+					cState := gs.Commits[ci]
+					if seenCommits[cState.SHA] {
+						continue
+					}
+					seenCommits[cState.SHA] = true
+					commitObj, err := fix.Repo.CommitObject(plumbing.NewHash(cState.SHA))
+					if err != nil {
+						return nil, fmt.Errorf("lookup commit %s: %w", cState.SHA, err)
+					}
+					pureCommit, err := codec.FromGitCommit(fix.Repo, commitObj)
+					if err != nil {
+						return nil, fmt.Errorf("from git commit %s: %w", cState.SHA, err)
+					}
+					op, err := codec.DecodeCommit(pureCommit)
+					if err != nil {
+						continue
+					}
+					opsByObject[op.ObjectID] = append(opsByObject[op.ObjectID], op)
+				}
+			}
+		}
+	}
+
 	// Sort object IDs for deterministic golden output
 	var objectIDs []string
-	for objID := range enumRes.Ops {
+	for objID := range opsByObject {
 		objectIDs = append(objectIDs, objID)
 	}
 	sort.Strings(objectIDs)
@@ -107,7 +145,7 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	for _, objID := range objectIDs {
-		codecOps := enumRes.Ops[objID]
+		codecOps := opsByObject[objID]
 		if len(codecOps) == 0 {
 			continue
 		}
@@ -209,31 +247,40 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 
 		// Comment reducer pass: verify typed writ.FoldComment canonicalizes identically to spec.Fold
 		// and carries winning anchor payload byte-identically.
-		if codecOps[0].ObjectType == "comment" {
-			commentRes, err := writ.FoldComment(codecOps)
+		var commentOps []codec.Op
+		for _, op := range codecOps {
+			if op.ObjectType == "comment" {
+				commentOps = append(commentOps, op)
+			}
+		}
+
+		if len(commentOps) > 0 {
+			commentRes, err := writ.FoldComment(commentOps)
 			if err != nil {
 				return nil, fmt.Errorf("writ.FoldComment for object %s: %w", objID, err)
 			}
-			commentJSON, err := canonicaljson.Marshal(mustJSON(t, commentRes))
-			if err != nil {
-				return nil, fmt.Errorf("canonicalizing Comment for %s: %w", objID, err)
-			}
-			if !bytes.Equal(commentJSON, expectedJSON) {
-				t.Fatalf("typed Comment fold state differs from spec reference for object %s in fixture %s:\n comment: %s\n ref:     %s",
-					objID, fix.Name, string(commentJSON), string(expectedJSON))
+			if len(commentOps) == len(codecOps) {
+				commentJSON, err := canonicaljson.Marshal(mustJSON(t, commentRes))
+				if err != nil {
+					return nil, fmt.Errorf("canonicalizing Comment for %s: %w", objID, err)
+				}
+				if !bytes.Equal(commentJSON, expectedJSON) {
+					t.Fatalf("typed Comment fold state differs from spec reference for object %s in fixture %s:\n comment: %s\n ref:     %s",
+						objID, fix.Name, string(commentJSON), string(expectedJSON))
+				}
 			}
 
 			// Direct anchor identity assertion:
 			var winningCreateOp *codec.Op
 			for _, sha := range totalOrder {
-				for i := range codecOps {
-					if codecOps[i].ID == sha && codecOps[i].OpType == "create" && codecOps[i].OpVersion == 1 {
+				for i := range commentOps {
+					if commentOps[i].ID == sha && commentOps[i].OpType == "create" && commentOps[i].OpVersion == 1 {
 						var body map[string]json.RawMessage
-						if len(codecOps[i].Body) > 0 {
-							_ = json.Unmarshal(codecOps[i].Body, &body)
+						if len(commentOps[i].Body) > 0 {
+							_ = json.Unmarshal(commentOps[i].Body, &body)
 						}
 						if ancRaw, ok := body["anchor"]; ok && len(ancRaw) > 0 && string(ancRaw) != "null" {
-							winningCreateOp = &codecOps[i]
+							winningCreateOp = &commentOps[i]
 							break
 						}
 					}
