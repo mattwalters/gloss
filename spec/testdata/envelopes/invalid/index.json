@@ -1,0 +1,82 @@
+[
+  {
+    "file": "missing-object-id.json",
+    "rejects": "schema",
+    "reason": "required field object_id is absent"
+  },
+  {
+    "file": "missing-body.json",
+    "rejects": "schema",
+    "reason": "required field body is absent"
+  },
+  {
+    "file": "op-version-zero.json",
+    "rejects": "schema",
+    "reason": "op_version must be a positive integer; 0 violates the minimum"
+  },
+  {
+    "file": "op-version-fractional.json",
+    "rejects": "schema",
+    "reason": "op_version must be an integer; 1.5 has a fractional part"
+  },
+  {
+    "file": "op-version-string.json",
+    "rejects": "schema",
+    "reason": "op_version must be a JSON integer, not a string"
+  },
+  {
+    "file": "op-version-beyond-2-53.json",
+    "rejects": "schema",
+    "reason": "op_version must not exceed 2^53-1, the largest exactly-representable double"
+  },
+  {
+    "file": "object-id-empty.json",
+    "rejects": "schema",
+    "reason": "object_id must be a non-empty string"
+  },
+  {
+    "file": "object-id-space.json",
+    "rejects": "schema",
+    "reason": "object_id must be printable non-space ASCII; a space violates the pattern"
+  },
+  {
+    "file": "object-type-uppercase.json",
+    "rejects": "schema",
+    "reason": "object_type must match ^[a-z][a-z0-9-]*$; uppercase is not allowed"
+  },
+  {
+    "file": "body-array.json",
+    "rejects": "schema",
+    "reason": "body must be a JSON object, not an array"
+  },
+  {
+    "file": "pretty-printed.json",
+    "rejects": "canonicalization",
+    "category": "not-canonical",
+    "reason": "insignificant whitespace: the bytes are not the canonical encoding of the value"
+  },
+  {
+    "file": "unsorted-keys.json",
+    "rejects": "canonicalization",
+    "category": "not-canonical",
+    "reason": "object members are not in UTF-16 code unit order of their keys"
+  },
+  {
+    "file": "trailing-newline.json",
+    "rejects": "canonicalization",
+    "category": "not-canonical",
+    "reason": "trailing newline after the JSON value; canonical encoding ends at the closing brace"
+  },
+  {
+    "file": "duplicate-key.json",
+    "rejects": "canonicalization",
+    "category": "duplicate-key",
+    "reason": "duplicate object key object_id; canonicalization rejects duplicate keys outright"
+  },
+  {
+    "file": "lone-surrogate.json",
+    "rejects": "canonicalization",
+    "category": "lone-surrogate",
+    "reason": "lone high surrogate escape \\ud800 in a string; canonicalization rejects unpaired surrogates"
+  }
+]

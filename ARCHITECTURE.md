@@ -16,9 +16,9 @@ We use plain refs rather than git-notes: notes don't fetch by default, and notes
 
 ### The op envelope
 
-Each op commit carries a canonical payload: op id, parent op ids (DAG edges), object id, object type, op type + version, author, timestamp, signature, and a type-specific body. Two rules with teeth:
+Every op carries the same logical envelope — op id, parent op ids (DAG edges), object id, object type, op type + version, author, timestamp, signature, type-specific body — split across **two carriers with exactly one home per field** (amended with WRIT-6, which spec'd the envelope): the op commit itself carries op id (the commit's SHA), parent op ids (parent SHAs), author, timestamp, and signature; a canonical JSON blob at a fixed path in the commit tree carries object id, object type, op type + version, and the body. Nothing is mirrored between carriers — mirroring creates two sources of truth that can disagree (payload parents vs. commit parents), and the edges are incoherent anyway: a payload can't contain its own content-derived op id, nor a signature covering the payload the signature lives inside. The accepted cost is that the payload alone isn't self-describing; a conforming reader always needs the commit. Normative detail: `spec/op-envelope.md`. Two rules with teeth:
 
-- **Canonicalization:** byte-stable encoding (canonical JSON) because signatures and content-addressing demand it. This is spec-level, fixture-enforced.
+- **Canonicalization:** byte-stable encoding (canonical JSON, `spec/canonicalization.md`) because signatures and content-addressing demand it. This is spec-level, fixture-enforced.
 - **Unknown-op tolerance:** implementations MUST preserve and ignore op types/fields they don't understand — never drop. Old clients must not destroy new clients' data. This is what lets the schema evolve without flag days.
 
 Signing rides git's existing commit-signature machinery (SSH signing preferred — users already have the key). Every op is attributable and tamper-evident, which matters increasingly as agents become review actors.

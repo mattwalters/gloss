@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/writtendev/writ/spec/schemas/op-envelope.schema.json",
+  "title": "Writ op envelope payload",
+  "description": "The payload half of the op envelope: the canonical JSON blob stored at op.json in an op commit's tree. The other half of the envelope (op id, parent op ids, author, timestamp, signature) is carried by the commit itself and is not represented here. See spec/op-envelope.md for field semantics and spec/canonicalization.md for the byte encoding this blob must use. Unknown top-level fields are permitted: readers preserve and ignore fields they do not understand.",
+  "type": "object",
+  "properties": {
+    "object_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[\\x21-\\x7e]+$",
+      "description": "Identifier of the collaborative object this op belongs to. Opaque at this layer: printable non-space ASCII, no further structure imposed here. The workspace-global id format is specified separately (WRIT-16)."
+    },
+    "object_type": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "The collaborative object's type, e.g. review, comment, approval, ci-status, issue, project, cycle. Deliberately not an enum: readers must tolerate object types they do not know (preserve and ignore, never drop)."
+    },
+    "op_type": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "The operation's type within its object type's vocabulary, e.g. create. Deliberately not an enum: the per-type vocabularies are specified separately (WRIT-8 through WRIT-11), and readers must tolerate op types they do not know."
+    },
+    "op_version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "description": "Schema version of this op type's body, starting at 1. A small integer, always exactly representable as an IEEE-754 double; anything that could grow past 2^53 must be a string field instead (see spec/canonicalization.md on numbers)."
+    },
+    "body": {
+      "type": "object",
+      "description": "Type-specific operation content. An open slot at this layer: each (object_type, op_type, op_version) triple defines its own body schema in the op vocabulary specs (WRIT-8 through WRIT-11). Unknown body fields are likewise preserved and ignored."
+    }
+  },
+  "required": [
+    "object_id",
+    "object_type",
+    "op_type",
+    "op_version",
+    "body"
+  ],
+  "additionalProperties": true
+}
