@@ -3,6 +3,7 @@ package writ_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -209,3 +210,37 @@ func TestIssuesWritePathEnvelopes(t *testing.T) {
 		t.Errorf("got op_version %v, want 1", payload["op_version"])
 	}
 }
+
+func TestIssuesValidationAndNotFound(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+
+	missingID := "00000000000000000000000000000000"
+	newTitle := "New Title"
+
+	if err := s.Issues.Update(ctx, missingID, writ.IssueEdit{Title: &newTitle}); !errors.Is(err, writ.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for Update on missing issue, got %v", err)
+	}
+	if err := s.Issues.SetState(ctx, missingID, writ.IssueState{State: "closed"}); !errors.Is(err, writ.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for SetState on missing issue, got %v", err)
+	}
+	if err := s.Issues.Assign(ctx, missingID, []string{"alice"}, nil); !errors.Is(err, writ.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for Assign on missing issue, got %v", err)
+	}
+	if err := s.Issues.Label(ctx, missingID, []string{"bug"}, nil); !errors.Is(err, writ.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for Label on missing issue, got %v", err)
+	}
+	if err := s.Issues.Link(ctx, missingID, writ.Link{Target: "r-1", Relation: "fixes"}); !errors.Is(err, writ.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for Link on missing issue, got %v", err)
+	}
+	if _, err := s.Issues.Comment(ctx, missingID, writ.NewComment{Text: "text"}); !errors.Is(err, writ.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for Comment on missing issue, got %v", err)
+	}
+}
+

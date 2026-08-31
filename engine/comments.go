@@ -28,11 +28,16 @@ func (c *Comments) Edit(ctx context.Context, id, text string) error {
 		return fmt.Errorf("writ: comment text cannot be empty")
 	}
 
-	_ = c.store.maybeAutoRefresh(ctx)
+	if err := c.store.maybeAutoRefresh(ctx); err != nil {
+		return fmt.Errorf("writ: auto refresh: %w", err)
+	}
 
 	frontier, err := c.store.projection.Frontier(id)
 	if err != nil {
 		return fmt.Errorf("writ: get frontier: %w", err)
+	}
+	if len(frontier) == 0 {
+		return ErrNotFound
 	}
 
 	bodyBytes, err := json.Marshal(map[string]string{
@@ -70,11 +75,16 @@ func (c *Comments) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("writ: comment id cannot be empty")
 	}
 
-	_ = c.store.maybeAutoRefresh(ctx)
+	if err := c.store.maybeAutoRefresh(ctx); err != nil {
+		return fmt.Errorf("writ: auto refresh: %w", err)
+	}
 
 	frontier, err := c.store.projection.Frontier(id)
 	if err != nil {
 		return fmt.Errorf("writ: get frontier: %w", err)
+	}
+	if len(frontier) == 0 {
+		return ErrNotFound
 	}
 
 	env := codec.Envelope{

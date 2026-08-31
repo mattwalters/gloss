@@ -54,6 +54,9 @@ func (r *Reviews) Create(ctx context.Context, n NewReview) (string, error) {
 	if n.Title == "" {
 		return "", fmt.Errorf("writ: review title cannot be empty")
 	}
+	if (n.Base != "" && n.Head == "") || (n.Base == "" && n.Head != "") {
+		return "", fmt.Errorf("writ: both base and head must be specified for revision")
+	}
 
 	id := newObjectID()
 
@@ -81,11 +84,7 @@ func (r *Reviews) Create(ctx context.Context, n NewReview) (string, error) {
 		return "", fmt.Errorf("writ: create review: %w", err)
 	}
 
-	if n.Base != "" || n.Head != "" {
-		if n.Base == "" || n.Head == "" {
-			return "", fmt.Errorf("writ: both base and head must be specified for revision")
-		}
-
+	if n.Base != "" && n.Head != "" {
 		revBytes, err := json.Marshal(map[string]string{
 			"base": n.Base,
 			"head": n.Head,
@@ -126,7 +125,13 @@ func (r *Reviews) Update(ctx context.Context, id string, edit ReviewEdit) error 
 		return fmt.Errorf("writ: at least one of title or description must be provided")
 	}
 
-	_ = r.store.maybeAutoRefresh(ctx)
+	if err := r.store.maybeAutoRefresh(ctx); err != nil {
+		return fmt.Errorf("writ: auto refresh: %w", err)
+	}
+
+	if _, err := r.store.projection.Review(id); err != nil {
+		return err
+	}
 
 	frontier, err := r.store.projection.Frontier(id)
 	if err != nil {
@@ -174,7 +179,13 @@ func (r *Reviews) PushRevision(ctx context.Context, id, base, head string) error
 		return fmt.Errorf("writ: id, base, and head must be non-empty")
 	}
 
-	_ = r.store.maybeAutoRefresh(ctx)
+	if err := r.store.maybeAutoRefresh(ctx); err != nil {
+		return fmt.Errorf("writ: auto refresh: %w", err)
+	}
+
+	if _, err := r.store.projection.Review(id); err != nil {
+		return err
+	}
 
 	frontier, err := r.store.projection.Frontier(id)
 	if err != nil {
@@ -217,7 +228,13 @@ func (r *Reviews) SetStatus(ctx context.Context, id string, status ReviewStatus)
 		return fmt.Errorf("writ: review id and status must be non-empty")
 	}
 
-	_ = r.store.maybeAutoRefresh(ctx)
+	if err := r.store.maybeAutoRefresh(ctx); err != nil {
+		return fmt.Errorf("writ: auto refresh: %w", err)
+	}
+
+	if _, err := r.store.projection.Review(id); err != nil {
+		return err
+	}
 
 	frontier, err := r.store.projection.Frontier(id)
 	if err != nil {
@@ -270,7 +287,13 @@ func (r *Reviews) Comment(ctx context.Context, id string, c NewComment) (string,
 		return "", fmt.Errorf("writ: comment text cannot be empty")
 	}
 
-	_ = r.store.maybeAutoRefresh(ctx)
+	if err := r.store.maybeAutoRefresh(ctx); err != nil {
+		return "", fmt.Errorf("writ: auto refresh: %w", err)
+	}
+
+	if _, err := r.store.projection.Review(id); err != nil {
+		return "", err
+	}
 
 	reviewFrontier, err := r.store.projection.Frontier(id)
 	if err != nil {
@@ -282,9 +305,13 @@ func (r *Reviews) Comment(ctx context.Context, id string, c NewComment) (string,
 
 	if c.InReplyTo != "" {
 		replyFrontier, err := r.store.projection.Frontier(c.InReplyTo)
-		if err == nil && len(replyFrontier) > 0 {
-			causalParents = append(causalParents, replyFrontier...)
+		if err != nil {
+			return "", fmt.Errorf("writ: get reply frontier: %w", err)
 		}
+		if len(replyFrontier) == 0 {
+			return "", fmt.Errorf("writ: in_reply_to comment %s not found: %w", c.InReplyTo, ErrNotFound)
+		}
+		causalParents = append(causalParents, replyFrontier...)
 	}
 	causalParents = dedupeAndSort(causalParents)
 
@@ -339,17 +366,20 @@ func (r *Reviews) Approve(ctx context.Context, id string, a Approval) error {
 		return fmt.Errorf("writ: review id cannot be empty")
 	}
 
-	_ = r.store.maybeAutoRefresh(ctx)
+	if err := r.store.maybeAutoRefresh(ctx); err != nil {
+		return fmt.Errorf("writ: auto refresh: %w", err)
+	}
 
 	if a.Verdict == "" {
 		a.Verdict = "approve"
 	}
 
+	res, err := r.store.projection.Review(id)
+	if err != nil {
+		return err
+	}
+
 	if a.Revision == "" {
-		res, err := r.store.projection.Review(id)
-		if err != nil {
-			return fmt.Errorf("writ: lookup review for approval: %w", err)
-		}
 		if len(res.Review.Revisions) == 0 {
 			return fmt.Errorf("writ: cannot approve review with no revisions")
 		}

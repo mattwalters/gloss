@@ -3,6 +3,7 @@ package writ_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -318,3 +319,61 @@ func TestMultiWriterCausalParents(t *testing.T) {
 		t.Fatalf("B's comment commit %s did not include A's create op %s as a parent! ParentHashes: %+v", commitB.Hash, createOpHash, commitB.ParentHashes)
 	}
 }
+
+func TestReviewsValidationAndNotFound(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+
+	// Invalid Base without Head fails before writing create op
+	_, err = s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Invalid Rev",
+		Base:  "main",
+	})
+	if err == nil {
+		t.Fatal("expected error creating review with Base but no Head")
+	}
+
+	// Verify no ops were written to review chain
+	repo, err := git.PlainOpen(repoDir)
+	if err != nil {
+		t.Fatalf("PlainOpen: %v", err)
+	}
+	if _, err := repo.Reference(plumbing.ReferenceName("refs/writ/0123456789abcdef/review"), true); err == nil {
+		t.Fatal("expected no review ref created on validation failure")
+	}
+
+	// Non-existent review mutations return ErrNotFound
+	missingID := "00000000000000000000000000000000"
+	newTitle := "New Title"
+
+	if err := s.Reviews.Update(ctx, missingID, writ.ReviewEdit{Title: &newTitle}); !errors.Is(err, writ.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for Update on missing review, got %v", err)
+	}
+	if err := s.Reviews.PushRevision(ctx, missingID, "base", "head"); !errors.Is(err, writ.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for PushRevision on missing review, got %v", err)
+	}
+	if err := s.Reviews.SetStatus(ctx, missingID, writ.ReviewStatus{Status: "closed"}); !errors.Is(err, writ.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for SetStatus on missing review, got %v", err)
+	}
+	if _, err := s.Reviews.Comment(ctx, missingID, writ.NewComment{Text: "text"}); !errors.Is(err, writ.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for Comment on missing review, got %v", err)
+	}
+	if err := s.Reviews.Approve(ctx, missingID, writ.Approval{Verdict: "approve"}); !errors.Is(err, writ.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for Approve on missing review, got %v", err)
+	}
+
+	// Missing comment mutation
+	if err := s.Comments.Edit(ctx, missingID, "text"); !errors.Is(err, writ.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for Edit on missing comment, got %v", err)
+	}
+	if err := s.Comments.Delete(ctx, missingID); !errors.Is(err, writ.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for Delete on missing comment, got %v", err)
+	}
+}
+

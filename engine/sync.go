@@ -122,17 +122,11 @@ func (s *Store) countUnsynced(ctx context.Context, remote string) (int, error) {
 	}
 
 	totalUnsynced := 0
-	localPrefix := fmt.Sprintf("refs/writ/%s/", s.identity.WriterID)
-	remotePrefix := fmt.Sprintf("refs/remotes/%s/writ/%s/", remote, s.identity.WriterID)
-
 	for _, chain := range chains {
-		refName := chain.Ref.Name.String()
-		if len(refName) <= len(localPrefix) || refName[:len(localPrefix)] != localPrefix {
+		if chain.Ref.Remote != "" || chain.Ref.WriterID != s.identity.WriterID {
 			continue
 		}
-		objType := chain.Ref.ObjectType
-		remoteRefName := plumbing.ReferenceName(remotePrefix + objType)
-
+		remoteRefName := dag.RemoteRefName(remote, s.identity.WriterID, chain.Ref.ObjectType)
 		remoteChain, exists := chains[remoteRefName.String()]
 		var remoteTip plumbing.Hash
 		if exists {
@@ -168,7 +162,7 @@ func countCommitsBetween(repo *git.Repository, oldHash, newHash plumbing.Hash) i
 		if err != nil {
 			break
 		}
-		if commit.Author.Name != targetAuthor.Name || commit.Author.Email != targetAuthor.Email {
+		if commit.Author.Email != targetAuthor.Email && commit.Author.Name != targetAuthor.Name {
 			break
 		}
 		count++

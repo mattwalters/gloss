@@ -88,7 +88,13 @@ func (i *Issues) Update(ctx context.Context, id string, edit IssueEdit) error {
 		return fmt.Errorf("writ: at least one of title or description must be provided")
 	}
 
-	_ = i.store.maybeAutoRefresh(ctx)
+	if err := i.store.maybeAutoRefresh(ctx); err != nil {
+		return fmt.Errorf("writ: auto refresh: %w", err)
+	}
+
+	if _, err := i.store.projection.Issue(id); err != nil {
+		return err
+	}
 
 	frontier, err := i.store.projection.Frontier(id)
 	if err != nil {
@@ -136,7 +142,13 @@ func (i *Issues) SetState(ctx context.Context, id string, state IssueState) erro
 		return fmt.Errorf("writ: issue id and state must be non-empty")
 	}
 
-	_ = i.store.maybeAutoRefresh(ctx)
+	if err := i.store.maybeAutoRefresh(ctx); err != nil {
+		return fmt.Errorf("writ: auto refresh: %w", err)
+	}
+
+	if _, err := i.store.projection.Issue(id); err != nil {
+		return err
+	}
 
 	frontier, err := i.store.projection.Frontier(id)
 	if err != nil {
@@ -186,7 +198,13 @@ func (i *Issues) Assign(ctx context.Context, id string, add, remove []string) er
 		return fmt.Errorf("writ: add or remove must be non-empty")
 	}
 
-	_ = i.store.maybeAutoRefresh(ctx)
+	if err := i.store.maybeAutoRefresh(ctx); err != nil {
+		return fmt.Errorf("writ: auto refresh: %w", err)
+	}
+
+	if _, err := i.store.projection.Issue(id); err != nil {
+		return err
+	}
 
 	frontier, err := i.store.projection.Frontier(id)
 	if err != nil {
@@ -237,7 +255,13 @@ func (i *Issues) Label(ctx context.Context, id string, add, remove []string) err
 		return fmt.Errorf("writ: add or remove must be non-empty")
 	}
 
-	_ = i.store.maybeAutoRefresh(ctx)
+	if err := i.store.maybeAutoRefresh(ctx); err != nil {
+		return fmt.Errorf("writ: auto refresh: %w", err)
+	}
+
+	if _, err := i.store.projection.Issue(id); err != nil {
+		return err
+	}
 
 	frontier, err := i.store.projection.Frontier(id)
 	if err != nil {
@@ -285,7 +309,13 @@ func (i *Issues) Link(ctx context.Context, id string, l Link) error {
 		return fmt.Errorf("writ: issue id, target, and relation must be non-empty")
 	}
 
-	_ = i.store.maybeAutoRefresh(ctx)
+	if err := i.store.maybeAutoRefresh(ctx); err != nil {
+		return fmt.Errorf("writ: auto refresh: %w", err)
+	}
+
+	if _, err := i.store.projection.Issue(id); err != nil {
+		return err
+	}
 
 	frontier, err := i.store.projection.Frontier(id)
 	if err != nil {
@@ -336,7 +366,13 @@ func (i *Issues) Comment(ctx context.Context, id string, c NewComment) (string, 
 		return "", fmt.Errorf("writ: comment text cannot be empty")
 	}
 
-	_ = i.store.maybeAutoRefresh(ctx)
+	if err := i.store.maybeAutoRefresh(ctx); err != nil {
+		return "", fmt.Errorf("writ: auto refresh: %w", err)
+	}
+
+	if _, err := i.store.projection.Issue(id); err != nil {
+		return "", err
+	}
 
 	issueFrontier, err := i.store.projection.Frontier(id)
 	if err != nil {
@@ -348,9 +384,13 @@ func (i *Issues) Comment(ctx context.Context, id string, c NewComment) (string, 
 
 	if c.InReplyTo != "" {
 		replyFrontier, err := i.store.projection.Frontier(c.InReplyTo)
-		if err == nil && len(replyFrontier) > 0 {
-			causalParents = append(causalParents, replyFrontier...)
+		if err != nil {
+			return "", fmt.Errorf("writ: get reply frontier: %w", err)
 		}
+		if len(replyFrontier) == 0 {
+			return "", fmt.Errorf("writ: in_reply_to comment %s not found: %w", c.InReplyTo, ErrNotFound)
+		}
+		causalParents = append(causalParents, replyFrontier...)
 	}
 	causalParents = dedupeAndSort(causalParents)
 

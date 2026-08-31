@@ -2,6 +2,7 @@ package writ
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -91,26 +92,44 @@ func Open(path string, opts ...Option) (*Store, error) {
 
 	// Read writer identity (non-fatal if unconfigured)
 	ident, identErr := identity.Load(context.Background(), repoDir)
-	hasIdentity := identErr == nil
-
-	// Determine signer
-	var signer codec.Signer
+	var hasIdentity bool
 	var hasSigner bool
+	var signer codec.Signer
 	var signerErr error
 
-	if cfg.signer != nil {
-		signer = cfg.signer
-		hasSigner = true
-	} else if hasIdentity && ident.Key.Value != "" && ident.Key.Format == "ssh" {
-		s, err := codec.NewSigner(ident.Key)
-		if err == nil {
-			signer = s
+	if identErr == nil {
+		hasIdentity = true
+		if cfg.signer != nil {
+			signer = cfg.signer
 			hasSigner = true
+		} else if ident.Key.Value != "" && ident.Key.Format == "ssh" {
+			s, err := codec.NewSigner(ident.Key)
+			if err == nil {
+				signer = s
+				hasSigner = true
+			} else {
+				signerErr = err
+			}
 		} else {
-			signerErr = err
+			signerErr = ErrNoSigningKey
 		}
 	} else {
-		signerErr = ErrNoSigningKey
+		// Check if error was solely due to signing key / gpg format
+		var cfgErr *identity.ConfigError
+		if errors.As(identErr, &cfgErr) && (cfgErr.Key == "user.signingKey" || cfgErr.Key == "gpg.format") {
+			// Writer ID and user name/email are valid
+			hasIdentity = true
+			if cfg.signer != nil {
+				signer = cfg.signer
+				hasSigner = true
+			} else {
+				signerErr = ErrNoSigningKey
+			}
+		} else {
+			hasIdentity = false
+			identErr = ErrNoIdentity
+			signerErr = ErrNoSigningKey
+		}
 	}
 
 	// Open DAG store
