@@ -127,40 +127,13 @@ func (d *DB) resetSchema() error {
 // DumpTables returns a deterministic dump of all projection tables and their rows.
 // Used primarily for asserting byte-for-byte equality across incremental vs cold builds.
 func (d *DB) DumpTables() (map[string][]map[string]any, error) {
-	tableQueries := map[string]string{
-		"meta":               "SELECT * FROM meta ORDER BY key ASC",
-		"chain_tips":         "SELECT * FROM chain_tips ORDER BY ref_name ASC",
-		"code_tips":          "SELECT * FROM code_tips ORDER BY ref_name ASC",
-		"ops":                "SELECT * FROM ops ORDER BY op_id ASC",
-		"objects":            "SELECT * FROM objects ORDER BY object_id ASC",
-		"unknown_ops":        "SELECT * FROM unknown_ops ORDER BY object_id ASC, op_id ASC",
-		"reviews":            "SELECT * FROM reviews ORDER BY object_id ASC",
-		"review_revisions":   "SELECT * FROM review_revisions ORDER BY review_object_id ASC, revision_index ASC",
-		"approvals":          "SELECT * FROM approvals ORDER BY review_object_id ASC, subject ASC, revision ASC",
-		"ci_statuses":        "SELECT * FROM ci_statuses ORDER BY review_object_id ASC, revision ASC, name ASC",
-		"comments":           "SELECT * FROM comments ORDER BY object_id ASC",
-		"anchor_resolutions": "SELECT * FROM anchor_resolutions ORDER BY comment_object_id ASC, target_commit ASC, side ASC",
-	}
-
-	tables := []string{
-		"meta",
-		"chain_tips",
-		"code_tips",
-		"ops",
-		"objects",
-		"unknown_ops",
-		"reviews",
-		"review_revisions",
-		"approvals",
-		"ci_statuses",
-		"comments",
-		"anchor_resolutions",
-	}
-
 	dump := make(map[string][]map[string]any)
 
-	for _, table := range tables {
-		query := tableQueries[table]
+	for _, table := range projectionTables {
+		query, ok := tableQueries[table]
+		if !ok {
+			return nil, fmt.Errorf("missing query for table %s", table)
+		}
 		rows, err := d.db.Query(query)
 		if err != nil {
 			return nil, fmt.Errorf("query table %s: %w", table, err)

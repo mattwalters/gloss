@@ -203,20 +203,10 @@ func (d *DB) rebuildWithConfig(store *dag.Store, cfg *refreshConfig, targetTips 
 	}()
 
 	// Clear all projection tables
-	tables := []string{
-		"chain_tips",
-		"code_tips",
-		"ops",
-		"objects",
-		"unknown_ops",
-		"reviews",
-		"review_revisions",
-		"approvals",
-		"ci_statuses",
-		"comments",
-		"anchor_resolutions",
-	}
-	for _, t := range tables {
+	for _, t := range projectionTables {
+		if t == "meta" {
+			continue
+		}
 		if _, err := tx.Exec("DELETE FROM " + t); err != nil {
 			return Stats{}, fmt.Errorf("projection: truncate table %s: %w", t, err)
 		}

@@ -1,0 +1,327 @@
+package projection_test
+
+// NOTE: This benchmark currently uses a synthetic corpus at the scale measured in the
+// WRIT-60 spike (5k reviews × 20 comments = 100k comments, 5k issues).
+// Once bridge/github lands and import tooling exists, re-point this benchmark at
+// a real imported repository dataset (see WRIT-31 Plan).
+
+import (
+	"fmt"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/writtendev/writ/engine/projection"
+)
+
+const (
+	benchNumReviews = 5000
+	benchNumComments = 100000
+	benchNumIssues  = 5000
+)
+
+func openBenchDB(tb testing.TB) *projection.DB {
+	tb.Helper()
+	tempDir := tb.TempDir()
+	dbPath := filepath.Join(tempDir, "bench_projection.db")
+	db, err := projection.Open(dbPath)
+	if err != nil {
+		tb.Fatalf("projection.Open: %v", err)
+	}
+
+	seedBenchDB(tb, db)
+	return db
+}
+
+func seedBenchDB(tb testing.TB, db *projection.DB) {
+	tb.Helper()
+	rawDB := db.DB()
+
+	tx, err := rawDB.Begin()
+	if err != nil {
+		tb.Fatalf("begin seed tx: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// 1. Bulk insert reviews and their object rows
+	objStmt, err := tx.Prepare("INSERT INTO objects (object_id, object_type, op_count, last_op_id, author_name, author_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		tb.Fatalf("prepare objects: %v", err)
+	}
+	defer objStmt.Close()
+
+	revStmt, err := tx.Prepare("INSERT INTO reviews (object_id, title, description, status, merge_commit, reason) VALUES (?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		tb.Fatalf("prepare reviews: %v", err)
+	}
+	defer revStmt.Close()
+
+	statuses := []string{"open", "merged", "closed"}
+	authors := []struct{ name, email string }{
+		{"Alice", "alice@example.com"},
+		{"Bob", "bob@example.com"},
+		{"Charlie", "charlie@example.com"},
+	}
+
+	for i := 0; i < benchNumReviews; i++ {
+		revID := fmt.Sprintf("rev-%d", i)
+		author := authors[i%len(authors)]
+		status := statuses[i%len(statuses)]
+		createdAt := int64(1700000000 + i*10)
+
+		if _, err := objStmt.Exec(revID, "review", 1, "op-"+revID, author.name, author.email, createdAt, createdAt); err != nil {
+			tb.Fatalf("insert rev object: %v", err)
+		}
+		if _, err := revStmt.Exec(revID, fmt.Sprintf("Review %d for feature", i), fmt.Sprintf("Description of review %d", i), status, "", ""); err != nil {
+			tb.Fatalf("insert review: %v", err)
+		}
+	}
+
+	// 2. Bulk insert comments
+	commStmt, err := tx.Prepare("INSERT INTO comments (object_id, subject_type, subject_id, text, in_reply_to, anchor, deleted) VALUES (?, ?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		tb.Fatalf("prepare comments: %v", err)
+	}
+	defer commStmt.Close()
+
+	for i := 0; i < benchNumComments; i++ {
+		commID := fmt.Sprintf("comm-%d", i)
+		revID := fmt.Sprintf("rev-%d", i%benchNumReviews)
+		author := authors[i%len(authors)]
+		createdAt := int64(1700000000 + i)
+
+		var inReplyTo string
+		if i%20 > 0 && i > 0 {
+			// Reply to parent comment in same review
+			parentIndex := i - (i % 20)
+			inReplyTo = fmt.Sprintf("comm-%d", parentIndex)
+		}
+
+		if _, err := objStmt.Exec(commID, "comment", 1, "op-"+commID, author.name, author.email, createdAt, createdAt); err != nil {
+			tb.Fatalf("insert comm object: %v", err)
+		}
+		if _, err := commStmt.Exec(commID, "review", revID, fmt.Sprintf("Comment %d content", i), inReplyTo, "", 0); err != nil {
+			tb.Fatalf("insert comment: %v", err)
+		}
+	}
+
+	// 3. Bulk insert issues
+	issStmt, err := tx.Prepare("INSERT INTO issues (object_id, title, description, state, reason) VALUES (?, ?, ?, ?, ?)")
+	if err != nil {
+		tb.Fatalf("prepare issues: %v", err)
+	}
+	defer issStmt.Close()
+
+	asStmt, err := tx.Prepare("INSERT INTO issue_assignees (issue_object_id, assignee) VALUES (?, ?)")
+	if err != nil {
+		tb.Fatalf("prepare assignees: %v", err)
+	}
+	defer asStmt.Close()
+
+	lblStmt, err := tx.Prepare("INSERT INTO issue_labels (issue_object_id, label) VALUES (?, ?)")
+	if err != nil {
+		tb.Fatalf("prepare labels: %v", err)
+	}
+	defer lblStmt.Close()
+
+	issueStates := []string{"open", "in_progress", "closed"}
+	assignees := []string{"alice", "bob", "charlie"}
+	labels := []string{"bug", "feature", "docs"}
+
+	for i := 0; i < benchNumIssues; i++ {
+		issID := fmt.Sprintf("iss-%d", i)
+		author := authors[i%len(authors)]
+		state := issueStates[i%len(issueStates)]
+		createdAt := int64(1700000000 + i*5)
+
+		if _, err := objStmt.Exec(issID, "issue", 1, "op-"+issID, author.name, author.email, createdAt, createdAt); err != nil {
+			tb.Fatalf("insert iss object: %v", err)
+		}
+		if _, err := issStmt.Exec(issID, fmt.Sprintf("Issue %d title", i), fmt.Sprintf("Issue %d description", i), state, ""); err != nil {
+			tb.Fatalf("insert issue: %v", err)
+		}
+
+		if i%4 != 0 {
+			// Assigned
+			assignee := assignees[i%len(assignees)]
+			if _, err := asStmt.Exec(issID, assignee); err != nil {
+				tb.Fatalf("insert assignee: %v", err)
+			}
+		}
+		label := labels[i%len(labels)]
+		if _, err := lblStmt.Exec(issID, label); err != nil {
+			tb.Fatalf("insert label: %v", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		tb.Fatalf("commit seed tx: %v", err)
+	}
+}
+
+func BenchmarkReviewsListWithFilter(b *testing.B) {
+	db := openBenchDB(b)
+	defer db.Close()
+
+	filter := projection.ReviewFilter{
+		Status: []string{"open"},
+		Limit:  50,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		res, err := db.Reviews(filter)
+		if err != nil {
+			b.Fatalf("Reviews: %v", err)
+		}
+		if len(res) != 50 {
+			b.Fatalf("expected 50 reviews, got %d", len(res))
+		}
+	}
+}
+
+func BenchmarkIssuesListWithFilter(b *testing.B) {
+	db := openBenchDB(b)
+	defer db.Close()
+
+	filter := projection.IssueFilter{
+		State:    []string{"open"},
+		Assignee: []string{"alice"},
+		Limit:    50,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		res, err := db.Issues(filter)
+		if err != nil {
+			b.Fatalf("Issues: %v", err)
+		}
+		if len(res) == 0 {
+			b.Fatalf("expected > 0 issues")
+		}
+	}
+}
+
+func BenchmarkGroupIssuesByAssignee(b *testing.B) {
+	db := openBenchDB(b)
+	defer db.Close()
+
+	filter := projection.IssueFilter{
+		State: []string{"open"},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		groups, err := db.GroupIssues(projection.GroupByAssignee, filter)
+		if err != nil {
+			b.Fatalf("GroupIssues: %v", err)
+		}
+		if len(groups) == 0 {
+			b.Fatalf("expected > 0 groups")
+		}
+	}
+}
+
+func BenchmarkThreadsAssembly(b *testing.B) {
+	db := openBenchDB(b)
+	defer db.Close()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		threads, err := db.Threads("review", "rev-42")
+		if err != nil {
+			b.Fatalf("Threads: %v", err)
+		}
+		if len(threads) == 0 {
+			b.Fatalf("expected > 0 threads for rev-42")
+		}
+	}
+}
+
+func TestQueryPerformanceBudget(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping query performance budget test in short mode")
+	}
+
+	budget := 20 * time.Millisecond
+	if isRaceDetector {
+		// modernc pure-Go SQLite interpreter runs ~10x slower under the Go race detector
+		budget = 250 * time.Millisecond
+	}
+
+	db := openBenchDB(t)
+	defer db.Close()
+
+	// 1. Budget for Reviews list with filter: < budget
+	t.Run("ReviewsListFilterBudget", func(t *testing.T) {
+		filter := projection.ReviewFilter{
+			Status: []string{"open"},
+			Limit:  50,
+		}
+		// Warm up query
+		_, _ = db.Reviews(filter)
+
+		start := time.Now()
+		const iterations = 10
+		for i := 0; i < iterations; i++ {
+			res, err := db.Reviews(filter)
+			if err != nil {
+				t.Fatalf("Reviews: %v", err)
+			}
+			if len(res) != 50 {
+				t.Fatalf("expected 50 reviews, got %d", len(res))
+			}
+		}
+		avg := time.Since(start) / iterations
+		if avg > budget {
+			t.Errorf("Reviews list filter query exceeded budget: avg %v (budget %v)", avg, budget)
+		}
+	})
+
+	// 2. Budget for Issues list with filter: < budget
+	t.Run("IssuesListFilterBudget", func(t *testing.T) {
+		filter := projection.IssueFilter{
+			State:    []string{"open"},
+			Assignee: []string{"alice"},
+			Limit:    50,
+		}
+		_, _ = db.Issues(filter)
+
+		start := time.Now()
+		const iterations = 10
+		for i := 0; i < iterations; i++ {
+			res, err := db.Issues(filter)
+			if err != nil {
+				t.Fatalf("Issues: %v", err)
+			}
+			if len(res) == 0 {
+				t.Fatalf("expected > 0 issues")
+			}
+		}
+		avg := time.Since(start) / iterations
+		if avg > budget {
+			t.Errorf("Issues list filter query exceeded budget: avg %v (budget %v)", avg, budget)
+		}
+	})
+
+	// 3. Budget for Threads assembly: < budget
+	t.Run("ThreadsAssemblyBudget", func(t *testing.T) {
+		_, _ = db.Threads("review", "rev-42")
+
+		start := time.Now()
+		const iterations = 10
+		for i := 0; i < iterations; i++ {
+			threads, err := db.Threads("review", "rev-42")
+			if err != nil {
+				t.Fatalf("Threads: %v", err)
+			}
+			if len(threads) == 0 {
+				t.Fatalf("expected > 0 threads")
+			}
+		}
+		avg := time.Since(start) / iterations
+		if avg > budget {
+			t.Errorf("Threads assembly query exceeded budget: avg %v (budget %v)", avg, budget)
+		}
+	})
+}
