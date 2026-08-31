@@ -47,7 +47,7 @@ Planned monorepo layout (see `ARCHITECTURE.md` for the rationale):
 
 ```
 /spec          — convention doc, JSON schemas, conformance fixtures
-/engine        — codec, dag, fold, projection, sync
+/engine        — codec, dag, fold, resolve, projection, sync
 /cmd/writ      — CLI: porcelain for humans, --json for scripts/agents
 /tui           — Bubble Tea client
 /bridge/github — bidirectional PR/comment ⇄ ops sync
