@@ -84,6 +84,18 @@ func TestOrderingVectors(t *testing.T) {
 	}
 }
 
+func TestTotalOrderCycleRejection(t *testing.T) {
+	cyclicOps := []spec.OrderOp{
+		{ID: "op-a", Parents: []string{"op-b"}, Time: 100, ObjectID: "obj-1"},
+		{ID: "op-b", Parents: []string{"op-a"}, Time: 200, ObjectID: "obj-1"},
+	}
+
+	_, err := spec.TotalOrder(cyclicOps, "obj-1")
+	if err == nil {
+		t.Fatal("expected cycle error from TotalOrder on cyclic graph, got nil")
+	}
+}
+
 func TestMergeVectorsLoad(t *testing.T) {
 	vectors, err := spec.MergeVectors()
 	if err != nil {

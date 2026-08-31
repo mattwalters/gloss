@@ -15,40 +15,60 @@ func EffectiveTimes(ops []OrderOp, objectID string) map[string]int64 {
 			inSet[op.ID] = true
 		}
 	}
-	return EffectiveTimesInSet(ops, inSet)
+	tStar, _ := EffectiveTimesInSet(ops, inSet)
+	return tStar
 }
 
 // EffectiveTimesInSet computes effective timestamps for ops within an explicit inSet.
-func EffectiveTimesInSet(ops []OrderOp, inSet map[string]bool) map[string]int64 {
+// Returns an error if a directed cycle is detected within the restricted DAG.
+func EffectiveTimesInSet(ops []OrderOp, inSet map[string]bool) (map[string]int64, error) {
 	tStar := make(map[string]int64, len(inSet))
 	opMap := make(map[string]OrderOp, len(ops))
 	for _, op := range ops {
 		opMap[op.ID] = op
 	}
 
-	var getTStar func(id string) int64
-	getTStar = func(id string) int64 {
+	state := make(map[string]int, len(inSet)) // 0: unvisited, 1: visiting, 2: visited
+
+	var getTStar func(id string) (int64, error)
+	getTStar = func(id string) (int64, error) {
 		if t, ok := tStar[id]; ok {
-			return t
+			return t, nil
 		}
+		if state[id] == 1 {
+			return 0, fmt.Errorf("cycle detected involving op %q", id)
+		}
+		if state[id] == 2 {
+			return tStar[id], nil
+		}
+
+		state[id] = 1
 		op := opMap[id]
 		res := op.Time
 		for _, p := range op.Parents {
 			if inSet[p] {
-				pt := getTStar(p)
+				pt, err := getTStar(p)
+				if err != nil {
+					return 0, err
+				}
 				if pt > res {
 					res = pt
 				}
 			}
 		}
+		state[id] = 2
 		tStar[id] = res
-		return res
+		return res, nil
 	}
 
 	for id := range inSet {
-		getTStar(id)
+		if state[id] == 0 {
+			if _, err := getTStar(id); err != nil {
+				return nil, err
+			}
+		}
 	}
-	return tStar
+	return tStar, nil
 }
 
 // TotalOrder produces the deterministic total order sequence L of ops for target objectID
@@ -66,7 +86,10 @@ func TotalOrder(ops []OrderOp, objectID string) ([]string, error) {
 		return nil, nil
 	}
 
-	tStar := EffectiveTimesInSet(ops, inSet)
+	tStar, err := EffectiveTimesInSet(ops, inSet)
+	if err != nil {
+		return nil, fmt.Errorf("computing effective timestamps: %w", err)
+	}
 
 	inDegree := make(map[string]int, len(inSet))
 	children := make(map[string][]string, len(inSet))
