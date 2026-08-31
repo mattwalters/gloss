@@ -2,12 +2,15 @@ package writ
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/writtendev/writ/engine/dag"
+	"github.com/writtendev/writ/engine/identity"
+	writsync "github.com/writtendev/writ/engine/sync"
 )
 
 // SyncResult reports aggregate statistics from a sync operation.
@@ -25,6 +28,12 @@ type SyncResult struct {
 	Unsynced int `json:"unsynced"`
 }
 
+// TypeUnsynced reports the unsynced operations count for a specific collaborative object type.
+type TypeUnsynced struct {
+	ObjectType string `json:"object_type"`
+	Unsynced   int    `json:"unsynced"`
+}
+
 // SyncStatus reports the synchronization status against a git remote.
 type SyncStatus struct {
 	// Remote is the name of the git remote (e.g. "origin").
@@ -33,12 +42,45 @@ type SyncStatus struct {
 	// Unsynced is the number of local op commits not yet pushed to the remote.
 	Unsynced int `json:"unsynced"`
 
+	// ByType breaks down unsynced ops by collaborative object type.
+	ByType []TypeUnsynced `json:"by_type,omitempty"`
+
+	// Diverged indicates that the remote chain tip is not an ancestor of the local chain tip.
+	Diverged bool `json:"diverged,omitempty"`
+
 	// LastSyncedAt is the timestamp of the last successful sync against this remote, if any.
 	LastSyncedAt *time.Time `json:"last_synced_at,omitempty"`
 }
 
+// SyncError represents a structured failure during synchronization with a git remote.
+type SyncError struct {
+	Remote    string
+	Kind      string
+	Message   string
+	Advice    string
+	Retryable bool
+	Unsynced  int
+	Err       error
+}
+
+// Error returns the formatted sync error description.
+func (e *SyncError) Error() string {
+	if e.Advice != "" {
+		return fmt.Sprintf("sync %s: %s: %s (%s)", e.Remote, e.Kind, e.Message, e.Advice)
+	}
+	return fmt.Sprintf("sync %s: %s: %s", e.Remote, e.Kind, e.Message)
+}
+
+// Unwrap returns the underlying classified error sentinel (such as ErrAuth, ErrNetwork, ErrRefRejected, ErrNonFastForward, or ErrUnknownRemote).
+func (e *SyncError) Unwrap() error {
+	return e.Err
+}
+
 // Sync ensures fetch refspecs in .git/config, fetches remote operations, pushes local operations,
 // and refreshes the projection cache.
+//
+// On transport failure, Sync still refreshes the projection cache and returns the remaining
+// unsynced count wrapped in a *SyncError.
 func (s *Store) Sync(ctx context.Context, remote string) (SyncResult, error) {
 	if s == nil {
 		return SyncResult{}, fmt.Errorf("writ: store is nil")
@@ -47,63 +89,134 @@ func (s *Store) Sync(ctx context.Context, remote string) (SyncResult, error) {
 		return SyncResult{}, fmt.Errorf("writ: remote cannot be empty")
 	}
 
+	var syncErr error
+
 	// 1. Ensure fetch refspec
 	if _, err := s.syncClient.Ensure(ctx, remote); err != nil {
-		return SyncResult{}, fmt.Errorf("writ: ensure refspecs for %s: %w", remote, err)
+		syncErr = fmt.Errorf("ensure refspecs: %w", err)
 	}
 
 	// 2. Fetch remote operations
-	fetchRes, err := s.syncClient.Fetch(ctx, remote)
-	if err != nil {
-		return SyncResult{}, fmt.Errorf("writ: fetch %s: %w", remote, err)
+	var fetchRes *writsync.FetchResult
+	var stopTipsBeforeFetch []plumbing.Hash
+	chainsBefore, _ := dag.Chains(s.repo.Storer)
+	for _, c := range chainsBefore {
+		if c.Tip != plumbing.ZeroHash {
+			stopTipsBeforeFetch = append(stopTipsBeforeFetch, c.Tip)
+		}
+	}
+
+	if syncErr == nil {
+		var err error
+		fetchRes, err = s.syncClient.Fetch(ctx, remote)
+		if err != nil {
+			syncErr = err
+		}
 	}
 
 	opsFetched := 0
-	for _, u := range fetchRes.Updates {
-		opsFetched += countCommitsBetween(s.repo, u.Old, u.New)
+	if fetchRes != nil {
+		opsFetched = writsync.CountChainUpdates(s.repo, fetchRes.Updates, stopTipsBeforeFetch)
 	}
 
 	// 3. Push local operations if identity is configured
 	opsPushed := 0
-	if s.hasIdentity && s.identity.WriterID != "" {
-		pushRes, err := s.syncClient.Push(ctx, remote)
-		if err != nil {
-			return SyncResult{}, fmt.Errorf("writ: push %s: %w", remote, err)
+	var pushRes *writsync.PushResult
+	if syncErr == nil && s.hasIdentity && s.identity.WriterID != "" {
+		var stopTipsBeforePush []plumbing.Hash
+		chainsBeforePush, err := dag.Chains(s.repo.Storer)
+		if err == nil {
+			for _, c := range chainsBeforePush {
+				if c.Ref.Remote == remote && c.Tip != plumbing.ZeroHash {
+					stopTipsBeforePush = append(stopTipsBeforePush, c.Tip)
+				}
+			}
 		}
-		for _, u := range pushRes.Updates {
-			opsPushed += countCommitsBetween(s.repo, u.Old, u.New)
+		var pushErr error
+		pushRes, pushErr = s.syncClient.Push(ctx, remote)
+		if pushErr != nil {
+			syncErr = pushErr
+		}
+		if pushRes != nil {
+			opsPushed = writsync.CountChainUpdates(s.repo, pushRes.Updates, stopTipsBeforePush)
 		}
 	}
 
-	// 4. Refresh projection
-	refreshStats, err := s.Refresh(ctx)
-	if err != nil {
-		return SyncResult{}, fmt.Errorf("writ: refresh after sync: %w", err)
-	}
+	// 4. Refresh projection (runs even if transport errored)
+	refreshStats, refreshErr := s.Refresh(ctx)
 
-	// Record sync cursors in local DB
-	now := time.Now().UTC()
-	chains, err := dag.Chains(s.repo.Storer)
-	if err == nil {
-		for refName, chain := range chains {
-			if chain.Ref.Remote == remote || (chain.Ref.Remote == "" && s.hasIdentity && chain.Ref.WriterID == s.identity.WriterID) {
-				_ = s.projection.SetSyncCursor(remote, refName, chain.Tip.String(), now)
+	// Record sync cursors in local DB if sync succeeded
+	if syncErr == nil {
+		now := time.Now().UTC()
+		chains, err := dag.Chains(s.repo.Storer)
+		if err == nil {
+			for refName, chain := range chains {
+				if chain.Ref.Remote == remote || (chain.Ref.Remote == "" && s.hasIdentity && chain.Ref.WriterID == s.identity.WriterID) {
+					_ = s.projection.SetSyncCursor(remote, refName, chain.Tip.String(), now)
+				}
 			}
 		}
 	}
 
 	// 5. Compute remaining unsynced count
-	unsynced, err := s.countUnsynced(ctx, remote)
-	if err != nil {
-		return SyncResult{}, fmt.Errorf("writ: count unsynced: %w", err)
+	unsynced, _ := s.countUnsynced(ctx, remote)
+
+	objectsTouched := 0
+	if refreshErr == nil {
+		objectsTouched = refreshStats.ObjectsTouched
 	}
 
-	return SyncResult{
+	result := SyncResult{
 		OpsFetched:     opsFetched,
 		OpsPushed:      opsPushed,
-		ObjectsTouched: refreshStats.ObjectsTouched,
+		ObjectsTouched: objectsTouched,
 		Unsynced:       unsynced,
-	}, nil
+	}
+
+	if syncErr != nil {
+		return result, s.wrapSyncError(remote, syncErr, unsynced)
+	}
+
+	if refreshErr != nil {
+		return result, fmt.Errorf("writ: refresh after sync: %w", refreshErr)
+	}
+
+	return result, nil
+}
+
+func (s *Store) wrapSyncError(remote string, err error, unsynced int) error {
+	if err == nil {
+		return nil
+	}
+	var gitErr *writsync.GitError
+	if errors.As(err, &gitErr) {
+		msg := gitErr.Stderr
+		if msg == "" && gitErr.Err != nil {
+			msg = gitErr.Err.Error()
+		}
+		if msg == "" {
+			msg = "git transport failed"
+		}
+		return &SyncError{
+			Remote:    remote,
+			Kind:      string(gitErr.Kind),
+			Message:   msg,
+			Advice:    gitErr.Advice,
+			Retryable: gitErr.Retryable(),
+			Unsynced:  unsynced,
+			Err:       gitErr.Err,
+		}
+	}
+
+	return &SyncError{
+		Remote:    remote,
+		Kind:      string(writsync.FailureKindUnknown),
+		Message:   err.Error(),
+		Advice:    "",
+		Retryable: false,
+		Unsynced:  unsynced,
+		Err:       err,
+	}
 }
 
 // SyncStatus reports the number of local operations not yet pushed to the remote.
@@ -115,7 +228,12 @@ func (s *Store) SyncStatus(ctx context.Context, remote string) (SyncStatus, erro
 		return SyncStatus{}, fmt.Errorf("writ: remote cannot be empty")
 	}
 
-	unsynced, err := s.countUnsynced(ctx, remote)
+	var writerID identity.WriterID
+	if s.hasIdentity {
+		writerID = s.identity.WriterID
+	}
+
+	status, err := writsync.ComputeStatus(s.repo, writerID, remote)
 	if err != nil {
 		return SyncStatus{}, err
 	}
@@ -134,9 +252,22 @@ func (s *Store) SyncStatus(ctx context.Context, remote string) (SyncStatus, erro
 		}
 	}
 
+	var byType []TypeUnsynced
+	if len(status.ByType) > 0 {
+		byType = make([]TypeUnsynced, len(status.ByType))
+		for i, bt := range status.ByType {
+			byType[i] = TypeUnsynced{
+				ObjectType: bt.ObjectType,
+				Unsynced:   bt.Unsynced,
+			}
+		}
+	}
+
 	return SyncStatus{
 		Remote:       remote,
-		Unsynced:     unsynced,
+		Unsynced:     status.Unsynced,
+		ByType:       byType,
+		Diverged:     status.Diverged,
 		LastSyncedAt: lastSyncedAt,
 	}, nil
 }
@@ -146,64 +277,15 @@ func (s *Store) countUnsynced(ctx context.Context, remote string) (int, error) {
 		return 0, nil
 	}
 
-	chains, err := dag.Chains(s.repo.Storer)
+	status, err := writsync.ComputeStatus(s.repo, s.identity.WriterID, remote)
 	if err != nil {
-		return 0, fmt.Errorf("writ: list chains: %w", err)
+		return 0, err
 	}
 
-	totalUnsynced := 0
-	for _, chain := range chains {
-		if chain.Ref.Remote != "" || chain.Ref.WriterID != s.identity.WriterID {
-			continue
-		}
-		remoteRefName := dag.RemoteRefName(remote, s.identity.WriterID, chain.Ref.ObjectType)
-		remoteChain, exists := chains[remoteRefName.String()]
-		var remoteTip plumbing.Hash
-		if exists {
-			remoteTip = remoteChain.Tip
-		}
-
-		totalUnsynced += countCommitsBetween(s.repo, remoteTip, chain.Tip)
-	}
-
-	return totalUnsynced, nil
+	return status.Unsynced, nil
 }
 
 func countCommitsBetween(repo *git.Repository, oldHash, newHash plumbing.Hash) int {
-	if newHash == plumbing.ZeroHash || repo == nil {
-		return 0
-	}
-	if oldHash == newHash {
-		return 0
-	}
-
-	startCommit, err := repo.CommitObject(newHash)
-	if err != nil {
-		return 0
-	}
-	targetAuthor := startCommit.Author
-
-	count := 0
-	curr := newHash
-	visited := make(map[plumbing.Hash]bool)
-	for curr != plumbing.ZeroHash && curr != oldHash && !visited[curr] {
-		visited[curr] = true
-		commit, err := repo.CommitObject(curr)
-		if err != nil {
-			break
-		}
-		// Stop if we reach a causal parent authored by a different identity.
-		// On a writer's initial chain commit, ParentHashes[0] points to a causal
-		// parent from another writer; stopping at the foreign author boundary prevents
-		// crossing over into other chains when oldHash is ZeroHash.
-		if commit.Author.Email != targetAuthor.Email && commit.Author.Name != targetAuthor.Name {
-			break
-		}
-		count++
-		if len(commit.ParentHashes) == 0 {
-			break
-		}
-		curr = commit.ParentHashes[0]
-	}
-	return count
+	return writsync.CountCommitsBetween(repo, oldHash, newHash)
 }
+

@@ -47,6 +47,8 @@ Exit codes:
   3  Unknown or unconfigured remote
   4  Rejected non-fast-forward update
   5  Not a git repository / store cannot be opened
+  6  Authentication or credentials failure
+  7  Network or remote unreachable
 `)
 	}
 
@@ -108,9 +110,14 @@ Exit codes:
 		if statusMode {
 			status, err := store.SyncStatus(ctx, remote)
 			if err != nil {
-				fmt.Fprintf(stderr, "writ sync: %s: %v\n", remote, err)
+				code := exitCodeFor(err)
 				if firstExitCode == 0 {
-					firstExitCode = exitCodeFor(err)
+					firstExitCode = code
+				}
+				if jsonMode {
+					syncStatuses = append(syncStatuses, wire.FromSyncStatusFailure(remote, err, status.Unsynced))
+				} else {
+					printSyncError(stderr, remote, err)
 				}
 				continue
 			}
@@ -122,9 +129,14 @@ Exit codes:
 		} else {
 			res, err := store.Sync(ctx, remote)
 			if err != nil {
-				fmt.Fprintf(stderr, "writ sync: %s: %v\n", remote, err)
+				code := exitCodeFor(err)
 				if firstExitCode == 0 {
-					firstExitCode = exitCodeFor(err)
+					firstExitCode = code
+				}
+				if jsonMode {
+					syncResults = append(syncResults, wire.FromSyncResultFailure(remote, res, err))
+				} else {
+					printSyncError(stderr, remote, err)
 				}
 				continue
 			}
@@ -136,7 +148,7 @@ Exit codes:
 		}
 	}
 
-	if jsonMode && firstExitCode == 0 {
+	if jsonMode {
 		if statusMode {
 			if syncStatuses == nil {
 				syncStatuses = []wire.SyncStatus{}
@@ -181,12 +193,53 @@ func exitCodeFor(err error) int {
 	if err == nil {
 		return 0
 	}
+	if errors.Is(err, writ.ErrAuth) || errors.Is(err, sync.ErrAuth) {
+		return 6
+	}
+	if errors.Is(err, writ.ErrNetwork) || errors.Is(err, sync.ErrNetwork) {
+		return 7
+	}
 	if errors.Is(err, writ.ErrUnknownRemote) || errors.Is(err, sync.ErrUnknownRemote) {
 		return 3
 	}
 	if errors.Is(err, writ.ErrNonFastForward) || errors.Is(err, sync.ErrNonFastForward) {
 		return 4
 	}
+
+	var syncErr *writ.SyncError
+	if errors.As(err, &syncErr) {
+		switch syncErr.Kind {
+		case string(sync.FailureKindAuth):
+			return 6
+		case string(sync.FailureKindNetwork):
+			return 7
+		case string(sync.FailureKindNotFound):
+			return 3
+		case string(sync.FailureKindRejected):
+			if errors.Is(syncErr.Err, writ.ErrNonFastForward) || errors.Is(syncErr.Err, sync.ErrNonFastForward) {
+				return 4
+			}
+			return 1
+		}
+	}
+
+	var gitErr *sync.GitError
+	if errors.As(err, &gitErr) {
+		switch gitErr.Kind {
+		case sync.FailureKindAuth:
+			return 6
+		case sync.FailureKindNetwork:
+			return 7
+		case sync.FailureKindNotFound:
+			return 3
+		case sync.FailureKindRejected:
+			if errors.Is(gitErr.Err, writ.ErrNonFastForward) || errors.Is(gitErr.Err, sync.ErrNonFastForward) {
+				return 4
+			}
+			return 1
+		}
+	}
+
 	if strings.Contains(err.Error(), "not a git repository") ||
 		strings.Contains(err.Error(), "stat path") ||
 		strings.Contains(err.Error(), "resolve absolute path") ||
@@ -199,6 +252,35 @@ func exitCodeFor(err error) int {
 		return 5
 	}
 	return 1
+}
+
+func printSyncError(stderr io.Writer, remote string, err error) {
+	var syncErr *writ.SyncError
+	if errors.As(err, &syncErr) {
+		fmt.Fprintf(stderr, "writ sync: %s: %s: %s\n", remote, syncErr.Kind, syncErr.Message)
+		if syncErr.Advice != "" {
+			fmt.Fprintf(stderr, "  advice: %s\n", syncErr.Advice)
+		}
+		if syncErr.Unsynced > 0 {
+			fmt.Fprintf(stderr, "  %d %s unsynced\n", syncErr.Unsynced, plural(syncErr.Unsynced, "op", "ops"))
+		}
+		return
+	}
+
+	var gitErr *sync.GitError
+	if errors.As(err, &gitErr) {
+		msg := gitErr.Stderr
+		if msg == "" && gitErr.Err != nil {
+			msg = gitErr.Err.Error()
+		}
+		fmt.Fprintf(stderr, "writ sync: %s: %s: %s\n", remote, gitErr.Kind, msg)
+		if gitErr.Advice != "" {
+			fmt.Fprintf(stderr, "  advice: %s\n", gitErr.Advice)
+		}
+		return
+	}
+
+	fmt.Fprintf(stderr, "writ sync: %s: %v\n", remote, err)
 }
 
 func plural(n int, singular, pluralStr string) string {
@@ -239,3 +321,4 @@ func formatSyncStatus(remote string, status writ.SyncStatus) string {
 	}
 	return fmt.Sprintf("%s: %d %s unsynced", remote, status.Unsynced, plural(status.Unsynced, "op", "ops"))
 }
+

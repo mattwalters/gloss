@@ -275,16 +275,24 @@ func TestSync_ExitCodeClassification(t *testing.T) {
 			wantCode int
 		}{
 			{name: "nil", err: nil, wantCode: 0},
+			{name: "writ.ErrAuth", err: writ.ErrAuth, wantCode: 6},
+			{name: "sync.ErrAuth", err: sync.ErrAuth, wantCode: 6},
+			{name: "writ.SyncError auth", err: &writ.SyncError{Kind: "auth", Err: writ.ErrAuth}, wantCode: 6},
+			{name: "sync.GitError auth", err: &sync.GitError{Kind: sync.FailureKindAuth, Err: sync.ErrAuth}, wantCode: 6},
+			{name: "writ.ErrNetwork", err: writ.ErrNetwork, wantCode: 7},
+			{name: "sync.ErrNetwork", err: sync.ErrNetwork, wantCode: 7},
+			{name: "writ.SyncError network", err: &writ.SyncError{Kind: "network", Err: writ.ErrNetwork}, wantCode: 7},
+			{name: "sync.GitError network", err: &sync.GitError{Kind: sync.FailureKindNetwork, Err: sync.ErrNetwork}, wantCode: 7},
 			{name: "writ.ErrUnknownRemote", err: writ.ErrUnknownRemote, wantCode: 3},
 			{name: "sync.ErrUnknownRemote", err: sync.ErrUnknownRemote, wantCode: 3},
 			{name: "wrapped UnknownRemote", err: fmt.Errorf("fetch failed: %w", writ.ErrUnknownRemote), wantCode: 3},
-			{name: "git error UnknownRemote", err: &sync.GitError{Err: sync.ErrUnknownRemote}, wantCode: 3},
+			{name: "git error UnknownRemote", err: &sync.GitError{Err: sync.ErrUnknownRemote, Kind: sync.FailureKindNotFound}, wantCode: 3},
 			{name: "writ.ErrNonFastForward", err: writ.ErrNonFastForward, wantCode: 4},
 			{name: "sync.ErrNonFastForward", err: sync.ErrNonFastForward, wantCode: 4},
 			{name: "wrapped NonFastForward", err: fmt.Errorf("push failed: %w", writ.ErrNonFastForward), wantCode: 4},
-			{name: "git error NonFastForward", err: &sync.GitError{Err: sync.ErrNonFastForward}, wantCode: 4},
-			{name: "git error generic", err: &sync.GitError{Err: errors.New("exec error"), Stderr: "fatal: authentication failed"}, wantCode: 1},
-			{name: "generic transport error", err: errors.New("network timeout"), wantCode: 1},
+			{name: "git error NonFastForward", err: &sync.GitError{Err: sync.ErrNonFastForward, Kind: sync.FailureKindRejected}, wantCode: 4},
+			{name: "git error generic", err: &sync.GitError{Err: errors.New("exec error"), Kind: sync.FailureKindUnknown}, wantCode: 1},
+			{name: "generic transport error", err: errors.New("something went wrong"), wantCode: 1},
 			{name: "not a git repo", err: errors.New("writ: not a git repository (or any parent up to mount point): /tmp/dir"), wantCode: 5},
 			{name: "stat path error", err: errors.New("writ: stat path \"/nonexistent/path\": no such file or directory"), wantCode: 5},
 			{name: "git.ErrRepositoryNotExists", err: git.ErrRepositoryNotExists, wantCode: 5},
@@ -297,6 +305,48 @@ func TestSync_ExitCodeClassification(t *testing.T) {
 					t.Errorf("exitCodeFor(%v) = %d, want %d", tc.err, got, tc.wantCode)
 				}
 			})
+		}
+	})
+
+	t.Run("e2e_auth_failure", func(t *testing.T) {
+		_, aliceDir, _ := setupSyncTestHarness(t)
+		// Create an SSH wrapper script that outputs publickey denial
+		shimDir := t.TempDir()
+		shimPath := filepath.Join(shimDir, "fake_ssh")
+		shimScript := "#!/bin/sh\necho \"git@github.com: Permission denied (publickey).\" >&2\nexit 255\n"
+		if err := os.WriteFile(shimPath, []byte(shimScript), 0755); err != nil {
+			t.Fatalf("write ssh shim: %v", err)
+		}
+		t.Setenv("GIT_SSH_COMMAND", shimPath)
+
+		// Point remote to an SSH URL
+		addRemote(t, aliceDir, "sshremote", "git@github.com:example/repo.git")
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{"-C", aliceDir, "sync", "sshremote"}, &stdout, &stderr)
+		if code != 6 {
+			t.Errorf("sync with auth failure exit code = %d (want 6); stderr: %s", code, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "auth") {
+			t.Errorf("stderr does not mention auth kind: %s", stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "advice:") {
+			t.Errorf("stderr does not include advice: %s", stderr.String())
+		}
+	})
+
+	t.Run("e2e_network_failure", func(t *testing.T) {
+		_, aliceDir, _ := setupSyncTestHarness(t)
+		// Add an unroutable HTTP remote
+		addRemote(t, aliceDir, "netremote", "http://127.0.0.1:9999/unreachable.git")
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{"-C", aliceDir, "sync", "netremote"}, &stdout, &stderr)
+		if code != 7 {
+			t.Errorf("sync with network failure exit code = %d (want 7); stderr: %s", code, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "network") {
+			t.Errorf("stderr does not mention network kind: %s", stderr.String())
 		}
 	})
 
@@ -434,6 +484,41 @@ func TestSync_JSONOutput(t *testing.T) {
 	r := envSync.Data[0]
 	if r.Remote != "origin" || r.OpsPushed != 1 || r.Unsynced != 0 {
 		t.Errorf("sync json remote = %+v, want {Remote: origin, OpsPushed: 1, Unsynced: 0}", r)
+	}
+
+	// 3. Multi-remote partial failure with --json
+	addRemote(t, aliceDir, "badremote", "http://127.0.0.1:9999/unreachable.git")
+	var stdoutMulti, stderrMulti bytes.Buffer
+	codeMulti := run(ctx, []string{"-C", aliceDir, "sync", "--json", "origin", "badremote"}, &stdoutMulti, &stderrMulti)
+	if codeMulti != 7 {
+		t.Fatalf("sync multi-remote exited with %d (want 7); stderr: %s", codeMulti, stderrMulti.String())
+	}
+	type multiEnvelope struct {
+		SchemaVersion int `json:"schema_version"`
+		Kind          string `json:"kind"`
+		Data          []struct {
+			Remote   string `json:"remote"`
+			Unsynced int    `json:"unsynced"`
+			Failure  *struct {
+				Kind      string `json:"kind"`
+				Message   string `json:"message"`
+				Advice    string `json:"advice"`
+				Retryable bool   `json:"retryable"`
+			} `json:"failure,omitempty"`
+		} `json:"data"`
+	}
+	var envMulti multiEnvelope
+	if err := json.Unmarshal(stdoutMulti.Bytes(), &envMulti); err != nil {
+		t.Fatalf("unmarshal multi-remote sync --json: %v (raw: %s)", err, stdoutMulti.String())
+	}
+	if len(envMulti.Data) != 2 {
+		t.Fatalf("expected 2 remotes in data, got %d", len(envMulti.Data))
+	}
+	if envMulti.Data[0].Remote != "origin" || envMulti.Data[0].Failure != nil {
+		t.Errorf("expected origin to have no failure, got %+v", envMulti.Data[0])
+	}
+	if envMulti.Data[1].Remote != "badremote" || envMulti.Data[1].Failure == nil || envMulti.Data[1].Failure.Kind != "network" {
+		t.Errorf("expected badremote to have network failure, got %+v", envMulti.Data[1])
 	}
 }
 
