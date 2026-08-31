@@ -1,0 +1,83 @@
+{
+  "future-op-version.json": {
+    "disposition": "opaque",
+    "rules": [
+      "FC-1",
+      "FC-7",
+      "FC-10"
+    ],
+    "reason": "op_version 2 for review/create exceeds the reader profile version 1"
+  },
+  "future-version-bump.json": {
+    "disposition": "opaque",
+    "rules": [
+      "FC-7",
+      "FC-10"
+    ],
+    "reason": "comment/post op_version 3 is beyond reader profile supported versions [1, 2]"
+  },
+  "interpretable-control.json": {
+    "disposition": "interpretable",
+    "rules": [
+      "FC-4",
+      "FC-5",
+      "FC-8",
+      "FC-9",
+      "FC-13"
+    ],
+    "reason": "standard valid op matching reader profile folds normally without opaque marking"
+  },
+  "multi-version-known-v2.json": {
+    "disposition": "interpretable",
+    "rules": [
+      "FC-8",
+      "FC-9"
+    ],
+    "reason": "comment/post op_version 2 is implemented in reader profile and folds normally"
+  },
+  "nested-unknown-body-structure.json": {
+    "disposition": "interpretable",
+    "rules": [
+      "FC-3",
+      "FC-11"
+    ],
+    "reason": "nested unknown structures inside body are preserved and ignored; op remains interpretable"
+  },
+  "unknown-body-field.json": {
+    "disposition": "interpretable",
+    "rules": [
+      "FC-3",
+      "FC-6",
+      "FC-11"
+    ],
+    "reason": "unknown field 'reviewer_draft_note' inside body is ignored; op remains interpretable"
+  },
+  "unknown-object-type.json": {
+    "disposition": "opaque",
+    "rules": [
+      "FC-1",
+      "FC-12",
+      "FC-14",
+      "FC-15"
+    ],
+    "reason": "object_type 'telemetry' is not known to the reader profile"
+  },
+  "unknown-op-type.json": {
+    "disposition": "opaque",
+    "rules": [
+      "FC-1",
+      "FC-12",
+      "FC-15"
+    ],
+    "reason": "op_type 'archive' under known object_type 'review' is not in reader profile"
+  },
+  "unknown-top-level-field.json": {
+    "disposition": "interpretable",
+    "rules": [
+      "FC-2",
+      "FC-6",
+      "FC-11"
+    ],
+    "reason": "unknown top-level field 'client_info' is ignored; known envelope fields are interpretable"
+  }
+}

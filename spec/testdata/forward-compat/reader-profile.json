@@ -1,0 +1,20 @@
+{
+  "profile": "synthetic-conforming-reader-v1",
+  "known_ops": [
+    {
+      "object_type": "review",
+      "op_type": "create",
+      "versions": [1]
+    },
+    {
+      "object_type": "review",
+      "op_type": "close",
+      "versions": [1]
+    },
+    {
+      "object_type": "comment",
+      "op_type": "post",
+      "versions": [1, 2]
+    }
+  ]
+}

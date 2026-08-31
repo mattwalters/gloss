@@ -230,7 +230,8 @@ interior context row).
 
 ## Versioning and evolution
 
-`version` is the format's evolution seam, and it leads the object:
+`version` is the format's evolution seam, and it leads the object (general
+versioning and forward-compatibility rules: `spec/forward-compatibility.md`):
 
 - Additive change — new optional fields — does **not** bump `version`.
   Unknown-field tolerance already carries it: old readers preserve and
