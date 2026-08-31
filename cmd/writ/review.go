@@ -632,20 +632,9 @@ Flags:
 
 	var orderBy writ.OrderBy
 	if sortOrder != "" {
-		switch sortOrder {
-		case "created_at_asc", "created-asc", "created_asc", "created":
-			orderBy = writ.OrderByCreatedAtAsc
-		case "created_at_desc", "created-desc", "created_desc":
-			orderBy = writ.OrderByCreatedAtDesc
-		case "updated_at_asc", "updated-asc", "updated_asc":
-			orderBy = writ.OrderByUpdatedAtAsc
-		case "updated_at_desc", "updated-desc", "updated_desc", "updated":
-			orderBy = writ.OrderByUpdatedAtDesc
-		case "title_asc", "title-asc", "title":
-			orderBy = writ.OrderByTitleAsc
-		case "title_desc", "title-desc":
-			orderBy = writ.OrderByTitleDesc
-		default:
+		var err error
+		orderBy, err = parseOrderBy(sortOrder)
+		if err != nil {
 			fmt.Fprintf(stderr, "writ review list: invalid sort order %q\n", sortOrder)
 			fs.Usage()
 			return 2

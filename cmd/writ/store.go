@@ -10,14 +10,20 @@ import (
 
 	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/identity"
+	"github.com/writtendev/writ/engine/state"
 )
 
 type notFoundError struct {
-	id string
+	kind string
+	id   string
 }
 
 func (e notFoundError) Error() string {
-	return fmt.Sprintf("no review with id %s", e.id)
+	kind := e.kind
+	if kind == "" {
+		kind = "review"
+	}
+	return fmt.Sprintf("no %s with id %s", kind, e.id)
 }
 
 func (e notFoundError) Unwrap() error {
@@ -86,13 +92,115 @@ func resolveReviewID(ctx context.Context, store *writ.Store, prefix string) (str
 	}
 
 	if len(matches) == 0 {
-		return "", notFoundError{id: prefix}
+		return "", notFoundError{kind: "review", id: prefix}
 	}
 	if len(matches) > 1 {
 		return "", fmt.Errorf("ambiguous review ID prefix %q matches %d reviews (%s)", prefix, len(matches), strings.Join(matches, ", "))
 	}
 
 	return matches[0], nil
+}
+
+func resolveIssueRef(ctx context.Context, store *writ.Store, ref string) (scope string, slug string, objectID string, err error) {
+	des, objID, err := state.ParseReference(ref)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	var issueRepoID string
+	var registry []writ.RepoEntry
+	if store.Workspace != nil {
+		info := store.Workspace.Info()
+		if info.Configured {
+			issueRepoID = info.WorkspaceRepoID
+			repos, rErr := store.Workspace.Repos(ctx)
+			if rErr == nil {
+				registry = repos
+			}
+		} else {
+			issueRepoID = info.LocalRepoID
+		}
+	}
+
+	if des == "" || (issueRepoID != "" && des == issueRepoID) {
+		return "local", "", objID, nil
+	}
+
+	for _, entry := range registry {
+		if entry.RepoID == des {
+			return "cross-repo", entry.Slug, objID, nil
+		}
+	}
+
+	return "unresolved", "", objID, nil
+}
+
+func resolveIssueID(ctx context.Context, store *writ.Store, prefix string) (string, error) {
+	if prefix == "" {
+		return "", fmt.Errorf("issue ID required")
+	}
+
+	targetPrefix := prefix
+	if strings.Contains(prefix, "#") {
+		scope, slug, objID, err := resolveIssueRef(ctx, store, prefix)
+		if err != nil {
+			return "", err
+		}
+		if scope == "cross-repo" {
+			if slug == "" {
+				des, _, _ := state.ParseReference(prefix)
+				slug = des
+			}
+			return "", fmt.Errorf("issue lives in repo %s", slug)
+		}
+		if scope == "unresolved" {
+			return "", notFoundError{kind: "issue", id: prefix}
+		}
+		targetPrefix = objID
+	}
+
+	issues, err := store.Query.Issues(writ.IssueFilter{})
+	if err != nil {
+		return "", err
+	}
+
+	var matches []string
+	for _, iss := range issues {
+		if strings.HasPrefix(iss.ObjectID, targetPrefix) {
+			matches = append(matches, iss.ObjectID)
+		}
+	}
+
+	if len(matches) == 0 {
+		return "", notFoundError{kind: "issue", id: prefix}
+	}
+	if len(matches) > 1 {
+		return "", fmt.Errorf("ambiguous issue ID prefix %q matches %d issues (%s)", prefix, len(matches), strings.Join(matches, ", "))
+	}
+
+	return matches[0], nil
+}
+
+func parseOrderBy(sortOrder string) (writ.OrderBy, error) {
+	if sortOrder == "" {
+		return "", nil
+	}
+	switch sortOrder {
+	case "created_at_asc", "created-asc", "created_asc", "created":
+		return writ.OrderByCreatedAtAsc, nil
+	case "created_at_desc", "created-desc", "created_desc":
+		return writ.OrderByCreatedAtDesc, nil
+	case "updated_at_asc", "updated-asc", "updated_asc":
+		return writ.OrderByUpdatedAtAsc, nil
+	case "updated_at_desc", "updated-desc", "updated_desc", "updated":
+		return writ.OrderByUpdatedAtDesc, nil
+	case "title_asc", "title-asc", "title":
+		return writ.OrderByTitleAsc, nil
+	case "title_desc", "title-desc":
+		return writ.OrderByTitleDesc, nil
+	default:
+		return "", fmt.Errorf("invalid sort order %q", sortOrder)
+	}
 }
 
 func gitRevParse(ctx context.Context, dir, ref string) (string, error) {

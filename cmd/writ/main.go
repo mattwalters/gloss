@@ -49,6 +49,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 0
 	case "init":
 		return runInit(ctx, defaultDir, args[1:], stdout, stderr)
+	case "issue":
+		return runIssue(ctx, defaultDir, args[1:], stdout, stderr)
 	case "review":
 		return runReview(ctx, defaultDir, args[1:], stdout, stderr)
 	case "sync":
@@ -65,6 +67,7 @@ func printUsage(w io.Writer) {
 
 Commands:
   init      Initialize writ configuration (writer ID and remote fetch refspecs)
+  issue     Manage issues (create, status, assign, list, link)
   review    Manage code reviews (open, comment, approve, status, list)
   sync      Synchronize operations with git remotes
 
