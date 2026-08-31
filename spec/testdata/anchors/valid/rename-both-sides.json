@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "old": {
+    "commit": "0f61c1a9f3f64b6f7d33f2b3a2c5d9e8b7a6c5d4",
+    "path": "engine/fold.go",
+    "blob": "6a4c8e0b2d5f6a4c8e0b2d5f6a4c8e0b2d5f6a4c",
+    "range": {
+      "start": 12,
+      "end": 12
+    },
+    "context": {
+      "before": [
+        "// Fold is pure: ops in, state out.",
+        "//",
+        "// It never performs I/O."
+      ],
+      "lines": [
+        "func Fold(ops []Op) (State, error) {"
+      ],
+      "after": [
+        "\tvar st State",
+        "\tfor _, op := range ops {",
+        "\t\tst = apply(st, op)"
+      ]
+    }
+  },
+  "new": {
+    "commit": "7c5d9e1f3a2b4c6d8e0f1a2b3c4d5e6f7a8b9c0d",
+    "path": "engine/fold/fold.go",
+    "blob": "6a4c8e0b2d5f6a4c8e0b2d5f6a4c8e0b2d5f6a4c",
+    "range": {
+      "start": 12,
+      "end": 12
+    },
+    "context": {
+      "before": [
+        "// Fold is pure: ops in, state out.",
+        "//",
+        "// It never performs I/O."
+      ],
+      "lines": [
+        "func Fold(ops []Op) (State, error) {"
+      ],
+      "after": [
+        "\tvar st State",
+        "\tfor _, op := range ops {",
+        "\t\tst = apply(st, op)"
+      ]
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "new": {
+    "commit": "2ae787a3e353251a99120a6935bfd6b807e60d5a",
+    "path": "engine/fold/review.go",
+    "blob": "b7e23ec29af22b0b4e41da31e868d57226121c84",
+    "range": {
+      "start": 41,
+      "end": 41
+    },
+    "context": {
+      "before": [
+        "\tif err != nil {",
+        "\t\treturn nil, err",
+        "\t}"
+      ],
+      "lines": [
+        "\tstate.Status = next"
+      ],
+      "after": [
+        "\tstate.UpdatedAt = op.Time",
+        "\treturn state, nil",
+        "}"
+      ],
+      "future_hint": "from-a-newer-producer"
+    },
+    "future_side_field": {
+      "nested": true
+    }
+  },
+  "future_top_field": [
+    1,
+    2,
+    3
+  ]
+}

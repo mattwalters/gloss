@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://writ.dev/spec/anchor.schema.json",
+  "title": "Writ anchor (v1)",
+  "description": "Content-based comment position: dual-sided (old/new), anchored to blob identity plus captured hunk context. Normative text: spec/anchors.md. The $id is an identifier, not a network location. Cross-field invariants the schema cannot express (end >= start, context lines vs range size, the omitted head/tail arithmetic, path segment rules, uniform OID length) are defined in the spec text and enforced by validators alongside this schema; the schema does pin the 64-entry ceiling on context.lines. additionalProperties is deliberately never false: unknown fields are preserved and ignored.",
+  "type": "object",
+  "properties": {
+    "version": { "const": 1 },
+    "old": { "$ref": "#/$defs/side" },
+    "new": { "$ref": "#/$defs/side" }
+  },
+  "required": ["version"],
+  "anyOf": [{ "required": ["old"] }, { "required": ["new"] }],
+  "$defs": {
+    "oid": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "line": {
+      "type": "string",
+      "pattern": "^[^\\n]*$",
+      "maxLength": 1000
+    },
+    "side": {
+      "type": "object",
+      "properties": {
+        "commit": { "$ref": "#/$defs/oid" },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^/]"
+        },
+        "blob": { "$ref": "#/$defs/oid" },
+        "range": { "$ref": "#/$defs/range" },
+        "context": { "$ref": "#/$defs/context" }
+      },
+      "required": ["commit", "path", "blob"],
+      "dependentRequired": {
+        "range": ["context"],
+        "context": ["range"]
+      }
+    },
+    "range": {
+      "type": "object",
+      "properties": {
+        "start": { "type": "integer", "minimum": 1 },
+        "end": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["start", "end"]
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "before": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/line" },
+          "maxItems": 3
+        },
+        "lines": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/line" },
+          "minItems": 1,
+          "maxItems": 64
+        },
+        "omitted": { "type": "integer", "minimum": 1 },
+        "after": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/line" },
+          "maxItems": 3
+        }
+      },
+      "required": ["before", "lines", "after"]
+    }
+  }
+}

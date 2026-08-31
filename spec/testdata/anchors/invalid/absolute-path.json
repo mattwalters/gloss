@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "new": {
+    "commit": "2ae787a3e353251a99120a6935bfd6b807e60d5a",
+    "path": "/engine/fold.go",
+    "blob": "b7e23ec29af22b0b4e41da31e868d57226121c84",
+    "range": {
+      "start": 1,
+      "end": 1
+    },
+    "context": {
+      "before": [],
+      "lines": [
+        "x"
+      ],
+      "after": []
+    }
+  }
+}

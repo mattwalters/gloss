@@ -17,9 +17,13 @@ disagree, the fixtures win and the prose gets fixed.
 | --- | --- | --- |
 | `op-envelope.md` | Normative | The op envelope: which fields live on the op commit vs. in the `op.json` payload, op-id derivation, reader validation rules |
 | `canonicalization.md` | Normative | Byte-stable canonical JSON encoding: ordering, escaping, number formatting, rejection rules |
+| `anchors.md` | Normative | Content-based comment anchors (v1): the dual-sided anchor object, context capture, re-anchoring and orphaning |
 | `schemas/op-envelope.schema.json` | Normative | JSON Schema (draft 2020-12) for the payload half of the envelope |
+| `schemas/anchor.schema.json` | Normative | JSON Schema (draft 2020-12) for the anchor object |
 | `testdata/canonicalization/vectors.json` | Normative | Canonicalization test vectors: input → exact canonical bytes, or input → rejection |
 | `testdata/envelopes/` | Normative | Envelope payload instances, valid and invalid; `invalid/index.json` records each expected rejection |
+| `testdata/anchors/valid/`, `testdata/anchors/invalid/` | Normative | Anchor instances; `invalid/index.json` records each expected rejection and whether the schema or an invariant catches it |
+| `testdata/anchors/github/` | Informative | GitHub-position conversion vectors, illustrating a mapping whose enforcement lives in the bridge rather than here |
 | `spec.go` | Informative | Go embedding of `schemas/` and `testdata/` so every consumer reads the one committed copy |
 | `fixtures/` | Mixed | The fixture-repo generator and golden harness (informative tooling) producing the golden corpus under `fixtures/testdata/` (normative) |
 | `README.md` | Informative | This document: index, conformance model, independent-implementation guide |
@@ -31,12 +35,18 @@ spec/
 ├── README.md               — this document: conformance model & independent implementation guide
 ├── op-envelope.md          — normative: the op envelope, field by field
 ├── canonicalization.md     — normative: canonical JSON encoding rules
+├── anchors.md              — normative: content-based comment anchors (v1)
 ├── spec.go                 — go:embed of schemas/ and testdata/ (package spec)
 ├── schemas/
-│   └── op-envelope.schema.json — draft 2020-12 schema for the op payload
+│   ├── op-envelope.schema.json — draft 2020-12 schema for the op payload
+│   └── anchor.schema.json  — draft 2020-12 schema for the anchor object
 ├── testdata/
 │   ├── canonicalization/   — encoding vectors (valid and rejected inputs)
-│   └── envelopes/          — payload instances: valid/ and invalid/ with index.json
+│   ├── envelopes/          — payload instances: valid/ and invalid/ with index.json
+│   └── anchors/
+│       ├── valid/          — anchors that must validate
+│       ├── invalid/        — anchors that must be rejected (+ index.json of reasons)
+│       └── github/         — informative GitHub-position conversion vectors
 └── fixtures/
     ├── README.md           — fixture storage, repo generation, and test harness details
     ├── corpus.go           — loads descriptions from testdata/descriptions/
