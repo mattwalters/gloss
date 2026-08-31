@@ -52,17 +52,21 @@ spec/
     ├── corpus.go           — loads descriptions from testdata/descriptions/
     ├── description.go      — YAML description parser and schema
     ├── diff.go             — standard unified diff engine for readable failure/update diffs
+    ├── envelope_test.go    — envelope fixture family registration & reader validation test
     ├── generate.go         — deterministic bare git repository builder
     ├── harness.go          — golden-file test harness and fixture family runner
     ├── identity.go         — fixture identities (alice, bob) and signing config
     ├── manifest.go         — manifest data model (SHAs, trees, parents, refs)
+    ├── op.go               — OpDesc to canonical payload & commit message derivation
     ├── sign.go             — ed25519 SSH commit signing
-    ├── tree.go             — git tree object generation
+    ├── tamper.go           — post-signing commit tampering engine
+    ├── tree.go             — git tree object generation with file modes
+    ├── verify.go           — SSH allowed-signers trust store and signature verification oracle
     ├── gen/                — CLI command to regenerate fixture repos and check/update goldens
     ├── keys/               — throwaway ed25519 keypairs for deterministic signatures
     └── testdata/
         ├── descriptions/   — declarative YAML descriptions of fixture git histories
-        └── golden/         — golden JSON outputs pinned byte-for-byte
+        └── golden/         — golden JSON outputs pinned byte-for-byte (manifest/ and envelope/)
 ```
 
 ## Conformance Model

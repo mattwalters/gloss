@@ -19,6 +19,23 @@ that enforces spec correctness across all fixture families.
    into `t.TempDir()`, runs them through the target system (codec, fold,
    projection), and validates output byte-for-byte against `testdata/golden/`.
 
+## Declarative Description Knobs
+
+Fixture YAML descriptions under `testdata/descriptions/` support the following commit-level knobs:
+
+- **`id` & `parents`:** Commit labeling and DAG parent resolution. `parents: [labels]` resolves against previous commit IDs across the description. Omitted parents fall back to the implicit linear chain.
+- **`op:` block:** Structured operation payload (`object_id`, `object_type`, `op_type`, `op_version`, `body`, plus optional arbitrary extra fields). Automatically canonicalized into `op.json` at file mode `100644` with a derived commit message `writ: <op_type> <object_type>/<object_id>\n`. Mutually exclusive with raw `files:` and `message:`.
+- **`sign_as:`** Sign with a named identity's key (e.g. `bob`) other than the author's own key.
+- **`tamper:`** Closed enum applied post-signing to simulate malformed/tampered commits while retaining the original signature: `payload-byte`, `message`, `author`, `signature`, `op-json-mode-exec`.
+- **`unsigned: true`:** Omit the commit signature header.
+- **`committer:`** Override committer identity to test reader rejection of author/committer divergence.
+- **`expect:`** Declared machine-readable expectation: `accept` or `{reject: <reason>}` from the closed rejection reason set (`wrong-key`, `payload-mutated`, `corrupted-signature`, `unsigned`, `non-canonical-payload`, `duplicate-key`, `lone-surrogate`, `schema-violation`, `extra-tree-entry`, `op-json-subdirectory`, `missing-op-json`, `invalid-op-json-mode`, `committer-mismatch`).
+
+## The Fixture Families
+
+- **`manifest`:** Pinned repository manifest outputs (`testdata/golden/*.json`) covering all generated refs, commits, SHAs, and trees.
+- **`envelope`:** Golden envelope outputs (`testdata/golden/envelope/*.json`) verifying byte-for-byte canonicalization, schema conformance, tree structure, SSH signature verification via `ssh-keygen -Y verify`, and declared vs observed disposition equality.
+
 ## The Golden-File Test Harness
 
 The test harness (`fixtures.Run` and `fixtures.RunFamily`) is the shared

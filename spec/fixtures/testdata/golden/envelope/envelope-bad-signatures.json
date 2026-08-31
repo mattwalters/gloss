@@ -1,0 +1,120 @@
+{
+  "ops": [
+    {
+      "ref": "refs/writ/alice/review",
+      "commit": "03d8a5475427965857083d7560d447c87e38fc87",
+      "parents": [],
+      "author": "Alice Example \u003calice@example.test\u003e",
+      "committer": "Alice Example \u003calice@example.test\u003e",
+      "timestamp": "2026-01-01T00:00:00Z",
+      "tree_entries": [
+        {
+          "name": "op.json",
+          "mode": "0100644",
+          "sha": "37fa2a1a74a8708727d475bd585f9a5c7d3d31a0"
+        }
+      ],
+      "payload": "{\"body\":{\"title\":\"Signed with Bob's key instead of Alice's\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"create\",\"op_version\":1}",
+      "canonical_payload": "{\"body\":{\"title\":\"Signed with Bob's key instead of Alice's\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"create\",\"op_version\":1}",
+      "signed": true,
+      "signature_key_fingerprint": "SHA256:O/tazBDLdOtpewVOG55l3W8ZJOSCXXSbkFws9gBOhYc",
+      "verification_outcome": "wrong-key",
+      "expected": {
+        "disposition": "reject",
+        "reason": "wrong-key"
+      },
+      "observed": {
+        "disposition": "reject",
+        "reason": "wrong-key"
+      }
+    },
+    {
+      "ref": "refs/writ/alice/review",
+      "commit": "3719c01328cfc060198c89252845cd299ecb73f9",
+      "parents": [
+        "03d8a5475427965857083d7560d447c87e38fc87"
+      ],
+      "author": "Alice Example \u003calice@example.test\u003e",
+      "committer": "Alice Example \u003calice@example.test\u003e",
+      "timestamp": "2026-01-01T00:01:00Z",
+      "tree_entries": [
+        {
+          "name": "op.json",
+          "mode": "0100644",
+          "sha": "38d4c595297cdb1d1f28e021ff90d725b8b3bc46"
+        }
+      ],
+      "payload": "{\"body\":{\"title\":\"Bayload mutated after signing\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"update\",\"op_version\":1}",
+      "canonical_payload": "{\"body\":{\"title\":\"Bayload mutated after signing\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"update\",\"op_version\":1}",
+      "signed": true,
+      "signature_key_fingerprint": "SHA256:wDVIYagWNF4y7O9lMha3+MljfIDuV15tOKMYNG78oeA",
+      "verification_outcome": "payload-mutated",
+      "expected": {
+        "disposition": "reject",
+        "reason": "payload-mutated"
+      },
+      "observed": {
+        "disposition": "reject",
+        "reason": "payload-mutated"
+      }
+    },
+    {
+      "ref": "refs/writ/alice/review",
+      "commit": "54fc97b3f2149c868f32a071f68ecc47277ed7be",
+      "parents": [
+        "3719c01328cfc060198c89252845cd299ecb73f9"
+      ],
+      "author": "Alice Example \u003calice@example.test\u003e",
+      "committer": "Alice Example \u003calice@example.test\u003e",
+      "timestamp": "2026-01-01T00:02:00Z",
+      "tree_entries": [
+        {
+          "name": "op.json",
+          "mode": "0100644",
+          "sha": "4478df4b1221123db2254ac934f9aa378e2538cf"
+        }
+      ],
+      "payload": "{\"body\":{\"title\":\"Corrupted armor signature\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"update\",\"op_version\":1}",
+      "canonical_payload": "{\"body\":{\"title\":\"Corrupted armor signature\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"update\",\"op_version\":1}",
+      "signed": true,
+      "verification_outcome": "corrupted-signature",
+      "expected": {
+        "disposition": "reject",
+        "reason": "corrupted-signature"
+      },
+      "observed": {
+        "disposition": "reject",
+        "reason": "corrupted-signature"
+      }
+    },
+    {
+      "ref": "refs/writ/alice/review",
+      "commit": "ea2337ebf81dfd463fcff45967aecbd8d76b08ce",
+      "parents": [
+        "54fc97b3f2149c868f32a071f68ecc47277ed7be"
+      ],
+      "author": "Alice Example \u003calice@example.test\u003e",
+      "committer": "Alice Example \u003calice@example.test\u003e",
+      "timestamp": "2026-01-01T00:03:00Z",
+      "tree_entries": [
+        {
+          "name": "op.json",
+          "mode": "0100644",
+          "sha": "62b5301c5322daeee6956e037dcdf6d69dbf57af"
+        }
+      ],
+      "payload": "{\"body\":{\"title\":\"Unsigned commit\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"update\",\"op_version\":1}",
+      "canonical_payload": "{\"body\":{\"title\":\"Unsigned commit\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"update\",\"op_version\":1}",
+      "signed": false,
+      "verification_outcome": "unsigned",
+      "expected": {
+        "disposition": "reject",
+        "reason": "unsigned"
+      },
+      "observed": {
+        "disposition": "reject",
+        "reason": "unsigned"
+      }
+    }
+  ]
+}

@@ -50,19 +50,78 @@ type Generation struct {
 	Commits []CommitDesc `yaml:"commits"`
 }
 
-// CommitDesc is one commit: full file contents for its tree (not a diff
-// against the previous commit), an identity naming a signer from the
-// keyring in keys/, and a fixed timestamp. All three are required because
-// byte-determinism depends on none of them ever coming from the
-// environment (no time.Now, no ambient git config).
-type CommitDesc struct {
-	Author    string            `yaml:"author"`
-	Timestamp time.Time         `yaml:"timestamp"`
-	Message   string            `yaml:"message"`
-	Files     map[string]string `yaml:"files"`
+// ExpectDesc specifies the declared machine-readable expectation for an op commit:
+// either accept, or reject with a reason from the closed set.
+type ExpectDesc struct {
+	Accept bool   `yaml:"accept,omitempty"`
+	Reject string `yaml:"reject,omitempty"`
 }
 
-// Load parses a single fixture description from YAML.
+func (e *ExpectDesc) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		if value.Value == "accept" {
+			e.Accept = true
+			e.Reject = ""
+			return nil
+		}
+		return fmt.Errorf("invalid expect value %q: scalar must be 'accept'", value.Value)
+	}
+	if value.Kind == yaml.MappingNode {
+		var m struct {
+			Accept bool   `yaml:"accept"`
+			Reject string `yaml:"reject"`
+		}
+		if err := value.Decode(&m); err != nil {
+			return err
+		}
+		if m.Accept && m.Reject != "" {
+			return fmt.Errorf("expect cannot specify both accept and reject")
+		}
+		if !m.Accept && m.Reject == "" {
+			return fmt.Errorf("expect must specify either accept: true or reject: <reason>")
+		}
+		e.Accept = m.Accept
+		e.Reject = m.Reject
+		return nil
+	}
+	return fmt.Errorf("expect must be a scalar ('accept') or a mapping ({reject: <reason>})")
+}
+
+// CommitDesc is one commit: full file contents or an op block for its tree,
+// an identity naming a signer from the keyring in keys/, a fixed timestamp,
+// and optional parent labels, committer override, signing override, or tamper instruction.
+type CommitDesc struct {
+	ID        string            `yaml:"id,omitempty"`
+	Parents   []string          `yaml:"parents,omitempty"`
+	Author    string            `yaml:"author"`
+	Committer string            `yaml:"committer,omitempty"`
+	Timestamp time.Time         `yaml:"timestamp"`
+	Message   string            `yaml:"message,omitempty"`
+	Files     map[string]string `yaml:"files,omitempty"`
+	Op        *OpDesc           `yaml:"op,omitempty"`
+	SignAs    string            `yaml:"sign_as,omitempty"`
+	Tamper    string            `yaml:"tamper,omitempty"`
+	Unsigned  bool              `yaml:"unsigned,omitempty"`
+	Expect    *ExpectDesc       `yaml:"expect,omitempty"`
+}
+
+var validRejectReasons = map[string]bool{
+	"wrong-key":             true,
+	"payload-mutated":       true,
+	"corrupted-signature":   true,
+	"unsigned":              true,
+	"non-canonical-payload": true,
+	"duplicate-key":         true,
+	"lone-surrogate":        true,
+	"schema-violation":      true,
+	"extra-tree-entry":      true,
+	"op-json-subdirectory":  true,
+	"missing-op-json":       true,
+	"invalid-op-json-mode":  true,
+	"committer-mismatch":    true,
+}
+
+// Load parses a single fixture description from YAML and validates its integrity.
 func Load(data []byte) (*Description, error) {
 	var d Description
 	if err := yaml.Unmarshal(data, &d); err != nil {
@@ -74,18 +133,10 @@ func Load(data []byte) (*Description, error) {
 	if len(d.Refs) == 0 {
 		return nil, fmt.Errorf("fixtures: description %q has no refs", d.Name)
 	}
-	// Every ref name and every keep_as must be unique across the whole
-	// description: they all become real refs written into the same repo,
-	// and a collision would make one silently overwrite another at
-	// generation time (git only has one namespace per ref name) while the
-	// manifest still recorded both writes as if they'd each landed.
-	// Maps a ref name already claimed to a description of where it came
-	// from, so a collision error can say which two things collided
-	// instead of just "seen twice" — a keep_as colliding with a
-	// differently-named ref reads very differently from an actual
-	// duplicate `name:` entry, and a fixture author debugging the
-	// rejection needs to know which one they're looking at.
+
 	seenRefNames := map[string]string{}
+	seenLabels := map[string]bool{}
+
 	for _, r := range d.Refs {
 		if r.Name == "" {
 			return nil, fmt.Errorf("fixtures: description %q has a ref with no name", d.Name)
@@ -113,6 +164,51 @@ func Load(data []byte) (*Description, error) {
 				}
 				if c.Timestamp.IsZero() {
 					return nil, fmt.Errorf("fixtures: description %q ref %q generation %d commit %d has no timestamp", d.Name, r.Name, gi, ci)
+				}
+				if c.ID != "" {
+					if seenLabels[c.ID] {
+						return nil, fmt.Errorf("fixtures: description %q: duplicate commit id %q", d.Name, c.ID)
+					}
+					seenLabels[c.ID] = true
+				}
+				if c.Parents != nil {
+					for _, p := range c.Parents {
+						if !seenLabels[p] {
+							return nil, fmt.Errorf("fixtures: description %q: commit references unknown or forward parent label %q", d.Name, p)
+						}
+					}
+				}
+				if c.Op != nil {
+					if len(c.Files) > 0 {
+						return nil, fmt.Errorf("fixtures: description %q ref %q generation %d commit %d specifies both 'op' and 'files'", d.Name, r.Name, gi, ci)
+					}
+					if c.Message != "" {
+						return nil, fmt.Errorf("fixtures: description %q ref %q generation %d commit %d specifies both 'op' and 'message'", d.Name, r.Name, gi, ci)
+					}
+					if c.Op.ObjectID == "" {
+						return nil, fmt.Errorf("fixtures: description %q ref %q generation %d commit %d op missing object_id", d.Name, r.Name, gi, ci)
+					}
+					if c.Op.ObjectType == "" {
+						return nil, fmt.Errorf("fixtures: description %q ref %q generation %d commit %d op missing object_type", d.Name, r.Name, gi, ci)
+					}
+					if c.Op.OpType == "" {
+						return nil, fmt.Errorf("fixtures: description %q ref %q generation %d commit %d op missing op_type", d.Name, r.Name, gi, ci)
+					}
+				}
+				if c.SignAs != "" {
+					if _, err := lookupIdentity(c.SignAs); err != nil {
+						return nil, fmt.Errorf("fixtures: description %q ref %q generation %d commit %d invalid sign_as: %w", d.Name, r.Name, gi, ci, err)
+					}
+				}
+				if c.Tamper != "" {
+					if !IsValidTamper(c.Tamper) {
+						return nil, fmt.Errorf("fixtures: description %q ref %q generation %d commit %d invalid tamper %q (must be closed enum)", d.Name, r.Name, gi, ci, c.Tamper)
+					}
+				}
+				if c.Expect != nil && c.Expect.Reject != "" {
+					if !validRejectReasons[c.Expect.Reject] {
+						return nil, fmt.Errorf("fixtures: description %q ref %q generation %d commit %d invalid reject reason %q (must be closed enum)", d.Name, r.Name, gi, ci, c.Expect.Reject)
+					}
 				}
 			}
 		}

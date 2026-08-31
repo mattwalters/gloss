@@ -1,0 +1,62 @@
+name: envelope-bad-signatures
+description: >
+  Negative signature test cases: op signed by the wrong identity key,
+  op payload mutated after signing, corrupted armored signature header,
+  and unsigned commit.
+
+refs:
+  - name: refs/writ/alice/review
+    history:
+      - commits:
+          - id: bad-sig-wrong-key
+            author: alice
+            sign_as: bob
+            timestamp: 2026-01-01T00:00:00Z
+            op:
+              object_id: review-01
+              object_type: review
+              op_type: create
+              op_version: 1
+              body:
+                title: "Signed with Bob's key instead of Alice's"
+            expect:
+              reject: wrong-key
+          - id: bad-sig-payload-mutated
+            author: alice
+            tamper: payload-byte
+            timestamp: 2026-01-01T00:01:00Z
+            op:
+              object_id: review-01
+              object_type: review
+              op_type: update
+              op_version: 1
+              body:
+                title: "Payload mutated after signing"
+            expect:
+              reject: payload-mutated
+          - id: bad-sig-corrupted
+            author: alice
+            tamper: signature
+            timestamp: 2026-01-01T00:02:00Z
+            op:
+              object_id: review-01
+              object_type: review
+              op_type: update
+              op_version: 1
+              body:
+                title: "Corrupted armor signature"
+            expect:
+              reject: corrupted-signature
+          - id: bad-sig-unsigned
+            author: alice
+            unsigned: true
+            timestamp: 2026-01-01T00:03:00Z
+            op:
+              object_id: review-01
+              object_type: review
+              op_type: update
+              op_version: 1
+              body:
+                title: "Unsigned commit"
+            expect:
+              reject: unsigned

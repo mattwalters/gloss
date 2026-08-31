@@ -32,6 +32,7 @@ func Generate(desc *Description, outDir string) (*Manifest, error) {
 	defer sgnr.close()
 
 	manifest := &Manifest{}
+	labels := make(map[string]plumbing.Hash)
 
 	for _, ref := range desc.Refs {
 		for gi, gen := range ref.History {
@@ -40,18 +41,27 @@ func Generate(desc *Description, outDir string) (*Manifest, error) {
 			state := GenerationState{Ref: ref.Name, Index: gi, KeptAs: gen.KeptAs}
 
 			for _, cd := range gen.Commits {
-				id, err := lookupIdentity(cd.Author)
-				if err != nil {
-					return nil, err
-				}
-				if !parent.IsZero() {
+				if cd.Parents != nil {
+					parents = make([]plumbing.Hash, len(cd.Parents))
+					for pi, pLabel := range cd.Parents {
+						pHash, ok := labels[pLabel]
+						if !ok {
+							return nil, fmt.Errorf("fixtures: ref %q generation %d: unknown parent label %q", ref.Name, gi, pLabel)
+						}
+						parents[pi] = pHash
+					}
+				} else if !parent.IsZero() {
 					parents = []plumbing.Hash{parent}
 				} else {
 					parents = nil
 				}
-				commit, hash, err := buildCommit(repo, sgnr, id, cd, parents)
+
+				commit, hash, err := buildCommit(repo, sgnr, cd, parents)
 				if err != nil {
 					return nil, fmt.Errorf("fixtures: ref %q generation %d: %w", ref.Name, gi, err)
+				}
+				if cd.ID != "" {
+					labels[cd.ID] = hash
 				}
 				parent = hash
 				state.Commits = append(state.Commits, commitState(commit, hash))
@@ -93,42 +103,82 @@ func setRef(repo *git.Repository, name string, hash plumbing.Hash) error {
 	return nil
 }
 
-// buildCommit writes files as a tree, constructs a commit object with the
-// given parents, signs it, and stores it. Returns the decoded commit
-// (with its final signature) and its hash.
-func buildCommit(repo *git.Repository, sgnr *signer, id identity, cd CommitDesc, parents []plumbing.Hash) (*object.Commit, plumbing.Hash, error) {
+// buildCommit writes files or canonical op.json as a tree, constructs a commit object with the
+// given parents, signs it, applies any requested post-signing tamper, and stores it.
+func buildCommit(repo *git.Repository, sgnr *signer, cd CommitDesc, parents []plumbing.Hash) (*object.Commit, plumbing.Hash, error) {
+	if cd.Op != nil {
+		payloadBytes, err := BuildOpPayload(cd.Op)
+		if err != nil {
+			return nil, plumbing.ZeroHash, err
+		}
+		cd.Files = map[string]string{
+			"op.json": string(payloadBytes),
+		}
+		cd.Message = DeriveMessage(cd.Op)
+	}
+
+	authorId, err := lookupIdentity(cd.Author)
+	if err != nil {
+		return nil, plumbing.ZeroHash, err
+	}
+
+	signerId := authorId
+	if cd.SignAs != "" {
+		signerId, err = lookupIdentity(cd.SignAs)
+		if err != nil {
+			return nil, plumbing.ZeroHash, err
+		}
+	}
+
+	authorSig := object.Signature{Name: authorId.Name, Email: authorId.Email, When: cd.Timestamp.UTC()}
+	committerSig := authorSig
+	if cd.Committer != "" {
+		committerId, err := lookupIdentity(cd.Committer)
+		if err != nil {
+			return nil, plumbing.ZeroHash, err
+		}
+		committerSig = object.Signature{Name: committerId.Name, Email: committerId.Email, When: cd.Timestamp.UTC()}
+	}
+
 	treeHash, err := buildTree(repo.Storer, cd.Files)
 	if err != nil {
 		return nil, plumbing.ZeroHash, err
 	}
 
-	sig := object.Signature{Name: id.Name, Email: id.Email, When: cd.Timestamp.UTC()}
 	commit := &object.Commit{
-		Author:       sig,
-		Committer:    sig,
+		Author:       authorSig,
+		Committer:    committerSig,
 		Message:      cd.Message,
 		TreeHash:     treeHash,
 		ParentHashes: parents,
 	}
 
-	payloadObj := repo.Storer.NewEncodedObject()
-	if err := commit.EncodeWithoutSignature(payloadObj); err != nil {
-		return nil, plumbing.ZeroHash, fmt.Errorf("encode commit payload: %w", err)
-	}
-	r, err := payloadObj.Reader()
-	if err != nil {
-		return nil, plumbing.ZeroHash, fmt.Errorf("read commit payload: %w", err)
-	}
-	payload, err := io.ReadAll(r)
-	if err != nil {
-		return nil, plumbing.ZeroHash, fmt.Errorf("read commit payload: %w", err)
+	if !cd.Unsigned {
+		payloadObj := repo.Storer.NewEncodedObject()
+		if err := commit.EncodeWithoutSignature(payloadObj); err != nil {
+			return nil, plumbing.ZeroHash, fmt.Errorf("encode commit payload: %w", err)
+		}
+		r, err := payloadObj.Reader()
+		if err != nil {
+			return nil, plumbing.ZeroHash, fmt.Errorf("read commit payload: %w", err)
+		}
+		payload, err := io.ReadAll(r)
+		if err != nil {
+			return nil, plumbing.ZeroHash, fmt.Errorf("read commit payload: %w", err)
+		}
+
+		armored, err := sgnr.sign(signerId, payload)
+		if err != nil {
+			return nil, plumbing.ZeroHash, err
+		}
+		commit.PGPSignature = armored
 	}
 
-	armored, err := sgnr.sign(id, payload)
-	if err != nil {
-		return nil, plumbing.ZeroHash, err
+	if cd.Tamper != "" {
+		if err := applyTamper(repo.Storer, commit, cd.Files, cd.Tamper); err != nil {
+			return nil, plumbing.ZeroHash, err
+		}
 	}
-	commit.PGPSignature = armored
 
 	commitObj := repo.Storer.NewEncodedObject()
 	commitObj.SetType(plumbing.CommitObject)
