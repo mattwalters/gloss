@@ -151,8 +151,8 @@ than enums. An implementation that folds an object containing op types
 or fields it does not understand MUST keep those ops intact in the DAG
 so newer clients still see them. The full unknown-op and
 forward-compatibility rules (how fold treats an op it cannot interpret)
-are specified in WRIT-15; this document fixes only the envelope-level
-constraint.
+are specified in `spec/forward-compatibility.md`; this document fixes only the
+envelope-level constraint.
 
 ## Reader validation
 
@@ -179,7 +179,7 @@ cannot live in fold, and this document does not define when it runs.
 - Ref layout, writer-id convention, and refspecs: [`spec/ref-layout.md`](ref-layout.md).
 - Per-op-type body schemas and vocabularies: **WRIT-8–11**.
 - Fold semantics, ordering, and concurrency tiebreaks: [`spec/fold.md`](fold.md).
-- Unknown-op handling inside fold: **WRIT-15**.
+- Unknown-op handling and forward-compatibility rules: [`spec/forward-compatibility.md`](forward-compatibility.md).
 - Workspace-global object-id format: **WRIT-16**.
 - Signature verification mechanics and caching: **WRIT-22**.
 

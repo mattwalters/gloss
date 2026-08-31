@@ -18,6 +18,7 @@ disagree, the fixtures win and the prose gets fixed.
 | `op-envelope.md` | Normative | The op envelope: which fields live on the op commit vs. in the `op.json` payload, op-id derivation, reader validation rules |
 | `ref-layout.md` | Normative | Chain ref layout, writer-id convention, edge rules, and init refspecs |
 | `canonicalization.md` | Normative | Byte-stable canonical JSON encoding: ordering, escaping, number formatting, rejection rules |
+| `forward-compatibility.md` | Normative | Unknown-op handling, forward compatibility, version-bump semantics, and round-trip preservation rules |
 | `anchors.md` | Normative | Content-based comment anchors (v1): the dual-sided anchor object, context capture, re-anchoring and orphaning |
 | `fold.md` | Normative | Fold semantics: the input model, causality-monotone effective time `t*`, the deterministic total order, concurrency rules, the closed per-field merge strategy catalogue, tombstones, and state serialization |
 | `schemas/op-envelope.schema.json` | Normative | JSON Schema (draft 2020-12) for the payload half of the envelope |
@@ -25,6 +26,7 @@ disagree, the fixtures win and the prose gets fixed.
 | `testdata/canonicalization/vectors.json` | Normative | Canonicalization test vectors: input → exact canonical bytes, or input → rejection |
 | `testdata/ref-names/vectors.json` | Normative | Ref-naming test vectors (valid/invalid) and pinned refspecs |
 | `testdata/envelopes/` | Normative | Envelope payload instances, valid and invalid; `invalid/index.json` records each expected rejection |
+| `testdata/forward-compat/` | Normative | Forward-compatibility instances (unknown types, future versions, unknown fields) and synthetic reader profile (+ index.json) |
 | `testdata/anchors/valid/`, `testdata/anchors/invalid/` | Normative | Anchor instances; `invalid/index.json` records each expected rejection and whether the schema or an invariant catches it |
 | `testdata/anchors/github/` | Informative | GitHub-position conversion vectors, illustrating a mapping whose enforcement lives in the bridge rather than here |
 | `testdata/fold/order/`, `testdata/fold/merge/` | Normative | Fold test vectors: deterministic total order test vectors and merge strategy vectors |
@@ -41,6 +43,7 @@ spec/
 ├── op-envelope.md          — normative: the op envelope, field by field
 ├── ref-layout.md           — normative: chain ref layout, writer-id convention, and refspecs
 ├── canonicalization.md     — normative: canonical JSON encoding rules
+├── forward-compatibility.md — normative: unknown-op and forward-compatibility rules
 ├── anchors.md              — normative: content-based comment anchors (v1)
 ├── fold.md                 — normative: fold semantics, total order, and merge strategy catalogue
 ├── spec.go                 — go:embed of schemas/ and testdata/ (package spec)
@@ -52,6 +55,7 @@ spec/
 │   ├── canonicalization/   — encoding vectors (valid and rejected inputs)
 │   ├── ref-names/          — ref-naming vectors (valid/invalid) and pinned refspecs
 │   ├── envelopes/          — payload instances: valid/ and invalid/ with index.json
+│   ├── forward-compat/     — forward-compatibility test corpus: ops/, reader-profile.json, index.json
 │   ├── anchors/
 │   │   ├── valid/          — anchors that must validate
 │   │   ├── invalid/        — anchors that must be rejected (+ index.json of reasons)
