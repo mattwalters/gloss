@@ -1,0 +1,23 @@
+{
+  "name": "ancestor-descendant-equal-tstar",
+  "description": "Ancestor has higher ID and descendant has lower ID with equal t*; topological order guarantees ancestor precedes descendant",
+  "object_id": "obj-1",
+  "ops": [
+    {
+      "id": "op-ff-ancestor",
+      "parents": [],
+      "time": 300,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-00-descendant",
+      "parents": ["op-ff-ancestor"],
+      "time": 100,
+      "object_id": "obj-1"
+    }
+  ],
+  "expected_order": [
+    "op-ff-ancestor",
+    "op-00-descendant"
+  ]
+}

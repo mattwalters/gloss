@@ -1,0 +1,23 @@
+{
+  "name": "skewed-clock",
+  "description": "Child operation has earlier author time than parent; causality-monotone t* preserves ordering",
+  "object_id": "obj-1",
+  "ops": [
+    {
+      "id": "op-01",
+      "parents": [],
+      "time": 500,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-02",
+      "parents": ["op-01"],
+      "time": 100,
+      "object_id": "obj-1"
+    }
+  ],
+  "expected_order": [
+    "op-01",
+    "op-02"
+  ]
+}

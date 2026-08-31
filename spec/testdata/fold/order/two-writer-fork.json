@@ -1,0 +1,30 @@
+{
+  "name": "two-writer-fork",
+  "description": "Two concurrent writers branching from a common ancestor with different timestamps",
+  "object_id": "obj-1",
+  "ops": [
+    {
+      "id": "op-root",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-a1",
+      "parents": ["op-root"],
+      "time": 200,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-b1",
+      "parents": ["op-root"],
+      "time": 300,
+      "object_id": "obj-1"
+    }
+  ],
+  "expected_order": [
+    "op-root",
+    "op-a1",
+    "op-b1"
+  ]
+}

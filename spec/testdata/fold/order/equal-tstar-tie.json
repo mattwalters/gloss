@@ -1,0 +1,30 @@
+{
+  "name": "equal-tstar-tie",
+  "description": "Two concurrent writers with identical timestamps broken by op ID byte order",
+  "object_id": "obj-1",
+  "ops": [
+    {
+      "id": "op-root",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-b1",
+      "parents": ["op-root"],
+      "time": 200,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-a1",
+      "parents": ["op-root"],
+      "time": 200,
+      "object_id": "obj-1"
+    }
+  ],
+  "expected_order": [
+    "op-root",
+    "op-a1",
+    "op-b1"
+  ]
+}

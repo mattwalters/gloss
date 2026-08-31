@@ -1,0 +1,37 @@
+{
+  "name": "cross-chain-causal",
+  "description": "Writer 2 creates an op causally referencing Writer 1's earlier op",
+  "object_id": "obj-1",
+  "ops": [
+    {
+      "id": "op-w1-1",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-w1-2",
+      "parents": ["op-w1-1"],
+      "time": 200,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-w2-1",
+      "parents": [],
+      "time": 150,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-w2-2",
+      "parents": ["op-w2-1", "op-w1-2"],
+      "time": 250,
+      "object_id": "obj-1"
+    }
+  ],
+  "expected_order": [
+    "op-w1-1",
+    "op-w2-1",
+    "op-w1-2",
+    "op-w2-2"
+  ]
+}

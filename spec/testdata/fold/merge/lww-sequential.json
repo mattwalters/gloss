@@ -1,0 +1,34 @@
+{
+  "name": "lww-sequential",
+  "description": "Sequential edits to a field with last-writer-wins",
+  "object_id": "obj-1",
+  "fields": {
+    "title": { "strategy": "lww" },
+    "body_text": { "strategy": "lww" }
+  },
+  "ops": [
+    {
+      "id": "op-01",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "title": "Initial Title",
+        "body_text": "Initial Body"
+      }
+    },
+    {
+      "id": "op-02",
+      "parents": ["op-01"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "title": "Updated Title"
+      }
+    }
+  ],
+  "expected_state": {
+    "title": "Updated Title",
+    "body_text": "Initial Body"
+  }
+}
