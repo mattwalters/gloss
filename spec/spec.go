@@ -6,8 +6,9 @@
 // separate and read by the fixtures package directly.)
 //
 // The prose halves live alongside as op-envelope.md, ref-layout.md,
-// canonicalization.md, anchors.md, and README.md in this directory; the
-// fixture-repo generator and golden harness live in the fixtures subpackage.
+// canonicalization.md, forward-compatibility.md, anchors.md, and
+// README.md in this directory; the fixture-repo generator and golden
+// harness live in the fixtures subpackage.
 package spec
 
 import "embed"
