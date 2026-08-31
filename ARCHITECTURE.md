@@ -64,12 +64,14 @@ store.Sync(ctx, remote)                  // ensures refspecs, fetches, pushes, r
 store.SyncStatus(ctx, remote)            // per-remote unsynced op count
 store.Refresh(ctx)                       // explicit projection refresh
 store.Rebuild(ctx)                       // explicit drop-and-rebuild of folded projection cache
-// store.Watch() <-chan Event            // reserved for reactive event bus milestone
+store.Watch(ctx)                         // <-chan Event (reactive event stream on writes/refolds)
 ```
 
 The domain types themselves (`Review`, `Comment`, `Issue`, `RepoEntry`, `ResolvedReference`, `Anchor`, …) are public from day one: defined in the leaf package `engine/state` (preventing cyclic dependencies with `engine/projection`) and re-exported from the root `writ` package via type aliases (`type Review = state.Review`), so the folded state _is_ the domain object callers receive — one set of types shared by the public API, the projection, the golden fixtures, and `--json` output (each of the latter two pinned as its own independent serialization).
 
 `store.Query` exposes typed query methods (`Reviews`, `Issues`, `Comments`, `Objects`, `Threads`, `GroupIssues`, `Review`, `Issue`) served directly from the SQLite projection cache. All operations automatically refresh the projection unless disabled via `writ.WithoutAutoRefresh()`.
+
+`store.Watch(ctx)` returns a receive-only channel of domain-shaped change events (`<-chan Event`) emitted on local writes and post-fetch refolds. Events are published only after projection transactions commit, ensuring state is queryable immediately upon receipt. Each subscriber receives events over an independent 128-element buffer under a non-blocking drop policy: if a consumer falls behind, intermediate events are dropped and a single `reset` event is delivered once capacity is available, prompting the consumer to re-query the full state.
 
 Workspace discovery and cross-repo references are surfaced through `store.Workspace` without changing `writ.Open`'s signature: a single `Store` remains the primary handle, and when `writ.workspace` is configured (or overridden via `writ.WithWorkspace(path)`), `store.Issues` automatically routes mutations and queries to the workspace repository while `store.Workspace` provides repo registry operations and pure reference resolution (`[<repo-id>#]<object-id>`).
 

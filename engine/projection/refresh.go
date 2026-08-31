@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/go-git/go-git/v5"
@@ -11,6 +12,21 @@ import (
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/dag"
 )
+
+// ObjectChange describes the modifications made to a collaborative object in an incremental refresh batch.
+type ObjectChange struct {
+	// ObjectID is the unique identifier of the collaborative object.
+	ObjectID string `json:"object_id"`
+
+	// ObjectType is the type of collaborative object (e.g. "review", "issue", "comment", "project", "cycle", "repo").
+	ObjectType string `json:"object_type"`
+
+	// OpTypes lists the distinct operation types applied to the object in this refresh batch.
+	OpTypes []string `json:"op_types"`
+
+	// Created reports whether the batch contained the creation operation for this object.
+	Created bool `json:"created"`
+}
 
 // Stats reports the work performed during a Refresh or Rebuild pass.
 type Stats struct {
@@ -25,6 +41,10 @@ type Stats struct {
 
 	// Rebuilt reports whether a full from-scratch rebuild was executed (e.g. on rollback, ref deletion, or explicit rebuild).
 	Rebuilt bool `json:"rebuilt"`
+
+	// Changed lists the objects modified during an incremental refresh pass.
+	// Left empty on a full rebuild, where Rebuilt: true indicates all objects may have changed.
+	Changed []ObjectChange `json:"changed,omitempty"`
 }
 
 type refreshConfig struct {
@@ -158,11 +178,46 @@ func (d *DB) Refresh(store *dag.Store, opts ...Option) (Stats, error) {
 		return Stats{}, fmt.Errorf("projection: commit refresh: %w", err)
 	}
 
+	var changed []ObjectChange
+	objIDs := make([]string, 0, len(enumRes.Ops))
+	for objID := range enumRes.Ops {
+		objIDs = append(objIDs, objID)
+	}
+	sort.Strings(objIDs)
+
+	for _, objID := range objIDs {
+		ops := enumRes.Ops[objID]
+		if len(ops) == 0 {
+			continue
+		}
+		objType := ops[0].ObjectType
+		var opTypes []string
+		seenOpTypes := make(map[string]bool)
+		created := false
+		for _, op := range ops {
+			if !seenOpTypes[op.OpType] {
+				seenOpTypes[op.OpType] = true
+				opTypes = append(opTypes, op.OpType)
+			}
+			if op.OpType == "create" {
+				created = true
+			}
+		}
+		sort.Strings(opTypes)
+		changed = append(changed, ObjectChange{
+			ObjectID:   objID,
+			ObjectType: objType,
+			OpTypes:    opTypes,
+			Created:    created,
+		})
+	}
+
 	return Stats{
 		OpsDecoded:      enumRes.DecodedCommits,
 		ObjectsTouched:  len(enumRes.Ops),
 		AnchorsResolved: anchorsResolved,
 		Rebuilt:         false,
+		Changed:         changed,
 	}, nil
 }
 
