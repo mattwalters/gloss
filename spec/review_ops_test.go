@@ -240,17 +240,6 @@ type fieldRule struct {
 	Key       []string `json:"key,omitempty"`
 }
 
-var closedCatalogueStrategies = map[string]bool{
-	"lww":                 true,
-	"create-once":         true,
-	"set-union":           true,
-	"set-observed-remove": true,
-	"append":              true,
-	"tombstone":           true,
-	"lattice":             true,
-	"keyed-lww":           true,
-}
-
 func TestFieldRules(t *testing.T) {
 	rawRules, err := spec.FS.ReadFile("testdata/review-ops/field-rules.json")
 	if err != nil {
@@ -267,8 +256,8 @@ func TestFieldRules(t *testing.T) {
 		if r.OpType == "" || r.OpVersion < 1 || r.Field == "" {
 			t.Errorf("invalid rule entry: %+v", r)
 		}
-		if !closedCatalogueStrategies[r.Strategy] {
-			t.Errorf("strategy %q for (%s, %d, %s) is not in WRIT-12 closed catalogue", r.Strategy, r.OpType, r.OpVersion, r.Field)
+		if !spec.KnownCatalogueStrategies[r.Strategy] {
+			t.Errorf("strategy %q for (%s, %d, %s) is not in the closed catalogue of spec/fold.md", r.Strategy, r.OpType, r.OpVersion, r.Field)
 		}
 		if r.Strategy == "keyed-lww" && len(r.Key) == 0 {
 			t.Errorf("keyed-lww strategy for (%s, %d, %s) must declare a non-empty key", r.OpType, r.OpVersion, r.Field)

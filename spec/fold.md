@@ -188,6 +188,7 @@ NOT invent default merge behaviors for undeclared fields.
 | `append` | Ordered list | Sequence of items (e.g. comments, revisions) ordered strictly by the total order $L$ of the operations that created them. |
 | `tombstone` | Deletable entity | Entity deletion state; deletion wins over concurrent edits while edits still fold into state. |
 | `lattice` | Join-semilattice | Monotone status transitions governed by a declared join operator ($\sqcup$). |
+| `keyed-lww` | Keyed register map | A map from a declared composite key to a register; `lww` applied independently within each key. |
 
 Counters are deliberately omitted from this catalogue; adding a counter
 strategy requires a spec amendment.
@@ -242,6 +243,13 @@ strategy requires a spec amendment.
 - **Semantics:** The field's allowed values form a bounded join-semilattice $(V, \sqcup, \le)$ with partial order $\le$ and join operation $\sqcup$.
 - **Reduction:** When an operation writes value $v \in V$, the new state is $\text{state} \sqcup v$.
 - **Result:** Because $\sqcup$ is associative, commutative, and idempotent, concurrent transitions $u \parallel v$ reconcile deterministically to $v_u \sqcup v_v$ regardless of arrival or topological order.
+
+#### 8. `keyed-lww` (Keyed Last-Writer-Wins registers)
+- **Initial state:** Empty map `{}`.
+- **Key:** A field declaring this strategy MUST also declare a non-empty, ordered list of body fields forming its key $k$. Two operations address the same register if and only if their key tuples are equal, compared component-wise over canonical values.
+- **Reduction:** As operations are consumed in total order $L$, an operation writing the field replaces the value stored at its own key $k$ and leaves every other key untouched — that is, `lww` applied independently within each key.
+- **Result:** For each key, the value written by the latest operation in $L$ bearing that key. Entries are serialized as a list of `{key, value}` records ordered by their key tuples, compared component-wise.
+- **Why this is not `lww` or a set:** Registers scoped to a key — one vote per (voter, revision), one status per (revision, check name) — need a later write under one key to leave the others alone. Plain `lww` would collapse them to a single register; a set has no notion of a value being replaced.
 
 ## 6. Anchors and external references
 

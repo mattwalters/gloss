@@ -17,6 +17,7 @@ var KnownCatalogueStrategies = map[string]bool{
 	"append":              true,
 	"tombstone":           true,
 	"lattice":             true,
+	"keyed-lww":           true,
 }
 
 // OrderOp represents a single abstract operation in an ordering vector.
@@ -41,6 +42,7 @@ type OrderVector struct {
 type StrategyConfig struct {
 	Strategy string   `json:"strategy"`
 	Lattice  []string `json:"lattice,omitempty"`
+	Key      []string `json:"key,omitempty"`
 }
 
 // MergeOp represents a single synthetic operation in a merge vector.
@@ -195,6 +197,9 @@ func MergeVectors() ([]MergeVector, error) {
 			}
 			if cfg.Strategy == "lattice" && len(cfg.Lattice) == 0 {
 				return nil, fmt.Errorf("spec: merge vector %q field %q uses lattice strategy but defines no lattice elements", vec.Name, fieldName)
+			}
+			if cfg.Strategy == "keyed-lww" && len(cfg.Key) == 0 {
+				return nil, fmt.Errorf("spec: merge vector %q field %q uses keyed-lww strategy but declares no key", vec.Name, fieldName)
 			}
 		}
 		if len(vec.Ops) == 0 {

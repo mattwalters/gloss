@@ -409,6 +409,44 @@ func foldMerge(vec spec.MergeVector) (map[string]any, error) {
 			}
 			state[fieldName] = isDeleted
 
+		case "keyed-lww":
+			// lww applied independently within each declared key tuple.
+			type keyedEntry struct {
+				key   []string
+				value any
+			}
+			latest := make(map[string]*keyedEntry)
+			for _, id := range totalOrder {
+				op := opMap[id]
+				val, ok := op.Body[fieldName]
+				if !ok {
+					continue
+				}
+				key := make([]string, 0, len(cfg.Key))
+				for _, kf := range cfg.Key {
+					key = append(key, fmt.Sprint(op.Body[kf]))
+				}
+				latest[fmt.Sprintf("%q", key)] = &keyedEntry{key: key, value: val}
+			}
+			entries := make([]*keyedEntry, 0, len(latest))
+			for _, e := range latest {
+				entries = append(entries, e)
+			}
+			sort.Slice(entries, func(i, j int) bool {
+				a, b := entries[i].key, entries[j].key
+				for x := range a {
+					if a[x] != b[x] {
+						return a[x] < b[x]
+					}
+				}
+				return false
+			})
+			keyed := make([]any, 0, len(entries))
+			for _, e := range entries {
+				keyed = append(keyed, map[string]any{"key": e.key, "value": e.value})
+			}
+			state[fieldName] = keyed
+
 		case "lattice":
 			rankMap := make(map[string]int, len(cfg.Lattice))
 			for i, elem := range cfg.Lattice {
