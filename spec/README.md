@@ -22,9 +22,11 @@ disagree, the fixtures win and the prose gets fixed.
 | `anchors.md` | Normative | Content-based comment anchors (v1): the dual-sided anchor object, context capture, re-anchoring and orphaning |
 | `fold.md` | Normative | Fold semantics: the input model, causality-monotone effective time `t*`, the deterministic total order, concurrency rules, the closed per-field merge strategy catalogue, tombstones, and state serialization |
 | `identifiers.md` | Normative | Workspace-global IDs, repo designators, cross-repo references, workspace repo, and reference resolution |
+| `review-ops.md` | Normative | The review family operation vocabulary (v1): review creation, revisions, status transitions, approvals, and CI statuses |
 | `schemas/op-envelope.schema.json` | Normative | JSON Schema (draft 2020-12) for the payload half of the envelope |
 | `schemas/anchor.schema.json` | Normative | JSON Schema (draft 2020-12) for the anchor object |
 | `schemas/identifiers.schema.json` | Normative | JSON Schema (draft 2020-12) for identifiers, references, and the repo registry |
+| `schemas/review-ops.schema.json` | Normative | JSON Schema (draft 2020-12) for the review operations family |
 | `testdata/canonicalization/vectors.json` | Normative | Canonicalization test vectors: input → exact canonical bytes, or input → rejection |
 | `testdata/ref-names/vectors.json` | Normative | Ref-naming test vectors (valid/invalid) and pinned refspecs |
 | `testdata/envelopes/` | Normative | Envelope payload instances, valid and invalid; `invalid/index.json` records each expected rejection |
@@ -33,6 +35,9 @@ disagree, the fixtures win and the prose gets fixed.
 | `testdata/anchors/github/` | Informative | GitHub-position conversion vectors, illustrating a mapping whose enforcement lives in the bridge rather than here |
 | `testdata/fold/order/`, `testdata/fold/merge/` | Normative | Fold test vectors: deterministic total order test vectors and merge strategy vectors |
 | `testdata/references/valid/`, `testdata/references/invalid/` | Normative | Reference and resolution instances; `invalid/index.json` records each expected rejection |
+| `testdata/review-ops/valid/`, `testdata/review-ops/invalid/` | Normative | Review operation payload instances; `invalid/index.json` records each expected rejection |
+| `testdata/review-ops/field-rules.json` | Normative | Field-by-field fold merge strategy declarations for the review op vocabulary |
+| `testdata/review-ops/github/` | Informative | GitHub PR, review, status, and check-run conversion vectors |
 | `spec.go` | Informative | Go embedding of `schemas/` and `testdata/` so every consumer reads the one committed copy |
 | `foldvectors.go` | Informative | Go loader and structural validation for fold ordering and merge test vectors |
 | `fixtures/` | Mixed | The fixture-repo generator and golden harness (informative tooling) producing the golden corpus under `fixtures/testdata/` (normative) |
@@ -50,12 +55,14 @@ spec/
 ├── anchors.md              — normative: content-based comment anchors (v1)
 ├── fold.md                 — normative: fold semantics, total order, and merge strategy catalogue
 ├── identifiers.md          — normative: workspace-global IDs, references & workspace repo
+├── review-ops.md           — normative: review family operation vocabulary (v1)
 ├── spec.go                 — go:embed of schemas/ and testdata/ (package spec)
 ├── foldvectors.go          — loader and structural validation for fold test vectors
 ├── schemas/
 │   ├── op-envelope.schema.json — draft 2020-12 schema for the op payload
 │   ├── anchor.schema.json  — draft 2020-12 schema for the anchor object
-│   └── identifiers.schema.json — draft 2020-12 schema for identifiers & references
+│   ├── identifiers.schema.json — draft 2020-12 schema for identifiers & references
+│   └── review-ops.schema.json  — draft 2020-12 schema for review operations
 ├── testdata/
 │   ├── canonicalization/   — encoding vectors (valid and rejected inputs)
 │   ├── ref-names/          — ref-naming vectors (valid/invalid) and pinned refspecs
@@ -68,9 +75,14 @@ spec/
 │   ├── fold/
 │   │   ├── order/          — deterministic total order vectors
 │   │   └── merge/          — per-field merge strategy and interleaving vectors
-│   └── references/
-│       ├── valid/          — references & resolution vectors that must validate
-│       └── invalid/        — invalid references & index.json of expected rejections
+│   ├── references/
+│   │   ├── valid/          — references & resolution vectors that must validate
+│   │   └── invalid/        — invalid references & index.json of expected rejections
+│   └── review-ops/
+│       ├── valid/          — review op instances that must validate
+│       ├── invalid/        — review op instances that must be rejected (+ index.json)
+│       ├── field-rules.json — fold merge strategies per field
+│       └── github/         — informative GitHub PR/review/status conversion vectors
 └── fixtures/
     ├── README.md           — fixture storage, repo generation, and test harness details
     ├── corpus.go           — loads descriptions from testdata/descriptions/
