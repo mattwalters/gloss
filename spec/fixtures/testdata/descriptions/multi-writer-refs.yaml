@@ -1,14 +1,15 @@
 name: multi-writer-refs
 description: >
-  Two independent refs, each written by a different identity, standing in
-  for the per-writer-ref shape ARCHITECTURE.md's ref layout uses
-  (refs/writ/<writer-id>/...): concurrent writers never share a ref, so
-  there's nothing here for a fold to reconcile at the git level — this
-  fixture is about proving the generator can build more than one ref with
-  more than one signer in a single repo, not about fold semantics.
+  Two independent refs, each written by a different identity under the
+  per-writer chain layout (refs/writ/<writer-id>/<object-type>), using
+  obviously-synthetic valid 16-hex writer IDs (0123456789abcdef for alice,
+  fedcba9876543210 for bob) and the review object type: concurrent writers
+  never share a ref, so there is nothing here for a fold to reconcile at
+  the git level — this fixture illustrates multi-ref repo generation with
+  distinct signers across valid chain ref paths.
 
 refs:
-  - name: refs/heads/writer-alice
+  - name: refs/writ/0123456789abcdef/review
     history:
       - commits:
           - author: alice
@@ -21,7 +22,7 @@ refs:
             message: "alice's second commit"
             files:
               writer.json: '{"writer":"alice","seq":2}'
-  - name: refs/heads/writer-bob
+  - name: refs/writ/fedcba9876543210/review
     history:
       - commits:
           - author: bob

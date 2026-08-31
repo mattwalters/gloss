@@ -1,17 +1,17 @@
 {
   "refs": [
     {
-      "name": "refs/heads/writer-alice",
+      "name": "refs/writ/0123456789abcdef/review",
       "commit": "ece287012f481d19a0a576c36b792de70cdc37e5"
     },
     {
-      "name": "refs/heads/writer-bob",
+      "name": "refs/writ/fedcba9876543210/review",
       "commit": "3f851624c39cbd033b2ddd1300adbcaf03e32810"
     }
   ],
   "generations": [
     {
-      "ref": "refs/heads/writer-alice",
+      "ref": "refs/writ/0123456789abcdef/review",
       "index": 0,
       "commits": [
         {
@@ -37,7 +37,7 @@
       ]
     },
     {
-      "ref": "refs/heads/writer-bob",
+      "ref": "refs/writ/fedcba9876543210/review",
       "index": 0,
       "commits": [
         {

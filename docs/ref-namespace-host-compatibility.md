@@ -111,8 +111,8 @@ encode the same information inside an *allowed* namespace instead of a new
 top-level one — since every host tested (and, per docs, GitLab and Bitbucket
 too — Codeberg untested either way) treats `refs/heads/*` as unrestricted:
 
-- Prefix-encode: `refs/heads/writ/<writer-id>/cobs/<type>/<object-id>`
-  instead of `refs/writ/<writer-id>/cobs/<type>/<object-id>`. Same tree
+- Prefix-encode: `refs/heads/writ/<writer-id>/<object-type>`
+  instead of `refs/writ/<writer-id>/<object-type>`. Same tree
   shape, same per-writer-namespace non-fast-forward-freedom property
   (ARCHITECTURE.md). Costs: these op-commits now show up in branch-listing
   UI unless clients filter the `writ/` prefix out (a client concern, not a
@@ -125,12 +125,12 @@ too — Codeberg untested either way) treats `refs/heads/*` as unrestricted:
   triggers before adopting this fallback on a given host, not just ref
   acceptance.
 - A repo could already have a real branch named `writ/...`, colliding with
-  the encoded namespace; the writer-id/object-id segments make accidental
+  the encoded namespace; the writer-id/object-type segments make accidental
   collision unlikely but not impossible, worth a guard if this is ever
   implemented.
 - This is a mechanical rename at the spec level (one prefix constant), not a
   redesign — canonical encoding, the op envelope, and fold are unaffected
-  since none of them inspect the ref name beyond the writer-id/object-id
+  since none of them inspect the ref name beyond the writer-id/object-type
   segments.
 - Only adopt this for the specific host(s) found to need it; don't pay the
   branch-namespace-pollution cost on hosts where the plain `refs/writ/*`
