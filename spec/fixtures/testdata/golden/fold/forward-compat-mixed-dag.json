@@ -1,0 +1,86 @@
+{
+  "objects": [
+    {
+      "object_id": "review-mixed-01",
+      "object_type": "comment",
+      "total_order": [
+        {
+          "commit": "6589046cba37ca71ff7c11eef2babe5498945d01",
+          "label": "alice-ctrl-create",
+          "t_star": 1767225600
+        },
+        {
+          "commit": "6dd9f5605c5b7abcf3a8f4280ae41087508d304e",
+          "label": "bob-mix-opaque-v2",
+          "t_star": 1767225630
+        },
+        {
+          "commit": "c41f48c534a9ef87ae10bd4331ca7ced6868015a",
+          "label": "alice-mix-opaque-telemetry",
+          "t_star": 1767225660
+        },
+        {
+          "commit": "0d454a6c7b1823e4743b6c1762a78307a7c983ce",
+          "label": "alice-ctrl-comment",
+          "t_star": 1767225720
+        },
+        {
+          "commit": "7e440b19a86317f08137120af2b39c063ddb1cf0",
+          "label": "alice-mix-comment",
+          "t_star": 1767225720
+        },
+        {
+          "commit": "607c4a2101962c2ea15f759cd140ab67a8a43806",
+          "label": "bob-ctrl-close",
+          "t_star": 1767225780
+        },
+        {
+          "commit": "af4ca081fea9b3db3360894c8958ad8cf699b2c7",
+          "label": "bob-mix-close",
+          "t_star": 1767225780
+        }
+      ],
+      "state": {
+        "title": "Mixed DAG review"
+      },
+      "unknown_ops": [
+        {
+          "commit": "0d454a6c7b1823e4743b6c1762a78307a7c983ce",
+          "label": "alice-ctrl-comment",
+          "op_type": "post",
+          "op_version": 1
+        },
+        {
+          "commit": "607c4a2101962c2ea15f759cd140ab67a8a43806",
+          "label": "bob-ctrl-close",
+          "op_type": "close",
+          "op_version": 1
+        },
+        {
+          "commit": "6dd9f5605c5b7abcf3a8f4280ae41087508d304e",
+          "label": "bob-mix-opaque-v2",
+          "op_type": "create",
+          "op_version": 2
+        },
+        {
+          "commit": "7e440b19a86317f08137120af2b39c063ddb1cf0",
+          "label": "alice-mix-comment",
+          "op_type": "post",
+          "op_version": 1
+        },
+        {
+          "commit": "af4ca081fea9b3db3360894c8958ad8cf699b2c7",
+          "label": "bob-mix-close",
+          "op_type": "close",
+          "op_version": 1
+        },
+        {
+          "commit": "c41f48c534a9ef87ae10bd4331ca7ced6868015a",
+          "label": "alice-mix-opaque-telemetry",
+          "op_type": "emit",
+          "op_version": 1
+        }
+      ]
+    }
+  ]
+}

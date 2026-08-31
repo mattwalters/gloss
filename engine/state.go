@@ -1,6 +1,8 @@
 package writ
 
 import (
+	"encoding/json"
+
 	"github.com/writtendev/writ/engine/resolve"
 )
 
@@ -76,17 +78,66 @@ type CIStatus struct {
 // Comment represents the materialized state of a comment collaborative object (v1).
 // Reducer implementation is in WRIT-27.
 type Comment struct {
-	Subject   CommentSubject `json:"subject"`
-	Text      string         `json:"text"`
-	InReplyTo string         `json:"in_reply_to,omitempty"`
-	Anchor    *Anchor        `json:"anchor,omitempty"`
-	Deleted   bool           `json:"deleted,omitempty"`
+	Subject    CommentSubject `json:"subject,omitzero"`
+	Text       string         `json:"text,omitempty"`
+	InReplyTo  string         `json:"in_reply_to,omitempty"`
+	Anchor     *Anchor        `json:"anchor,omitempty"`
+	Deleted    bool           `json:"deleted,omitempty"`
+	UnknownOps []UnknownOp    `json:"unknown_ops,omitempty"`
 }
 
 // CommentSubject identifies the collaborative object a comment is attached to.
 type CommentSubject struct {
-	ObjectType string `json:"object_type"`
-	ObjectID   string `json:"object_id"`
+	ObjectType string                     `json:"object_type,omitempty"`
+	ObjectID   string                     `json:"object_id,omitempty"`
+	Unknown    map[string]json.RawMessage `json:"-"`
+	Raw        []byte                     `json:"-"`
+}
+
+// MarshalJSON serializes CommentSubject. If Raw is populated, Raw is returned directly
+// to preserve unknown fields and exact bytes.
+func (s CommentSubject) MarshalJSON() ([]byte, error) {
+	if len(s.Raw) > 0 {
+		return s.Raw, nil
+	}
+	type Alias CommentSubject
+	return json.Marshal((*Alias)(&s))
+}
+
+// IsZero reports whether the CommentSubject is empty.
+func (s CommentSubject) IsZero() bool {
+	return s.ObjectType == "" && s.ObjectID == "" && len(s.Unknown) == 0 && len(s.Raw) == 0
+}
+
+// ParseCommentSubject parses raw JSON bytes into a CommentSubject, retaining the original bytes
+// in Raw and preserving unknown fields.
+func ParseCommentSubject(raw []byte) (CommentSubject, error) {
+	var topLevel map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &topLevel); err != nil {
+		return CommentSubject{}, err
+	}
+
+	var s CommentSubject
+	s.Raw = raw
+
+	if v, ok := topLevel["object_type"]; ok {
+		if err := json.Unmarshal(v, &s.ObjectType); err != nil {
+			return CommentSubject{}, err
+		}
+		delete(topLevel, "object_type")
+	}
+	if v, ok := topLevel["object_id"]; ok {
+		if err := json.Unmarshal(v, &s.ObjectID); err != nil {
+			return CommentSubject{}, err
+		}
+		delete(topLevel, "object_id")
+	}
+
+	if len(topLevel) > 0 {
+		s.Unknown = topLevel
+	}
+
+	return s, nil
 }
 
 // Issue represents the materialized state of an issue collaborative object.

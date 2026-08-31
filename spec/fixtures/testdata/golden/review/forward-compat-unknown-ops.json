@@ -11,11 +11,6 @@
             "op_version": 1
           },
           {
-            "commit": "637142a214438e299cd8b145809fc2ec28a5c315",
-            "op_type": "post",
-            "op_version": 1
-          },
-          {
             "commit": "5fc45d99af1ec746b9f684b96bd18b4af431ad0a",
             "op_type": "close",
             "op_version": 1
