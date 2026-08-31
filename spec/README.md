@@ -27,6 +27,7 @@ disagree, the fixtures win and the prose gets fixed.
 | `comments.md` | Normative | Comment op vocabulary (v1): object model, create/edit/delete ops, threading, anchor reference, GitHub shapes |
 | `issue-ops.md` | Normative | The issue family operation vocabulary (v1): issue creation, metadata updates, state transitions, assignments, labels, and cross-references |
 | `project-cycle.md` | Normative | Project and cycle operation vocabularies (v1): workspace-scoped grouping types, creation, status transitions, cycle dates, and issue membership |
+| `repo-ops.md` | Normative | The repository registry operation vocabulary (v1): repository registration, slug updates, and remote URLs |
 | `resolution.md` | Normative | Re-anchoring & orphan degradation (v1): the `resolve(anchor, tree)` ladder, tiebreaks, thresholds, and orphan semantics |
 | `schemas/op-envelope.schema.json` | Normative | JSON Schema (draft 2020-12) for the payload half of the envelope |
 | `schemas/anchor.schema.json` | Normative | JSON Schema (draft 2020-12) for the anchor object |
@@ -36,6 +37,7 @@ disagree, the fixtures win and the prose gets fixed.
 | `schemas/issue-ops.schema.json` | Normative | JSON Schema (draft 2020-12) for the issue operations family |
 | `schemas/project-ops.schema.json` | Normative | JSON Schema (draft 2020-12) for project operation payloads |
 | `schemas/cycle-ops.schema.json` | Normative | JSON Schema (draft 2020-12) for cycle operation payloads |
+| `schemas/repo-ops.schema.json` | Normative | JSON Schema (draft 2020-12) for repository registry operation payloads |
 | `schemas/resolution.schema.json` | Normative | JSON Schema (draft 2020-12) for the resolution outcome object |
 | `testdata/canonicalization/vectors.json` | Normative | Canonicalization test vectors: input → exact canonical bytes, or input → rejection |
 | `testdata/ref-names/vectors.json` | Normative | Ref-naming test vectors (valid/invalid) and pinned refspecs |
@@ -57,6 +59,8 @@ disagree, the fixtures win and the prose gets fixed.
 | `testdata/project/field-rules.json` | Normative | Field-by-field fold merge strategy declarations for the project op vocabulary |
 | `testdata/cycle/valid/`, `testdata/cycle/invalid/` | Normative | Cycle operation payload instances; `invalid/index.json` records each expected rejection |
 | `testdata/cycle/field-rules.json` | Normative | Field-by-field fold merge strategy declarations for the cycle op vocabulary |
+| `testdata/repo/valid/`, `testdata/repo/invalid/` | Normative | Repository registry operation payload instances; `invalid/index.json` records each expected rejection |
+| `testdata/repo/field-rules.json` | Normative | Field-by-field fold merge strategy declarations for the repository registry op vocabulary |
 | `testdata/resolution/` | Normative | Resolution test vectors (`cases/*.json`) and outcome index (`index.json`) |
 | `spec.go` | Informative | Go embedding of `schemas/` and `testdata/` so every consumer reads the one committed copy |
 | `foldvectors.go` | Informative | Go loader and structural validation for fold ordering and merge test vectors |
@@ -85,6 +89,7 @@ spec/
 ├── comments.md             — normative: comment op vocabulary (v1)
 ├── issue-ops.md            — normative: issue family operation vocabulary (v1)
 ├── project-cycle.md        — normative: project & cycle grouping op vocabularies (v1)
+├── repo-ops.md             — normative: repository registry op vocabulary (v1)
 ├── resolution.md           — normative: re-anchoring & orphan degradation (v1)
 ├── spec.go                 — go:embed of schemas/ and testdata/ (package spec)
 ├── foldvectors.go          — loader and structural validation for fold test vectors
@@ -98,6 +103,7 @@ spec/
 │   ├── issue-ops.schema.json — draft 2020-12 schema for issue operations
 │   ├── project-ops.schema.json — draft 2020-12 schema for project operation payloads
 │   ├── cycle-ops.schema.json — draft 2020-12 schema for cycle operation payloads
+│   ├── repo-ops.schema.json — draft 2020-12 schema for repository registry operation payloads
 │   └── resolution.schema.json — draft 2020-12 schema for the resolution outcome object
 ├── testdata/
 │   ├── canonicalization/   — encoding vectors (valid and rejected inputs)
@@ -135,6 +141,10 @@ spec/
 │   ├── cycle/
 │   │   ├── valid/          — cycle op instances that must validate
 │   │   ├── invalid/        — cycle op instances that must be rejected (+ index.json)
+│   │   └── field-rules.json — fold merge strategies per field
+│   ├── repo/
+│   │   ├── valid/          — repo op instances that must validate
+│   │   ├── invalid/        — repo op instances that must be rejected (+ index.json)
 │   │   └── field-rules.json — fold merge strategies per field
 │   └── resolution/
 │       ├── cases/          — resolution test cases (anchor + target tree -> outcome)
