@@ -134,6 +134,62 @@ func TestGolden_ReviewStatus_UnknownOps(t *testing.T) {
 	compareOrUpdateGolden(t, "review_status_unknown_ops.json", stdout.Bytes())
 }
 
+func TestGolden_IssueList_Empty(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("init failed: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "list", "-C", env.repoDir, "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue list --json failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	compareOrUpdateGolden(t, "issue_list_empty.json", stdout.Bytes())
+}
+
+func TestGolden_IssueList_Single(t *testing.T) {
+	repoDir := loadFixtureRepo(t, "issue-lifecycle")
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"issue", "list", "-C", repoDir, "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue list --json failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	compareOrUpdateGolden(t, "issue_list_single.json", stdout.Bytes())
+}
+
+func TestGolden_IssueStatus_Detail(t *testing.T) {
+	repoDir := loadFixtureRepo(t, "issue-concurrent-triage")
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"issue", "status", "-C", repoDir, "i-concurrent", "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue status --json failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	compareOrUpdateGolden(t, "issue_status_detail.json", stdout.Bytes())
+}
+
+func TestGolden_IssueStatus_LinksAndUnknownOps(t *testing.T) {
+	repoDir := loadFixtureRepo(t, "issue-cross-repo-links")
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"issue", "status", "-C", repoDir, "i-links", "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue status --json failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	compareOrUpdateGolden(t, "issue_status_links.json", stdout.Bytes())
+}
+
 func TestGolden_SyncStatus(t *testing.T) {
 	_, aliceDir, _ := setupSyncTestHarness(t)
 	ctx := context.Background()
@@ -192,9 +248,13 @@ func TestDeterminism_AllReadVerbs(t *testing.T) {
 	repoDir := loadFixtureRepo(t, "review-mixed-signals")
 	ctx := context.Background()
 
+	issueRepoDir := loadFixtureRepo(t, "issue-concurrent-triage")
+
 	readCommands := [][]string{
 		{"review", "list", "-C", repoDir, "--json"},
 		{"review", "status", "-C", repoDir, "r-mixed", "--json"},
+		{"issue", "list", "-C", issueRepoDir, "--json"},
+		{"issue", "status", "-C", issueRepoDir, "i-concurrent", "--json"},
 	}
 
 	for _, cmd := range readCommands {
@@ -223,6 +283,8 @@ func TestEveryReadVerbHasJSON(t *testing.T) {
 	}{
 		{name: "review list", args: []string{"review", "list", "-h"}},
 		{name: "review status", args: []string{"review", "status", "-h"}},
+		{name: "issue list", args: []string{"issue", "list", "-h"}},
+		{name: "issue status", args: []string{"issue", "status", "-h"}},
 		{name: "sync", args: []string{"sync", "-h"}},
 	}
 

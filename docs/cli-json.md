@@ -21,7 +21,7 @@ All plumbing commands emit a single top-level JSON document on `stdout` adhering
 | Field | Type | Description |
 |---|---|---|
 | `schema_version` | integer | Envelope schema version (currently `1`). Bumps only on breaking changes. |
-| `kind` | string | Discriminator for the payload schema (e.g. `review.list`, `review.status`, `sync.status`, `sync.result`). |
+| `kind` | string | Discriminator for the payload schema (e.g. `review.list`, `review.status`, `issue.list`, `issue.status`, `sync.status`, `sync.result`). |
 | `data` | object or array | Verb-specific payload structure. |
 
 ---
@@ -160,6 +160,105 @@ Fetches detailed status and folded state for a single code review.
 
 ---
 
+### `writ issue list --json`
+
+Lists issues matching optional filters.
+
+- **Envelope `kind`**: `"issue.list"`
+- **`data` Type**: Array of `IssueSummary` objects (`[]IssueSummary`)
+
+#### `IssueSummary` Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `object_id` | string | 32-character lowercase hex identifier for the issue. |
+| `title` | string | Title of the issue. |
+| `state` | string | Lifecycle state (`open`, `closed`). |
+| `author` | object | Creator identity: `{ "name": string, "email": string }`. |
+| `created_at` | string | Creation timestamp in RFC 3339 UTC (`...Z`). |
+| `updated_at` | string | Last modification timestamp in RFC 3339 UTC (`...Z`). |
+
+#### Example Output
+
+```json
+{
+  "schema_version": 1,
+  "kind": "issue.list",
+  "data": [
+    {
+      "object_id": "0123456789abcdef0123456789abcdef",
+      "title": "Login form rejects valid emails",
+      "state": "open",
+      "author": {
+        "name": "Alice",
+        "email": "alice@example.com"
+      },
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:05:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### `writ issue status <id> --json`
+
+Fetches detailed status and folded state for a single issue.
+
+- **Envelope `kind`**: `"issue.status"`
+- **`data` Type**: `Issue` object
+
+#### `Issue` Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `object_id` | string | 32-character lowercase hex identifier for the issue. |
+| `title` | string | Title of the issue. |
+| `description` | string (optional) | Extended issue description. |
+| `state` | string | Lifecycle state (`open`, `closed`). |
+| `reason` | string (optional) | Reason text supplied with the last state change. |
+| `author` | object | Creator identity: `{ "name": string, "email": string }`. |
+| `created_at` | string | Creation timestamp in RFC 3339 UTC. |
+| `updated_at` | string | Last modification timestamp in RFC 3339 UTC. |
+| `assignees` | array of strings | Assignee names or emails, converged from concurrent add/remove operations. |
+| `labels` | array of strings | Labels attached to the issue, converged from concurrent add/remove operations. |
+| `links` | array of objects | Cross-reference links: `[ { "target": string, "target_type": string, "relation": string } ]`. `target` is either a bare object ID (same repo) or `<repo-id>#<object-id>` (cross-repo). |
+| `unknown_ops` | array of objects | Preserved forward-compatibility operations: `[ { "commit": string, "op_type": string, "op_version": integer } ]`. |
+
+#### Example Output
+
+```json
+{
+  "schema_version": 1,
+  "kind": "issue.status",
+  "data": {
+    "object_id": "0123456789abcdef0123456789abcdef",
+    "title": "Login form rejects valid emails",
+    "description": "RFC 5321 plus-addressing is rejected by the client-side regex",
+    "state": "open",
+    "author": {
+      "name": "Alice",
+      "email": "alice@example.com"
+    },
+    "created_at": "2026-01-01T00:00:00Z",
+    "updated_at": "2026-01-01T00:05:00Z",
+    "assignees": ["bob@example.com"],
+    "labels": ["bug"],
+    "links": [
+      {
+        "target": "1111111111111111111111111111111111111111",
+        "target_type": "review",
+        "relation": "fixes"
+      }
+    ],
+    "unknown_ops": []
+  }
+}
+```
+
+---
+
 ### `writ sync --status --json [remote...]`
 
 Reports the count of unpushed local operations without performing network transport.
@@ -243,6 +342,16 @@ writ review status <id> --json | jq -e '.data.approvals[] | select(.verdict == "
 ### Extract the latest revision head commit
 ```bash
 writ review status <id> --json | jq -r '.data.revisions[-1].head'
+```
+
+### List open issues
+```bash
+writ issue list --json | jq -r '.data[] | select(.state == "open") | "\(.object_id) \(.title)"'
+```
+
+### Check if an issue is assigned to a user
+```bash
+writ issue status <id> --json | jq -e --arg who "bob@example.com" '.data.assignees | index($who)' > /dev/null
 ```
 
 ### Check total unsynced operations before network sync

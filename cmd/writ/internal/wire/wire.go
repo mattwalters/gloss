@@ -19,6 +19,8 @@ const CurrentSchemaVersion = 1
 const (
 	KindReviewList   = "review.list"
 	KindReviewStatus = "review.status"
+	KindIssueList    = "issue.list"
+	KindIssueStatus  = "issue.status"
 	KindSyncStatus   = "sync.status"
 	KindSyncResult   = "sync.result"
 )
@@ -93,6 +95,39 @@ type Review struct {
 	Revisions   []Revision  `json:"revisions"`
 	Approvals   []Approval  `json:"approvals"`
 	CIStatuses  []CIStatus  `json:"ci_statuses"`
+	UnknownOps  []UnknownOp `json:"unknown_ops"`
+}
+
+// IssueSummary is a single row in the issue list output.
+type IssueSummary struct {
+	ObjectID  string    `json:"object_id"`
+	Title     string    `json:"title"`
+	State     string    `json:"state"`
+	Author    Author    `json:"author"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// IssueLink represents a cross-reference link attached to an issue.
+type IssueLink struct {
+	Target     string `json:"target"`
+	TargetType string `json:"target_type,omitempty"`
+	Relation   string `json:"relation"`
+}
+
+// Issue is the full detail view of an issue collaborative object.
+type Issue struct {
+	ObjectID    string      `json:"object_id"`
+	Title       string      `json:"title"`
+	Description string      `json:"description,omitempty"`
+	State       string      `json:"state"`
+	Reason      string      `json:"reason,omitempty"`
+	Author      Author      `json:"author"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	Assignees   []string    `json:"assignees"`
+	Labels      []string    `json:"labels"`
+	Links       []IssueLink `json:"links"`
 	UnknownOps  []UnknownOp `json:"unknown_ops"`
 }
 
@@ -260,6 +295,75 @@ func FromReviewResult(r writ.ReviewResult) Review {
 		Revisions:   revisions,
 		Approvals:   approvals,
 		CIStatuses:  ciStatuses,
+		UnknownOps:  unknownOps,
+	}
+}
+
+// FromIssueResultSummary converts a writ.IssueResult into an IssueSummary wire struct.
+func FromIssueResultSummary(r writ.IssueResult) IssueSummary {
+	return IssueSummary{
+		ObjectID:  r.ObjectID,
+		Title:     r.Issue.Title,
+		State:     r.Issue.State,
+		Author:    Author{Name: r.Author.Name, Email: r.Author.Email},
+		CreatedAt: r.CreatedAt.UTC(),
+		UpdatedAt: r.UpdatedAt.UTC(),
+	}
+}
+
+// FromIssueResultSummaries converts a slice of writ.IssueResults into a slice of IssueSummaries.
+// An empty slice is returned rather than nil to ensure JSON serialization as `[]`.
+func FromIssueResultSummaries(issues []writ.IssueResult) []IssueSummary {
+	if len(issues) == 0 {
+		return []IssueSummary{}
+	}
+	out := make([]IssueSummary, len(issues))
+	for i, r := range issues {
+		out[i] = FromIssueResultSummary(r)
+	}
+	return out
+}
+
+// FromIssueResult converts a writ.IssueResult into a full detail Issue wire struct.
+// Collections are always initialized to empty non-nil slices so they serialize as `[]`.
+func FromIssueResult(r writ.IssueResult) Issue {
+	assignees := r.Issue.Assignees
+	if assignees == nil {
+		assignees = []string{}
+	}
+	labels := r.Issue.Labels
+	if labels == nil {
+		labels = []string{}
+	}
+	links := make([]IssueLink, len(r.Issue.Links))
+	for i, l := range r.Issue.Links {
+		links[i] = IssueLink{
+			Target:     l.Target,
+			TargetType: l.TargetType,
+			Relation:   l.Relation,
+		}
+	}
+	unknownOps := make([]UnknownOp, len(r.Issue.UnknownOps))
+	for i, u := range r.Issue.UnknownOps {
+		unknownOps[i] = UnknownOp{
+			Commit:    u.Commit,
+			OpType:    u.OpType,
+			OpVersion: u.OpVersion,
+		}
+	}
+
+	return Issue{
+		ObjectID:    r.ObjectID,
+		Title:       r.Issue.Title,
+		Description: r.Issue.Description,
+		State:       r.Issue.State,
+		Reason:      r.Issue.Reason,
+		Author:      Author{Name: r.Author.Name, Email: r.Author.Email},
+		CreatedAt:   r.CreatedAt.UTC(),
+		UpdatedAt:   r.UpdatedAt.UTC(),
+		Assignees:   assignees,
+		Labels:      labels,
+		Links:       links,
 		UnknownOps:  unknownOps,
 	}
 }
