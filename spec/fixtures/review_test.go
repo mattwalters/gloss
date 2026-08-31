@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/codec"
@@ -76,11 +75,22 @@ func runReviewFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 	}
 	sort.Strings(objectIDs)
 
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	r := rand.New(rand.NewSource(42))
 
 	for _, objID := range objectIDs {
 		codecOps := enumRes.Ops[objID]
-		if len(codecOps) == 0 || codecOps[0].ObjectType != "review" {
+		if len(codecOps) == 0 {
+			continue
+		}
+
+		hasReviewOp := false
+		for _, op := range codecOps {
+			if op.ObjectType == "review" {
+				hasReviewOp = true
+				break
+			}
+		}
+		if !hasReviewOp {
 			continue
 		}
 
@@ -122,6 +132,10 @@ func runReviewFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 			ObjectID: objID,
 			Review:   reviewState,
 		})
+	}
+
+	if len(golden.Objects) == 0 {
+		return nil, fmt.Errorf("review fixture %s yielded zero review objects", fix.Name)
 	}
 
 	b, err := json.MarshalIndent(golden, "", "  ")

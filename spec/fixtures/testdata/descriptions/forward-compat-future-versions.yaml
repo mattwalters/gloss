@@ -4,7 +4,7 @@ description: >
   multi-version and v1 baseline operations (FC-7, FC-8, FC-10).
 
 refs:
-  - name: refs/writ/alice/review
+  - name: refs/writ/0123456789abcdef/review
     history:
       - commits:
           - id: alice-baseline-v1
@@ -34,7 +34,7 @@ refs:
                   min_approvals: 2
             expect: accept
 
-  - name: refs/writ/bob/review
+  - name: refs/writ/fedcba9876543210/review
     history:
       - commits:
           - id: bob-multiversion-known-v2

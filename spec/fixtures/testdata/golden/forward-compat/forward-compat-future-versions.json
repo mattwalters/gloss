@@ -2,7 +2,7 @@
   "reader_profile": "synthetic-conforming-reader-v1",
   "ops": [
     {
-      "ref": "refs/writ/alice/review",
+      "ref": "refs/writ/0123456789abcdef/review",
       "commit": "290ce1cb31c68170262856dc1fe93a0ac940e62a",
       "parents": [],
       "blob_sha": "60a25f85e60a9ef7915e9fa508f965977fff4b50",
@@ -11,7 +11,7 @@
       "observed_disposition": "interpretable"
     },
     {
-      "ref": "refs/writ/alice/review",
+      "ref": "refs/writ/0123456789abcdef/review",
       "commit": "031ccbad9958a3002d7804e396c211d74fc85987",
       "parents": [
         "290ce1cb31c68170262856dc1fe93a0ac940e62a"
@@ -22,7 +22,7 @@
       "observed_disposition": "opaque"
     },
     {
-      "ref": "refs/writ/bob/review",
+      "ref": "refs/writ/fedcba9876543210/review",
       "commit": "eafb2d5323ec8ed03657b2e9776e68970e567bcf",
       "parents": [],
       "blob_sha": "620de4d0f79b78e8fc3d20a209731196cec46721",
@@ -31,7 +31,7 @@
       "observed_disposition": "interpretable"
     },
     {
-      "ref": "refs/writ/bob/review",
+      "ref": "refs/writ/fedcba9876543210/review",
       "commit": "96b61359722a6af55cb69ae70727e74ef1da0da7",
       "parents": [
         "eafb2d5323ec8ed03657b2e9776e68970e567bcf",

@@ -36,14 +36,15 @@ type ObjectState struct {
 // Review represents the materialized state of a code review collaborative object (v1),
 // produced by FoldReview.
 type Review struct {
-	Title       string     `json:"title,omitempty"`
-	Description string     `json:"description,omitempty"`
-	Status      string     `json:"status,omitempty"`
-	MergeCommit string     `json:"merge_commit,omitempty"`
-	Reason      string     `json:"reason,omitempty"`
-	Revisions   []Revision `json:"revisions,omitempty"`
-	Approvals   []Approval `json:"approvals,omitempty"`
-	CIStatuses  []CIStatus `json:"ci_statuses,omitempty"`
+	Title       string      `json:"title,omitempty"`
+	Description string      `json:"description,omitempty"`
+	Status      string      `json:"status,omitempty"`
+	MergeCommit string      `json:"merge_commit,omitempty"`
+	Reason      string      `json:"reason,omitempty"`
+	Revisions   []Revision  `json:"revisions,omitempty"`
+	Approvals   []Approval  `json:"approvals,omitempty"`
+	CIStatuses  []CIStatus  `json:"ci_statuses,omitempty"`
+	UnknownOps  []UnknownOp `json:"unknown_ops,omitempty"`
 }
 
 // Revision represents a code revision push (base and head commits) on a review.

@@ -2,7 +2,7 @@
   "reader_profile": "synthetic-conforming-reader-v1",
   "ops": [
     {
-      "ref": "refs/writ/alice/review",
+      "ref": "refs/writ/0123456789abcdef/review",
       "commit": "6589046cba37ca71ff7c11eef2babe5498945d01",
       "parents": [],
       "blob_sha": "cf82841eb0d4e7370d7be0bff3f54796ce41e93a",
@@ -11,7 +11,7 @@
       "observed_disposition": "interpretable"
     },
     {
-      "ref": "refs/writ/alice/review",
+      "ref": "refs/writ/0123456789abcdef/review",
       "commit": "c41f48c534a9ef87ae10bd4331ca7ced6868015a",
       "parents": [
         "6589046cba37ca71ff7c11eef2babe5498945d01"
@@ -22,7 +22,7 @@
       "observed_disposition": "opaque"
     },
     {
-      "ref": "refs/writ/alice/review",
+      "ref": "refs/writ/0123456789abcdef/review",
       "commit": "7e440b19a86317f08137120af2b39c063ddb1cf0",
       "parents": [
         "c41f48c534a9ef87ae10bd4331ca7ced6868015a"
@@ -33,7 +33,7 @@
       "observed_disposition": "interpretable"
     },
     {
-      "ref": "refs/writ/bob/review",
+      "ref": "refs/writ/fedcba9876543210/review",
       "commit": "6dd9f5605c5b7abcf3a8f4280ae41087508d304e",
       "parents": [],
       "blob_sha": "e6ad854eeb48b4a37208f2836c2340cbfcbeb987",
@@ -42,7 +42,7 @@
       "observed_disposition": "opaque"
     },
     {
-      "ref": "refs/writ/bob/review",
+      "ref": "refs/writ/fedcba9876543210/review",
       "commit": "af4ca081fea9b3db3360894c8958ad8cf699b2c7",
       "parents": [
         "6dd9f5605c5b7abcf3a8f4280ae41087508d304e",
@@ -54,7 +54,7 @@
       "observed_disposition": "interpretable"
     },
     {
-      "ref": "refs/writ/alice/review-control",
+      "ref": "refs/writ/0123456789abcdef/review-control",
       "commit": "6589046cba37ca71ff7c11eef2babe5498945d01",
       "parents": [],
       "blob_sha": "cf82841eb0d4e7370d7be0bff3f54796ce41e93a",
@@ -63,7 +63,7 @@
       "observed_disposition": "interpretable"
     },
     {
-      "ref": "refs/writ/alice/review-control",
+      "ref": "refs/writ/0123456789abcdef/review-control",
       "commit": "0d454a6c7b1823e4743b6c1762a78307a7c983ce",
       "parents": [
         "6589046cba37ca71ff7c11eef2babe5498945d01"
@@ -74,7 +74,7 @@
       "observed_disposition": "interpretable"
     },
     {
-      "ref": "refs/writ/bob/review-control",
+      "ref": "refs/writ/fedcba9876543210/review-control",
       "commit": "607c4a2101962c2ea15f759cd140ab67a8a43806",
       "parents": [
         "0d454a6c7b1823e4743b6c1762a78307a7c983ce"
