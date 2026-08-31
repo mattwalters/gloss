@@ -3,6 +3,7 @@
 Status: **normative**. Schema: [`schemas/issue-ops.schema.json`](schemas/issue-ops.schema.json).
 Vectors: [`testdata/issue-ops/`](testdata/issue-ops/).
 Field rules: [`testdata/issue-ops/field-rules.json`](testdata/issue-ops/field-rules.json).
+Fixtures: [`spec/fixtures/testdata/descriptions/issue-*.yaml`](fixtures/testdata/descriptions/) and [`spec/fixtures/testdata/golden/issue/`](fixtures/testdata/golden/issue/).
 
 This document defines the operation vocabulary, payload schemas, and fold
 semantics for issues in Writ (`object_type: "issue"`). It covers issue

@@ -1,0 +1,79 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/0123456789abcdef/issue",
+      "commit": "4a2608f22ba59708489436bfb19f19ae60e5b903"
+    },
+    {
+      "name": "refs/writ/fedcba9876543210/issue",
+      "commit": "e693c3e8a579b65b2bdb93aa4e1c73f46eee5085"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/0123456789abcdef/issue",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "cf81e5ca3e4831e8d2a815e86c5b074b7f530286",
+          "tree": "230346f92affc9fab791b72da9781704eeff2f02",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create issue/i-lifecycle\n",
+          "signed": true
+        },
+        {
+          "sha": "f9be8939b1bab4996e56d101a4833eec59d9f15c",
+          "tree": "421743e11350cf83b5f8e54af0bf9bd29d4be853",
+          "parents": [
+            "cf81e5ca3e4831e8d2a815e86c5b074b7f530286"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: update issue/i-lifecycle\n",
+          "signed": true
+        },
+        {
+          "sha": "4a2608f22ba59708489436bfb19f19ae60e5b903",
+          "tree": "7f0262da42bce984015b0623b18645204dee5891",
+          "parents": [
+            "f9be8939b1bab4996e56d101a4833eec59d9f15c"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: set-state issue/i-lifecycle\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/fedcba9876543210/issue",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "18a7e130fa4a876ac93745a9ab930d59fe16bed9",
+          "tree": "a069d549d37ddc6991778ec92f0d6bbbf884aafd",
+          "parents": [
+            "4a2608f22ba59708489436bfb19f19ae60e5b903"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:03:00Z",
+          "message": "writ: set-state issue/i-lifecycle\n",
+          "signed": true
+        },
+        {
+          "sha": "e693c3e8a579b65b2bdb93aa4e1c73f46eee5085",
+          "tree": "d717892ebf8fe0ce6860da619a436e2a8648769a",
+          "parents": [
+            "18a7e130fa4a876ac93745a9ab930d59fe16bed9"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:04:00Z",
+          "message": "writ: update issue/i-lifecycle\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "objects": [
+    {
+      "object_id": "i-lifecycle",
+      "issue": {
+        "title": "Issue Lifecycle — Revised",
+        "description": "Updated description with new requirements",
+        "state": "open",
+        "reason": "reopened with new requirements"
+      }
+    }
+  ]
+}

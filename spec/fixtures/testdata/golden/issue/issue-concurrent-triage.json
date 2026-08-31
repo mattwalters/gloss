@@ -1,0 +1,20 @@
+{
+  "objects": [
+    {
+      "object_id": "i-concurrent",
+      "issue": {
+        "title": "Concurrent Triage Issue",
+        "description": "Testing concurrent triage operations",
+        "state": "open",
+        "assignees": [
+          "alice",
+          "charlie"
+        ],
+        "labels": [
+          "bug",
+          "documentation"
+        ]
+      }
+    }
+  ]
+}

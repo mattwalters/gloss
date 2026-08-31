@@ -279,3 +279,6 @@ The normative test vectors and fixture repositories verify compliance:
 - `spec/testdata/fold/order/`: Abstract op graphs testing total order derivation across linear chains, multi-writer forks, equal-$t^*$ ties, skewed clocks, ancestry truncation, and multi-object interleaving.
 - `spec/testdata/fold/merge/`: Op graphs testing each catalogue strategy, including delete/edit interleavings and concurrent mutations.
 - `spec/fixtures/testdata/descriptions/fold-*.yaml` and `spec/fixtures/testdata/golden/fold/`: Signed fixture repositories exercising concurrent field edits, multi-device writer races, LWW and tiebreaks, per-field merge strategies, and ancestry truncation.
+- `spec/fixtures/testdata/descriptions/issue-*.yaml` and `spec/fixtures/testdata/golden/issue/`: Signed fixture repositories exercising issue lifecycle, state transitions, concurrent assign and label OR-sets, and cross-repo links.
+- `spec/fixtures/testdata/descriptions/project-*.yaml` and `spec/fixtures/testdata/golden/project/`: Signed fixture repositories exercising project lifecycle, status transitions, and issue membership races.
+- `spec/fixtures/testdata/descriptions/cycle-*.yaml` and `spec/fixtures/testdata/golden/cycle/`: Signed fixture repositories exercising cycle lifecycle, concurrent date updates, and issue membership.
