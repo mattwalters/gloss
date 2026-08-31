@@ -168,6 +168,16 @@ func Run(t TestReporter, s Scenario) {
 				t.Fatalf("step %d: unknown device %q in Commit", stepIdx, step.Device.Name)
 				return
 			}
+			branch := step.Branch
+			if branch == "" {
+				branch = "main"
+			}
+			cmdBranch := exec.Command("git", "-C", rt.dir, "checkout", "-B", branch)
+			if out, err := cmdBranch.CombinedOutput(); err != nil {
+				t.Fatalf("step %d: checkout -B %s failed: %v (%s)", stepIdx, branch, err, string(out))
+				return
+			}
+
 			for path, content := range step.Files {
 				fullPath := filepath.Join(rt.dir, path)
 				if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
@@ -178,15 +188,6 @@ func Run(t TestReporter, s Scenario) {
 					t.Fatalf("step %d: write %s failed: %v", stepIdx, fullPath, err)
 					return
 				}
-			}
-			branch := step.Branch
-			if branch == "" {
-				branch = "main"
-			}
-			cmdBranch := exec.Command("git", "-C", rt.dir, "checkout", "-B", branch)
-			if out, err := cmdBranch.CombinedOutput(); err != nil {
-				t.Fatalf("step %d: checkout -B %s failed: %v (%s)", stepIdx, branch, err, string(out))
-				return
 			}
 
 			cmdAdd := exec.Command("git", "-C", rt.dir, "add", "-A")
@@ -295,7 +296,7 @@ func Run(t TestReporter, s Scenario) {
 			targetSHA := step.TargetOpSHA
 			if targetSHA == "" {
 				ops := rt.appendedOpsByType[step.ObjectType]
-				if len(ops) <= step.TargetOpIndex {
+				if step.TargetOpIndex < 0 || step.TargetOpIndex >= len(ops) {
 					t.Fatalf("step %d: TargetOpIndex %d out of range (have %d ops for %s)", stepIdx, step.TargetOpIndex, len(ops), step.ObjectType)
 					return
 				}
@@ -332,7 +333,7 @@ func Run(t TestReporter, s Scenario) {
 			targetSHA := step.TargetOpSHA
 			if targetSHA == "" {
 				ops := rt.appendedOpsByType[step.ObjectType]
-				if len(ops) <= step.TargetOpIndex {
+				if step.TargetOpIndex < 0 || step.TargetOpIndex >= len(ops) {
 					t.Fatalf("step %d: TargetOpIndex %d out of range (have %d ops for %s)", stepIdx, step.TargetOpIndex, len(ops), step.ObjectType)
 					return
 				}
@@ -351,10 +352,12 @@ func Run(t TestReporter, s Scenario) {
 				snapshot, err := buildSnapshot(t, rt, step.AnchorChecks)
 				if err != nil {
 					t.Fatalf("step %d: build snapshot for device %s failed: %v", stepIdx, rt.device.Name, err)
+					return
 				}
 				raw, err := json.MarshalIndent(snapshot, "", "  ")
 				if err != nil {
 					t.Fatalf("step %d: marshal snapshot for device %s failed: %v", stepIdx, rt.device.Name, err)
+					return
 				}
 				raw = append(raw, '\n')
 				if i == 0 {
@@ -369,6 +372,7 @@ func Run(t TestReporter, s Scenario) {
 						)
 						t.Fatalf("step %d: convergence mismatch between %s and %s:\n%s",
 							stepIdx, deviceList[0].device.Name, rt.device.Name, diff)
+						return
 					}
 				}
 			}
@@ -379,22 +383,26 @@ func Run(t TestReporter, s Scenario) {
 			}
 			goldenPath := filepath.Join("testdata", "golden", goldenName+".json")
 
-			if fixtures.UpdateGolden() {
+			if fixtures.UpdateGolden() && !step.SkipGoldenUpdate {
 				if err := os.MkdirAll(filepath.Dir(goldenPath), 0o755); err != nil {
 					t.Fatalf("step %d: mkdir for golden %s failed: %v", stepIdx, goldenPath, err)
+					return
 				}
 				if err := os.WriteFile(goldenPath, dev0Bytes, 0o644); err != nil {
 					t.Fatalf("step %d: write golden %s failed: %v", stepIdx, goldenPath, err)
+					return
 				}
 				t.Logf("[GOLDEN UPDATED] %s (%d bytes)", goldenPath, len(dev0Bytes))
 			} else {
 				want, err := os.ReadFile(goldenPath)
 				if err != nil {
 					t.Fatalf("step %d: read golden %s failed (run with -update-golden to generate): %v", stepIdx, goldenPath, err)
+					return
 				}
 				if !bytes.Equal(dev0Bytes, want) {
 					diff := fixtures.Diff(goldenPath+" (golden)", want, "actual (converged)", dev0Bytes)
 					t.Fatalf("step %d: converged snapshot differs from golden %s:\n%s", stepIdx, goldenPath, diff)
+					return
 				}
 			}
 
@@ -515,8 +523,11 @@ func buildSnapshot(t TestReporter, rt *deviceRuntime, checks []AnchorCheck) (Sna
 	// Anchor checks
 	for _, chk := range checks {
 		comm := findCommentInThreads(snapshot.Comments, chk.CommentID)
-		if comm == nil || comm.Anchor == nil {
-			continue
+		if comm == nil {
+			return Snapshot{}, fmt.Errorf("anchor check: comment %q not found in snapshot comments", chk.CommentID)
+		}
+		if comm.Anchor == nil {
+			return Snapshot{}, fmt.Errorf("anchor check: comment %q has no anchor", chk.CommentID)
 		}
 		branch := chk.Branch
 		if branch == "" {

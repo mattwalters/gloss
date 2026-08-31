@@ -115,8 +115,9 @@ type AnchorCheck struct {
 // performs anchor checks against the target code tree, asserts byte-identical
 // converged snapshots across all devices, and verifies against the golden file.
 type Converge struct {
-	AnchorChecks []AnchorCheck
-	GoldenName   string
+	AnchorChecks     []AnchorCheck
+	GoldenName       string
+	SkipGoldenUpdate bool
 }
 
 func (Converge) isStep() {}

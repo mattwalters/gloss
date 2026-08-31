@@ -575,6 +575,8 @@ func TestNegativeControl_MissingFetchFails(t *testing.T) {
 			scenario.Fetch{Device: bobLaptop},
 
 			scenario.Converge{
+				GoldenName:       "canonical",
+				SkipGoldenUpdate: true,
 				AnchorChecks: []scenario.AnchorCheck{
 					{CommentID: "c-anchor", Branch: "main"},
 				},
@@ -689,6 +691,8 @@ func TestNegativeControl_MissingOpFails(t *testing.T) {
 			scenario.Fetch{Device: bobLaptop},
 			scenario.Fetch{Device: aliceDesktop},
 			scenario.Converge{
+				GoldenName:       "canonical",
+				SkipGoldenUpdate: true,
 				AnchorChecks: []scenario.AnchorCheck{
 					{CommentID: "c-anchor", Branch: "main"},
 				},
