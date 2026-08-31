@@ -91,17 +91,25 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 		}
 	}
 
+	baseIdent := Identity{
+		WriterID: writerID,
+		Author: Author{
+			Name:  name,
+			Email: email,
+		},
+	}
+
 	// 4. GPG Format: gpg.format (must be ssh)
 	gpgFormat, ok := cfg["gpg.format"]
 	if !ok || gpgFormat == "" {
-		return Identity{}, &ConfigError{
+		return baseIdent, &ConfigError{
 			Key:     "gpg.format",
 			Value:   "",
 			Problem: ErrUnsupportedFormat,
 		}
 	}
 	if strings.ToLower(gpgFormat) != "ssh" {
-		return Identity{}, &ConfigError{
+		return baseIdent, &ConfigError{
 			Key:     "gpg.format",
 			Value:   gpgFormat,
 			Problem: ErrUnsupportedFormat,
@@ -111,7 +119,7 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 	// 5. Signing Key: user.signingKey
 	rawSigningKey, ok := cfg["user.signingkey"]
 	if !ok || rawSigningKey == "" {
-		return Identity{}, &ConfigError{
+		return baseIdent, &ConfigError{
 			Key:     "user.signingKey",
 			Problem: ErrMissing,
 		}
@@ -121,7 +129,7 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 	if strings.HasPrefix(rawSigningKey, "key::") {
 		literalKey := strings.TrimPrefix(rawSigningKey, "key::")
 		if literalKey == "" {
-			return Identity{}, &ConfigError{
+			return baseIdent, &ConfigError{
 				Key:     "user.signingKey",
 				Value:   rawSigningKey,
 				Problem: ErrInvalid,

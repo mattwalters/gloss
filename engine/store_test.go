@@ -147,3 +147,53 @@ func TestStoreCloseAndRefresh(t *testing.T) {
 		t.Fatalf("second Close failed: %v", err)
 	}
 }
+
+func TestStoreMissingSigningKey(t *testing.T) {
+	dir := t.TempDir()
+	runGitCmd(t, dir, "init")
+	runGitCmd(t, dir, "config", "user.name", "Alice Test")
+	runGitCmd(t, dir, "config", "user.email", "alice@example.com")
+	runGitCmd(t, dir, "config", "writ.writerId", "0123456789abcdef")
+	// Omit user.signingKey
+
+	dummyFile := filepath.Join(dir, "README.md")
+	if err := os.WriteFile(dummyFile, []byte("# Test\n"), 0o644); err != nil {
+		t.Fatalf("write dummy file: %v", err)
+	}
+	runGitCmd(t, dir, "add", "README.md")
+	runGitCmd(t, dir, "commit", "-m", "initial commit")
+
+	ctx := context.Background()
+
+	// 1. Without WithSigner: Writer() returns identity, but writes return ErrNoSigningKey
+	s1, err := writ.Open(dir)
+	if err != nil {
+		t.Fatalf("Open without signer failed: %v", err)
+	}
+	defer s1.Close()
+
+	if w := s1.Writer(); w.ID != "0123456789abcdef" || w.Name != "Alice Test" {
+		t.Errorf("unexpected writer: %+v", w)
+	}
+
+	_, err = s1.Reviews.Create(ctx, writ.NewReview{Title: "Should fail signing key"})
+	if !errors.Is(err, writ.ErrNoSigningKey) {
+		t.Errorf("expected ErrNoSigningKey, got: %v", err)
+	}
+
+	// 2. With WithSigner: write succeeds
+	s2, err := writ.Open(dir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open with custom signer failed: %v", err)
+	}
+	defer s2.Close()
+
+	id, err := s2.Reviews.Create(ctx, writ.NewReview{Title: "Should succeed with custom signer"})
+	if err != nil {
+		t.Fatalf("Reviews.Create with custom signer failed: %v", err)
+	}
+	if id == "" {
+		t.Fatal("expected non-empty review ID")
+	}
+}
+

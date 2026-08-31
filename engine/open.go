@@ -117,8 +117,9 @@ func Open(path string, opts ...Option) (*Store, error) {
 		// Check if error was solely due to signing key / gpg format
 		var cfgErr *identity.ConfigError
 		if errors.As(identErr, &cfgErr) && (cfgErr.Key == "user.signingKey" || cfgErr.Key == "gpg.format") {
-			// Writer ID and user name/email are valid
+			// Writer ID and user name/email are valid and retained in ident
 			hasIdentity = true
+			identErr = nil // Clear ident error so identity check passes
 			if cfg.signer != nil {
 				signer = cfg.signer
 				hasSigner = true

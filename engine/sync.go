@@ -162,6 +162,10 @@ func countCommitsBetween(repo *git.Repository, oldHash, newHash plumbing.Hash) i
 		if err != nil {
 			break
 		}
+		// Stop if we reach a causal parent authored by a different identity.
+		// On a writer's initial chain commit, ParentHashes[0] points to a causal
+		// parent from another writer; stopping at the foreign author boundary prevents
+		// crossing over into other chains when oldHash is ZeroHash.
 		if commit.Author.Email != targetAuthor.Email && commit.Author.Name != targetAuthor.Name {
 			break
 		}
