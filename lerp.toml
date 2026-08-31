@@ -113,17 +113,11 @@ args = "--permission-mode bypassPermissions"
 # tidiness-not-security caveat, same "or curate an allowlist yourself"
 # alternative.
 #
-# model/effort ride agy's own default rather than pin one: WRIT-63 asked to
-# pin planning's, not implementing's, and picking a model here would
-# be a guess with no implement run yet to weigh it against. Revisit once
-# the line below is no longer true.
-#
-# Not yet run end to end on a real ticket — provision, run, draft PR,
-# verdict comment, status move — against live GitHub and Linear. That is a
-# real side-effecting dry run and belongs to whoever reviews this PR to
-# greenlight, not to the run that wrote this file.
+# Pinned to the studio standard (WRIT-79): gemini-3.7-flash-high for the
+# implement runner.
 [runners.antigravity]
 vendor = "antigravity"
+model = "gemini-3.7-flash-high"
 args = "--dangerously-skip-permissions"
 
 # Each agent needs its own Linear access — lerp passes only the ticket
@@ -339,25 +333,18 @@ a human has just been reading. Skip this step and everything after it still
 appears to work: you would rebase the operator's main onto main, pass the
 check, force that over the approved branch, and merge an empty diff.
 
-Before merging, find out whether this repository has CI to consult at all:
-look for workflows under `.github/workflows` in the tree you fetched. As
-this is written there are none — the repository predates its own code — and
-with no workflows there is no run to wait for anywhere in this prompt: the
-check you run yourself below is the only verdict there is, and an empty
-answer from `gh` about checks means nothing is configured, not that
-something failed. The rest of this paragraph applies from the day workflows
-land here. When they exist, check with `gh` that the default branch is
-green — its latest CI run against main's own head, not a required-checks
-setting: this repository protects no branch, so asking after required
-checks comes back empty and proves nothing. Green means a finished,
-successful run against that exact head. One still going is not green yet,
-so wait for it, and a head GitHub has no run for at all is not green
-either — read that as red rather than reaching back to the previous head's
-run, which tested code that is no longer what you would be merging onto.
-Merging onto a red main buries somebody else's breakage inside your merge,
-where the next person to look will find it attributed to this pull request.
-If main is red, do not merge: comment on {{ticket}} saying so and move it
-to {{on_failure}}. Main is not yours to fix from here.
+Before merging, check with `gh` that the default branch is green — its
+latest CI run against main's own head, not a required-checks setting: this
+repository protects no branch, so asking after required checks comes back
+empty and proves nothing. Green means a finished, successful run against that
+exact head. One still going is not green yet, so wait for it, and a head
+GitHub has no run for at all is not green either — read that as red rather
+than reaching back to the previous head's run, which tested code that is no
+longer what you would be merging onto. Merging onto a red main buries
+somebody else's breakage inside your merge, where the next person to look
+will find it attributed to this pull request. If main is red, do not merge:
+comment on {{ticket}} saying so and move it to {{on_failure}}. Main is not
+yours to fix from here.
 
 Then bring the branch up to date with the default branch — rebase it, or
 merge the default branch into it — and resolve the conflicts textually. Run
@@ -392,9 +379,7 @@ which is why the implement queue insists that title carry the ticket
 identifier, since here it becomes the permanent subject line on main. Merge
 only once the pull request's own checks are green against the head you just
 pushed: your local check says the code is fine, these say that what lands
-on main is. Where no workflows exist there are no such checks, and the
-check you already ran stands in for them; where they do, they will still be
-running when you get there, so watch them with
+on main is. They will still be running when you get there, so watch them with
 `gh pr checks <number> --watch` — by number for the same reason as above.
 An answer of no checks reported is then the window before GitHub has
 attached runs to the head you just pushed; that is a look-again, not a
