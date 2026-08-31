@@ -36,7 +36,7 @@ Potential hosted layer (separate, later): an **awareness service** — git has n
 
 A relay is never a source of truth — if it's unavailable, clients degrade to polling and git remains canonical.
 
-**Licensing:** Apache-2.0 (the patent grant matters for enterprise adoption; it's also the git-appraise precedent). Deliberately not a source-available license: the open layer is client-side by design, and the format's credibility as a neutral convention depends on it being unambiguously free. DCO from the first external PR to keep provenance clean.
+**Licensing:** Apache-2.0 (the patent grant matters for enterprise adoption; it's also the git-appraise precedent). Deliberately not a source-available license: the open layer is client-side by design, and the format's credibility as a neutral convention depends on it being unambiguously free. DCO on every commit to keep provenance clean.
 
 ## Performance story
 
