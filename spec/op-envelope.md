@@ -133,7 +133,8 @@ content addressing never depend on encoder quirks.
 - `op_type` (string, required) — the operation's type within its object
   type's vocabulary (e.g. `create`). Same lexical form as `object_type`.
   The per-object-type vocabularies are specified in `spec/review-ops.md`
-  (reviews) and WRIT-9 through WRIT-11 (comments, issues, projects, cycles).
+  (reviews), `spec/comments.md` (comments), `spec/issue-ops.md` (issues),
+  and WRIT-11 (projects, cycles).
 - `op_version` (integer, required) — schema version of this op type's
   body, starting at 1. A small JSON integer; it MUST be ≥ 1 and ≤ 2⁵³−1
   so it is always exactly representable as a double. Any field that
@@ -143,7 +144,8 @@ content addressing never depend on encoder quirks.
 - `body` (object, required) — the type-specific content. An open slot at
   this layer: each (`object_type`, `op_type`, `op_version`) triple
   defines its body schema in the op vocabulary specs (`spec/review-ops.md`
-  for reviews, WRIT-9–11 for comments, issues, projects, cycles). An op
+  for reviews, `spec/comments.md` for comments, `spec/issue-ops.md` for issues,
+  WRIT-11 for projects, cycles). An op
   with no content still carries `"body":{}`.
 
 ### Forward compatibility
@@ -181,7 +183,7 @@ cannot live in fold, and this document does not define when it runs.
 ## Out of scope, with forward references
 
 - Ref layout, writer-id convention, and refspecs: [`spec/ref-layout.md`](ref-layout.md).
-- Per-op-type body schemas and vocabularies: review family ([`spec/review-ops.md`](review-ops.md)), comment (**WRIT-9**), issue (**WRIT-10**), project/cycle (**WRIT-11**).
+- Per-op-type body schemas and vocabularies: review family ([`spec/review-ops.md`](review-ops.md)), comment ([`spec/comments.md`](comments.md)), issue ([`spec/issue-ops.md`](issue-ops.md)), project/cycle (**WRIT-11**).
 - Fold semantics, ordering, and concurrency tiebreaks: [`spec/fold.md`](fold.md).
 - Unknown-op handling and forward-compatibility rules: [`spec/forward-compatibility.md`](forward-compatibility.md).
 - Workspace-global object-id format, cross-repo references & workspace repo: [`spec/identifiers.md`](identifiers.md) (**WRIT-16**).
