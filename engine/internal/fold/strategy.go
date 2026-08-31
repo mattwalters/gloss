@@ -367,7 +367,11 @@ func (a *keyedLWWAccumulator) Apply(_ codec.Op, body map[string]any, _ map[strin
 	a.hasKeyed = true
 	key := make([]string, 0, len(a.keyCols))
 	for _, kf := range a.keyCols {
-		key = append(key, fmt.Sprint(body[kf]))
+		if val, ok := body[kf]; ok && val != nil {
+			key = append(key, fmt.Sprint(val))
+		} else {
+			key = append(key, "")
+		}
 	}
 	keyStr := fmt.Sprintf("%q", key)
 	a.latest[keyStr] = &keyedEntry{key: key, value: val}

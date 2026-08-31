@@ -164,7 +164,9 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 
 			var body map[string]any
 			if len(cop.Body) > 0 {
-				_ = json.Unmarshal(cop.Body, &body)
+				if err := json.Unmarshal(cop.Body, &body); err != nil {
+					t.Fatalf("unmarshaling op %s body: %v", cop.ID, err)
+				}
 			}
 			if body == nil {
 				body = make(map[string]any)

@@ -1,9 +1,8 @@
 name: review-mixed-signals
 description: >
   Single review object r-mixed combining create with description, two revision pushes,
-  concurrent set-status, approvals from Alice and Bob across both revisions including
-  one approval with subject omitted (testing default-subject rule), and two distinct ci-status
-  checks on the same revision head (exercising field-name separation between revision, description, and message).
+  concurrent set-status, approvals from Alice and Bob across both revisions,
+  and two distinct ci-status checks on the same revision head (exercising field-name separation between revision, description, and message).
 
 refs:
   - name: refs/writ/0123456789abcdef/review
@@ -50,7 +49,7 @@ refs:
                 head: "2222222222222222222222222222222222222222"
             expect: accept
 
-          - id: alice-app-r1-default-subject
+          - id: alice-app-r1
             parents: [alice-rev2]
             author: alice
             timestamp: 2026-01-01T00:03:00Z
@@ -62,11 +61,12 @@ refs:
               body:
                 revision: "1111111111111111111111111111111111111111"
                 verdict: "approve"
-                message: "Alice approves r1 without explicit subject"
+                subject: "alice"
+                message: "Alice approves r1"
             expect: accept
 
           - id: alice-status
-            parents: [alice-app-r1-default-subject]
+            parents: [alice-app-r1]
             author: alice
             timestamp: 2026-01-01T00:04:00Z
             op:

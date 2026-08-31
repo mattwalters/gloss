@@ -501,7 +501,11 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 						hasKeyed = true
 						key := make([]string, 0, len(rule.Key))
 						for _, kf := range rule.Key {
-							key = append(key, fmt.Sprint(op.Body[kf]))
+							if val, ok := op.Body[kf]; ok && val != nil {
+								key = append(key, fmt.Sprint(val))
+							} else {
+								key = append(key, "")
+							}
 						}
 						latest[fmt.Sprintf("%q", key)] = &keyedEntry{key: key, value: val}
 					}

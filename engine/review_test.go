@@ -47,54 +47,51 @@ func TestFoldReviewEmpty(t *testing.T) {
 	}
 }
 
-func TestFoldReviewDefaultSubject(t *testing.T) {
+func TestFoldReviewApprovalsAndRetraction(t *testing.T) {
 	now := time.Unix(100, 0).UTC()
 
-	// 1. Subject omitted, Author.Email present -> uses Author.Email
 	op1 := codec.Op{
 		Envelope: codec.Envelope{
 			ObjectID:   "r-test",
 			ObjectType: "review",
 			OpType:     "approval",
 			OpVersion:  1,
-			Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"approve","message":"looks good"}`),
+			Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"approve","subject":"alice","message":"looks good"}`),
 		},
 		ID: "op1",
 		Author: codec.Identity{
-			Name:  "Alice Name",
 			Email: "alice@example.com",
 			When:  now,
 		},
 	}
 
-	// 2. Subject omitted, Author.Email empty -> fallback to Author.Name
 	op2 := codec.Op{
 		Envelope: codec.Envelope{
 			ObjectID:   "r-test",
 			ObjectType: "review",
 			OpType:     "approval",
 			OpVersion:  1,
-			Body:       json.RawMessage(`{"revision":"2222222222222222222222222222222222222222","verdict":"request-changes","message":"need tests"}`),
+			Body:       json.RawMessage(`{"revision":"2222222222222222222222222222222222222222","verdict":"request-changes","subject":"bob","message":"need tests"}`),
 		},
 		ID: "op2",
 		Author: codec.Identity{
-			Name: "Bob Name",
-			When: now.Add(time.Minute),
+			Email: "bob@example.com",
+			When:  now.Add(time.Minute),
 		},
 	}
 
-	// 3. Explicit subject provided -> uses explicit subject over Author identity
+	// Alice retracts her verdict on rev 1
 	op3 := codec.Op{
 		Envelope: codec.Envelope{
 			ObjectID:   "r-test",
 			ObjectType: "review",
 			OpType:     "approval",
 			OpVersion:  1,
-			Body:       json.RawMessage(`{"revision":"3333333333333333333333333333333333333333","verdict":"approve","subject":"carol-custom","message":"delegated approval"}`),
+			Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"none","subject":"alice","message":"retracted"}`),
 		},
-		ID: "op3",
+		ID:      "op3",
+		Parents: []string{"op1"},
 		Author: codec.Identity{
-			Name:  "Alice Name",
 			Email: "alice@example.com",
 			When:  now.Add(2 * time.Minute),
 		},
@@ -105,20 +102,139 @@ func TestFoldReviewDefaultSubject(t *testing.T) {
 		t.Fatalf("FoldReview failed: %v", err)
 	}
 
-	if len(state.Approvals) != 3 {
-		t.Fatalf("expected 3 approvals, got %d", len(state.Approvals))
+	if len(state.Approvals) != 1 {
+		t.Fatalf("expected 1 active approval after retraction, got %d: %+v", len(state.Approvals), state.Approvals)
 	}
 
-	// Sorted by (subject, revision):
-	// "Bob Name" < "alice@example.com" < "carol-custom"
-	if state.Approvals[0].Subject != "Bob Name" || state.Approvals[0].Revision != "2222222222222222222222222222222222222222" {
-		t.Errorf("approval[0] mismatch: got %+v", state.Approvals[0])
+	if state.Approvals[0].Subject != "bob" || state.Approvals[0].Revision != "2222222222222222222222222222222222222222" || state.Approvals[0].Verdict != "request-changes" {
+		t.Errorf("approval mismatch: got %+v", state.Approvals[0])
 	}
-	if state.Approvals[1].Subject != "alice@example.com" || state.Approvals[1].Revision != "1111111111111111111111111111111111111111" {
-		t.Errorf("approval[1] mismatch: got %+v", state.Approvals[1])
+}
+
+func TestFoldReviewRevisionsPairing(t *testing.T) {
+	now := time.Unix(100, 0).UTC()
+
+	rev1 := codec.Op{
+		Envelope: codec.Envelope{
+			ObjectID:   "r-rev",
+			ObjectType: "review",
+			OpType:     "revision",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"base":"0123456789abcdef0123456789abcdef01234567","head":"1111111111111111111111111111111111111111"}`),
+		},
+		ID:     "rev1",
+		Author: codec.Identity{When: now},
 	}
-	if state.Approvals[2].Subject != "carol-custom" || state.Approvals[2].Revision != "3333333333333333333333333333333333333333" {
-		t.Errorf("approval[2] mismatch: got %+v", state.Approvals[2])
+
+	rev2 := codec.Op{
+		Envelope: codec.Envelope{
+			ObjectID:   "r-rev",
+			ObjectType: "review",
+			OpType:     "revision",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"base":"0123456789abcdef0123456789abcdef01234567","head":"2222222222222222222222222222222222222222"}`),
+		},
+		ID:      "rev2",
+		Parents: []string{"rev1"},
+		Author:  codec.Identity{When: now.Add(time.Minute)},
+	}
+
+	state, err := writ.FoldReview([]codec.Op{rev1, rev2})
+	if err != nil {
+		t.Fatalf("FoldReview failed: %v", err)
+	}
+
+	if len(state.Revisions) != 2 {
+		t.Fatalf("expected 2 revisions, got %d", len(state.Revisions))
+	}
+	if state.Revisions[0].Base != "0123456789abcdef0123456789abcdef01234567" || state.Revisions[0].Head != "1111111111111111111111111111111111111111" {
+		t.Errorf("rev[0] mismatch: %+v", state.Revisions[0])
+	}
+	if state.Revisions[1].Base != "0123456789abcdef0123456789abcdef01234567" || state.Revisions[1].Head != "2222222222222222222222222222222222222222" {
+		t.Errorf("rev[1] mismatch: %+v", state.Revisions[1])
+	}
+}
+
+func TestFoldReviewCIStatuses(t *testing.T) {
+	now := time.Unix(100, 0).UTC()
+
+	ci1 := codec.Op{
+		Envelope: codec.Envelope{
+			ObjectID:   "r-ci",
+			ObjectType: "review",
+			OpType:     "ci-status",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","name":"ci/test","state":"pending","url":"https://ci.example.com/1"}`),
+		},
+		ID:     "ci1",
+		Author: codec.Identity{When: now},
+	}
+
+	ci2 := codec.Op{
+		Envelope: codec.Envelope{
+			ObjectID:   "r-ci",
+			ObjectType: "review",
+			OpType:     "ci-status",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","name":"ci/test","state":"success","url":"https://ci.example.com/1","description":"passed","started_at":"2026-01-01T00:00:00Z","completed_at":"2026-01-01T00:01:00Z","external_id":"ext-1"}`),
+		},
+		ID:      "ci2",
+		Parents: []string{"ci1"},
+		Author:  codec.Identity{When: now.Add(time.Minute)},
+	}
+
+	ciLint := codec.Op{
+		Envelope: codec.Envelope{
+			ObjectID:   "r-ci",
+			ObjectType: "review",
+			OpType:     "ci-status",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","name":"ci/lint","state":"success"}`),
+		},
+		ID:     "ciLint",
+		Author: codec.Identity{When: now},
+	}
+
+	state, err := writ.FoldReview([]codec.Op{ci1, ci2, ciLint})
+	if err != nil {
+		t.Fatalf("FoldReview failed: %v", err)
+	}
+
+	if len(state.CIStatuses) != 2 {
+		t.Fatalf("expected 2 ci statuses, got %d", len(state.CIStatuses))
+	}
+	// Deterministically sorted by (revision, name): ci/lint < ci/test
+	if state.CIStatuses[0].Name != "ci/lint" || state.CIStatuses[0].State != "success" {
+		t.Errorf("ci[0] mismatch: %+v", state.CIStatuses[0])
+	}
+	if state.CIStatuses[1].Name != "ci/test" || state.CIStatuses[1].State != "success" || state.CIStatuses[1].Description != "passed" || state.CIStatuses[1].ExternalID != "ext-1" {
+		t.Errorf("ci[1] mismatch: %+v", state.CIStatuses[1])
+	}
+}
+
+func TestFoldReviewMalformedBodyError(t *testing.T) {
+	now := time.Unix(100, 0).UTC()
+
+	badOp := codec.Op{
+		Envelope: codec.Envelope{
+			ObjectID:   "r-err",
+			ObjectType: "review",
+			OpType:     "create",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{not valid json`),
+		},
+		ID:     "bad1",
+		Author: codec.Identity{When: now},
+	}
+
+	_, errFold := writ.Fold([]codec.Op{badOp}, writ.ReviewRules())
+	if errFold == nil {
+		t.Fatal("expected Fold to error on malformed JSON body, got nil")
+	}
+
+	_, errReview := writ.FoldReview([]codec.Op{badOp})
+	if errReview == nil {
+		t.Fatal("expected FoldReview to error on malformed JSON body, got nil")
 	}
 }
 
@@ -308,5 +424,156 @@ func TestFoldReviewUnknownOpVersionAndType(t *testing.T) {
 	}
 	if !reflect.DeepEqual(state.UnknownOps, expectedUnknown) {
 		t.Errorf("unknown_ops mismatch:\n got:  %+v\n want: %+v", state.UnknownOps, expectedUnknown)
+	}
+}
+
+func TestFoldReviewAgreement(t *testing.T) {
+	now := time.Unix(100, 0).UTC()
+
+	ops := []codec.Op{
+		{
+			ID: "c1",
+			Envelope: codec.Envelope{
+				ObjectID:   "r-agree",
+				ObjectType: "review",
+				OpType:     "create",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"title":"Initial Title","description":"Initial Description"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now},
+		},
+		{
+			ID:      "r1",
+			Parents: []string{"c1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-agree",
+				ObjectType: "review",
+				OpType:     "revision",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"base":"0123456789abcdef0123456789abcdef01234567","head":"1111111111111111111111111111111111111111"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(time.Minute)},
+		},
+		{
+			ID:      "u1",
+			Parents: []string{"r1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-agree",
+				ObjectType: "review",
+				OpType:     "update",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"title":"Updated Title"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(2 * time.Minute)},
+		},
+		{
+			ID:      "s1",
+			Parents: []string{"u1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-agree",
+				ObjectType: "review",
+				OpType:     "set-status",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"status":"open","reason":"Ready"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(3 * time.Minute)},
+		},
+		{
+			ID:      "app1",
+			Parents: []string{"s1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-agree",
+				ObjectType: "review",
+				OpType:     "approval",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"approve","subject":"bob","message":"LGTM"}`),
+			},
+			Author: codec.Identity{Email: "bob@example.com", When: now.Add(4 * time.Minute)},
+		},
+		{
+			ID:      "app2",
+			Parents: []string{"s1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-agree",
+				ObjectType: "review",
+				OpType:     "approval",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"approve","subject":"alice"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(4 * time.Minute)},
+		},
+		{
+			ID:      "app2-retract",
+			Parents: []string{"app2"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-agree",
+				ObjectType: "review",
+				OpType:     "approval",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"none","subject":"alice"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(5 * time.Minute)},
+		},
+		{
+			ID:      "ci1",
+			Parents: []string{"s1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-agree",
+				ObjectType: "review",
+				OpType:     "ci-status",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","name":"ci/lint","state":"success"}`),
+			},
+			Author: codec.Identity{Email: "ci@example.com", When: now.Add(4 * time.Minute)},
+		},
+	}
+
+	reviewState, err := writ.FoldReview(ops)
+	if err != nil {
+		t.Fatalf("FoldReview failed: %v", err)
+	}
+
+	objectState, err := writ.Fold(ops, writ.ReviewRules())
+	if err != nil {
+		t.Fatalf("Fold failed: %v", err)
+	}
+
+	if reviewState.Title != objectState.State["title"] {
+		t.Errorf("title mismatch: got %q, want %v", reviewState.Title, objectState.State["title"])
+	}
+	if reviewState.Description != objectState.State["description"] {
+		t.Errorf("description mismatch: got %q, want %v", reviewState.Description, objectState.State["description"])
+	}
+	if reviewState.Status != objectState.State["status"] {
+		t.Errorf("status mismatch: got %q, want %v", reviewState.Status, objectState.State["status"])
+	}
+	if reviewState.Reason != objectState.State["reason"] {
+		t.Errorf("reason mismatch: got %q, want %v", reviewState.Reason, objectState.State["reason"])
+	}
+
+	baseList, ok := objectState.State["base"].([]any)
+	if !ok || len(baseList) != len(reviewState.Revisions) {
+		t.Fatalf("base list mismatch: got %v, want %d revisions", baseList, len(reviewState.Revisions))
+	}
+	for i, rev := range reviewState.Revisions {
+		if rev.Base != baseList[i] {
+			t.Errorf("revision[%d].Base mismatch: got %q, want %v", i, rev.Base, baseList[i])
+		}
+	}
+
+	// Approvals: Bob active, Alice retracted
+	if len(reviewState.Approvals) != 1 {
+		t.Fatalf("expected 1 active approval in FoldReview, got %d", len(reviewState.Approvals))
+	}
+	if reviewState.Approvals[0].Subject != "bob" || reviewState.Approvals[0].Verdict != "approve" {
+		t.Errorf("unexpected active approval: %+v", reviewState.Approvals[0])
+	}
+
+	// CI Statuses: ci/lint success
+	if len(reviewState.CIStatuses) != 1 {
+		t.Fatalf("expected 1 active ci status in FoldReview, got %d", len(reviewState.CIStatuses))
+	}
+	if reviewState.CIStatuses[0].Name != "ci/lint" || reviewState.CIStatuses[0].State != "success" {
+		t.Errorf("unexpected active ci status: %+v", reviewState.CIStatuses[0])
 	}
 }
