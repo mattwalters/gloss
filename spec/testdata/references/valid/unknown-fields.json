@@ -1,0 +1,9 @@
+{
+  "reference": "0123456789abcdef0123456789abcdef",
+  "unknown_future_field": "preserved",
+  "expected": {
+    "resolved": true,
+    "scope": "local",
+    "object_id": "0123456789abcdef0123456789abcdef"
+  }
+}

@@ -27,7 +27,7 @@ Signing rides git's existing commit-signature machinery (SSH signing preferred �
 
 ### Object types (spec'd from day one, even where clients come later)
 
-Repo-scoped: `review` (base/head, revisions, status), `comment` (threaded, anchored), `approval`/`ci-status`. Workspace-scoped (living in a designated **workspace repo**, per Gerrit's All-Projects precedent): `issue`, `project`, `cycle`, membership metadata. Object IDs and cross-references are workspace-global (`<repo-designator>#<object-id>` or content-addressed) so "issue in repo A fixed by review in repo B" is representable — the one-graph query is the point.
+Repo-scoped: `review` (base/head, revisions, status), `comment` (threaded, anchored), `approval`/`ci-status`. Workspace-scoped (living in a designated **workspace repo**, per Gerrit's All-Projects precedent): `issue`, `project`, `cycle`, membership metadata. Object IDs and cross-references are workspace-global (`<repo-id>#<object-id>` or bare `<object-id>` for repo-local references, where IDs are 128-bit random lowercase hex strings; decided and spec'd in `spec/identifiers.md`, WRIT-16) so "issue in repo A fixed by review in repo B" is representable — the one-graph query is the point.
 
 ### Anchoring (the hard problem)
 

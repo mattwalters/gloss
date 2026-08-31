@@ -1,0 +1,8 @@
+{
+  "reference": "legacy-object-id-12345",
+  "expected": {
+    "resolved": true,
+    "scope": "local",
+    "object_id": "legacy-object-id-12345"
+  }
+}

@@ -28,7 +28,8 @@ deliberately does not define:
   (WRIT-9). An anchor is a value object inside op bodies, not an op itself.
 - **Cross-repo references.** Anchors are repo-local: every OID in an anchor
   refers to an object in the repository whose ref namespace carries the
-  containing op. Workspace-global identity is WRIT-16.
+  containing op. Workspace-global identity is specified in
+  [`spec/identifiers.md`](identifiers.md) (WRIT-16).
 
 Because anchors travel inside op payloads, they inherit the op envelope's
 rules: canonical JSON encoding (byte-stable, signature-covered) and

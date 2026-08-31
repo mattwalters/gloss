@@ -120,8 +120,11 @@ content addressing never depend on encoder quirks.
 - `object_id` (string, required) — identifier of the collaborative
   object this op belongs to. Opaque at this layer: printable non-space
   ASCII (`^[\x21-\x7e]+$`), 1–256 characters. The workspace-global id
-  format and cross-repo references are specified in WRIT-16; nothing in
-  this envelope depends on the id's internal structure.
+  format, cross-repo references, and workspace repo are specified in
+  [`spec/identifiers.md`](identifiers.md) (WRIT-16); nothing in this envelope
+  depends on the id's internal structure, and the envelope schema is
+  deliberately unchanged so readers continue accepting any envelope-legal
+  opaque id.
 - `object_type` (string, required) — the object's type: `review`,
   `comment`, `approval`, `ci-status`, `issue`, `project`, `cycle`, and
   whatever later specs add. Lowercase `^[a-z][a-z0-9-]*$`, at most 64
@@ -180,7 +183,7 @@ cannot live in fold, and this document does not define when it runs.
 - Per-op-type body schemas and vocabularies: **WRIT-8–11**.
 - Fold semantics, ordering, and concurrency tiebreaks: [`spec/fold.md`](fold.md).
 - Unknown-op handling and forward-compatibility rules: [`spec/forward-compatibility.md`](forward-compatibility.md).
-- Workspace-global object-id format: **WRIT-16**.
+- Workspace-global object-id format, cross-repo references & workspace repo: [`spec/identifiers.md`](identifiers.md) (**WRIT-16**).
 - Signature verification mechanics and caching: **WRIT-22**.
 
 ## Conformance data
