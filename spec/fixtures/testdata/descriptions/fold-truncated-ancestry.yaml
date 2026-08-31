@@ -1,0 +1,52 @@
+name: fold-truncated-ancestry
+description: >
+  An op whose commit parent belongs to a different object_id (or an ancestry edge
+  outside the restricted DAG). Fold must truncate the edge and produce folded state
+  without error.
+
+refs:
+  - name: refs/writ/fedcba9876543210/comment
+    history:
+      - commits:
+          - id: bob-comment-other-obj
+            author: bob
+            timestamp: 2026-01-01T00:01:00Z
+            op:
+              object_id: c-other
+              object_type: comment
+              op_type: create
+              op_version: 1
+              body:
+                subject:
+                  object_type: review
+                  object_id: r-truncated
+                text: "Comment on truncated review"
+            expect: accept
+
+  - name: refs/writ/0123456789abcdef/review
+    history:
+      - commits:
+          - id: alice-create
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            op:
+              object_id: r-truncated
+              object_type: review
+              op_type: create
+              op_version: 1
+              body:
+                title: "Truncated Ancestry Initial Title"
+            expect: accept
+
+          - id: alice-update
+            parents: [alice-create, bob-comment-other-obj]
+            author: alice
+            timestamp: 2026-01-01T00:02:00Z
+            op:
+              object_id: r-truncated
+              object_type: review
+              op_type: update
+              op_version: 1
+              body:
+                title: "Truncated Ancestry Updated Title"
+            expect: accept

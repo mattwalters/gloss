@@ -1,0 +1,41 @@
+{
+  "objects": [
+    {
+      "object_id": "c-other",
+      "object_type": "comment",
+      "total_order": [
+        {
+          "commit": "c3b8d26a07b828925b8ca7f2b4567d8fb322456c",
+          "label": "bob-comment-other-obj",
+          "t_star": 1767225660
+        }
+      ],
+      "state": {
+        "subject": {
+          "object_id": "r-truncated",
+          "object_type": "review"
+        },
+        "text": "Comment on truncated review"
+      }
+    },
+    {
+      "object_id": "r-truncated",
+      "object_type": "review",
+      "total_order": [
+        {
+          "commit": "38cc46f5e92c76495267be720bec14abd1014ac9",
+          "label": "alice-create",
+          "t_star": 1767225600
+        },
+        {
+          "commit": "ea7b05e84a21e27fad16c418cd9d9e09078788f7",
+          "label": "alice-update",
+          "t_star": 1767225720
+        }
+      ],
+      "state": {
+        "title": "Truncated Ancestry Updated Title"
+      }
+    }
+  ]
+}

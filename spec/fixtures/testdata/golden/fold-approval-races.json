@@ -1,0 +1,79 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/0123456789abcdef/review",
+      "commit": "3f5a99043e2dfcca767d5d8385dac5833351dbee"
+    },
+    {
+      "name": "refs/writ/fedcba9876543210/review",
+      "commit": "9b8e0e64e4d30dfda7ae369f15ad36eba29929da"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/0123456789abcdef/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "daaa1d2294a09139c1f9ab933f713fe0b826bf34",
+          "tree": "53b6daa0eae4ea6c56d31f6e6e3d2677e3e64de1",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create review/r-approval\n",
+          "signed": true
+        },
+        {
+          "sha": "75d2899628577ac09437f1676322df5782518189",
+          "tree": "27e47b43bb6b54e31ae5cfbd239c40566eb5ef11",
+          "parents": [
+            "daaa1d2294a09139c1f9ab933f713fe0b826bf34"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: approval review/r-approval\n",
+          "signed": true
+        },
+        {
+          "sha": "3f5a99043e2dfcca767d5d8385dac5833351dbee",
+          "tree": "1be2d4a8fc71c5d732e1a28c8f5cbc483ed8c151",
+          "parents": [
+            "75d2899628577ac09437f1676322df5782518189"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:03:00Z",
+          "message": "writ: approval review/r-approval\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/fedcba9876543210/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "2a47a411536c13b228f6ce3859846d61bc602326",
+          "tree": "7df81d4c7f202c30dcbf4e86a4164bcae2687d29",
+          "parents": [
+            "daaa1d2294a09139c1f9ab933f713fe0b826bf34"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:30Z",
+          "message": "writ: approval review/r-approval\n",
+          "signed": true
+        },
+        {
+          "sha": "9b8e0e64e4d30dfda7ae369f15ad36eba29929da",
+          "tree": "d20c7bd85e474303e1012e7ba7005933d192ad47",
+          "parents": [
+            "2a47a411536c13b228f6ce3859846d61bc602326"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: approval review/r-approval\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+name: fold-equal-tstar-tiebreak
+description: >
+  Sibling ops with identical t* decided by op-id byte order, a skewed clock
+  where t* lifts a child above its parent's stale timestamp, and an ancestor/descendant
+  pair at equal t* ensuring topological ordering precedence over commit SHA byte order.
+
+refs:
+  - name: refs/writ/0123456789abcdef/review
+    history:
+      - commits:
+          - id: alice-create
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            op:
+              object_id: r-tiebreak
+              object_type: review
+              op_type: create
+              op_version: 1
+              body:
+                title: "Tiebreak Root Title"
+            expect: accept
+
+          - id: alice-eq
+            parents: [alice-create]
+            author: alice
+            timestamp: 2026-01-01T00:01:00Z
+            op:
+              object_id: r-tiebreak
+              object_type: review
+              op_type: update
+              op_version: 1
+              body:
+                title: "Alice Equal Timestamp"
+            expect: accept
+
+  - name: refs/writ/fedcba9876543210/review
+    history:
+      - commits:
+          - id: bob-eq
+            parents: [alice-create]
+            author: bob
+            timestamp: 2026-01-01T00:01:00Z
+            op:
+              object_id: r-tiebreak
+              object_type: review
+              op_type: update
+              op_version: 1
+              body:
+                title: "Bob Equal Timestamp"
+            expect: accept
+
+          - id: bob-parent
+            parents: [bob-eq]
+            author: bob
+            timestamp: 2026-01-01T00:05:00Z
+            op:
+              object_id: r-tiebreak
+              object_type: review
+              op_type: set-status
+              op_version: 1
+              body:
+                status: "closed"
+            expect: accept
+
+          - id: bob-child-skewed
+            parents: [bob-parent]
+            author: bob
+            timestamp: 2026-01-01T00:02:00Z
+            op:
+              object_id: r-tiebreak
+              object_type: review
+              op_type: set-status
+              op_version: 1
+              body:
+                status: "open"
+            expect: accept

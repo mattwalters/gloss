@@ -335,3 +335,55 @@ func TestGitHubCommentVectors(t *testing.T) {
 		})
 	}
 }
+
+func TestCommentFieldRules(t *testing.T) {
+	rawRules, err := spec.FS.ReadFile("testdata/comments/field-rules.json")
+	if err != nil {
+		t.Fatalf("reading comments/field-rules.json: %v", err)
+	}
+
+	var rules []spec.FieldRule
+	if err := json.Unmarshal(rawRules, &rules); err != nil {
+		t.Fatalf("decoding comments/field-rules.json: %v", err)
+	}
+
+	ruleMap := make(map[string]spec.FieldRule)
+	for _, r := range rules {
+		if r.OpType == "" || r.OpVersion < 1 || r.Field == "" {
+			t.Errorf("invalid rule entry: %+v", r)
+		}
+		if !spec.KnownCatalogueStrategies[r.Strategy] {
+			t.Errorf("strategy %q for (%s, %d, %s) is not in the closed catalogue", r.Strategy, r.OpType, r.OpVersion, r.Field)
+		}
+		key := fmt.Sprintf("%s:%d:%s", r.OpType, r.OpVersion, r.Field)
+		if _, exists := ruleMap[key]; exists {
+			t.Errorf("duplicate rule for %s", key)
+		}
+		ruleMap[key] = r
+	}
+
+	// Verify that all properties in comment schema have matching field rules.
+	expectedFields := map[string][]string{
+		"create": {"subject", "text", "in_reply_to", "anchor"},
+		"edit":   {"text"},
+		"delete": {"deleted"},
+	}
+
+	for opType, fields := range expectedFields {
+		for _, field := range fields {
+			key := fmt.Sprintf("%s:1:%s", opType, field)
+			if _, ok := ruleMap[key]; !ok {
+				t.Errorf("missing field rule for (%s, op_version: 1, field: %s)", opType, field)
+			}
+		}
+	}
+
+	allRules, err := spec.FieldRules()
+	if err != nil {
+		t.Fatalf("spec.FieldRules() failed: %v", err)
+	}
+	if len(allRules) == 0 {
+		t.Fatal("spec.FieldRules() returned no rules")
+	}
+}
+

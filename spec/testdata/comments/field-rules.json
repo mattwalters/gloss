@@ -1,0 +1,38 @@
+[
+  {
+    "op_type": "create",
+    "op_version": 1,
+    "field": "subject",
+    "strategy": "create-once"
+  },
+  {
+    "op_type": "create",
+    "op_version": 1,
+    "field": "text",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "create",
+    "op_version": 1,
+    "field": "in_reply_to",
+    "strategy": "create-once"
+  },
+  {
+    "op_type": "create",
+    "op_version": 1,
+    "field": "anchor",
+    "strategy": "create-once"
+  },
+  {
+    "op_type": "edit",
+    "op_version": 1,
+    "field": "text",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "delete",
+    "op_version": 1,
+    "field": "deleted",
+    "strategy": "tombstone"
+  }
+]

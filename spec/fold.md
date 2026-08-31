@@ -275,6 +275,7 @@ implementations:
 
 ## 9. Conformance data
 
-The normative test vectors under `spec/testdata/fold/` verify compliance:
+The normative test vectors and fixture repositories verify compliance:
 - `spec/testdata/fold/order/`: Abstract op graphs testing total order derivation across linear chains, multi-writer forks, equal-$t^*$ ties, skewed clocks, ancestry truncation, and multi-object interleaving.
 - `spec/testdata/fold/merge/`: Op graphs testing each catalogue strategy, including delete/edit interleavings and concurrent mutations.
+- `spec/fixtures/testdata/descriptions/fold-*.yaml` and `spec/fixtures/testdata/golden/fold/`: Signed fixture repositories exercising concurrent field edits, multi-device writer races, LWW and tiebreaks, per-field merge strategies, and ancestry truncation.

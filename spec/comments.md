@@ -197,19 +197,37 @@ under the same subject. Clients and UIs that present flat two-level threads
 (such as GitHub) may flatten the tree for display, but the underlying data
 model retains exact parentage.
 
-## Edit and deletion semantics
+## Fold Implications & Merge Strategies
 
-### Edit semantics
+Every body property defined in this vocabulary is mapped to one merge strategy
+from WRIT-12's closed catalogue. A machine-readable copy of these rules is
+published in `spec/testdata/comments/field-rules.json`.
 
-- An `edit` op replaces the comment text in folded state.
+Per WRIT-12, **any field without a declared strategy is not merged**; it is
+treated as unknown data, preserved in the DAG, and ignored during fold.
+
+| `op_type` | Field | Merge Strategy | Key / Details |
+| --- | --- | --- | --- |
+| `create` | `subject` | `create-once` | Immutable subject binding |
+| `create` | `text` | `lww` | Initial text |
+| `create` | `in_reply_to` | `create-once` | Immutable parent comment binding |
+| `create` | `anchor` | `create-once` | Immutable anchor binding |
+| `edit` | `text` | `lww` | Last writer wins in total order |
+| `delete` | `deleted` | `tombstone` | Entity-level tombstone; deletion wins over concurrent edits |
+
+### Edit and Deletion Semantics
+
+#### Edit Semantics
+
+- An `edit` op replaces the comment text in folded state via `lww`.
 - If multiple edits exist concurrently across writer branches, fold
   resolution applies deterministic Last-Write-Wins (LWW) ordering per
   `spec/fold.md` (WRIT-12).
 
-### Deletion semantics (honest tombstones)
+#### Deletion Semantics (Honest Tombstones)
 
 - In materialized / folded state, a deleted comment is marked as deleted
-  and its text is redacted / withheld.
+  (`deleted: true`) and its text is redacted / withheld.
 - **Append-only reality**: op commits in git history are immutable and
   permanent. A `delete` op does not erase the earlier `create` or `edit`
   commits from the git repository object database. Anyone with repository
@@ -220,7 +238,7 @@ model retains exact parentage.
   subsequent `edit` ops on that comment object fold to nothing (the comment
   remains deleted).
 
-### Representability vs. authorization
+### Representability vs. Authorization
 
 The comment op schema permits any writer with commit access to author an
 `edit` or `delete` op. Whether a fold reducer accepts edits or deletions
