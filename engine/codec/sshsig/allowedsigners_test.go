@@ -92,3 +92,18 @@ untrusted@example.com cert-authority ` + pubLine1 + `
 		t.Error("blocked@example.com should be rejected due to !blocked@example.com")
 	}
 }
+
+func TestAllowedSigners_MalformedLines(t *testing.T) {
+	malformedInputs := []string{
+		"alice@example.com ssh-ed25519",                    // 2 fields, no options, missing key
+		"alice@example.com namespaces=\"git\" ssh-ed25519", // 3 fields with options, missing key
+		"alice@example.com",                                // 1 field
+	}
+
+	for _, input := range malformedInputs {
+		_, err := sshsig.ParseAllowedSigners(strings.NewReader(input))
+		if err == nil {
+			t.Errorf("ParseAllowedSigners(%q) expected error, got nil", input)
+		}
+	}
+}

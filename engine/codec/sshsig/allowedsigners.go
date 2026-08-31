@@ -100,6 +100,9 @@ func parseAllowedSignersLine(line string) (*SignerRule, error) {
 		keyType = fields[2]
 		keyBase64 = fields[3]
 	} else {
+		if len(fields) < 3 {
+			return nil, errors.New("missing public key")
+		}
 		keyType = fields[1]
 		keyBase64 = fields[2]
 	}

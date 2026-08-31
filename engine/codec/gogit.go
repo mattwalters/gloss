@@ -171,7 +171,7 @@ func buildTreeFromEntries(entries []TreeEntry) (plumbing.Hash, error) {
 			}
 			hash = subHash
 			mode = filemode.Dir
-		} else if len(entry.Data) > 0 {
+		} else if entry.Data != nil {
 			blobObj := &plumbing.MemoryObject{}
 			blobObj.SetType(plumbing.BlobObject)
 			blobObj.SetSize(int64(len(entry.Data)))
