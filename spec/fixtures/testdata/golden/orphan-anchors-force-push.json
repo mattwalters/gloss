@@ -1,0 +1,45 @@
+{
+  "refs": [
+    {
+      "name": "refs/fixture-history/main/gen-0",
+      "commit": "11e7fda7822e49d7a71715c725e0568da31228fe"
+    },
+    {
+      "name": "refs/heads/main",
+      "commit": "a71516fa396ca7ac5d23fc3bf584d21a1af80d38"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/heads/main",
+      "index": 0,
+      "kept_as": "refs/fixture-history/main/gen-0",
+      "commits": [
+        {
+          "sha": "11e7fda7822e49d7a71715c725e0568da31228fe",
+          "tree": "213f45e79266d802cd3e4b2702ab304ea113a53a",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "initial gen-0 commit before force-push",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/heads/main",
+      "index": 1,
+      "commits": [
+        {
+          "sha": "a71516fa396ca7ac5d23fc3bf584d21a1af80d38",
+          "tree": "4a9226506d5d9be83142aa41a72fd051937f28bc",
+          "parents": [],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T01:00:00Z",
+          "message": "force-pushed unrelated history",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

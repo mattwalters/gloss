@@ -1,0 +1,93 @@
+name: orphan-anchors-rename
+description: >
+  File rename scenarios: a file moved unchanged (exact-blob-moved match),
+  a file moved and edited inside the anchored range (context-fuzzy match at the new path),
+  and a whole-file anchor on a moved file (exact-blob-moved match with no range).
+
+refs:
+  - name: refs/heads/main
+    history:
+      - keep_as: refs/fixture-history/main/gen-0
+        commits:
+          - id: base
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: "initial layout before renames"
+            files:
+              src/clean.go: |
+                package src
+
+                func Clean() string {
+                	return "clean"
+                }
+              src/edited.go: |
+                package src
+
+                import "fmt"
+
+                func Process() {
+                	step1()
+                	step2()
+                	step3()
+                	fmt.Println("done")
+                }
+              docs/guide.md: |
+                # User Guide
+                This is the complete guide.
+      - commits:
+          - id: rewritten
+            author: bob
+            timestamp: 2026-01-01T01:00:00Z
+            message: "reorganize packages and edit files"
+            files:
+              pkg/clean.go: |
+                package src
+
+                func Clean() string {
+                	return "clean"
+                }
+              pkg/edited.go: |
+                package src
+
+                import "fmt"
+
+                func Process() {
+                	step1()
+                	step2Modified()
+                	step3()
+                	fmt.Println("done")
+                }
+              documentation/guide.md: |
+                # User Guide
+                This is the complete guide.
+
+resolutions:
+  - name: moved-file-clean-range
+    anchor:
+      at: base
+      path: src/clean.go
+      side: new
+      range: [3, 5]
+    target: rewritten
+    expect:
+      outcome: resolved
+      match: exact-blob-moved
+  - name: moved-file-edited-range
+    anchor:
+      at: base
+      path: src/edited.go
+      side: new
+      range: [5, 9]
+    target: rewritten
+    expect:
+      outcome: resolved
+      match: context-fuzzy
+  - name: moved-whole-file
+    anchor:
+      at: base
+      path: docs/guide.md
+      side: new
+    target: rewritten
+    expect:
+      outcome: resolved
+      match: exact-blob-moved

@@ -31,6 +31,7 @@ Fixture YAML descriptions under `testdata/descriptions/` support the following c
 - **`committer:`** Override committer identity to test reader rejection of author/committer divergence.
 - **`expect:`** Declared machine-readable expectation: `accept` or `{reject: <reason>}` from the closed rejection reason set (`wrong-key`, `payload-mutated`, `corrupted-signature`, `unsigned`, `non-canonical-payload`, `duplicate-key`, `lone-surrogate`, `schema-violation`, `extra-tree-entry`, `op-json-subdirectory`, `missing-op-json`, `invalid-op-json-mode`, `committer-mismatch`).
 - **`disposition:`** Declared forward-compatibility classification under the reader capability profile: `interpretable` or `opaque` (from the closed enum), only meaningful alongside an `op:` block.
+- **`resolutions:`** Top-level list of resolution cases declaring an anchor's source (`at` commit label, `path`, optional `range`, `side`), `target` commit label, and `expect` outcome (`resolved` with `match` rung or `orphaned` with `reason`, or cross-side/status expectations). Anchors are captured from the generated source tree and resolved against the target tree.
 
 ## The Fixture Families
 
@@ -38,6 +39,7 @@ Fixture YAML descriptions under `testdata/descriptions/` support the following c
 - **`envelope`:** Golden envelope outputs (`testdata/golden/envelope/*.json`) verifying byte-for-byte canonicalization, schema conformance, tree structure, pure-Go SSH signature verification (`codec.Verify`), and declared vs observed disposition equality.
 - **`forward-compat`:** Golden forward-compatibility outputs (`testdata/golden/forward-compat/*.json`) verifying that unknown op types, future op versions, and unknown fields are preserved byte-for-byte, classified according to the reader profile, and surfaced as opaque records without perturbing known state.
 - **`fold`:** Golden folded state outputs (`testdata/golden/fold/*.json`) verifying that concurrent field edits, multi-device writer races, LWW and tiebreak rules, per-field merge strategies, and ancestry truncation reduce deterministically to byte-identical folded states across writers and DAG permutations.
+- **`orphan-anchors`:** Golden resolution outputs (`testdata/golden/orphan-anchors/*.json`) verifying pure anchor resolution (`resolve.Resolve`) across real git history rewrites (rebase, rename, file and line deletion, hunk drift, force-push), checking matching ladder rungs, orphan degradation reasons, overall status derivation, schema validity, and byte-identical orphan preservation.
 
 ## The Golden-File Test Harness
 

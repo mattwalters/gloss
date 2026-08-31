@@ -1,0 +1,45 @@
+{
+  "refs": [
+    {
+      "name": "refs/fixture-history/main/gen-0",
+      "commit": "3c6851744aab484ae49937eda170c86f11c70f1a"
+    },
+    {
+      "name": "refs/heads/main",
+      "commit": "251be8a37cacf1e7acca556ff465c00b2481fd10"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/heads/main",
+      "index": 0,
+      "kept_as": "refs/fixture-history/main/gen-0",
+      "commits": [
+        {
+          "sha": "3c6851744aab484ae49937eda170c86f11c70f1a",
+          "tree": "e4e1b37b83c7b9beb78dd08a4ec2109ee6672a5c",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "initial base state before rebase",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/heads/main",
+      "index": 1,
+      "commits": [
+        {
+          "sha": "251be8a37cacf1e7acca556ff465c00b2481fd10",
+          "tree": "6bb72c8ff57db7627cea521c8553450c99323a39",
+          "parents": [],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T01:00:00Z",
+          "message": "rebased onto new root with preamble lines",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

@@ -115,11 +115,14 @@ spec/
     ├── description.go      — YAML description parser and schema
     ├── diff.go             — standard unified diff engine for readable failure/update diffs
     ├── envelope_test.go    — envelope fixture family registration & reader validation test
+    ├── fold_test.go        — fold fixture family registration & state reduction test
+    ├── forwardcompat_test.go — forward-compatibility fixture family registration & preservation test
     ├── generate.go         — deterministic bare git repository builder
     ├── harness.go          — golden-file test harness and fixture family runner
     ├── identity.go         — fixture identities (alice, bob) and signing config
     ├── manifest.go         — manifest data model (SHAs, trees, parents, refs)
     ├── op.go               — OpDesc to canonical payload & commit message derivation
+    ├── orphananchors_test.go — orphan-anchors fixture family registration & resolution test
     ├── sign.go             — ed25519 SSH commit signing
     ├── tamper.go           — post-signing commit tampering engine
     ├── tree.go             — git tree object generation with file modes
@@ -128,7 +131,7 @@ spec/
     ├── keys/               — throwaway ed25519 keypairs for deterministic signatures
     └── testdata/
         ├── descriptions/   — declarative YAML descriptions of fixture git histories
-        └── golden/         — golden JSON outputs pinned byte-for-byte (manifest/ and envelope/)
+        └── golden/         — golden JSON outputs pinned byte-for-byte (manifest/, envelope/, fold/, forward-compat/, and orphan-anchors/)
 ```
 
 ## Conformance Model

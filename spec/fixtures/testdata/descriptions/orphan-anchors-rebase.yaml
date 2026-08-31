@@ -1,0 +1,89 @@
+name: orphan-anchors-rebase
+description: >
+  Rebase scenario: history is replayed onto a new root commit.
+  One file remains completely untouched (exact-path-blob match),
+  while another file has new preamble lines inserted above an anchored
+  range (context-exact match at a shifted start line).
+
+refs:
+  - name: refs/heads/main
+    history:
+      - keep_as: refs/fixture-history/main/gen-0
+        commits:
+          - id: base
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: "initial base state before rebase"
+            files:
+              untouched.txt: |
+                alpha
+                beta
+                gamma
+                delta
+              parser.go: |
+                package parser
+
+                import "fmt"
+
+                // Parse parses input tokens.
+                func Parse(tokens []string) error {
+                	if len(tokens) == 0 {
+                		return fmt.Errorf("empty input")
+                	}
+                	for _, t := range tokens {
+                		fmt.Println(t)
+                	}
+                	return nil
+                }
+      - commits:
+          - id: rewritten
+            author: bob
+            timestamp: 2026-01-01T01:00:00Z
+            message: "rebased onto new root with preamble lines"
+            files:
+              untouched.txt: |
+                alpha
+                beta
+                gamma
+                delta
+              parser.go: |
+                // Package parser provides token parsing.
+                // Copyright 2026 Writ Authors.
+                // License: Apache-2.0
+
+                package parser
+
+                import "fmt"
+
+                // Parse parses input tokens.
+                func Parse(tokens []string) error {
+                	if len(tokens) == 0 {
+                		return fmt.Errorf("empty input")
+                	}
+                	for _, t := range tokens {
+                		fmt.Println(t)
+                	}
+                	return nil
+                }
+
+resolutions:
+  - name: untouched-file-reanchor
+    anchor:
+      at: base
+      path: untouched.txt
+      side: new
+      range: [1, 2]
+    target: rewritten
+    expect:
+      outcome: resolved
+      match: exact-path-blob
+  - name: rebased-range-shifts
+    anchor:
+      at: base
+      path: parser.go
+      side: new
+      range: [7, 9]
+    target: rewritten
+    expect:
+      outcome: resolved
+      match: context-exact

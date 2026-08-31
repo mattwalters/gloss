@@ -1,0 +1,45 @@
+{
+  "refs": [
+    {
+      "name": "refs/fixture-history/main/gen-0",
+      "commit": "d41d87159b0e364cbb4a21ef18b33ef27d7c774c"
+    },
+    {
+      "name": "refs/heads/main",
+      "commit": "d0fd758826238675543acde4d4b2be3eb35cba4f"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/heads/main",
+      "index": 0,
+      "kept_as": "refs/fixture-history/main/gen-0",
+      "commits": [
+        {
+          "sha": "d41d87159b0e364cbb4a21ef18b33ef27d7c774c",
+          "tree": "79922d4debfe096b788fc0e8e5c7a47fc1fe1b9f",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "initial files before deletions",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/heads/main",
+      "index": 1,
+      "commits": [
+        {
+          "sha": "d0fd758826238675543acde4d4b2be3eb35cba4f",
+          "tree": "291706e9604c8ca3dc9e2d813aecd37ae4daaff7",
+          "parents": [],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T01:00:00Z",
+          "message": "remove deprecated file and truncate worker",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

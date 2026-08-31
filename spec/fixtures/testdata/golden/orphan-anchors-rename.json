@@ -1,0 +1,45 @@
+{
+  "refs": [
+    {
+      "name": "refs/fixture-history/main/gen-0",
+      "commit": "9047576a1f8de5584db60122546331ca736648af"
+    },
+    {
+      "name": "refs/heads/main",
+      "commit": "f169decdec21c2ca88a29a1db5a147b9ae0f47f8"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/heads/main",
+      "index": 0,
+      "kept_as": "refs/fixture-history/main/gen-0",
+      "commits": [
+        {
+          "sha": "9047576a1f8de5584db60122546331ca736648af",
+          "tree": "bb46e4b0aaf484ecc2d2b4df2707849d203a497b",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "initial layout before renames",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/heads/main",
+      "index": 1,
+      "commits": [
+        {
+          "sha": "f169decdec21c2ca88a29a1db5a147b9ae0f47f8",
+          "tree": "87dd54f718308800ca236d5806e6f5b334c3dceb",
+          "parents": [],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T01:00:00Z",
+          "message": "reorganize packages and edit files",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "cases": [
+    {
+      "name": "cross-side-force-push-partial",
+      "source": {
+        "commit": "11e7fda7822e49d7a71715c725e0568da31228fe",
+        "path": "feature.txt",
+        "range": {
+          "start": 1,
+          "end": 1
+        }
+      },
+      "target": {
+        "ref": "refs/heads/main",
+        "commit": "a71516fa396ca7ac5d23fc3bf584d21a1af80d38"
+      },
+      "anchor": {
+        "version": 1,
+        "old": {
+          "commit": "11e7fda7822e49d7a71715c725e0568da31228fe",
+          "path": "shared.txt",
+          "blob": "a92d664bc20a04b1621b1fc893d1196b41182fdf",
+          "range": {
+            "start": 1,
+            "end": 2
+          },
+          "context": {
+            "before": [],
+            "lines": [
+              "line 1",
+              "line 2"
+            ],
+            "after": [
+              "line 3"
+            ]
+          }
+        },
+        "new": {
+          "commit": "11e7fda7822e49d7a71715c725e0568da31228fe",
+          "path": "feature.txt",
+          "blob": "cb147a2f74abae17723b29096f367381fd984c4f",
+          "range": {
+            "start": 1,
+            "end": 1
+          },
+          "context": {
+            "before": [],
+            "lines": [
+              "feature v1 content"
+            ],
+            "after": []
+          }
+        }
+      },
+      "resolution": {
+        "anchor": {
+          "version": 1,
+          "old": {
+            "commit": "11e7fda7822e49d7a71715c725e0568da31228fe",
+            "path": "shared.txt",
+            "blob": "a92d664bc20a04b1621b1fc893d1196b41182fdf",
+            "range": {
+              "start": 1,
+              "end": 2
+            },
+            "context": {
+              "before": [],
+              "lines": [
+                "line 1",
+                "line 2"
+              ],
+              "after": [
+                "line 3"
+              ]
+            }
+          },
+          "new": {
+            "commit": "11e7fda7822e49d7a71715c725e0568da31228fe",
+            "path": "feature.txt",
+            "blob": "cb147a2f74abae17723b29096f367381fd984c4f",
+            "range": {
+              "start": 1,
+              "end": 1
+            },
+            "context": {
+              "before": [],
+              "lines": [
+                "feature v1 content"
+              ],
+              "after": []
+            }
+          }
+        },
+        "old": {
+          "outcome": "resolved",
+          "match": "exact-path-blob",
+          "path": "shared.txt",
+          "range": {
+            "start": 1,
+            "end": 2
+          }
+        },
+        "new": {
+          "outcome": "orphaned",
+          "reason": "path-absent"
+        }
+      },
+      "status": "partially-resolved"
+    }
+  ]
+}

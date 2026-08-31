@@ -301,3 +301,242 @@ refs:
 	}
 }
 
+func TestLoadRejectsInvalidResolutions(t *testing.T) {
+	cases := []struct {
+		name string
+		yaml string
+	}{
+		{
+			name: "resolution missing name",
+			yaml: `
+name: invalid-res
+refs:
+  - name: refs/heads/main
+    history:
+      - commits:
+          - id: c1
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: m
+            files: {f: "1"}
+resolutions:
+  - anchor: {at: c1, path: f, side: new}
+    target: c1
+    expect: {outcome: resolved, match: exact-path-blob}
+`,
+		},
+		{
+			name: "unknown target commit label",
+			yaml: `
+name: invalid-res
+refs:
+  - name: refs/heads/main
+    history:
+      - commits:
+          - id: c1
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: m
+            files: {f: "1"}
+resolutions:
+  - name: r1
+    anchor: {at: c1, path: f, side: new}
+    target: unknown-target
+    expect: {outcome: resolved, match: exact-path-blob}
+`,
+		},
+		{
+			name: "unknown anchor commit label",
+			yaml: `
+name: invalid-res
+refs:
+  - name: refs/heads/main
+    history:
+      - commits:
+          - id: c1
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: m
+            files: {f: "1"}
+resolutions:
+  - name: r1
+    anchor: {at: unknown-at, path: f, side: new}
+    target: c1
+    expect: {outcome: resolved, match: exact-path-blob}
+`,
+		},
+		{
+			name: "invalid range format (end < start)",
+			yaml: `
+name: invalid-res
+refs:
+  - name: refs/heads/main
+    history:
+      - commits:
+          - id: c1
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: m
+            files: {f: "1"}
+resolutions:
+  - name: r1
+    anchor: {at: c1, path: f, side: new, range: [10, 5]}
+    target: c1
+    expect: {outcome: resolved, match: exact-path-blob}
+`,
+		},
+		{
+			name: "invalid match rung",
+			yaml: `
+name: invalid-res
+refs:
+  - name: refs/heads/main
+    history:
+      - commits:
+          - id: c1
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: m
+            files: {f: "1"}
+resolutions:
+  - name: r1
+    anchor: {at: c1, path: f, side: new}
+    target: c1
+    expect: {outcome: resolved, match: made-up-match}
+`,
+		},
+		{
+			name: "invalid orphan reason",
+			yaml: `
+name: invalid-res
+refs:
+  - name: refs/heads/main
+    history:
+      - commits:
+          - id: c1
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: m
+            files: {f: "1"}
+resolutions:
+  - name: r1
+    anchor: {at: c1, path: f, side: new}
+    target: c1
+    expect: {outcome: orphaned, reason: made-up-reason}
+`,
+		},
+		{
+			name: "resolved specifies orphan reason",
+			yaml: `
+name: invalid-res
+refs:
+  - name: refs/heads/main
+    history:
+      - commits:
+          - id: c1
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: m
+            files: {f: "1"}
+resolutions:
+  - name: r1
+    anchor: {at: c1, path: f, side: new}
+    target: c1
+    expect: {outcome: resolved, match: exact-path-blob, reason: path-absent}
+`,
+		},
+		{
+			name: "orphaned specifies match",
+			yaml: `
+name: invalid-res
+refs:
+  - name: refs/heads/main
+    history:
+      - commits:
+          - id: c1
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: m
+            files: {f: "1"}
+resolutions:
+  - name: r1
+    anchor: {at: c1, path: f, side: new}
+    target: c1
+    expect: {outcome: orphaned, reason: path-absent, match: exact-path-blob}
+`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := Load([]byte(tc.yaml)); err == nil {
+				t.Fatalf("expected Load to reject %s, got nil error", tc.name)
+			}
+		})
+	}
+}
+
+func TestLoadAcceptsValidResolutions(t *testing.T) {
+	yamlData := `
+name: valid-resolutions
+refs:
+  - name: refs/heads/main
+    history:
+      - commits:
+          - id: base
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: base
+            files: {f: "1"}
+          - id: target-commit
+            author: bob
+            timestamp: 2026-01-01T00:01:00Z
+            message: rewrite
+            files: {f: "2"}
+resolutions:
+  - name: res1
+    anchor:
+      at: base
+      path: f
+      side: new
+      range: [1, 2]
+    target: target-commit
+    expect:
+      outcome: resolved
+      match: context-exact
+  - name: res2
+    anchor:
+      old:
+        at: base
+        path: f
+        range: [1, 1]
+      new:
+        at: base
+        path: f
+        range: [1, 2]
+    target: target-commit
+    expect:
+      status: partially-resolved
+      old:
+        outcome: resolved
+        match: exact-path-blob
+      new:
+        outcome: orphaned
+        reason: path-absent
+`
+	desc, err := Load([]byte(yamlData))
+	if err != nil {
+		t.Fatalf("expected Load to accept valid resolutions, got: %v", err)
+	}
+	if len(desc.Resolutions) != 2 {
+		t.Fatalf("expected 2 resolutions, got %d", len(desc.Resolutions))
+	}
+	if desc.Resolutions[0].Name != "res1" || desc.Resolutions[0].Expect.Match != "context-exact" {
+		t.Errorf("unexpected resolution 0: %+v", desc.Resolutions[0])
+	}
+	if desc.Resolutions[1].Name != "res2" || desc.Resolutions[1].Expect.Status != "partially-resolved" {
+		t.Errorf("unexpected resolution 1: %+v", desc.Resolutions[1])
+	}
+}
+
+

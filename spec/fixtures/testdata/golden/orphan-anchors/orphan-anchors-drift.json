@@ -1,0 +1,247 @@
+{
+  "cases": [
+    {
+      "name": "range-drift-fuzzy",
+      "source": {
+        "commit": "cae7dc465d1fe225355eadc32df285880e5c5160",
+        "path": "fuzzy.txt",
+        "range": {
+          "start": 4,
+          "end": 7
+        }
+      },
+      "target": {
+        "ref": "refs/heads/main",
+        "commit": "72dd63f12adf88fb8a49ff38b1109ec4b7339b01"
+      },
+      "anchor": {
+        "version": 1,
+        "new": {
+          "commit": "cae7dc465d1fe225355eadc32df285880e5c5160",
+          "path": "fuzzy.txt",
+          "blob": "52bce0320472fea633d8a0c0fb634ea608b963b8",
+          "range": {
+            "start": 4,
+            "end": 7
+          },
+          "context": {
+            "before": [
+              "pre_a",
+              "pre_b",
+              "pre_c"
+            ],
+            "lines": [
+              "core_1",
+              "core_2",
+              "core_3",
+              "core_4"
+            ],
+            "after": [
+              "post_a",
+              "post_b",
+              "post_c"
+            ]
+          }
+        }
+      },
+      "resolution": {
+        "anchor": {
+          "version": 1,
+          "new": {
+            "commit": "cae7dc465d1fe225355eadc32df285880e5c5160",
+            "path": "fuzzy.txt",
+            "blob": "52bce0320472fea633d8a0c0fb634ea608b963b8",
+            "range": {
+              "start": 4,
+              "end": 7
+            },
+            "context": {
+              "before": [
+                "pre_a",
+                "pre_b",
+                "pre_c"
+              ],
+              "lines": [
+                "core_1",
+                "core_2",
+                "core_3",
+                "core_4"
+              ],
+              "after": [
+                "post_a",
+                "post_b",
+                "post_c"
+              ]
+            }
+          }
+        },
+        "new": {
+          "outcome": "resolved",
+          "match": "context-fuzzy",
+          "path": "fuzzy.txt",
+          "range": {
+            "start": 4,
+            "end": 7
+          }
+        }
+      },
+      "status": "resolved"
+    },
+    {
+      "name": "excessive-drift-below-threshold",
+      "source": {
+        "commit": "cae7dc465d1fe225355eadc32df285880e5c5160",
+        "path": "drifted.txt",
+        "range": {
+          "start": 4,
+          "end": 7
+        }
+      },
+      "target": {
+        "ref": "refs/heads/main",
+        "commit": "72dd63f12adf88fb8a49ff38b1109ec4b7339b01"
+      },
+      "anchor": {
+        "version": 1,
+        "new": {
+          "commit": "cae7dc465d1fe225355eadc32df285880e5c5160",
+          "path": "drifted.txt",
+          "blob": "835ec679c197e885053105086a9377f541457e3a",
+          "range": {
+            "start": 4,
+            "end": 7
+          },
+          "context": {
+            "before": [
+              "alpha",
+              "beta",
+              "gamma"
+            ],
+            "lines": [
+              "delta_1",
+              "delta_2",
+              "delta_3",
+              "delta_4"
+            ],
+            "after": [
+              "omega_1",
+              "omega_2",
+              "omega_3"
+            ]
+          }
+        }
+      },
+      "resolution": {
+        "anchor": {
+          "version": 1,
+          "new": {
+            "commit": "cae7dc465d1fe225355eadc32df285880e5c5160",
+            "path": "drifted.txt",
+            "blob": "835ec679c197e885053105086a9377f541457e3a",
+            "range": {
+              "start": 4,
+              "end": 7
+            },
+            "context": {
+              "before": [
+                "alpha",
+                "beta",
+                "gamma"
+              ],
+              "lines": [
+                "delta_1",
+                "delta_2",
+                "delta_3",
+                "delta_4"
+              ],
+              "after": [
+                "omega_1",
+                "omega_2",
+                "omega_3"
+              ]
+            }
+          }
+        },
+        "new": {
+          "outcome": "orphaned",
+          "reason": "below-threshold"
+        }
+      },
+      "status": "orphaned"
+    },
+    {
+      "name": "duplicated-block-ambiguous",
+      "source": {
+        "commit": "cae7dc465d1fe225355eadc32df285880e5c5160",
+        "path": "duplicate.txt",
+        "range": {
+          "start": 2,
+          "end": 5
+        }
+      },
+      "target": {
+        "ref": "refs/heads/main",
+        "commit": "72dd63f12adf88fb8a49ff38b1109ec4b7339b01"
+      },
+      "anchor": {
+        "version": 1,
+        "new": {
+          "commit": "cae7dc465d1fe225355eadc32df285880e5c5160",
+          "path": "duplicate.txt",
+          "blob": "729cbdfa5d858c2041d8d8448aa0acee41a2e8f9",
+          "range": {
+            "start": 2,
+            "end": 5
+          },
+          "context": {
+            "before": [
+              "collar_top"
+            ],
+            "lines": [
+              "core_1",
+              "core_2",
+              "core_3",
+              "core_4"
+            ],
+            "after": [
+              "collar_bottom"
+            ]
+          }
+        }
+      },
+      "resolution": {
+        "anchor": {
+          "version": 1,
+          "new": {
+            "commit": "cae7dc465d1fe225355eadc32df285880e5c5160",
+            "path": "duplicate.txt",
+            "blob": "729cbdfa5d858c2041d8d8448aa0acee41a2e8f9",
+            "range": {
+              "start": 2,
+              "end": 5
+            },
+            "context": {
+              "before": [
+                "collar_top"
+              ],
+              "lines": [
+                "core_1",
+                "core_2",
+                "core_3",
+                "core_4"
+              ],
+              "after": [
+                "collar_bottom"
+              ]
+            }
+          }
+        },
+        "new": {
+          "outcome": "orphaned",
+          "reason": "ambiguous"
+        }
+      },
+      "status": "orphaned"
+    }
+  ]
+}
