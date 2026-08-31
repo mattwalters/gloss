@@ -10,7 +10,9 @@ Design lineage, with gratitude: the op-log + per-writer refs + signing + fold-to
 
 ### Ref layout
 
-Per-writer namespaces are load-bearing: `refs/writ/<writer-id>/cobs/<type>/<object-id>`. A writer only ever pushes to their own namespace, so pushes cannot non-fast-forward against another writer — the entire class of push conflicts disappears, which is what keeps the sync layer simple. `writer-id` is (user, device) so multi-device self-races also dissolve into the DAG instead of ref conflicts. Reading an object means enumerating its ops across _all_ writer namespaces and folding.
+Per-writer namespaces are load-bearing: a writer only ever pushes to their own namespace, so pushes cannot non-fast-forward against another writer — the entire class of push conflicts disappears, which is what keeps the sync layer simple. `writer-id` is (user, device) so multi-device self-races also dissolve into the DAG instead of ref conflicts.
+
+Within a writer's namespace, ops are stored as **append chains, not per-object refs**: `refs/writ/<writer-id>/<type>` points at that writer's latest op of that type, each op commit's git parent being their previous one. Which object an op belongs to rides the payload (`object_id`), never the ref name. Commit parents are the single home for edges (per the envelope spec, WRIT-6), and every parent is a true happens-before edge (decided, WRIT-71): parents[0] is the writer's chain predecessor — itself a genuine causal edge, since a writer-id is one sequential device — and any further parents are causal references to other ops. The chain spine is identified structurally, not heuristically: parents[0] is the chain edge iff it is an op by the same writer-id, which is sound because a chain's first op cannot have a same-writer causal parent — same writer and same type would place that parent on this very chain, contradicting "first." An object's op-DAG is then simply the commit graph restricted to ops carrying its `object_id`, with edges given by ancestry; no explicit intra-object parent list exists anywhere. Two consequences worth naming: any op someone built on stays reachable from the referencing writer's ref even if its origin ref rolls back, and fold behavior for ancestry referencing commits the fetcher lacks must be defined deterministically in the spec. The earlier per-object sketch (`.../cobs/<type>/<object-id>`) put ref count at O(writers × objects); since each comment is an object, an imported five-year repo is plausibly 500k refs, and git re-advertises every ref on every fetch (~120 bytes each, even unchanged), turning quiet background sync into tens of MB per no-op fetch — a cost the many-refs precedents (Gerrit, Radicle) escape only by controlling their own servers, which Writ never will. Chains bound refs at O(writers × devices × types), preserve conflict-free push and GC reachability, and make rollback detection a single cursor per chain; the cost is that reading one object without a projection means walking chains, and per-object legibility moves from `for-each-ref` into `writ` plumbing. Confirmed by measurement (`docs/spikes/writ-69-ref-scaling/`, WRIT-69): advertisement bytes are exactly linear in ref count (~119 B/ref; ~12 MB per no-op fetch at 100k refs), client-side ref processing goes superlinear past ~30k, and GitHub's write path fails outright first — a single 9,000-ref push 500s with an internal error, and chunked pushes degrade to ~70 ms/ref (22 minutes for 20k refs). Per-object refs stay comfortable only below ~10k total — one to two orders of magnitude under their own realistic scale — so the spec freezes on chains. Reading an object means walking _all_ writers' chains, grouping by the envelope's object id, and folding.
 
 We use plain refs rather than git-notes: notes don't fetch by default, and notes attached to commits are orphaned when commits are rewritten by rebase — limitations git-appraise's design had to work around. A one-time `writ init` writes fetch/push refspecs into `.git/config` so ordinary `git fetch` carries writ data; that config edit is the entire deployment story.
 
@@ -31,13 +33,18 @@ Repo-scoped: `review` (base/head, revisions, status), `comment` (threaded, ancho
 
 Line comments anchor to **content** (blob hash + hunk context), not line numbers, so they survive force-pushes and rebases as well as possible; when re-anchoring fails, comments degrade to "orphaned but preserved," never silently lost. The format (`spec/anchors.md`, WRIT-13) is dual-sided, following Radicle's `CodeLocation`: an anchor carries an `old` and/or `new` side — each a (commit, path, blob, line-range, captured-context) tuple — because deleted-line comments and GitHub's cross-side ranges are not representable as a single blob position. This gets its own spec section and its own fixture family; expect iteration.
 
-## The five machines (engine internals)
+Anchor _resolution_ is deliberately not part of the fold. Resolving an anchor requires blob access, and its result legitimately changes when a code branch moves even though no ops changed — so it lives in its own machine (#4 below): a pure function `resolve(anchor, target tree) → position | orphaned`, invoked by the projection at materialization time. The fold carries anchors verbatim as data, which keeps `fold(ops) → state` branch-independent and keeps fold goldens stable; the orphaned-anchors fixture family binds to the resolver's output.
+
+## The six machines (engine internals)
 
 1. **Op codec** — domain action ⇄ canonical signed payload in a commit. Owns canonicalization and signature verification.
 2. **DAG store** — append op with parents; enumerate an object's ops across all writer refs; topological ordering. Pure object-database work.
 3. **Fold** — the heart. Per-type deterministic reducers: ops in, materialized state out (`Review{status, comments, approvals}`, `Issue{title, state, assignee}`), concurrent-edit resolution exactly as fixtures dictate (last-writer-wins with op-id tiebreak as the default rule; per-field rules where the spec says so). Pure functions, no I/O, thoroughly testable. Must be boring and correct.
-4. **Projection** — SQLite cache keyed by ref tips: on read, diff tips vs. last fold, fold only deltas, serve queries from indexed tables. Always droppable/rebuildable; never a source of truth. Also home of local-only state: drafts (kept out of shared refs, following Gerrit's draft-handling precedent — publish on intent, never per-keystroke commits), read/unread, sync cursors. An optional DuckDB/Parquet exporter hangs off the same op-log for analytics — derived only, never committed.
-5. **Sync plane** — manages refspecs, invokes **system git** for fetch/push, reports per-remote status ("n ops unsynced"). Thin by design; per-writer refs made conflicts structurally impossible.
+4. **Anchor resolver** — pure re-anchoring: `resolve(anchor, target tree/blob contents) → resolved position | orphaned`, per the spec's re-anchoring rules. No I/O — trees and blobs are inputs. Invoked by the projection, never by the fold (see §Anchoring for why); orphan results retain the original anchor for possible re-attachment.
+5. **Projection** — SQLite cache keyed by ref tips: on read, diff tips vs. last fold, fold only deltas, serve queries from indexed tables. Always droppable/rebuildable; never a source of truth. Also home of local-only state: drafts (kept out of shared refs, following Gerrit's draft-handling precedent — publish on intent, never per-keystroke commits), read/unread, sync cursors. An optional DuckDB/Parquet exporter hangs off the same op-log for analytics — derived only, never committed.
+6. **Sync plane** — manages refspecs, invokes **system git** for fetch/push, reports per-remote status ("n ops unsynced"). Thin by design; per-writer refs made conflicts structurally impossible.
+
+Alongside the machines sits one small shared component: **writer identity** — derivation of the current writer-id (user, device) per the ref-layout spec and signing-key lookup from existing git config. Every append and every sign consults it; `writ init` writes the config, the engine reads it, and nothing identity-shaped is implemented above the engine (CLI, TUI, and bridge all consume this component).
 
 ## Public API shape
 
@@ -52,6 +59,8 @@ store.Sync(remote)                   // explicit, separate concern
 store.Watch() <-chan Event           // reactive clients
 ```
 
+The domain types themselves (`Review`, `Comment`, `Issue`, `Anchor`, …) are public from day one: defined in the root `engine` package as the fold's output types, so the folded state _is_ the domain object callers receive — one set of types shared by the public API, the projection, the golden fixtures, and `--json` output (each of the latter two pinned as its own independent serialization). The reducers and machinery that produce them stay in `engine/internal/`.
+
 `Watch()` is what makes the TUI reactive instead of polling, and it is the seam any event-relay service plugs into. Everything above the engine — CLI, TUI, localhost web view, GitHub bridge, any hosted service — is a consumer of this one interface, distinguished only by rendering surface. Nothing gets private powers.
 
 ## Language: Go (decided; rationale preserved)
@@ -60,7 +69,7 @@ We seriously considered Rust; its three advantages dissolved under this project'
 
 ## SQLite driver: pure Go (decided; rationale preserved)
 
-The projection (five machines, #4) uses `modernc.org/sqlite`, not
+The projection (six machines, #5) uses `modernc.org/sqlite`, not
 `mattn/go-sqlite3`. `mattn` is faster on bulk insert — a spike benchmark on
 a projection-shaped workload (5k reviews, 100k comments, one bulk-insert
 transaction plus indexed reads by review) measured cgo at roughly 1.4–2.2x
@@ -84,7 +93,7 @@ Everything open lives in a single Apache-2.0 monorepo because the spec, engine, 
 
 ```
 /spec          — convention doc, JSON schemas, conformance fixtures (the real standard)
-/engine        — codec, dag, fold, projection, sync (public Go API at the root package)
+/engine        — codec, dag, fold, resolve, projection, sync (public Go API at the root package)
 /cmd/writ      — CLI: porcelain for humans, --json plumbing for scripts/agents
 /tui           — Bubble Tea client
 /bridge/github — bidirectional PR/comment ⇄ ops sync (the migration path)
