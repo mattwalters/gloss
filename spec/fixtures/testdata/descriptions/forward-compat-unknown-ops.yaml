@@ -5,7 +5,7 @@ description: >
   Spread across alice and bob writer refs, all signed and valid envelopes (FC-1..FC-3).
 
 refs:
-  - name: refs/writ/alice/review
+  - name: refs/writ/0123456789abcdef/review
     history:
       - commits:
           - id: alice-known-with-top-level
@@ -55,7 +55,7 @@ refs:
                     confidence: 0.95
             expect: accept
 
-  - name: refs/writ/bob/review
+  - name: refs/writ/fedcba9876543210/review
     history:
       - commits:
           - id: bob-unknown-op-type

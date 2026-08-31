@@ -35,14 +35,15 @@ type CIStatus struct {
 
 // ReviewState is the folded state of a code review collaborative object (v1).
 type ReviewState struct {
-	Title       string     `json:"title,omitempty"`
-	Description string     `json:"description,omitempty"`
-	Status      string     `json:"status,omitempty"`
-	MergeCommit string     `json:"merge_commit,omitempty"`
-	Reason      string     `json:"reason,omitempty"`
-	Revisions   []Revision `json:"revisions,omitempty"`
-	Approvals   []Approval `json:"approvals,omitempty"`
-	CIStatuses  []CIStatus `json:"ci_statuses,omitempty"`
+	Title       string      `json:"title,omitempty"`
+	Description string      `json:"description,omitempty"`
+	Status      string      `json:"status,omitempty"`
+	MergeCommit string      `json:"merge_commit,omitempty"`
+	Reason      string      `json:"reason,omitempty"`
+	Revisions   []Revision  `json:"revisions,omitempty"`
+	Approvals   []Approval  `json:"approvals,omitempty"`
+	CIStatuses  []CIStatus  `json:"ci_statuses,omitempty"`
+	UnknownOps  []UnknownOp `json:"unknown_ops,omitempty"`
 }
 
 type approvalKey struct {
@@ -69,13 +70,19 @@ func FoldReview(ops []codec.Op) (ReviewState, error) {
 
 	var state ReviewState
 	var revisions []Revision
+	var unknownOps []UnknownOp
 
 	approvalsMap := make(map[approvalKey]*Approval)
 	ciStatusesMap := make(map[ciStatusKey]*CIStatus)
 
 	for _, o := range orderedOps {
 		op := o.Op
-		if op.OpVersion != 1 {
+		if op.ObjectType != "review" || op.OpVersion != 1 {
+			unknownOps = append(unknownOps, UnknownOp{
+				Commit:    op.ID,
+				OpType:    op.OpType,
+				OpVersion: op.OpVersion,
+			})
 			continue
 		}
 
@@ -84,7 +91,7 @@ func FoldReview(ops []codec.Op) (ReviewState, error) {
 			_ = json.Unmarshal(op.Body, &body)
 		}
 		if body == nil {
-			continue
+			body = make(map[string]any)
 		}
 
 		switch op.OpType {
@@ -175,10 +182,18 @@ func FoldReview(ops []codec.Op) (ReviewState, error) {
 			if eid, ok := body["external_id"].(string); ok {
 				entry.ExternalID = eid
 			}
+
+		default:
+			unknownOps = append(unknownOps, UnknownOp{
+				Commit:    op.ID,
+				OpType:    op.OpType,
+				OpVersion: op.OpVersion,
+			})
 		}
 	}
 
 	state.Revisions = revisions
+	state.UnknownOps = unknownOps
 
 	// Approvals: omit entries whose folded verdict is "none" or empty.
 	// Sort deterministically by (subject, revision).

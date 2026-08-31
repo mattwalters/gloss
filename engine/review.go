@@ -54,6 +54,18 @@ func FoldReview(ops []codec.Op) (Review, error) {
 		}
 	}
 
+	var unknownOps []UnknownOp
+	if len(state.UnknownOps) > 0 {
+		unknownOps = make([]UnknownOp, len(state.UnknownOps))
+		for i, u := range state.UnknownOps {
+			unknownOps[i] = UnknownOp{
+				Commit:    u.Commit,
+				OpType:    u.OpType,
+				OpVersion: u.OpVersion,
+			}
+		}
+	}
+
 	return Review{
 		Title:       state.Title,
 		Description: state.Description,
@@ -63,6 +75,7 @@ func FoldReview(ops []codec.Op) (Review, error) {
 		Revisions:   revisions,
 		Approvals:   approvals,
 		CIStatuses:  ciStatuses,
+		UnknownOps:  unknownOps,
 	}, nil
 }
 

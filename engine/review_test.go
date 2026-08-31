@@ -301,4 +301,12 @@ func TestFoldReviewUnknownOpVersionAndType(t *testing.T) {
 	if state.Description != "V1 Desc" {
 		t.Errorf("expected description 'V1 Desc', got %q", state.Description)
 	}
+
+	expectedUnknown := []writ.UnknownOp{
+		{Commit: "op-v2", OpType: "update", OpVersion: 2},
+		{Commit: "op-unknown", OpType: "archive", OpVersion: 1},
+	}
+	if !reflect.DeepEqual(state.UnknownOps, expectedUnknown) {
+		t.Errorf("unknown_ops mismatch:\n got:  %+v\n want: %+v", state.UnknownOps, expectedUnknown)
+	}
 }

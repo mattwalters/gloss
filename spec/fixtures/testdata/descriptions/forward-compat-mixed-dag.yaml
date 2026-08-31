@@ -5,7 +5,7 @@ description: >
   interpretable operations with opaque operations omitted (FC-4, FC-15).
 
 refs:
-  - name: refs/writ/alice/review
+  - name: refs/writ/0123456789abcdef/review
     history:
       - commits:
           - id: alice-mix-create
@@ -46,7 +46,7 @@ refs:
                 text: "Alice comment on mixed review"
             expect: accept
 
-  - name: refs/writ/bob/review
+  - name: refs/writ/fedcba9876543210/review
     history:
       - commits:
           - id: bob-mix-opaque-v2
@@ -75,7 +75,7 @@ refs:
                 reason: "approved"
             expect: accept
 
-  - name: refs/writ/alice/review-control
+  - name: refs/writ/0123456789abcdef/review-control
     history:
       - commits:
           - id: alice-ctrl-create
@@ -103,7 +103,7 @@ refs:
                 text: "Alice comment on mixed review"
             expect: accept
 
-  - name: refs/writ/bob/review-control
+  - name: refs/writ/fedcba9876543210/review-control
     history:
       - commits:
           - id: bob-ctrl-close
