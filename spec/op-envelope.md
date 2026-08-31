@@ -94,9 +94,9 @@ same signing key then mint the same op id.
   the signature rides the `gpgsig` header, and SSH signatures use the
   namespace `git` — the same bytes `git commit -S` produces with
   `gpg.format=ssh`, so existing git tooling verifies ops unmodified.
-  Verification mechanics, key distribution, and where the verified bit
-  is cached are specified with the codec signing work (WRIT-22); this
-  document only fixes where the signature lives.
+  Verification mechanics, trust store format, and the verification
+  outcome vocabulary are specified in [`spec/signing.md`](signing.md);
+  this document only fixes where the signature lives.
 
 ## The payload carrier
 
@@ -175,7 +175,7 @@ why) if any of the following fail:
    producers, not readers: readers ignore the message, and interpret any
    offset as its UTC instant.)
 
-Signature verification is a separate, later concern (WRIT-22) — it
+Signature verification is a separate concern (see [`spec/signing.md`](signing.md)) — it
 cannot live in fold, and this document does not define when it runs.
 
 ## Out of scope, with forward references
@@ -185,7 +185,7 @@ cannot live in fold, and this document does not define when it runs.
 - Fold semantics, ordering, and concurrency tiebreaks: [`spec/fold.md`](fold.md).
 - Unknown-op handling and forward-compatibility rules: [`spec/forward-compatibility.md`](forward-compatibility.md).
 - Workspace-global object-id format, cross-repo references & workspace repo: [`spec/identifiers.md`](identifiers.md) (**WRIT-16**).
-- Signature verification mechanics and caching: **WRIT-22**.
+- Signature verification mechanics, trust store, and outcomes: [`spec/signing.md`](signing.md).
 
 ## Conformance data
 

@@ -30,6 +30,7 @@ type Commit struct {
 	Committer Identity    `json:"committer"`
 	Message   string      `json:"message,omitempty"`
 	Signature string      `json:"signature,omitempty"`
+	Payload   []byte      `json:"-"`
 	Tree      []TreeEntry `json:"tree"`
 }
 

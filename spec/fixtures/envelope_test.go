@@ -63,11 +63,10 @@ type DispositionState struct {
 func runEnvelopeFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 	t.Helper()
 
-	verifier, err := fixtures.NewVerifier()
+	trustStore, err := fixtures.NewTrustStore()
 	if err != nil {
-		return nil, fmt.Errorf("create verifier: %w", err)
+		return nil, fmt.Errorf("create trust store: %w", err)
 	}
-	defer verifier.Close()
 
 	var golden EnvelopeGolden
 
@@ -93,7 +92,7 @@ func runEnvelopeFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 					return nil, fmt.Errorf("lookup commit %s: %w", cState.SHA, err)
 				}
 
-				opState, err := evaluateOpCommit(t, fix, ref.Name, commit, cd, verifier)
+				opState, err := evaluateOpCommit(t, fix, ref.Name, commit, cd, trustStore)
 				if err != nil {
 					return nil, err
 				}
@@ -109,7 +108,7 @@ func runEnvelopeFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 	return append(b, '\n'), nil
 }
 
-func evaluateOpCommit(t *testing.T, fix *fixtures.Fixture, refName string, commit *object.Commit, cd fixtures.CommitDesc, verifier *fixtures.Verifier) (*OpGoldenState, error) {
+func evaluateOpCommit(t *testing.T, fix *fixtures.Fixture, refName string, commit *object.Commit, cd fixtures.CommitDesc, trustStore codec.TrustStore) (*OpGoldenState, error) {
 	pureCommit, err := codec.FromGitCommit(fix.Repo, commit)
 	if err != nil {
 		return nil, fmt.Errorf("from git commit: %w", err)
@@ -163,14 +162,11 @@ func evaluateOpCommit(t *testing.T, fix *fixtures.Fixture, refName string, commi
 	}
 
 	// D. Signature verification
-	verResult, err := verifier.VerifyCommit(commit, cd.Author, commit.Author.Email)
-	if err != nil {
-		return nil, fmt.Errorf("verify commit signature: %w", err)
-	}
+	verResult := codec.Verify(pureCommit, trustStore)
 
 	if observed.Disposition == "" {
 		if !verResult.Valid {
-			observed = DispositionState{Disposition: "reject", Reason: verResult.Outcome}
+			observed = DispositionState{Disposition: "reject", Reason: string(verResult.Outcome)}
 		} else {
 			observed = DispositionState{Disposition: "accept"}
 		}
@@ -199,7 +195,7 @@ func evaluateOpCommit(t *testing.T, fix *fixtures.Fixture, refName string, commi
 		CanonicalPayload:        canonicalPayload,
 		Signed:                  commit.PGPSignature != "",
 		SignatureKeyFingerprint: verResult.KeyFingerprint,
-		VerificationOutcome:     verResult.Outcome,
+		VerificationOutcome:     string(verResult.Outcome),
 		Expected:                expected,
 		Observed:                observed,
 	}, nil

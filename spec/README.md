@@ -16,6 +16,7 @@ disagree, the fixtures win and the prose gets fixed.
 | File | Force | Contents |
 | --- | --- | --- |
 | `op-envelope.md` | Normative | The op envelope: which fields live on the op commit vs. in the `op.json` payload, op-id derivation, reader validation rules |
+| `signing.md` | Normative | Op signature scheme, signing payload, verification mechanics, allowed_signers trust store, and outcome vocabulary |
 | `ref-layout.md` | Normative | Chain ref layout, writer-id convention, edge rules, and init refspecs |
 | `canonicalization.md` | Normative | Byte-stable canonical JSON encoding: ordering, escaping, number formatting, rejection rules |
 | `forward-compatibility.md` | Normative | Unknown-op handling, forward compatibility, version-bump semantics, and round-trip preservation rules |
@@ -61,6 +62,7 @@ Every schema under `schemas/` must declare a `$id` URI of the form `https://writ
 spec/
 ├── README.md               — this document: conformance model & independent implementation guide
 ├── op-envelope.md          — normative: the op envelope, field by field
+├── signing.md              — normative: op signature scheme, verification mechanics, trust store, and outcome vocabulary
 ├── ref-layout.md           — normative: chain ref layout, writer-id convention, and refspecs
 ├── canonicalization.md     — normative: canonical JSON encoding rules
 ├── forward-compatibility.md — normative: unknown-op and forward-compatibility rules
