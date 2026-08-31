@@ -278,7 +278,7 @@ algorithm itself, thresholds, and orphan semantics are specified in
 
 ## Appendix A — GitHub inline-comment convertibility (informative)
 
-The bridge's read path (`/bridge/github`) must import GitHub pull-request
+The GitHub bridge read path must import GitHub pull-request
 review comments without losing position information. This appendix
 demonstrates the mapping; the conversion vectors under
 [`testdata/anchors/github/`](testdata/anchors/github/) make it concrete as

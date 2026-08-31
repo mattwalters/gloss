@@ -44,7 +44,7 @@ Anchor _resolution_ is deliberately not part of the fold. Resolving an anchor re
 5. **Projection** — SQLite cache keyed by ref tips: on read, diff tips vs. last fold, fold only deltas, serve queries from indexed tables. Always droppable/rebuildable; never a source of truth. Also home of local-only state: drafts (kept out of shared refs, following Gerrit's draft-handling precedent — publish on intent, never per-keystroke commits), read/unread, sync cursors. An optional DuckDB/Parquet exporter hangs off the same op-log for analytics — derived only, never committed.
 6. **Sync plane** — manages refspecs, invokes **system git** for fetch/push, reports per-remote status ("n ops unsynced"). Thin by design; per-writer refs made conflicts structurally impossible.
 
-Alongside the machines sits one small shared component: **writer identity** — derivation of the current writer-id (user, device) per the ref-layout spec and signing-key lookup from existing git config. Every append and every sign consults it; `writ init` writes the config, the engine reads it, and nothing identity-shaped is implemented above the engine (CLI, TUI, and bridge all consume this component).
+Alongside the machines sits one small shared component: **writer identity** — derivation of the current writer-id (user, device) per the ref-layout spec and signing-key lookup from existing git config. Every append and every sign consults it; `writ init` writes the config, the engine reads it, and nothing identity-shaped is implemented above the engine (the CLI and downstream clients/bridges all consume this component).
 
 ## Public API shape
 
@@ -73,11 +73,11 @@ The domain types themselves (`Review`, `Comment`, `Issue`, `RepoEntry`, `Resolve
 
 Workspace discovery and cross-repo references are surfaced through `store.Workspace` without changing `writ.Open`'s signature: a single `Store` remains the primary handle, and when `writ.workspace` is configured (or overridden via `writ.WithWorkspace(path)`), `store.Issues` automatically routes mutations and queries to the workspace repository while `store.Workspace` provides repo registry operations and pure reference resolution (`[<repo-id>#]<object-id>`).
 
-Everything above the engine — CLI, TUI, localhost web view, GitHub bridge, any hosted service — is a consumer of this one interface, distinguished only by rendering surface. Nothing gets private powers.
+Everything above the engine — CLI, downstream TUI or web viewers, GitHub bridges, any hosted service — is a consumer of this one interface, distinguished only by rendering surface. Nothing gets private powers.
 
 ## Language: Go (decided; rationale preserved)
 
-We seriously considered Rust; its three advantages dissolved under this project's constraints. (1) Bindings: the CLI in `--json` plumbing mode is the universal API — every language and agent can shell out to one static binary, which Go distributes exceptionally well; cgo-exported shared libraries remain a later option if in-process bindings are ever needed. (2) Git libraries: we take a **hybrid approach** — go-git (mature, pure Go) for local object I/O; **system git for all transport**, which is also git-appraise's approach and is quietly the right engineering call, because SSH agents, credential helpers, gitconfig, proxies, and enterprise auth setups all work for free. (3) Type-safety-for-correctness: the conformance fixture suite is the correctness story, not the compiler. Meanwhile the costs of splitting languages were real: Bubble Tea commits the TUI to Go; a Rust core underneath means a cgo seam, two toolchains, and a higher barrier for the contributor who starts in the TUI and ends up fixing an engine bug. One language, one `go build ./...`. A Rust (or Python, or TypeScript) implementation of the _spec_ by others would be genuinely welcome — an independent second implementation is the best proof a convention stands on its own.
+We seriously considered Rust; its three advantages dissolved under this project's constraints. (1) Bindings: the CLI in `--json` plumbing mode is the universal API — every language and agent can shell out to one static binary, which Go distributes exceptionally well; cgo-exported shared libraries remain a later option if in-process bindings are ever needed. (2) Git libraries: we take a **hybrid approach** — go-git (mature, pure Go) for local object I/O; **system git for all transport**, which is also git-appraise's approach and is quietly the right engineering call, because SSH agents, credential helpers, gitconfig, proxies, and enterprise auth setups all work for free. (3) Type-safety-for-correctness: the conformance fixture suite is the correctness story, not the compiler. Meanwhile the costs of splitting languages were real: a Rust core underneath means a cgo seam, two toolchains, and a higher barrier for the contributor who starts in a Go client/tool and ends up fixing an engine bug. One language, one `go build ./...`. A Rust (or Python, or TypeScript) implementation of the _spec_ by others would be genuinely welcome — an independent second implementation is the best proof a convention stands on its own.
 
 ## SQLite driver: pure Go (decided; rationale preserved)
 
@@ -101,20 +101,18 @@ method, and reproduction steps: `docs/spikes/writ-60-sqlite-driver/`.
 
 ## Repo strategy: one monorepo
 
-Everything open lives in a single Apache-2.0 monorepo because the spec, engine, and clients are one contract with several expressions: a fold-rule change should be one atomic PR touching spec text, fixtures, engine, and CLI together. Split repos invite version skew between fixtures and implementation — the exact failure that erodes trust in a convention. Layout:
+Everything open lives in a single Apache-2.0 monorepo because the spec, engine, and CLI are one contract with several expressions: a fold-rule change should be one atomic PR touching spec text, fixtures, engine, and CLI together. Split repos invite version skew between fixtures and implementation — the exact failure that erodes trust in a convention. Layout:
 
 ```
 /spec          — convention doc, JSON schemas, conformance fixtures (the real standard)
 /engine        — codec, dag, fold, resolve, projection, sync (public Go API at the root package)
 /cmd/writ      — CLI: porcelain for humans, --json plumbing for scripts/agents
-/tui           — Bubble Tea client
-/bridge/github — bidirectional PR/comment ⇄ ops sync (the migration path)
 /docs
 ```
 
-Any hosted service built on Writ — by us or anyone — should consume the engine's public API as an ordinary pinned Go module, with no reach into internals. Keeping the public API strong enough that _we_ never need private hooks is a deliberate design constraint: it keeps the convention honest. `spec/` can graduate to a neutral home once independent implementations exist and governance is worth formalizing.
+Downstream clients (TUIs, web viewers, GitHub bridges, hosted services) live in separate downstream repositories consuming the engine's public Go API (`github.com/writtendev/writ/engine`) or the `--json` CLI plumbing. Keeping the public API strong enough that downstream tools never need private hooks is a deliberate design constraint: it keeps the convention honest. `spec/` can graduate to a neutral home once independent implementations exist and governance is worth formalizing.
 
-That "ordinary pinned Go module" is one monorepo-wide `go.mod` at the repo root, module path `github.com/writtendev/writ`, covering `/engine`, `/cmd/writ`, `/tui`, and `/bridge/github` — not a separate module for the engine. A consumer that imports only `.../writ/engine` never compiles or links Bubble Tea or the GitHub client into its own build regardless, since only actually-imported packages get built, independent of which module they live in; `engine/internal/` enforces the API boundary the same way whether `engine` sits in its own `go.mod` or as a subtree of one. A second module and a `go.work` file are deferred until a real external consumer needs independent engine versioning (decision and full rationale: `docs/module-boundary-decision.md`, WRIT-61).
+That "ordinary pinned Go module" is one monorepo-wide `go.mod` at the repo root, module path `github.com/writtendev/writ`, covering `/engine` and `/cmd/writ` — not a separate module for the engine. A consumer that imports `github.com/writtendev/writ/engine` gets only the engine and its direct dependencies; `engine/internal/` enforces the API boundary whether `engine` sits in its own `go.mod` or as a subtree of one. A second module and a `go.work` file are deferred until a real external consumer needs independent engine versioning (decision and full rationale: `docs/module-boundary-decision.md`, WRIT-61).
 
 ## Spec = fixtures
 

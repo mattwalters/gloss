@@ -393,7 +393,7 @@ treated as unknown data, preserved in the DAG, and ignored during fold.
 
 ## Appendix A — External Integrations & Bridge Scope (Informative)
 
-The Writ-GitHub bridge (`/bridge/github`) synchronizes pull requests, code reviews,
+The Writ-GitHub bridge synchronizes pull requests, code reviews,
 and inline comment threads bidirectionally with Writ operations.
 
 GitHub Projects (v2) and GitHub Milestones are not synchronized by the bridge

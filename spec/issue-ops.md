@@ -296,7 +296,7 @@ Folded issue state is `Issue{title, description, state, reason, assignees, label
 
 ## Appendix A — GitHub Issue Representability (Informative)
 
-To ensure fidelity on the GitHub bridge read path (`/bridge/github`), every
+To ensure fidelity on the GitHub bridge read path, every
 standard GitHub issue mutation maps to the Writ issue op vocabulary.
 
 The conversion vectors under [`testdata/issue-ops/github/`](testdata/issue-ops/github/)

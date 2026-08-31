@@ -2,7 +2,7 @@ package projection_test
 
 // NOTE: This benchmark currently uses a synthetic corpus at the scale measured in the
 // WRIT-60 spike (5k reviews × 20 comments = 100k comments, 5k issues).
-// Once bridge/github lands and import tooling exists, re-point this benchmark at
+// Once downstream bridge/import tooling exists, re-point this benchmark at
 // a real imported repository dataset (see WRIT-31 Plan).
 
 import (

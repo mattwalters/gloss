@@ -5,7 +5,7 @@
 // operations and queries without dealing with git commit SHAs, refspecs, or
 // internal transport machinery unless explicitly requested.
 //
-// All client layers — CLI, TUI, GitHub bridge, and hosted services — build
+// All client layers — CLI, downstream TUIs/viewers, GitHub bridges, and hosted services — build
 // on this single interface.
 //
 // Basic usage:
