@@ -12,7 +12,7 @@
   "cross-side-partial-resolve.json": {
     "description": "Dual-sided anchor where new side resolves and old side orphans",
     "match": "exact-path-blob",
-    "outcome": "resolved"
+    "outcome": "partial"
   },
   "deleted-file.json": {
     "description": "Recorded path absent from target tree and no content candidate found",

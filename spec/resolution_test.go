@@ -466,14 +466,28 @@ func TestResolutionVectorsValidateAndExecute(t *testing.T) {
 			// Verify blob OID integrity for exact-blob matches
 			for path, content := range c.Target.Files {
 				computed := gitBlobOID(content)
-				if c.Expect.New != nil && c.Expect.New.Match == "exact-path-blob" && c.Expect.New.Path == path {
-					if c.Anchor.New.Blob != computed {
-						t.Errorf("%s: anchor.new.blob %q does not match computed blob %q of %s", name, c.Anchor.New.Blob, computed, path)
+				if c.Expect.New != nil && c.Anchor.New != nil {
+					if c.Expect.New.Match == "exact-path-blob" && c.Expect.New.Path == path {
+						if c.Anchor.New.Blob != computed {
+							t.Errorf("%s: anchor.new.blob %q does not match computed blob %q of %s", name, c.Anchor.New.Blob, computed, path)
+						}
+					}
+					if c.Expect.New.Match == "exact-blob-moved" && c.Expect.New.Path == path {
+						if c.Anchor.New.Blob != computed {
+							t.Errorf("%s: anchor.new.blob %q does not match computed blob %q of %s", name, c.Anchor.New.Blob, computed, path)
+						}
 					}
 				}
-				if c.Expect.New != nil && c.Expect.New.Match == "exact-blob-moved" && c.Expect.New.Path == path {
-					if c.Anchor.New.Blob != computed {
-						t.Errorf("%s: anchor.new.blob %q does not match computed blob %q of %s", name, c.Anchor.New.Blob, computed, path)
+				if c.Expect.Old != nil && c.Anchor.Old != nil {
+					if c.Expect.Old.Match == "exact-path-blob" && c.Expect.Old.Path == path {
+						if c.Anchor.Old.Blob != computed {
+							t.Errorf("%s: anchor.old.blob %q does not match computed blob %q of %s", name, c.Anchor.Old.Blob, computed, path)
+						}
+					}
+					if c.Expect.Old.Match == "exact-blob-moved" && c.Expect.Old.Path == path {
+						if c.Anchor.Old.Blob != computed {
+							t.Errorf("%s: anchor.old.blob %q does not match computed blob %q of %s", name, c.Anchor.Old.Blob, computed, path)
+						}
 					}
 				}
 			}

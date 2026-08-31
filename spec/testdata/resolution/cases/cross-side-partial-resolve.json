@@ -6,20 +6,20 @@
     "old": {
       "commit": "1111111111111111111111111111111111111111",
       "path": "runner.go",
-      "blob": "5937979c7971c0cb20bb250c1ff2a493233362d5",
+      "blob": "1e8a04aad62e169c68edb63173be9f8f3ad4effd",
       "range": {
         "start": 2,
-        "end": 2
+        "end": 3
       },
       "context": {
         "before": [
           "func Run() {"
         ],
         "lines": [
-          "\toldWork()"
+          "\toldWork1()",
+          "\toldWork2()"
         ],
         "after": [
-          "\tcommonWork()",
           "}"
         ]
       }
@@ -57,20 +57,20 @@
       "old": {
         "commit": "1111111111111111111111111111111111111111",
         "path": "runner.go",
-        "blob": "5937979c7971c0cb20bb250c1ff2a493233362d5",
+        "blob": "1e8a04aad62e169c68edb63173be9f8f3ad4effd",
         "range": {
           "start": 2,
-          "end": 2
+          "end": 3
         },
         "context": {
           "before": [
             "func Run() {"
           ],
           "lines": [
-            "\toldWork()"
+            "\toldWork1()",
+            "\toldWork2()"
           ],
           "after": [
-            "\tcommonWork()",
             "}"
           ]
         }
@@ -98,13 +98,8 @@
       }
     },
     "old": {
-      "outcome": "resolved",
-      "match": "context-fuzzy",
-      "path": "runner.go",
-      "range": {
-        "start": 2,
-        "end": 2
-      }
+      "outcome": "orphaned",
+      "reason": "below-threshold"
     },
     "new": {
       "outcome": "resolved",
