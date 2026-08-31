@@ -1,0 +1,63 @@
+{
+  "name": "ambiguous-duplicate",
+  "description": "Two candidate windows tie for best score \u003e= 60%",
+  "anchor": {
+    "version": 1,
+    "new": {
+      "commit": "1111111111111111111111111111111111111111",
+      "path": "dup.go",
+      "blob": "a178664f594f94cbed0876f9300d03aebfc39c16",
+      "range": {
+        "start": 3,
+        "end": 4
+      },
+      "context": {
+        "before": [
+          "\tsetup()"
+        ],
+        "lines": [
+          "\ta()",
+          "\tb()"
+        ],
+        "after": [
+          "\tteardown()"
+        ]
+      }
+    }
+  },
+  "target": {
+    "files": {
+      "dup.go": "func One() {\n\tsetup()\n\ta()\n\tb_modified()\n\tteardown()\n}\n\nfunc Two() {\n\tsetup()\n\ta()\n\tb_modified()\n\tteardown()\n}\n"
+    }
+  },
+  "expect": {
+    "anchor": {
+      "version": 1,
+      "new": {
+        "commit": "1111111111111111111111111111111111111111",
+        "path": "dup.go",
+        "blob": "a178664f594f94cbed0876f9300d03aebfc39c16",
+        "range": {
+          "start": 3,
+          "end": 4
+        },
+        "context": {
+          "before": [
+            "\tsetup()"
+          ],
+          "lines": [
+            "\ta()",
+            "\tb()"
+          ],
+          "after": [
+            "\tteardown()"
+          ]
+        }
+      }
+    },
+    "new": {
+      "outcome": "orphaned",
+      "reason": "ambiguous"
+    }
+  }
+}

@@ -20,10 +20,11 @@ deliberately does not define:
 
 - **Re-anchoring and orphan degradation** — how an anchor is resolved
   against a target tree (`resolve(anchor, tree) → position | orphaned`).
-  That is its own spec section (WRIT-14), implemented by the engine's
-  anchor resolver (WRIT-66) and pinned by the orphaned-anchors fixture
-  family (WRIT-19). This section only guarantees the format *carries enough
-  signal* for resolution — see [Resolution affordances](#resolution-affordances-non-normative).
+  That is its own spec section ([`resolution.md`](resolution.md)), implemented
+  by the engine's anchor resolver (WRIT-66) and pinned by standalone resolution
+  vectors and the orphaned-anchors fixture family (WRIT-19). This section only
+  guarantees the format *carries enough signal* for resolution — see
+  [Resolution affordances](#resolution-affordances-non-normative).
 - **The comment op** that embeds an anchor — threading, edits, deletion
   (WRIT-9). An anchor is a value object inside op bodies, not an op itself.
 - **Cross-repo references.** Anchors are repo-local: every OID in an anchor
@@ -257,7 +258,8 @@ added fields since.
 ## Resolution affordances (non-normative)
 
 Why these fields are enough to re-anchor across common rewrites — the
-algorithm itself, thresholds, and orphan semantics are WRIT-14:
+algorithm itself, thresholds, and orphan semantics are specified in
+[`resolution.md`](resolution.md):
 
 - **`blob`** is the exact-match key. Force-pushes and rebases that do not
   touch the file leave its blob OID intact somewhere in the new tree;

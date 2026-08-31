@@ -1,0 +1,77 @@
+{
+  "ambiguous-duplicate.json": {
+    "description": "Two candidate windows tie for best score \u003e= 60%",
+    "outcome": "orphaned",
+    "reason": "ambiguous"
+  },
+  "collar-only-single-line.json": {
+    "description": "Single-line comment where line itself was edited but 3+3 collar lines match",
+    "match": "context-fuzzy",
+    "outcome": "resolved"
+  },
+  "cross-side-partial-resolve.json": {
+    "description": "Dual-sided anchor where new side resolves and old side orphans",
+    "match": "exact-path-blob",
+    "outcome": "partial"
+  },
+  "deleted-file.json": {
+    "description": "Recorded path absent from target tree and no content candidate found",
+    "outcome": "orphaned",
+    "reason": "path-absent"
+  },
+  "deleted-line-old-side.json": {
+    "description": "Old-side anchor on deleted line evaluated against tree where content has 0 matching score",
+    "outcome": "orphaned",
+    "reason": "no-candidate"
+  },
+  "drift-within-file.json": {
+    "description": "File edited with inserted lines: range shifted to new line numbers",
+    "match": "context-exact",
+    "outcome": "resolved"
+  },
+  "elided-long-range.json": {
+    "description": "Elided long range (omitted \u003e 0) matches head-32 and tail-32 verbatim",
+    "match": "context-exact",
+    "outcome": "resolved"
+  },
+  "exact-blob-moved.json": {
+    "description": "File moved to new path with identical content",
+    "match": "exact-blob-moved",
+    "outcome": "resolved"
+  },
+  "exact-path-blob.json": {
+    "description": "File untouched at recorded path: range and context carry over verbatim",
+    "match": "exact-path-blob",
+    "outcome": "resolved"
+  },
+  "rename-and-edit.json": {
+    "description": "File renamed and edited: lines found verbatim in new file",
+    "match": "context-exact",
+    "outcome": "resolved"
+  },
+  "threshold-just-above.json": {
+    "description": "Fuzzy match scoring exactly 60% (6/10) passes threshold",
+    "match": "context-fuzzy",
+    "outcome": "resolved"
+  },
+  "threshold-just-below.json": {
+    "description": "Best candidate window scores below the 60% threshold (5/10)",
+    "outcome": "orphaned",
+    "reason": "below-threshold"
+  },
+  "unsupported-version.json": {
+    "description": "Anchor has unsupported version number (\u003e 1)",
+    "outcome": "orphaned",
+    "reason": "unsupported-version"
+  },
+  "whole-file-orphan.json": {
+    "description": "Whole-file anchor on file whose content changed in target tree",
+    "outcome": "orphaned",
+    "reason": "no-candidate"
+  },
+  "whole-file-resolve.json": {
+    "description": "Whole-file anchor on file whose blob matches target tree",
+    "match": "exact-path-blob",
+    "outcome": "resolved"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "name": "rename-and-edit",
+  "description": "File renamed and edited: lines found verbatim in new file",
+  "anchor": {
+    "version": 1,
+    "new": {
+      "commit": "1111111111111111111111111111111111111111",
+      "path": "math/calc.go",
+      "blob": "8d182ff554c388d2e0c4d417c7c344dc77c4566a",
+      "range": {
+        "start": 3,
+        "end": 5
+      },
+      "context": {
+        "before": [
+          "package math",
+          ""
+        ],
+        "lines": [
+          "func Multiply(a, b int) int {",
+          "\treturn a * b",
+          "}"
+        ],
+        "after": []
+      }
+    }
+  },
+  "target": {
+    "files": {
+      "math/math.go": "// Package math provides math helpers.\npackage math\n\nfunc Multiply(a, b int) int {\n\treturn a * b\n}\n\nfunc Subtract(a, b int) int {\n\treturn a - b\n}\n"
+    }
+  },
+  "expect": {
+    "anchor": {
+      "version": 1,
+      "new": {
+        "commit": "1111111111111111111111111111111111111111",
+        "path": "math/calc.go",
+        "blob": "8d182ff554c388d2e0c4d417c7c344dc77c4566a",
+        "range": {
+          "start": 3,
+          "end": 5
+        },
+        "context": {
+          "before": [
+            "package math",
+            ""
+          ],
+          "lines": [
+            "func Multiply(a, b int) int {",
+            "\treturn a * b",
+            "}"
+          ],
+          "after": []
+        }
+      }
+    },
+    "new": {
+      "outcome": "resolved",
+      "match": "context-exact",
+      "path": "math/math.go",
+      "range": {
+        "start": 4,
+        "end": 6
+      }
+    }
+  }
+}

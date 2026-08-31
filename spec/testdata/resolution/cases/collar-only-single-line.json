@@ -1,0 +1,74 @@
+{
+  "name": "collar-only-single-line",
+  "description": "Single-line comment where line itself was edited but 3+3 collar lines match",
+  "anchor": {
+    "version": 1,
+    "new": {
+      "commit": "1111111111111111111111111111111111111111",
+      "path": "counter.go",
+      "blob": "6ee8c487ea61d93f321e149da35496c5903674b5",
+      "range": {
+        "start": 5,
+        "end": 5
+      },
+      "context": {
+        "before": [
+          "",
+          "func count() int {",
+          "\t// initialize"
+        ],
+        "lines": [
+          "\tcount := 0"
+        ],
+        "after": [
+          "\t// increment",
+          "\tcount++",
+          "\treturn count"
+        ]
+      }
+    }
+  },
+  "target": {
+    "files": {
+      "counter.go": "package main\n\nfunc count() int {\n\t// initialize\n\tcount := 1\n\t// increment\n\tcount++\n\treturn count\n}\n"
+    }
+  },
+  "expect": {
+    "anchor": {
+      "version": 1,
+      "new": {
+        "commit": "1111111111111111111111111111111111111111",
+        "path": "counter.go",
+        "blob": "6ee8c487ea61d93f321e149da35496c5903674b5",
+        "range": {
+          "start": 5,
+          "end": 5
+        },
+        "context": {
+          "before": [
+            "",
+            "func count() int {",
+            "\t// initialize"
+          ],
+          "lines": [
+            "\tcount := 0"
+          ],
+          "after": [
+            "\t// increment",
+            "\tcount++",
+            "\treturn count"
+          ]
+        }
+      }
+    },
+    "new": {
+      "outcome": "resolved",
+      "match": "context-fuzzy",
+      "path": "counter.go",
+      "range": {
+        "start": 5,
+        "end": 5
+      }
+    }
+  }
+}
