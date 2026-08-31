@@ -6,19 +6,20 @@
     "new": {
       "commit": "1111111111111111111111111111111111111111",
       "path": "logic.go",
-      "blob": "fd99716bc7d57ef9b9dca380006e38362dca354c",
+      "blob": "e3dc174205dc312f76cd6fde19a0371973f87f92",
       "range": {
-        "start": 2,
-        "end": 4
+        "start": 4,
+        "end": 6
       },
       "context": {
         "before": [
+          "",
           "func Evaluate() {"
         ],
         "lines": [
           "\tstep1()",
           "\tstep2_old()",
-          "\tstep3()"
+          "\tstep3_old()"
         ],
         "after": [
           "\tend()",
@@ -29,7 +30,7 @@
   },
   "target": {
     "files": {
-      "logic.go": "func Evaluate() {\n\tstep1()\n\tstep2_new()\n\tstep3()\n\tend()\n}\n"
+      "logic.go": "package logic\n\nfunc Evaluate() {\n\tstep1()\n\tstep2_new()\n\tstep3_new()\n\tend()\n}\n"
     }
   },
   "expect": {
@@ -38,19 +39,20 @@
       "new": {
         "commit": "1111111111111111111111111111111111111111",
         "path": "logic.go",
-        "blob": "fd99716bc7d57ef9b9dca380006e38362dca354c",
+        "blob": "e3dc174205dc312f76cd6fde19a0371973f87f92",
         "range": {
-          "start": 2,
-          "end": 4
+          "start": 4,
+          "end": 6
         },
         "context": {
           "before": [
+            "",
             "func Evaluate() {"
           ],
           "lines": [
             "\tstep1()",
             "\tstep2_old()",
-            "\tstep3()"
+            "\tstep3_old()"
           ],
           "after": [
             "\tend()",
@@ -64,8 +66,8 @@
       "match": "context-fuzzy",
       "path": "logic.go",
       "range": {
-        "start": 2,
-        "end": 4
+        "start": 4,
+        "end": 6
       }
     }
   }
