@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/writtendev/writ/engine"
+	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/codec/canonicaljson"
 	"github.com/writtendev/writ/engine/dag"
 	"github.com/writtendev/writ/engine/identity"
@@ -203,6 +204,64 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 			if ref.Commit != totalOrder[i] || ref.TStar != effectiveTimes[ref.Commit] {
 				t.Fatalf("engine TotalOrder[%d] mismatch for %s in %s: got (%s, %d), want (%s, %d)",
 					i, objID, fix.Name, ref.Commit, ref.TStar, totalOrder[i], effectiveTimes[totalOrder[i]])
+			}
+		}
+
+		// Comment reducer pass: verify typed writ.FoldComment canonicalizes identically to spec.Fold
+		// and carries winning anchor payload byte-identically.
+		if codecOps[0].ObjectType == "comment" {
+			commentRes, err := writ.FoldComment(codecOps)
+			if err != nil {
+				return nil, fmt.Errorf("writ.FoldComment for object %s: %w", objID, err)
+			}
+			commentJSON, err := canonicaljson.Marshal(mustJSON(t, commentRes))
+			if err != nil {
+				return nil, fmt.Errorf("canonicalizing Comment for %s: %w", objID, err)
+			}
+			if !bytes.Equal(commentJSON, expectedJSON) {
+				t.Fatalf("typed Comment fold state differs from spec reference for object %s in fixture %s:\n comment: %s\n ref:     %s",
+					objID, fix.Name, string(commentJSON), string(expectedJSON))
+			}
+
+			// Direct anchor identity assertion:
+			var winningCreateOp *codec.Op
+			for _, sha := range totalOrder {
+				for i := range codecOps {
+					if codecOps[i].ID == sha && codecOps[i].OpType == "create" && codecOps[i].OpVersion == 1 {
+						var body map[string]json.RawMessage
+						if len(codecOps[i].Body) > 0 {
+							_ = json.Unmarshal(codecOps[i].Body, &body)
+						}
+						if ancRaw, ok := body["anchor"]; ok && len(ancRaw) > 0 && string(ancRaw) != "null" {
+							winningCreateOp = &codecOps[i]
+							break
+						}
+					}
+				}
+				if winningCreateOp != nil {
+					break
+				}
+			}
+
+			if winningCreateOp != nil {
+				var body map[string]json.RawMessage
+				_ = json.Unmarshal(winningCreateOp.Body, &body)
+				expectedAnchorRaw := body["anchor"]
+				if commentRes.Anchor == nil {
+					t.Fatalf("expected Anchor on comment %s in %s, got nil", objID, fix.Name)
+				}
+				anchorJSON, err := json.Marshal(commentRes.Anchor)
+				if err != nil {
+					t.Fatalf("marshaling comment Anchor: %v", err)
+				}
+				if !bytes.Equal(anchorJSON, expectedAnchorRaw) {
+					t.Fatalf("anchor bytes mismatch for %s in %s:\n got:  %s\n want: %s",
+						objID, fix.Name, string(anchorJSON), string(expectedAnchorRaw))
+				}
+			} else {
+				if commentRes.Anchor != nil {
+					t.Fatalf("expected nil Anchor on comment %s in %s, got %+v", objID, fix.Name, commentRes.Anchor)
+				}
 			}
 		}
 
