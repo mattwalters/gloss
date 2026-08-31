@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/writtendev/writ/engine/projection"
+	writsync "github.com/writtendev/writ/engine/sync"
 )
 
 var (
@@ -17,4 +18,13 @@ var (
 
 	// ErrNotFound is returned when an object is not found.
 	ErrNotFound = projection.ErrNotFound
+
+	// ErrNonFastForward indicates that a push or fetch update was rejected because
+	// it was not a fast-forward.
+	ErrNonFastForward = writsync.ErrNonFastForward
+
+	// ErrUnknownRemote indicates that the requested git remote is not configured
+	// or could not be found.
+	ErrUnknownRemote = writsync.ErrUnknownRemote
 )
+
