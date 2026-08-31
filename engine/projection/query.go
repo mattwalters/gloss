@@ -2,14 +2,19 @@ package projection
 
 import (
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/resolve"
+	"github.com/writtendev/writ/engine/state"
 )
+
+// ErrNotFound is returned when an object is not found in the projection.
+var ErrNotFound = errors.New("writ: object not found")
 
 // Author holds the author display name and email address derived from an object's operations.
 type Author struct {
@@ -23,7 +28,7 @@ type ReviewResult struct {
 	Author    Author      `json:"author"`
 	CreatedAt time.Time   `json:"created_at"`
 	UpdatedAt time.Time   `json:"updated_at"`
-	Review    writ.Review `json:"review"`
+	Review    state.Review `json:"review"`
 }
 
 // IssueResult represents an issue object along with its authorship and timestamps.
@@ -32,7 +37,7 @@ type IssueResult struct {
 	Author    Author     `json:"author"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
-	Issue     writ.Issue `json:"issue"`
+	Issue     state.Issue `json:"issue"`
 }
 
 // ResolvedPosition describes the resolved anchor position for a comment side.
@@ -53,7 +58,7 @@ type CommentResult struct {
 	Author    Author             `json:"author"`
 	CreatedAt time.Time          `json:"created_at"`
 	UpdatedAt time.Time          `json:"updated_at"`
-	Comment   writ.Comment       `json:"comment"`
+	Comment   state.Comment       `json:"comment"`
 	Resolved  []ResolvedPosition `json:"resolved,omitempty"`
 }
 
@@ -165,7 +170,7 @@ func (d *DB) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 	}
 
 	// Batch load revisions
-	revisionsMap := make(map[string][]writ.Revision)
+	revisionsMap := make(map[string][]state.Revision)
 	revRows, err := d.queryIn("SELECT review_object_id, base, head FROM review_revisions WHERE review_object_id IN (?) ORDER BY review_object_id ASC, revision_index ASC", objectIDs)
 	if err != nil {
 		return nil, fmt.Errorf("projection: query review revisions: %w", err)
@@ -176,12 +181,12 @@ func (d *DB) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 			revRows.Close()
 			return nil, fmt.Errorf("projection: scan review revision: %w", err)
 		}
-		revisionsMap[objID] = append(revisionsMap[objID], writ.Revision{Base: base, Head: head})
+		revisionsMap[objID] = append(revisionsMap[objID], state.Revision{Base: base, Head: head})
 	}
 	revRows.Close()
 
 	// Batch load approvals
-	approvalsMap := make(map[string][]writ.Approval)
+	approvalsMap := make(map[string][]state.Approval)
 	appRows, err := d.queryIn("SELECT review_object_id, subject, revision, verdict, message FROM approvals WHERE review_object_id IN (?) ORDER BY review_object_id ASC, subject ASC, revision ASC", objectIDs)
 	if err != nil {
 		return nil, fmt.Errorf("projection: query approvals: %w", err)
@@ -192,7 +197,7 @@ func (d *DB) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 			appRows.Close()
 			return nil, fmt.Errorf("projection: scan approval: %w", err)
 		}
-		approvalsMap[objID] = append(approvalsMap[objID], writ.Approval{
+		approvalsMap[objID] = append(approvalsMap[objID], state.Approval{
 			Subject:  subject,
 			Revision: revision,
 			Verdict:  verdict,
@@ -202,21 +207,21 @@ func (d *DB) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 	appRows.Close()
 
 	// Batch load ci_statuses
-	ciMap := make(map[string][]writ.CIStatus)
+	ciMap := make(map[string][]state.CIStatus)
 	ciRows, err := d.queryIn("SELECT review_object_id, revision, name, state, url, description, started_at, completed_at, external_id FROM ci_statuses WHERE review_object_id IN (?) ORDER BY review_object_id ASC, revision ASC, name ASC", objectIDs)
 	if err != nil {
 		return nil, fmt.Errorf("projection: query ci_statuses: %w", err)
 	}
 	for ciRows.Next() {
-		var objID, revision, name, state, url, description, startedAt, completedAt, externalID string
-		if err := ciRows.Scan(&objID, &revision, &name, &state, &url, &description, &startedAt, &completedAt, &externalID); err != nil {
+		var objID, revision, name, stateVal, url, description, startedAt, completedAt, externalID string
+		if err := ciRows.Scan(&objID, &revision, &name, &stateVal, &url, &description, &startedAt, &completedAt, &externalID); err != nil {
 			ciRows.Close()
 			return nil, fmt.Errorf("projection: scan ci_status: %w", err)
 		}
-		ciMap[objID] = append(ciMap[objID], writ.CIStatus{
+		ciMap[objID] = append(ciMap[objID], state.CIStatus{
 			Revision:    revision,
 			Name:        name,
-			State:       state,
+			State:       stateVal,
 			URL:         url,
 			Description: description,
 			StartedAt:   startedAt,
@@ -227,7 +232,7 @@ func (d *DB) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 	ciRows.Close()
 
 	// Batch load unknown_ops
-	unknownMap := make(map[string][]writ.UnknownOp)
+	unknownMap := make(map[string][]state.UnknownOp)
 	uRows, err := d.queryIn("SELECT object_id, op_id, op_type, op_version FROM unknown_ops WHERE object_id IN (?) ORDER BY object_id ASC, op_index ASC", objectIDs)
 	if err != nil {
 		return nil, fmt.Errorf("projection: query unknown_ops: %w", err)
@@ -239,7 +244,7 @@ func (d *DB) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 			uRows.Close()
 			return nil, fmt.Errorf("projection: scan unknown op: %w", err)
 		}
-		unknownMap[objID] = append(unknownMap[objID], writ.UnknownOp{
+		unknownMap[objID] = append(unknownMap[objID], state.UnknownOp{
 			Commit:    opID,
 			OpType:    opType,
 			OpVersion: opVersion,
@@ -249,7 +254,7 @@ func (d *DB) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 
 	results := make([]ReviewResult, 0, len(rawReviews))
 	for _, rr := range rawReviews {
-		review := writ.Review{
+		review := state.Review{
 			Title:       rr.title,
 			Description: rr.description,
 			Status:      rr.status,
@@ -414,7 +419,7 @@ func (d *DB) Issues(f IssueFilter) ([]IssueResult, error) {
 	lblRows.Close()
 
 	// Batch load links
-	linksMap := make(map[string][]writ.Link)
+	linksMap := make(map[string][]state.Link)
 	lnkRows, err := d.queryIn("SELECT issue_object_id, target, target_type, relation FROM issue_links WHERE issue_object_id IN (?) ORDER BY issue_object_id ASC, target ASC", objectIDs)
 	if err != nil {
 		return nil, fmt.Errorf("projection: query issue links: %w", err)
@@ -425,7 +430,7 @@ func (d *DB) Issues(f IssueFilter) ([]IssueResult, error) {
 			lnkRows.Close()
 			return nil, fmt.Errorf("projection: scan issue link: %w", err)
 		}
-		linksMap[objID] = append(linksMap[objID], writ.Link{
+		linksMap[objID] = append(linksMap[objID], state.Link{
 			Target:     target,
 			TargetType: targetType,
 			Relation:   relation,
@@ -434,7 +439,7 @@ func (d *DB) Issues(f IssueFilter) ([]IssueResult, error) {
 	lnkRows.Close()
 
 	// Batch load unknown_ops
-	unknownMap := make(map[string][]writ.UnknownOp)
+	unknownMap := make(map[string][]state.UnknownOp)
 	uRows, err := d.queryIn("SELECT object_id, op_id, op_type, op_version FROM unknown_ops WHERE object_id IN (?) ORDER BY object_id ASC, op_index ASC", objectIDs)
 	if err != nil {
 		return nil, fmt.Errorf("projection: query unknown_ops: %w", err)
@@ -446,7 +451,7 @@ func (d *DB) Issues(f IssueFilter) ([]IssueResult, error) {
 			uRows.Close()
 			return nil, fmt.Errorf("projection: scan unknown op: %w", err)
 		}
-		unknownMap[objID] = append(unknownMap[objID], writ.UnknownOp{
+		unknownMap[objID] = append(unknownMap[objID], state.UnknownOp{
 			Commit:    opID,
 			OpType:    opType,
 			OpVersion: opVersion,
@@ -456,7 +461,7 @@ func (d *DB) Issues(f IssueFilter) ([]IssueResult, error) {
 
 	results := make([]IssueResult, 0, len(rawIssues))
 	for _, ri := range rawIssues {
-		issue := writ.Issue{
+		issue := state.Issue{
 			Title:       ri.title,
 			Description: ri.description,
 			State:       ri.state,
@@ -577,7 +582,7 @@ func (d *DB) Comments(f CommentFilter) ([]CommentResult, error) {
 	}
 
 	// Batch load unknown_ops
-	unknownMap := make(map[string][]writ.UnknownOp)
+	unknownMap := make(map[string][]state.UnknownOp)
 	uRows, err := d.queryIn("SELECT object_id, op_id, op_type, op_version FROM unknown_ops WHERE object_id IN (?) ORDER BY object_id ASC, op_index ASC", objectIDs)
 	if err != nil {
 		return nil, fmt.Errorf("projection: query unknown_ops: %w", err)
@@ -589,7 +594,7 @@ func (d *DB) Comments(f CommentFilter) ([]CommentResult, error) {
 			uRows.Close()
 			return nil, fmt.Errorf("projection: scan unknown op: %w", err)
 		}
-		unknownMap[objID] = append(unknownMap[objID], writ.UnknownOp{
+		unknownMap[objID] = append(unknownMap[objID], state.UnknownOp{
 			Commit:    opID,
 			OpType:    opType,
 			OpVersion: opVersion,
@@ -661,8 +666,8 @@ func (d *DB) Comments(f CommentFilter) ([]CommentResult, error) {
 			}
 		}
 
-		comment := writ.Comment{
-			Subject: writ.CommentSubject{
+		comment := state.Comment{
+			Subject: state.CommentSubject{
 				ObjectType: rc.subjectType,
 				ObjectID:   rc.subjectID,
 			},
@@ -779,7 +784,7 @@ func (d *DB) Objects(f ObjectFilter) ([]ObjectResult, error) {
 }
 
 // Threads retrieves and structures all comments attached to a subject into a comment reply forest.
-func (d *DB) Threads(subjectType, subjectID string) ([]writ.CommentThread, error) {
+func (d *DB) Threads(subjectType, subjectID string) ([]state.CommentThread, error) {
 	if d == nil || d.db == nil {
 		return nil, fmt.Errorf("projection: database is closed")
 	}
@@ -886,16 +891,16 @@ func (d *DB) Threads(subjectType, subjectID string) ([]writ.CommentThread, error
 
 	sortIDs(rootIDs)
 
-	var buildTree func(id string) writ.CommentThread
-	buildTree = func(id string) writ.CommentThread {
+	var buildTree func(id string) state.CommentThread
+	buildTree = func(id string) state.CommentThread {
 		chIDs := childrenMap[id]
 		sortIDs(chIDs)
-		replies := make([]writ.CommentThread, 0, len(chIDs))
+		replies := make([]state.CommentThread, 0, len(chIDs))
 		for _, chID := range chIDs {
 			replies = append(replies, buildTree(chID))
 		}
 		node := nodeMap[id]
-		return writ.CommentThread{
+		return state.CommentThread{
 			ObjectID:   id,
 			Comment:    node.res.Comment,
 			Replies:    replies,
@@ -903,7 +908,7 @@ func (d *DB) Threads(subjectType, subjectID string) ([]writ.CommentThread, error
 		}
 	}
 
-	threads := make([]writ.CommentThread, 0, len(rootIDs))
+	threads := make([]state.CommentThread, 0, len(rootIDs))
 	for _, rootID := range rootIDs {
 		threads = append(threads, buildTree(rootID))
 	}
@@ -950,4 +955,325 @@ func (d *DB) queryIn(queryPattern string, ids []string, extraArgs ...any) (*sql.
 	args = append(args, extraArgs...)
 
 	return d.db.Query(query, args...)
+}
+
+// Frontier returns the observed frontier of op commits for the given object ID:
+// the op commits with no child dependencies within that object.
+func (d *DB) Frontier(objectID string) ([]string, error) {
+	if d == nil || d.db == nil {
+		return nil, fmt.Errorf("projection: database is closed")
+	}
+	if objectID == "" {
+		return nil, nil
+	}
+
+	rows, err := d.db.Query("SELECT op_id, parents FROM ops WHERE object_id = ? ORDER BY op_id ASC", objectID)
+	if err != nil {
+		return nil, fmt.Errorf("projection: query ops for frontier %s: %w", objectID, err)
+	}
+	defer rows.Close()
+
+	allOps := make(map[string]bool)
+	hasChildren := make(map[string]bool)
+
+	for rows.Next() {
+		var opID, parentsJSON string
+		if err := rows.Scan(&opID, &parentsJSON); err != nil {
+			return nil, fmt.Errorf("projection: scan op for frontier: %w", err)
+		}
+		allOps[opID] = true
+		if len(parentsJSON) > 0 {
+			var parents []string
+			if err := json.Unmarshal([]byte(parentsJSON), &parents); err == nil {
+				for _, p := range parents {
+					hasChildren[p] = true
+				}
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("projection: iterate ops for frontier: %w", err)
+	}
+
+	var frontier []string
+	for opID := range allOps {
+		if !hasChildren[opID] {
+			frontier = append(frontier, opID)
+		}
+	}
+	sort.Strings(frontier)
+
+	return frontier, nil
+}
+
+// Review fetches a single review by its object ID, returning ErrNotFound if not found.
+func (d *DB) Review(objectID string) (ReviewResult, error) {
+	if d == nil || d.db == nil {
+		return ReviewResult{}, fmt.Errorf("projection: database is closed")
+	}
+	if objectID == "" {
+		return ReviewResult{}, ErrNotFound
+	}
+
+	var rr struct {
+		objectID    string
+		title       string
+		description string
+		status      string
+		mergeCommit string
+		reason      string
+		authorName  string
+		authorEmail string
+		createdAt   int64
+		updatedAt   int64
+	}
+
+	err := d.db.QueryRow(
+		"SELECT r.object_id, r.title, r.description, r.status, r.merge_commit, r.reason, o.author_name, o.author_email, o.created_at, o.updated_at FROM reviews r JOIN objects o ON o.object_id = r.object_id WHERE r.object_id = ?",
+		objectID,
+	).Scan(
+		&rr.objectID, &rr.title, &rr.description, &rr.status, &rr.mergeCommit, &rr.reason,
+		&rr.authorName, &rr.authorEmail, &rr.createdAt, &rr.updatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ReviewResult{}, ErrNotFound
+		}
+		return ReviewResult{}, fmt.Errorf("projection: query review %s: %w", objectID, err)
+	}
+
+	var revisions []state.Revision
+	revRows, err := d.db.Query("SELECT base, head FROM review_revisions WHERE review_object_id = ? ORDER BY revision_index ASC", objectID)
+	if err != nil {
+		return ReviewResult{}, fmt.Errorf("projection: query review revisions: %w", err)
+	}
+	defer revRows.Close()
+	for revRows.Next() {
+		var base, head string
+		if err := revRows.Scan(&base, &head); err != nil {
+			return ReviewResult{}, fmt.Errorf("projection: scan review revision: %w", err)
+		}
+		revisions = append(revisions, state.Revision{Base: base, Head: head})
+	}
+	if err := revRows.Err(); err != nil {
+		return ReviewResult{}, fmt.Errorf("projection: iterate review revisions: %w", err)
+	}
+
+	var approvals []state.Approval
+	appRows, err := d.db.Query("SELECT subject, revision, verdict, message FROM approvals WHERE review_object_id = ? ORDER BY subject ASC, revision ASC", objectID)
+	if err != nil {
+		return ReviewResult{}, fmt.Errorf("projection: query approvals: %w", err)
+	}
+	defer appRows.Close()
+	for appRows.Next() {
+		var subject, revision, verdict, message string
+		if err := appRows.Scan(&subject, &revision, &verdict, &message); err != nil {
+			return ReviewResult{}, fmt.Errorf("projection: scan approval: %w", err)
+		}
+		approvals = append(approvals, state.Approval{
+			Subject:  subject,
+			Revision: revision,
+			Verdict:  verdict,
+			Message:  message,
+		})
+	}
+	if err := appRows.Err(); err != nil {
+		return ReviewResult{}, fmt.Errorf("projection: iterate approvals: %w", err)
+	}
+
+	var ciStatuses []state.CIStatus
+	ciRows, err := d.db.Query("SELECT revision, name, state, url, description, started_at, completed_at, external_id FROM ci_statuses WHERE review_object_id = ? ORDER BY revision ASC, name ASC", objectID)
+	if err != nil {
+		return ReviewResult{}, fmt.Errorf("projection: query ci_statuses: %w", err)
+	}
+	defer ciRows.Close()
+	for ciRows.Next() {
+		var revision, name, stateVal, url, description, startedAt, completedAt, externalID string
+		if err := ciRows.Scan(&revision, &name, &stateVal, &url, &description, &startedAt, &completedAt, &externalID); err != nil {
+			return ReviewResult{}, fmt.Errorf("projection: scan ci_status: %w", err)
+		}
+		ciStatuses = append(ciStatuses, state.CIStatus{
+			Revision:    revision,
+			Name:        name,
+			State:       stateVal,
+			URL:         url,
+			Description: description,
+			StartedAt:   startedAt,
+			CompletedAt: completedAt,
+			ExternalID:  externalID,
+		})
+	}
+	if err := ciRows.Err(); err != nil {
+		return ReviewResult{}, fmt.Errorf("projection: iterate ci_statuses: %w", err)
+	}
+
+	var unknownOps []state.UnknownOp
+	uRows, err := d.db.Query("SELECT op_id, op_type, op_version FROM unknown_ops WHERE object_id = ? ORDER BY op_index ASC", objectID)
+	if err != nil {
+		return ReviewResult{}, fmt.Errorf("projection: query unknown_ops: %w", err)
+	}
+	defer uRows.Close()
+	for uRows.Next() {
+		var opID, opType string
+		var opVersion int64
+		if err := uRows.Scan(&opID, &opType, &opVersion); err != nil {
+			return ReviewResult{}, fmt.Errorf("projection: scan unknown op: %w", err)
+		}
+		unknownOps = append(unknownOps, state.UnknownOp{
+			Commit:    opID,
+			OpType:    opType,
+			OpVersion: opVersion,
+		})
+	}
+	if err := uRows.Err(); err != nil {
+		return ReviewResult{}, fmt.Errorf("projection: iterate unknown_ops: %w", err)
+	}
+
+	return ReviewResult{
+		ObjectID:  rr.objectID,
+		Author:    Author{Name: rr.authorName, Email: rr.authorEmail},
+		CreatedAt: time.Unix(rr.createdAt, 0).UTC(),
+		UpdatedAt: time.Unix(rr.updatedAt, 0).UTC(),
+		Review: state.Review{
+			Title:       rr.title,
+			Description: rr.description,
+			Status:      rr.status,
+			MergeCommit: rr.mergeCommit,
+			Reason:      rr.reason,
+			Revisions:   revisions,
+			Approvals:   approvals,
+			CIStatuses:  ciStatuses,
+			UnknownOps:  unknownOps,
+		},
+	}, nil
+}
+
+// Issue fetches a single issue by its object ID, returning ErrNotFound if not found.
+func (d *DB) Issue(objectID string) (IssueResult, error) {
+	if d == nil || d.db == nil {
+		return IssueResult{}, fmt.Errorf("projection: database is closed")
+	}
+	if objectID == "" {
+		return IssueResult{}, ErrNotFound
+	}
+
+	var ri struct {
+		objectID    string
+		title       string
+		description string
+		state       string
+		reason      string
+		authorName  string
+		authorEmail string
+		createdAt   int64
+		updatedAt   int64
+	}
+
+	err := d.db.QueryRow(
+		"SELECT i.object_id, i.title, i.description, i.state, i.reason, o.author_name, o.author_email, o.created_at, o.updated_at FROM issues i JOIN objects o ON o.object_id = i.object_id WHERE i.object_id = ?",
+		objectID,
+	).Scan(
+		&ri.objectID, &ri.title, &ri.description, &ri.state, &ri.reason,
+		&ri.authorName, &ri.authorEmail, &ri.createdAt, &ri.updatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return IssueResult{}, ErrNotFound
+		}
+		return IssueResult{}, fmt.Errorf("projection: query issue %s: %w", objectID, err)
+	}
+
+	var assignees []string
+	asRows, err := d.db.Query("SELECT assignee FROM issue_assignees WHERE issue_object_id = ? ORDER BY assignee ASC", objectID)
+	if err != nil {
+		return IssueResult{}, fmt.Errorf("projection: query issue assignees: %w", err)
+	}
+	defer asRows.Close()
+	for asRows.Next() {
+		var assignee string
+		if err := asRows.Scan(&assignee); err != nil {
+			return IssueResult{}, fmt.Errorf("projection: scan issue assignee: %w", err)
+		}
+		assignees = append(assignees, assignee)
+	}
+	if err := asRows.Err(); err != nil {
+		return IssueResult{}, fmt.Errorf("projection: iterate issue assignees: %w", err)
+	}
+
+	var labels []string
+	lblRows, err := d.db.Query("SELECT label FROM issue_labels WHERE issue_object_id = ? ORDER BY label ASC", objectID)
+	if err != nil {
+		return IssueResult{}, fmt.Errorf("projection: query issue labels: %w", err)
+	}
+	defer lblRows.Close()
+	for lblRows.Next() {
+		var label string
+		if err := lblRows.Scan(&label); err != nil {
+			return IssueResult{}, fmt.Errorf("projection: scan issue label: %w", err)
+		}
+		labels = append(labels, label)
+	}
+	if err := lblRows.Err(); err != nil {
+		return IssueResult{}, fmt.Errorf("projection: iterate issue labels: %w", err)
+	}
+
+	var links []state.Link
+	lnkRows, err := d.db.Query("SELECT target, target_type, relation FROM issue_links WHERE issue_object_id = ? ORDER BY target ASC", objectID)
+	if err != nil {
+		return IssueResult{}, fmt.Errorf("projection: query issue links: %w", err)
+	}
+	defer lnkRows.Close()
+	for lnkRows.Next() {
+		var target, targetType, relation string
+		if err := lnkRows.Scan(&target, &targetType, &relation); err != nil {
+			return IssueResult{}, fmt.Errorf("projection: scan issue link: %w", err)
+		}
+		links = append(links, state.Link{
+			Target:     target,
+			TargetType: targetType,
+			Relation:   relation,
+		})
+	}
+	if err := lnkRows.Err(); err != nil {
+		return IssueResult{}, fmt.Errorf("projection: iterate issue links: %w", err)
+	}
+
+	var unknownOps []state.UnknownOp
+	uRows, err := d.db.Query("SELECT op_id, op_type, op_version FROM unknown_ops WHERE object_id = ? ORDER BY op_index ASC", objectID)
+	if err != nil {
+		return IssueResult{}, fmt.Errorf("projection: query unknown_ops: %w", err)
+	}
+	defer uRows.Close()
+	for uRows.Next() {
+		var opID, opType string
+		var opVersion int64
+		if err := uRows.Scan(&opID, &opType, &opVersion); err != nil {
+			return IssueResult{}, fmt.Errorf("projection: scan unknown op: %w", err)
+		}
+		unknownOps = append(unknownOps, state.UnknownOp{
+			Commit:    opID,
+			OpType:    opType,
+			OpVersion: opVersion,
+		})
+	}
+	if err := uRows.Err(); err != nil {
+		return IssueResult{}, fmt.Errorf("projection: iterate unknown_ops: %w", err)
+	}
+
+	return IssueResult{
+		ObjectID:  ri.objectID,
+		Author:    Author{Name: ri.authorName, Email: ri.authorEmail},
+		CreatedAt: time.Unix(ri.createdAt, 0).UTC(),
+		UpdatedAt: time.Unix(ri.updatedAt, 0).UTC(),
+		Issue: state.Issue{
+			Title:       ri.title,
+			Description: ri.description,
+			State:       ri.state,
+			Reason:      ri.reason,
+			Assignees:   assignees,
+			Labels:      labels,
+			Links:       links,
+			UnknownOps:  unknownOps,
+		},
+	}, nil
 }

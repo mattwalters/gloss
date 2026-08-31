@@ -1,0 +1,119 @@
+package writ
+
+import (
+	"context"
+	"fmt"
+	"sync"
+
+	"github.com/go-git/go-git/v5"
+	"github.com/writtendev/writ/engine/codec"
+	"github.com/writtendev/writ/engine/dag"
+	"github.com/writtendev/writ/engine/identity"
+	"github.com/writtendev/writ/engine/projection"
+	writsync "github.com/writtendev/writ/engine/sync"
+)
+
+// Writer represents the active writer identity.
+type Writer struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+// Signer is an alias for codec.Signer.
+type Signer = codec.Signer
+
+// Store is the top-level handle for interacting with collaborative SDLC objects
+// stored in a git repository.
+type Store struct {
+	// Reviews provides review creation, revision push, approval, and status operations.
+	Reviews *Reviews
+
+	// Issues provides issue creation, state transitions, assignments, labels, and links.
+	Issues *Issues
+
+	// Comments provides comment edits, deletions, and reply operations.
+	Comments *Comments
+
+	// Query provides read queries over reviews, issues, comments, threads, and objects.
+	Query *Query
+
+	gitInfo     GitDirInfo
+	repo        *git.Repository
+	dagStore    *dag.Store
+	projection  *projection.DB
+	syncClient  *writsync.Client
+	identity    identity.Identity
+	hasIdentity bool
+	identErr    error
+	signer      codec.Signer
+	hasSigner   bool
+	signerErr   error
+	autoRefresh bool
+	targetRefs  []string
+	mu          sync.Mutex
+}
+
+// Close closes the underlying projection database and releases associated resources.
+func (s *Store) Close() error {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.projection != nil {
+		return s.projection.Close()
+	}
+	return nil
+}
+
+// Refresh brings the projection cache up to date with the latest DAG operations and target code tips.
+func (s *Store) Refresh(ctx context.Context) (RefreshStats, error) {
+	if s == nil {
+		return RefreshStats{}, fmt.Errorf("writ: store is nil")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var opts []projection.Option
+	if len(s.targetRefs) > 0 {
+		opts = append(opts, projection.WithTargetRefs(s.targetRefs...))
+	}
+
+	stats, err := s.projection.Refresh(s.dagStore, opts...)
+	if err != nil {
+		return RefreshStats{}, fmt.Errorf("writ: refresh projection: %w", err)
+	}
+	return RefreshStats(stats), nil
+}
+
+// Writer returns the active writer identity.
+func (s *Store) Writer() Writer {
+	if s == nil {
+		return Writer{}
+	}
+	return Writer{
+		ID:    string(s.identity.WriterID),
+		Name:  s.identity.Author.Name,
+		Email: s.identity.Author.Email,
+	}
+}
+
+func (s *Store) ensureWritable() error {
+	if !s.hasIdentity || s.identErr != nil {
+		return ErrNoIdentity
+	}
+	if !s.hasSigner || s.signerErr != nil {
+		return ErrNoSigningKey
+	}
+	return nil
+}
+
+func (s *Store) maybeAutoRefresh(ctx context.Context) error {
+	if !s.autoRefresh {
+		return nil
+	}
+	_, err := s.Refresh(ctx)
+	return err
+}

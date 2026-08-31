@@ -8,10 +8,10 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/dag"
 	"github.com/writtendev/writ/engine/resolve"
+	"github.com/writtendev/writ/engine/state"
 )
 
 // materializeObject folds ops for a single collaborative object and records
@@ -51,7 +51,7 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 
 	switch objectType {
 	case "review":
-		review, err := writ.FoldReview(ops)
+		review, err := state.FoldReview(ops)
 		if err != nil {
 			return fmt.Errorf("projection: fold review %s: %w", objectID, err)
 		}
@@ -105,7 +105,7 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 		}
 
 	case "comment":
-		comment, err := writ.FoldComment(ops)
+		comment, err := state.FoldComment(ops)
 		if err != nil {
 			return fmt.Errorf("projection: fold comment %s: %w", objectID, err)
 		}
@@ -143,7 +143,7 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 		}
 
 	case "issue":
-		issue, err := writ.FoldIssue(ops)
+		issue, err := state.FoldIssue(ops)
 		if err != nil {
 			return fmt.Errorf("projection: fold issue %s: %w", objectID, err)
 		}
@@ -197,7 +197,7 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 		}
 
 	case "project":
-		project, err := writ.FoldProject(ops)
+		project, err := state.FoldProject(ops)
 		if err != nil {
 			return fmt.Errorf("projection: fold project %s: %w", objectID, err)
 		}
@@ -231,7 +231,7 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 		}
 
 	case "cycle":
-		cycle, err := writ.FoldCycle(ops)
+		cycle, err := state.FoldCycle(ops)
 		if err != nil {
 			return fmt.Errorf("projection: fold cycle %s: %w", objectID, err)
 		}
