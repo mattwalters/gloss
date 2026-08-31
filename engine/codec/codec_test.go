@@ -1,12 +1,15 @@
 package codec_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/storage/memory"
 	"github.com/writtendev/writ/engine/codec"
 )
 
@@ -262,5 +265,54 @@ func TestFromGitCommitNil(t *testing.T) {
 	_, err := codec.FromGitCommit(nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "nil git commit") {
 		t.Fatalf("expected nil git commit error, got %v", err)
+	}
+}
+
+func TestWriteCommitRoundTrip(t *testing.T) {
+	s := memory.NewStorage()
+	when := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	author := codec.Identity{
+		Name:  "Alice",
+		Email: "alice@example.com",
+		When:  when,
+	}
+
+	env := codec.Envelope{
+		ObjectID:   "rev-1",
+		ObjectType: "review",
+		OpType:     "create",
+		OpVersion:  1,
+		Body:       json.RawMessage(`{"title":"Initial"}`),
+	}
+
+	c, err := codec.BuildCommit(env, author, []string{})
+	if err != nil {
+		t.Fatalf("BuildCommit failed: %v", err)
+	}
+
+	signerCalled := false
+	signer := codec.SignerFunc(func(_ context.Context, payload []byte) (string, error) {
+		signerCalled = true
+		return "-----BEGIN SSH SIGNATURE-----\nsig\n-----END SSH SIGNATURE-----", nil
+	})
+
+	hash, err := codec.WriteCommit(context.Background(), s, c, signer)
+	if err != nil {
+		t.Fatalf("WriteCommit failed: %v", err)
+	}
+	if !signerCalled {
+		t.Errorf("expected signer to be called")
+	}
+	if hash.IsZero() || hash.String() != c.ID {
+		t.Errorf("commit hash mismatch: %v vs %v", hash, c.ID)
+	}
+
+	// Verify go-git commit object stored
+	gitCommit, err := object.GetCommit(s, hash)
+	if err != nil {
+		t.Fatalf("GetCommit failed: %v", err)
+	}
+	if gitCommit.Author.Name != "Alice" || gitCommit.PGPSignature == "" {
+		t.Errorf("unexpected git commit: %+v", gitCommit)
 	}
 }
