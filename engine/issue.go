@@ -1,0 +1,232 @@
+package writ
+
+import (
+	"encoding/json"
+	"fmt"
+	"sort"
+
+	"github.com/writtendev/writ/engine/codec"
+	"github.com/writtendev/writ/engine/internal/fold"
+)
+
+// FoldIssue executes deterministic fold reduction on an input set of operations
+// for an issue collaborative object, returning the materialized Issue state.
+func FoldIssue(ops []codec.Op) (Issue, error) {
+	if len(ops) == 0 {
+		return Issue{}, nil
+	}
+
+	orderedOps, err := fold.OrderWithTStar(ops)
+	if err != nil {
+		return Issue{}, err
+	}
+
+	reach := fold.BuildReachability(orderedOps)
+
+	var state Issue
+	var hasKnownOp bool
+	var stateExplicitlySet bool
+	var unknownOps []UnknownOp
+
+	type orSetRecord struct {
+		opID string
+		item string
+	}
+
+	var assignAdds []orSetRecord
+	var assignRemoves []orSetRecord
+	var labelAdds []orSetRecord
+	var labelRemoves []orSetRecord
+
+	linksMap := make(map[string]*Link)
+
+	for _, o := range orderedOps {
+		op := o.Op
+		if op.ObjectType != "issue" || op.OpVersion != 1 {
+			unknownOps = append(unknownOps, UnknownOp{
+				Commit:    op.ID,
+				OpType:    op.OpType,
+				OpVersion: op.OpVersion,
+			})
+			continue
+		}
+
+		var body map[string]any
+		if len(op.Body) > 0 {
+			if err := json.Unmarshal(op.Body, &body); err != nil {
+				return Issue{}, fmt.Errorf("fold issue: unmarshaling op %s body: %w", op.ID, err)
+			}
+		}
+		if body == nil {
+			body = make(map[string]any)
+		}
+
+		switch op.OpType {
+		case "create", "update":
+			hasKnownOp = true
+			if t, ok := body["title"].(string); ok {
+				state.Title = t
+			}
+			if d, ok := body["description"].(string); ok {
+				state.Description = d
+			}
+
+		case "set-state":
+			hasKnownOp = true
+			if s, ok := body["state"].(string); ok {
+				state.State = s
+				stateExplicitlySet = true
+			}
+			if r, ok := body["reason"].(string); ok {
+				state.Reason = r
+			}
+
+		case "assign":
+			hasKnownOp = true
+			if addRaw, ok := body["add"].([]any); ok {
+				for _, it := range addRaw {
+					assignAdds = append(assignAdds, orSetRecord{opID: op.ID, item: fmt.Sprint(it)})
+				}
+			} else if addRaw, ok := body["add"].([]string); ok {
+				for _, it := range addRaw {
+					assignAdds = append(assignAdds, orSetRecord{opID: op.ID, item: it})
+				}
+			}
+			if remRaw, ok := body["remove"].([]any); ok {
+				for _, it := range remRaw {
+					assignRemoves = append(assignRemoves, orSetRecord{opID: op.ID, item: fmt.Sprint(it)})
+				}
+			} else if remRaw, ok := body["remove"].([]string); ok {
+				for _, it := range remRaw {
+					assignRemoves = append(assignRemoves, orSetRecord{opID: op.ID, item: it})
+				}
+			}
+
+		case "label":
+			hasKnownOp = true
+			if addRaw, ok := body["add"].([]any); ok {
+				for _, it := range addRaw {
+					labelAdds = append(labelAdds, orSetRecord{opID: op.ID, item: fmt.Sprint(it)})
+				}
+			} else if addRaw, ok := body["add"].([]string); ok {
+				for _, it := range addRaw {
+					labelAdds = append(labelAdds, orSetRecord{opID: op.ID, item: it})
+				}
+			}
+			if remRaw, ok := body["remove"].([]any); ok {
+				for _, it := range remRaw {
+					labelRemoves = append(labelRemoves, orSetRecord{opID: op.ID, item: fmt.Sprint(it)})
+				}
+			} else if remRaw, ok := body["remove"].([]string); ok {
+				for _, it := range remRaw {
+					labelRemoves = append(labelRemoves, orSetRecord{opID: op.ID, item: it})
+				}
+			}
+
+		case "link":
+			hasKnownOp = true
+			target, _ := body["target"].(string)
+			if target != "" {
+				entry, ok := linksMap[target]
+				if !ok {
+					entry = &Link{Target: target}
+					linksMap[target] = entry
+				}
+				if tt, ok := body["target_type"].(string); ok {
+					entry.TargetType = tt
+				}
+				if rel, ok := body["relation"].(string); ok {
+					entry.Relation = rel
+				}
+			}
+
+		default:
+			unknownOps = append(unknownOps, UnknownOp{
+				Commit:    op.ID,
+				OpType:    op.OpType,
+				OpVersion: op.OpVersion,
+			})
+		}
+	}
+
+	if hasKnownOp && !stateExplicitlySet && state.State == "" {
+		state.State = "open"
+	}
+
+	// Assignees OR-set: add-wins over causal removes, emitted sorted
+	assignPresent := make(map[string]bool)
+	for _, add := range assignAdds {
+		removed := false
+		for _, rem := range assignRemoves {
+			if rem.item == add.item && reach.IsAncestor(add.opID, rem.opID) {
+				removed = true
+				break
+			}
+		}
+		if !removed {
+			assignPresent[add.item] = true
+		}
+	}
+	var assignees []string
+	for k := range assignPresent {
+		assignees = append(assignees, k)
+	}
+	sort.Strings(assignees)
+	state.Assignees = assignees
+
+	// Labels OR-set: add-wins over causal removes, emitted sorted
+	labelPresent := make(map[string]bool)
+	for _, add := range labelAdds {
+		removed := false
+		for _, rem := range labelRemoves {
+			if rem.item == add.item && reach.IsAncestor(add.opID, rem.opID) {
+				removed = true
+				break
+			}
+		}
+		if !removed {
+			labelPresent[add.item] = true
+		}
+	}
+	var labels []string
+	for k := range labelPresent {
+		labels = append(labels, k)
+	}
+	sort.Strings(labels)
+	state.Labels = labels
+
+	// Links keyed-LWW: omit entries with relation "none" or empty, sort by target
+	var links []Link
+	for _, l := range linksMap {
+		if l.Relation != "none" && l.Relation != "" {
+			links = append(links, *l)
+		}
+	}
+	sort.Slice(links, func(i, j int) bool {
+		return links[i].Target < links[j].Target
+	})
+	state.Links = links
+
+	state.UnknownOps = unknownOps
+
+	return state, nil
+}
+
+// IssueRules returns the built-in field merge rules for the issue-ops vocabulary (v1).
+func IssueRules() []Rule {
+	return []Rule{
+		{OpType: "create", OpVersion: 1, Field: "title", Strategy: "lww"},
+		{OpType: "create", OpVersion: 1, Field: "description", Strategy: "lww"},
+		{OpType: "update", OpVersion: 1, Field: "title", Strategy: "lww"},
+		{OpType: "update", OpVersion: 1, Field: "description", Strategy: "lww"},
+		{OpType: "set-state", OpVersion: 1, Field: "state", Strategy: "lww"},
+		{OpType: "set-state", OpVersion: 1, Field: "reason", Strategy: "lww"},
+		{OpType: "assign", OpVersion: 1, Field: "add", Strategy: "set-observed-remove"},
+		{OpType: "assign", OpVersion: 1, Field: "remove", Strategy: "set-observed-remove"},
+		{OpType: "label", OpVersion: 1, Field: "add", Strategy: "set-observed-remove"},
+		{OpType: "label", OpVersion: 1, Field: "remove", Strategy: "set-observed-remove"},
+		{OpType: "link", OpVersion: 1, Field: "target", Strategy: "keyed-lww", Key: []string{"target"}},
+		{OpType: "link", OpVersion: 1, Field: "target_type", Strategy: "keyed-lww", Key: []string{"target"}},
+		{OpType: "link", OpVersion: 1, Field: "relation", Strategy: "keyed-lww", Key: []string{"target"}},
+	}
+}

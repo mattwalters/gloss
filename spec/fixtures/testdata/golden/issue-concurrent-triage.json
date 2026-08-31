@@ -1,0 +1,123 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/0123456789abcdef/issue",
+      "commit": "7c906ba67759fb3d873b59a679e4399560a8be98"
+    },
+    {
+      "name": "refs/writ/fedcba9876543210/issue",
+      "commit": "e18487c5161a664bd6eba4b06febefba9e663bc1"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/0123456789abcdef/issue",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "ab9394bcbce3692024a1bb5f4b65c33355961590",
+          "tree": "10bbde3c20872ccf506e68d118a95016549f3050",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create issue/i-concurrent\n",
+          "signed": true
+        },
+        {
+          "sha": "77ac9ebf003e08f5670de749acca7c52db3fd856",
+          "tree": "bddfb9a933f2169ca998b697ec31c7729157db7e",
+          "parents": [
+            "ab9394bcbce3692024a1bb5f4b65c33355961590"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: assign issue/i-concurrent\n",
+          "signed": true
+        },
+        {
+          "sha": "4da5ff95e26876da270134581f90d2baa118987a",
+          "tree": "dd58fa255874063da8335c329de7acbadeb05146",
+          "parents": [
+            "77ac9ebf003e08f5670de749acca7c52db3fd856"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: label issue/i-concurrent\n",
+          "signed": true
+        },
+        {
+          "sha": "774e357088e492cb5ba7268f5c82c8cde975a4b6",
+          "tree": "238f97ae10591dd3f018ee2c20208f00ea181bab",
+          "parents": [
+            "4da5ff95e26876da270134581f90d2baa118987a"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:03:00Z",
+          "message": "writ: assign issue/i-concurrent\n",
+          "signed": true
+        },
+        {
+          "sha": "3d96e9acb52b8ae940d47cc2ea5a06cbe9ae0a27",
+          "tree": "33310973ee31036f1e69b8fbb94931ad18977ad9",
+          "parents": [
+            "774e357088e492cb5ba7268f5c82c8cde975a4b6"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:04:00Z",
+          "message": "writ: label issue/i-concurrent\n",
+          "signed": true
+        },
+        {
+          "sha": "d001763812fbce174539ae166cafc74984b735c1",
+          "tree": "bd3312df8259fdde9a94600ea6ac00819b8d9b3d",
+          "parents": [
+            "3d96e9acb52b8ae940d47cc2ea5a06cbe9ae0a27"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:05:00Z",
+          "message": "writ: assign issue/i-concurrent\n",
+          "signed": true
+        },
+        {
+          "sha": "7c906ba67759fb3d873b59a679e4399560a8be98",
+          "tree": "4ec9cb0156791c166cb1e4eab48d4e91c1cf71a6",
+          "parents": [
+            "d001763812fbce174539ae166cafc74984b735c1"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:06:00Z",
+          "message": "writ: label issue/i-concurrent\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/fedcba9876543210/issue",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "a326d669502c1c60120a2aa47b780c9fa8b4fdbe",
+          "tree": "1b8c045e714d7da04e161e4060f28195bf2d6468",
+          "parents": [
+            "3d96e9acb52b8ae940d47cc2ea5a06cbe9ae0a27"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:05:30Z",
+          "message": "writ: assign issue/i-concurrent\n",
+          "signed": true
+        },
+        {
+          "sha": "e18487c5161a664bd6eba4b06febefba9e663bc1",
+          "tree": "28e4e6d8061613ab54dbbc264bf38c7cd991eb84",
+          "parents": [
+            "a326d669502c1c60120a2aa47b780c9fa8b4fdbe"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:06:30Z",
+          "message": "writ: label issue/i-concurrent\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

@@ -3,6 +3,7 @@
 Status: **normative**. Schema: [`schemas/project-ops.schema.json`](schemas/project-ops.schema.json), [`schemas/cycle-ops.schema.json`](schemas/cycle-ops.schema.json).
 Vectors: [`testdata/project/`](testdata/project/), [`testdata/cycle/`](testdata/cycle/).
 Field rules: [`testdata/project/field-rules.json`](testdata/project/field-rules.json), [`testdata/cycle/field-rules.json`](testdata/cycle/field-rules.json).
+Fixtures: [`spec/fixtures/testdata/descriptions/project-*.yaml`](fixtures/testdata/descriptions/), [`spec/fixtures/testdata/descriptions/cycle-*.yaml`](fixtures/testdata/descriptions/).
 
 This document defines the operation vocabularies, payload schemas, and fold
 semantics for workspace-scoped grouping objects in Writ: `project` (`object_type: "project"`)

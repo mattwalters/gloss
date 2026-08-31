@@ -140,10 +140,44 @@ func ParseCommentSubject(raw []byte) (CommentSubject, error) {
 	return s, nil
 }
 
-// Issue represents the materialized state of an issue collaborative object.
-// Reducer implementation will be defined alongside the issue op vocabulary.
+// Issue represents the materialized state of an issue collaborative object (v1),
+// produced by FoldIssue.
 type Issue struct {
-	Title    string `json:"title,omitempty"`
-	State    string `json:"state,omitempty"`
-	Assignee string `json:"assignee,omitempty"`
+	Title       string      `json:"title,omitempty"`
+	Description string      `json:"description,omitempty"`
+	State       string      `json:"state,omitempty"`
+	Reason      string      `json:"reason,omitempty"`
+	Assignees   []string    `json:"assignees,omitempty"`
+	Labels      []string    `json:"labels,omitempty"`
+	Links       []Link      `json:"links,omitempty"`
+	UnknownOps  []UnknownOp `json:"unknown_ops,omitempty"`
+}
+
+// Link represents a cross-reference link attached to an issue.
+type Link struct {
+	Target     string `json:"target"`
+	TargetType string `json:"target_type,omitempty"`
+	Relation   string `json:"relation"`
+}
+
+// Project represents the materialized state of a project collaborative object (v1),
+// produced by FoldProject.
+type Project struct {
+	Title       string      `json:"title,omitempty"`
+	Description string      `json:"description,omitempty"`
+	Status      string      `json:"status,omitempty"`
+	Reason      string      `json:"reason,omitempty"`
+	Issues      []string    `json:"issues,omitempty"`
+	UnknownOps  []UnknownOp `json:"unknown_ops,omitempty"`
+}
+
+// Cycle represents the materialized state of a cycle collaborative object (v1),
+// produced by FoldCycle.
+type Cycle struct {
+	Title       string      `json:"title,omitempty"`
+	Description string      `json:"description,omitempty"`
+	StartsAt    string      `json:"starts_at,omitempty"`
+	EndsAt      string      `json:"ends_at,omitempty"`
+	Issues      []string    `json:"issues,omitempty"`
+	UnknownOps  []UnknownOp `json:"unknown_ops,omitempty"`
 }
