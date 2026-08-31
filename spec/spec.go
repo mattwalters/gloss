@@ -7,7 +7,7 @@
 //
 // The prose halves live alongside as op-envelope.md, ref-layout.md,
 // canonicalization.md, forward-compatibility.md, anchors.md, identifiers.md,
-// comments.md, and README.md in this directory; the fixture-repo generator
+// comments.md, project-cycle.md, and README.md in this directory; the fixture-repo generator
 // and golden harness live in the fixtures subpackage.
 package spec
 

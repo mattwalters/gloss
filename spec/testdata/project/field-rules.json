@@ -1,0 +1,50 @@
+[
+  {
+    "op_type": "create",
+    "op_version": 1,
+    "field": "title",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "create",
+    "op_version": 1,
+    "field": "description",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "update",
+    "op_version": 1,
+    "field": "title",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "update",
+    "op_version": 1,
+    "field": "description",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "set-status",
+    "op_version": 1,
+    "field": "status",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "set-status",
+    "op_version": 1,
+    "field": "reason",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "add-issue",
+    "op_version": 1,
+    "field": "issue",
+    "strategy": "set-observed-remove"
+  },
+  {
+    "op_type": "remove-issue",
+    "op_version": 1,
+    "field": "issue",
+    "strategy": "set-observed-remove"
+  }
+]

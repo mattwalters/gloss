@@ -10,12 +10,13 @@ import (
 
 // FieldRule specifies the merge strategy and parameters for an (op_type, field) tuple.
 type FieldRule struct {
-	OpType    string   `json:"op_type,omitempty"`
-	OpVersion int64    `json:"op_version,omitempty"`
-	Field     string   `json:"field"`
-	Strategy  string   `json:"strategy"`
-	Key       []string `json:"key,omitempty"`
-	Lattice   []string `json:"lattice,omitempty"`
+	OpType     string   `json:"op_type,omitempty"`
+	OpVersion  int64    `json:"op_version,omitempty"`
+	Field      string   `json:"field"`
+	Strategy   string   `json:"strategy"`
+	Key        []string `json:"key,omitempty"`
+	Lattice    []string `json:"lattice,omitempty"`
+	Vocabulary string   `json:"-"`
 }
 
 // FieldRules loads all field-rules.json files from the embedded spec.FS and validates each entry
@@ -42,6 +43,7 @@ func FieldRules() ([]FieldRule, error) {
 			return fmt.Errorf("spec: decoding %s: %w", filePath, err)
 		}
 
+		vocab := path.Base(path.Dir(filePath))
 		for _, r := range rules {
 			if r.OpType == "" {
 				return fmt.Errorf("spec: %s contains rule with empty op_type", filePath)
@@ -68,6 +70,7 @@ func FieldRules() ([]FieldRule, error) {
 			}
 			seen[key] = true
 
+			r.Vocabulary = vocab
 			allRules = append(allRules, r)
 		}
 
