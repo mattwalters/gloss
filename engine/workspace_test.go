@@ -323,3 +323,44 @@ func TestEndToEndCrossRepoIssueLinkAndResolution(t *testing.T) {
 		t.Errorf("expected bare target to be auto-qualified as %q, links are: %+v", expectedAutoQualified, issueRes2.Issue.Links)
 	}
 }
+
+func TestWorkspaceIssueThreadsRouting(t *testing.T) {
+	ctx := context.Background()
+
+	wsDir, _ := setupTestRepoWithID(t, "Workspace Admin", "admin@example.com")
+	repoDir, _ := setupTestRepoWithID(t, "Alice Dev", "alice@example.com")
+
+	store, err := writ.Open(repoDir, writ.WithWorkspace(wsDir), writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open store: %v", err)
+	}
+	defer store.Close()
+
+	// Create issue in workspace
+	issueID, err := store.Issues.Create(ctx, writ.NewIssue{Title: "Workspace Issue for Commenting"})
+	if err != nil {
+		t.Fatalf("Issues.Create: %v", err)
+	}
+
+	// Add comment on issue
+	commID, err := store.Issues.Comment(ctx, issueID, writ.NewComment{Text: "A discussion comment on the issue"})
+	if err != nil {
+		t.Fatalf("Issues.Comment: %v", err)
+	}
+
+	// Query threads for the issue from local repo store handle
+	threads, err := store.Query.Threads("issue", issueID)
+	if err != nil {
+		t.Fatalf("Query.Threads: %v", err)
+	}
+
+	if len(threads) != 1 {
+		t.Fatalf("expected 1 root thread on issue, got %d", len(threads))
+	}
+	if threads[0].ObjectID != commID {
+		t.Errorf("thread.ObjectID = %q, want %q", threads[0].ObjectID, commID)
+	}
+	if threads[0].Comment.Text != "A discussion comment on the issue" {
+		t.Errorf("thread comment text = %q", threads[0].Comment.Text)
+	}
+}

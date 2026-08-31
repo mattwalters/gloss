@@ -106,7 +106,11 @@ func (w *Workspace) Info() WorkspaceInfo {
 	// Workspace repo ID
 	wsRepoID := wsStore.Workspace.localRepoID
 	if wsRepoID == "" {
-		loadedID, _ := identity.LoadRepoID(context.Background(), wsStore.gitInfo.WorkTree)
+		wsDir := wsStore.gitInfo.WorkTree
+		if wsDir == "" {
+			wsDir = wsStore.gitInfo.GitDir
+		}
+		loadedID, _ := identity.LoadRepoID(context.Background(), wsDir)
 		wsRepoID = string(loadedID)
 	}
 	info.WorkspaceRepoID = wsRepoID
@@ -126,6 +130,12 @@ func (w *Workspace) Info() WorkspaceInfo {
 // Repos returns all registered repositories from the repository registry in the workspace.
 func (w *Workspace) Repos(ctx context.Context) ([]RepoEntry, error) {
 	if !w.IsConfigured() {
+		if w != nil && w.store != nil && w.store.projection != nil {
+			if err := w.store.maybeAutoRefresh(ctx); err != nil {
+				return nil, err
+			}
+			return w.store.projection.Repos()
+		}
 		return nil, nil
 	}
 

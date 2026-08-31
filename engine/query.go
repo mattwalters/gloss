@@ -144,13 +144,21 @@ func (q *Query) Objects(f ObjectFilter) ([]ObjectResult, error) {
 
 // Threads retrieves and structures all comments attached to a subject into a comment reply forest.
 func (q *Query) Threads(subjectType, subjectID string) ([]CommentThread, error) {
-	if q == nil || q.store == nil {
+	target := q.store
+	if subjectType == "issue" {
+		var err error
+		target, err = q.targetStoreForIssues(context.Background())
+		if err != nil {
+			return nil, err
+		}
+	}
+	if target == nil {
 		return nil, fmt.Errorf("writ: store is nil")
 	}
-	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
+	if err := target.maybeAutoRefresh(context.Background()); err != nil {
 		return nil, err
 	}
-	return q.store.projection.Threads(subjectType, subjectID)
+	return target.projection.Threads(subjectType, subjectID)
 }
 
 // GroupIssues partitions issues matching the filter by the specified grouping key.
