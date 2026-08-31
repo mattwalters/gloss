@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/codec/canonicaljson"
 	"github.com/writtendev/writ/engine/dag"
 	"github.com/writtendev/writ/engine/identity"
@@ -162,10 +163,47 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 			return nil, fmt.Errorf("fold for object %s: %w", objID, err)
 		}
 
+		// Cross-check: public writ.Fold produces byte-identical canonical state and total order
+		var writRules []writ.Rule
+		for _, r := range rules {
+			writRules = append(writRules, writ.Rule{
+				OpType:    r.OpType,
+				OpVersion: r.OpVersion,
+				Field:     r.Field,
+				Strategy:  r.Strategy,
+				Key:       r.Key,
+				Lattice:   r.Lattice,
+			})
+		}
+		engineRes, err := writ.Fold(codecOps, writRules)
+		if err != nil {
+			return nil, fmt.Errorf("writ.Fold for object %s: %w", objID, err)
+		}
+		engineJSON, err := canonicaljson.Marshal(mustJSON(t, engineRes.State))
+		if err != nil {
+			return nil, fmt.Errorf("canonicalizing engine state for %s: %w", objID, err)
+		}
+
 		// Commutativity verification: shuffle input ops 100 times and verify identical output
 		expectedJSON, err := canonicaljson.Marshal(mustJSON(t, foldedState))
 		if err != nil {
 			return nil, fmt.Errorf("canonicalizing folded state for %s: %w", objID, err)
+		}
+
+		if !bytes.Equal(engineJSON, expectedJSON) {
+			t.Fatalf("engine fold state differs from spec reference for object %s in fixture %s:\n engine: %s\n ref:    %s",
+				objID, fix.Name, string(engineJSON), string(expectedJSON))
+		}
+
+		if len(engineRes.TotalOrder) != len(totalOrder) {
+			t.Fatalf("engine TotalOrder length mismatch for %s in %s: got %d, want %d",
+				objID, fix.Name, len(engineRes.TotalOrder), len(totalOrder))
+		}
+		for i, ref := range engineRes.TotalOrder {
+			if ref.Commit != totalOrder[i] || ref.TStar != effectiveTimes[ref.Commit] {
+				t.Fatalf("engine TotalOrder[%d] mismatch for %s in %s: got (%s, %d), want (%s, %d)",
+					i, objID, fix.Name, ref.Commit, ref.TStar, totalOrder[i], effectiveTimes[totalOrder[i]])
+			}
 		}
 
 		for i := 0; i < 100; i++ {
