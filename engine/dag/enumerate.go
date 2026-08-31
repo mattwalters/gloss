@@ -21,7 +21,8 @@ type Rejection struct {
 // EnumerateResult is the output of an enumeration pass across all writers' chains.
 type EnumerateResult struct {
 	// Ops groups valid ops by envelope ObjectID.
-	// Each slice is sorted lexicographically by op ID (commit SHA).
+	// Each slice is sorted lexicographically by op ID (commit SHA) for stable
+	// grouping, and must be passed through Order before folding.
 	Ops map[string][]codec.Op `json:"ops"`
 
 	// Cursors maps every discovered chain ref name to its current tip SHA.
