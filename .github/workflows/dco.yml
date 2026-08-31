@@ -22,8 +22,12 @@ jobs:
           commits=$(git rev-list --no-merges "$merge_base..$HEAD_SHA")
           missing=0
           for sha in $commits; do
-            if ! git log -1 --format='%B' "$sha" | grep -qi '^Signed-off-by: .\+ <.\+>$'; then
+            author_email=$(git log -1 --format='%ae' "$sha")
+            if ! git log -1 --format='%B' "$sha" | grep -E -qi '^Signed-off-by: .+ <.+>$'; then
               echo "::error::commit $sha has no Signed-off-by trailer (see CONTRIBUTING.md)"
+              missing=1
+            elif ! git log -1 --format='%B' "$sha" | grep -i '^Signed-off-by:' | grep -i -q -F "<$author_email>"; then
+              echo "::error::commit $sha Signed-off-by trailer does not match author email <$author_email> (see CONTRIBUTING.md)"
               missing=1
             fi
           done

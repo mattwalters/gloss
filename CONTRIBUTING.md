@@ -78,19 +78,30 @@ to enforce:
 
 ## Developer Certificate of Origin (DCO)
 
-Starting with the first external PR, every commit must be signed off,
-certifying you wrote it or otherwise have the right to submit it under the
-project's license (Apache-2.0):
+Every commit must be signed off, certifying you wrote it or otherwise have
+the right to submit it under the project's license (Apache-2.0).
+
+Configure the repository's hook to sign off commits automatically:
+
+```
+git config core.hooksPath .githooks
+```
+
+This uses `.githooks/prepare-commit-msg` to append a `Signed-off-by` trailer
+when not already present, sourced from your `user.name` and `user.email`.
+
+Alternatively, sign off manually:
 
 ```
 git commit -s
 ```
 
-That appends a `Signed-off-by: Your Name <your.email@example.com>` trailer
-using the name and email from your git config. Use your real name — no
-pseudonyms or anonymous contributions. If you forgot on your last commit,
-`git commit --amend -s` fixes it. The DCO check on pull requests enforces
-this on every commit.
+The trailer format is `Signed-off-by: Your Name <your.email@example.com>`.
+The sign-off email must match the commit author's email (and for GitHub pull
+requests, your GitHub account email so it survives squash merges). Use your
+real name — no pseudonyms or anonymous contributions. If you forgot on your
+last commit, `git commit --amend -s` fixes it. The DCO check on pull requests
+enforces this on every commit.
 
 ## Build and test
 
