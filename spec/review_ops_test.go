@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	envelopeSchemaID  = "https://github.com/writtendev/writ/spec/schemas/op-envelope.schema.json"
+	envelopeSchemaID  = "https://writ.dev/spec/op-envelope.schema.json"
 	reviewOpsSchemaID = "https://writ.dev/spec/review-ops.schema.json"
 )
 

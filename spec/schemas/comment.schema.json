@@ -6,7 +6,7 @@
   "type": "object",
   "allOf": [
     {
-      "$ref": "https://github.com/writtendev/writ/spec/schemas/op-envelope.schema.json"
+      "$ref": "https://writ.dev/spec/op-envelope.schema.json"
     },
     {
       "properties": {
