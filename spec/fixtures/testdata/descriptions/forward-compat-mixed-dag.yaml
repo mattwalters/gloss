@@ -1,0 +1,121 @@
+name: forward-compat-mixed-dag
+description: >
+  Cross-writer DAG interleaving known operations and opaque operations on the
+  same object_id, alongside a control ref pair containing the exact identical
+  interpretable operations with opaque operations omitted (FC-4, FC-15).
+
+refs:
+  - name: refs/writ/alice/review
+    history:
+      - commits:
+          - id: alice-mix-create
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            disposition: interpretable
+            op:
+              object_id: review-mixed-01
+              object_type: review
+              op_type: create
+              op_version: 1
+              body:
+                title: "Mixed DAG review"
+            expect: accept
+          - id: alice-mix-opaque-telemetry
+            author: alice
+            timestamp: 2026-01-01T00:01:00Z
+            disposition: opaque
+            op:
+              object_id: review-mixed-01
+              object_type: telemetry
+              op_type: emit
+              op_version: 1
+              body:
+                metric: "session_start"
+                value: 100
+            expect: accept
+          - id: alice-mix-comment
+            author: alice
+            timestamp: 2026-01-01T00:02:00Z
+            disposition: interpretable
+            op:
+              object_id: review-mixed-01
+              object_type: comment
+              op_type: post
+              op_version: 1
+              body:
+                text: "Alice comment on mixed review"
+            expect: accept
+
+  - name: refs/writ/bob/review
+    history:
+      - commits:
+          - id: bob-mix-opaque-v2
+            author: bob
+            timestamp: 2026-01-01T00:00:30Z
+            disposition: opaque
+            op:
+              object_id: review-mixed-01
+              object_type: review
+              op_type: create
+              op_version: 2
+              body:
+                title: "Future review format"
+            expect: accept
+          - id: bob-mix-close
+            parents: [bob-mix-opaque-v2, alice-mix-comment]
+            author: bob
+            timestamp: 2026-01-01T00:03:00Z
+            disposition: interpretable
+            op:
+              object_id: review-mixed-01
+              object_type: review
+              op_type: close
+              op_version: 1
+              body:
+                reason: "approved"
+            expect: accept
+
+  - name: refs/writ/alice/review-control
+    history:
+      - commits:
+          - id: alice-ctrl-create
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            disposition: interpretable
+            op:
+              object_id: review-mixed-01
+              object_type: review
+              op_type: create
+              op_version: 1
+              body:
+                title: "Mixed DAG review"
+            expect: accept
+          - id: alice-ctrl-comment
+            author: alice
+            timestamp: 2026-01-01T00:02:00Z
+            disposition: interpretable
+            op:
+              object_id: review-mixed-01
+              object_type: comment
+              op_type: post
+              op_version: 1
+              body:
+                text: "Alice comment on mixed review"
+            expect: accept
+
+  - name: refs/writ/bob/review-control
+    history:
+      - commits:
+          - id: bob-ctrl-close
+            parents: [alice-ctrl-comment]
+            author: bob
+            timestamp: 2026-01-01T00:03:00Z
+            disposition: interpretable
+            op:
+              object_id: review-mixed-01
+              object_type: review
+              op_type: close
+              op_version: 1
+              body:
+                reason: "approved"
+            expect: accept

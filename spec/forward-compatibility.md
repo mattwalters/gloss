@@ -188,3 +188,12 @@ MUST NOT:
 | `FC-13` | Projection caches MUST be fully rebuildable from the raw DAG without losing or mutating uninterpretable ops. | Projection |
 | `FC-14` | Sync transport MUST NOT filter, prune, or inspect ops based on op type, version, or interpretability. | Sync |
 | `FC-15` | An uninterpretable op MUST NOT invalidate or fail the containing collaborative object or other valid ops in the DAG. | Engine / DAG |
+
+## Conformance fixtures
+
+The `forward-compat` fixture family in `spec/fixtures` provides the executable,
+repository-level conformance test suite for rules `FC-1` through `FC-5` and `FC-11`
+through `FC-15`. Multi-writer git DAGs containing unknown op types, future op versions,
+and unrecognized fields are executed against the reader capability profile and
+verified for byte-for-byte preservation and field isolation.
+

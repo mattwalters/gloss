@@ -1,0 +1,68 @@
+name: forward-compat-future-versions
+description: >
+  Future op versions beyond reader capabilities, verified alongside supported
+  multi-version and v1 baseline operations (FC-7, FC-8, FC-10).
+
+refs:
+  - name: refs/writ/alice/review
+    history:
+      - commits:
+          - id: alice-baseline-v1
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            disposition: interpretable
+            op:
+              object_id: review-01
+              object_type: review
+              op_type: create
+              op_version: 1
+              body:
+                title: "Baseline v1 review"
+            expect: accept
+          - id: alice-future-version-v2
+            author: alice
+            timestamp: 2026-01-01T00:01:00Z
+            disposition: opaque
+            op:
+              object_id: review-02
+              object_type: review
+              op_type: create
+              op_version: 2
+              body:
+                title: "V2 review schema"
+                structured_requirements:
+                  min_approvals: 2
+            expect: accept
+
+  - name: refs/writ/bob/review
+    history:
+      - commits:
+          - id: bob-multiversion-known-v2
+            author: bob
+            timestamp: 2026-01-01T00:00:30Z
+            disposition: interpretable
+            op:
+              object_id: review-01
+              object_type: comment
+              op_type: post
+              op_version: 2
+              body:
+                text: "Comment at v2 format"
+                rich_text:
+                  markdown: true
+            expect: accept
+          - id: bob-future-version-v3
+            parents: [bob-multiversion-known-v2, alice-future-version-v2]
+            author: bob
+            timestamp: 2026-01-01T00:02:00Z
+            disposition: opaque
+            op:
+              object_id: review-01
+              object_type: comment
+              op_type: post
+              op_version: 3
+              body:
+                text: "Comment at v3 format"
+                reactions:
+                  thumbs_up: 5
+            expect: accept

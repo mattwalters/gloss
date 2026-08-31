@@ -1,0 +1,86 @@
+name: forward-compat-unknown-ops
+description: >
+  Unknown object types, unknown op types under known object types, unknown
+  top-level envelope fields, and unknown fields/structures inside body.
+  Spread across alice and bob writer refs, all signed and valid envelopes (FC-1..FC-3).
+
+refs:
+  - name: refs/writ/alice/review
+    history:
+      - commits:
+          - id: alice-known-with-top-level
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            disposition: interpretable
+            op:
+              object_id: review-01
+              object_type: review
+              op_type: create
+              op_version: 1
+              body:
+                title: "Initial review"
+              client_info:
+                build: 42
+                name: "writ-web"
+            expect: accept
+          - id: alice-unknown-object
+            author: alice
+            timestamp: 2026-01-01T00:01:00Z
+            disposition: opaque
+            op:
+              object_id: telem-01
+              object_type: telemetry
+              op_type: emit
+              op_version: 1
+              body:
+                metric: "latency_ms"
+                value: 42
+            expect: accept
+          - id: alice-nested-body
+            author: alice
+            timestamp: 2026-01-01T00:02:00Z
+            disposition: interpretable
+            op:
+              object_id: review-01
+              object_type: comment
+              op_type: post
+              op_version: 1
+              body:
+                text: "Looks good"
+                metadata:
+                  flags:
+                    - "automated"
+                    - "experimental"
+                  scores:
+                    confidence: 0.95
+            expect: accept
+
+  - name: refs/writ/bob/review
+    history:
+      - commits:
+          - id: bob-unknown-op-type
+            author: bob
+            timestamp: 2026-01-01T00:00:30Z
+            disposition: opaque
+            op:
+              object_id: review-01
+              object_type: review
+              op_type: archive
+              op_version: 1
+              body:
+                reason: "superseded"
+            expect: accept
+          - id: bob-unknown-body-field
+            parents: [bob-unknown-op-type, alice-nested-body]
+            author: bob
+            timestamp: 2026-01-01T00:03:00Z
+            disposition: interpretable
+            op:
+              object_id: review-01
+              object_type: review
+              op_type: close
+              op_version: 1
+              body:
+                reason: "resolved"
+                reviewer_draft_note: "final approval note"
+            expect: accept

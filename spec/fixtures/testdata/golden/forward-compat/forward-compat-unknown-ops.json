@@ -1,0 +1,76 @@
+{
+  "reader_profile": "synthetic-conforming-reader-v1",
+  "ops": [
+    {
+      "ref": "refs/writ/alice/review",
+      "commit": "30b3bdb6b8c3f3dceeb7e96e45ea9f2408d5c623",
+      "parents": [],
+      "blob_sha": "115e9fd7f124530113151c430464f560491ffde7",
+      "canonical_payload": "{\"body\":{\"title\":\"Initial review\"},\"client_info\":{\"build\":42,\"name\":\"writ-web\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"create\",\"op_version\":1}",
+      "declared_disposition": "interpretable",
+      "observed_disposition": "interpretable"
+    },
+    {
+      "ref": "refs/writ/alice/review",
+      "commit": "c82adc77f0882af189ed84b86a09208375a785c1",
+      "parents": [
+        "30b3bdb6b8c3f3dceeb7e96e45ea9f2408d5c623"
+      ],
+      "blob_sha": "7feb83c75485c77317430aa2d16ca1bad851e5ee",
+      "canonical_payload": "{\"body\":{\"metric\":\"latency_ms\",\"value\":42},\"object_id\":\"telem-01\",\"object_type\":\"telemetry\",\"op_type\":\"emit\",\"op_version\":1}",
+      "declared_disposition": "opaque",
+      "observed_disposition": "opaque"
+    },
+    {
+      "ref": "refs/writ/alice/review",
+      "commit": "637142a214438e299cd8b145809fc2ec28a5c315",
+      "parents": [
+        "c82adc77f0882af189ed84b86a09208375a785c1"
+      ],
+      "blob_sha": "b3f7699ac23010a63c42e37bdd4a0e1f3d3b28c3",
+      "canonical_payload": "{\"body\":{\"metadata\":{\"flags\":[\"automated\",\"experimental\"],\"scores\":{\"confidence\":0.95}},\"text\":\"Looks good\"},\"object_id\":\"review-01\",\"object_type\":\"comment\",\"op_type\":\"post\",\"op_version\":1}",
+      "declared_disposition": "interpretable",
+      "observed_disposition": "interpretable"
+    },
+    {
+      "ref": "refs/writ/bob/review",
+      "commit": "a23e174bb43ce3a520727918eed325dd11ad4c5a",
+      "parents": [],
+      "blob_sha": "ff9fba175b856aaf1035e4f79e884674ac636f64",
+      "canonical_payload": "{\"body\":{\"reason\":\"superseded\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"archive\",\"op_version\":1}",
+      "declared_disposition": "opaque",
+      "observed_disposition": "opaque"
+    },
+    {
+      "ref": "refs/writ/bob/review",
+      "commit": "5fc45d99af1ec746b9f684b96bd18b4af431ad0a",
+      "parents": [
+        "a23e174bb43ce3a520727918eed325dd11ad4c5a",
+        "637142a214438e299cd8b145809fc2ec28a5c315"
+      ],
+      "blob_sha": "8b3de24d190228fec9e24286505620c93fc82538",
+      "canonical_payload": "{\"body\":{\"reason\":\"resolved\",\"reviewer_draft_note\":\"final approval note\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"close\",\"op_version\":1}",
+      "declared_disposition": "interpretable",
+      "observed_disposition": "interpretable"
+    }
+  ],
+  "opaque_records": [
+    {
+      "op_id": "c82adc77f0882af189ed84b86a09208375a785c1",
+      "object_type": "telemetry",
+      "op_type": "emit",
+      "op_version": 1
+    },
+    {
+      "op_id": "a23e174bb43ce3a520727918eed325dd11ad4c5a",
+      "object_type": "review",
+      "op_type": "archive",
+      "op_version": 1
+    }
+  ],
+  "interpretable_payloads": [
+    "{\"body\":{\"metadata\":{\"flags\":[\"automated\",\"experimental\"],\"scores\":{\"confidence\":0.95}},\"text\":\"Looks good\"},\"object_id\":\"review-01\",\"object_type\":\"comment\",\"op_type\":\"post\",\"op_version\":1}",
+    "{\"body\":{\"reason\":\"resolved\",\"reviewer_draft_note\":\"final approval note\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"close\",\"op_version\":1}",
+    "{\"body\":{\"title\":\"Initial review\"},\"client_info\":{\"build\":42,\"name\":\"writ-web\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"create\",\"op_version\":1}"
+  ]
+}

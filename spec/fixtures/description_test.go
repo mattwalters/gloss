@@ -216,6 +216,40 @@ refs:
               reject: made-up-rejection-reason
 `,
 		},
+		{
+			name: "invalid disposition enum",
+			yaml: `
+name: invalid-disposition
+refs:
+  - name: refs/heads/main
+    history:
+      - commits:
+          - author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            disposition: unsupported-disposition
+            op:
+              object_id: r1
+              object_type: review
+              op_type: create
+              op_version: 1
+              body: {}
+`,
+		},
+		{
+			name: "disposition without op",
+			yaml: `
+name: disposition-without-op
+refs:
+  - name: refs/heads/main
+    history:
+      - commits:
+          - author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: m
+            files: {f: "1"}
+            disposition: interpretable
+`,
+		},
 	}
 
 	for _, tc := range cases {
@@ -226,3 +260,44 @@ refs:
 		})
 	}
 }
+
+func TestLoadAcceptsValidDisposition(t *testing.T) {
+	yamlData := `
+name: valid-disposition
+refs:
+  - name: refs/heads/main
+    history:
+      - commits:
+          - id: c1
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            disposition: interpretable
+            op:
+              object_id: r1
+              object_type: review
+              op_type: create
+              op_version: 1
+              body: {}
+          - id: c2
+            author: alice
+            timestamp: 2026-01-01T00:01:00Z
+            disposition: opaque
+            op:
+              object_id: r2
+              object_type: custom
+              op_type: action
+              op_version: 1
+              body: {}
+`
+	desc, err := Load([]byte(yamlData))
+	if err != nil {
+		t.Fatalf("expected Load to accept valid dispositions, got: %v", err)
+	}
+	if desc.Refs[0].History[0].Commits[0].Disposition != "interpretable" {
+		t.Errorf("expected commit 0 disposition 'interpretable', got %q", desc.Refs[0].History[0].Commits[0].Disposition)
+	}
+	if desc.Refs[0].History[0].Commits[1].Disposition != "opaque" {
+		t.Errorf("expected commit 1 disposition 'opaque', got %q", desc.Refs[0].History[0].Commits[1].Disposition)
+	}
+}
+
