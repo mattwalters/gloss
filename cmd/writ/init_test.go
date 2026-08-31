@@ -479,6 +479,35 @@ func TestInit_NoRemotes(t *testing.T) {
 	}
 }
 
+func TestInit_BareRepository(t *testing.T) {
+	requireGit(t)
+	tempDir := t.TempDir()
+	bareDir := filepath.Join(tempDir, "bare.git")
+	_, err := git.PlainInit(bareDir, true)
+	if err != nil {
+		t.Fatalf("PlainInit bare: %v", err)
+	}
+
+	globalCfgPath := filepath.Join(tempDir, "global_gitconfig")
+	if err := os.WriteFile(globalCfgPath, []byte(""), 0600); err != nil {
+		t.Fatalf("writing empty global config: %v", err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", globalCfgPath)
+	t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"init", "-C", bareDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("init on bare repo failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	writerID := getGitConfigAll(t, bareDir, "writ.writerId")
+	if len(writerID) != 1 || len(writerID[0]) != 16 {
+		t.Errorf("bare repo writerId not minted: %v", writerID)
+	}
+}
+
 func TestInit_NonRepo(t *testing.T) {
 	requireGit(t)
 	nonRepoDir := t.TempDir()
@@ -549,6 +578,21 @@ func TestRoot_Dispatch(t *testing.T) {
 		code := run(context.Background(), []string{"-C", env.repoDir, "init"}, &stdout, &stderr)
 		if code != 0 {
 			t.Fatalf("root -C flag exit code = %d, want 0; stderr: %s", code, stderr.String())
+		}
+	})
+
+	t.Run("root_C_flag_with_help", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+
+		for _, flag := range []string{"-h", "--help", "help"} {
+			var stdout, stderr bytes.Buffer
+			code := run(context.Background(), []string{"-C", env.repoDir, flag}, &stdout, &stderr)
+			if code != 0 {
+				t.Fatalf("root -C flag with %s exit code = %d, want 0; stderr: %s", flag, code, stderr.String())
+			}
+			if !strings.Contains(stdout.String(), "Usage:") {
+				t.Errorf("stdout does not contain usage for %s: %s", flag, stdout.String())
+			}
 		}
 	})
 

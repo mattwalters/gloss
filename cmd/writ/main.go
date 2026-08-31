@@ -44,6 +44,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 
 	switch args[0] {
+	case "-h", "-help", "--help", "help":
+		printUsage(stdout)
+		return 0
 	case "init":
 		return runInit(ctx, defaultDir, args[1:], stdout, stderr)
 	default:

@@ -45,15 +45,32 @@ Flags:
 		targetDir = "."
 	}
 
-	// 1. Resolve repo root via git rev-parse --show-toplevel
+	// 1. Resolve repo root via git rev-parse
 	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel")
 	cmd.Dir = targetDir
 	out, err := cmd.Output()
-	if err != nil {
+	var repoRoot string
+	if err == nil {
+		repoRoot = strings.TrimSpace(string(out))
+	} else {
+		// Check if target directory is a bare repository
+		cmdBare := exec.CommandContext(ctx, "git", "rev-parse", "--is-bare-repository")
+		cmdBare.Dir = targetDir
+		outBare, errBare := cmdBare.Output()
+		if errBare == nil && strings.TrimSpace(string(outBare)) == "true" {
+			cmdGitDir := exec.CommandContext(ctx, "git", "rev-parse", "--absolute-git-dir")
+			cmdGitDir.Dir = targetDir
+			outGitDir, errGitDir := cmdGitDir.Output()
+			if errGitDir == nil {
+				repoRoot = strings.TrimSpace(string(outGitDir))
+			}
+		}
+	}
+
+	if repoRoot == "" {
 		fmt.Fprintf(stderr, "writ init: not a git repository (or any of the parent directories)\n")
 		return 1
 	}
-	repoRoot := strings.TrimSpace(string(out))
 
 	// 2. Discover existing chains for collision avoidance
 	var taken func(identity.WriterID) bool
