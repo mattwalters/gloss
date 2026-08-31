@@ -36,7 +36,7 @@ This section deliberately does not define:
   constrains what conforming Writ producers mint.
 - **The operation vocabulary for modifying the repository registry** — the
   `repo` create, set-slug, and add-remote op payloads are specified in the
-  workspace op vocabulary (WRIT-10/11). This document defines the folded
+  repository registry op vocabulary (WRIT-75). This document defines the folded
   registry entry shape that resolution consumes.
 - **Workspace permission semantics** — see [Out of scope](#out-of-scope).
 
@@ -246,7 +246,7 @@ rules.
 
 The concrete op vocabulary for creating and modifying repository registry
 entries (e.g. `repo/create`, `repo/set-slug`, `repo/add-remote`) is specified in
-the workspace op vocabulary (WRIT-10/11). This document defines the folded
+the repository registry op vocabulary (WRIT-75). This document defines the folded
 output shape that resolution consumes.
 
 ## Reference resolution

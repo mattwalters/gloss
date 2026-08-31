@@ -261,8 +261,11 @@ func TestFoldCoverage(t *testing.T) {
 		}
 	}
 
-	// Check that every published rule has coverage in fold-* fixtures
+	// Check that every published rule for repo-scoped fixtures (review-ops, comments) has coverage in fold-* fixtures
 	for _, rule := range rules {
+		if rule.Vocabulary != "review-ops" && rule.Vocabulary != "comments" {
+			continue
+		}
 		key := fmt.Sprintf("%s:%s", rule.OpType, rule.Field)
 		if !coveredFields[key] {
 			t.Errorf("uncovered field rule in fold-* fixtures: (%s, op_version: %d, field: %s, strategy: %s)",

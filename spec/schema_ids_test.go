@@ -2,6 +2,7 @@ package spec_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -31,10 +32,44 @@ func findRefs(v any) []string {
 	return refs
 }
 
+// resolveJSONPointer checks if a JSON pointer (e.g. "/$defs/reference") resolves within doc.
+func resolveJSONPointer(doc any, pointer string) bool {
+	if pointer == "" || pointer == "/" {
+		return true
+	}
+	if !strings.HasPrefix(pointer, "/") {
+		return false
+	}
+	parts := strings.Split(pointer[1:], "/")
+	current := doc
+	for _, part := range parts {
+		part = strings.ReplaceAll(part, "~1", "/")
+		part = strings.ReplaceAll(part, "~0", "~")
+		switch node := current.(type) {
+		case map[string]any:
+			val, ok := node[part]
+			if !ok {
+				return false
+			}
+			current = val
+		case []any:
+			var idx int
+			if _, err := fmt.Sscanf(part, "%d", &idx); err != nil || idx < 0 || idx >= len(node) {
+				return false
+			}
+			current = node[idx]
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // TestSchemaIDsAndRefs enforces the schema identity and cross-reference rule:
 //  1. Every schema in spec/schemas/ must declare a $id equal to
 //     "https://writ.dev/spec/" + filename.
-//  2. Every absolute $ref across all schemas must resolve to a known schema's $id.
+//  2. Every absolute $ref across all schemas must resolve to a known schema's $id
+//     and, if a fragment pointer is present, resolve within that schema.
 func TestSchemaIDsAndRefs(t *testing.T) {
 	entries, err := spec.FS.ReadDir("schemas")
 	if err != nil {
@@ -85,8 +120,16 @@ func TestSchemaIDsAndRefs(t *testing.T) {
 				// Local definition reference (e.g. #/$defs/...)
 				continue
 			}
-			if _, ok := knownIDs[ref]; !ok {
+			baseURI, frag, hasFrag := strings.Cut(ref, "#")
+			targetFile, ok := knownIDs[baseURI]
+			if !ok {
 				t.Errorf("schema %s has absolute $ref %q which does not match any sibling schema $id in spec/schemas", filename, ref)
+				continue
+			}
+			if hasFrag && frag != "" {
+				if !resolveJSONPointer(schemaDocs[targetFile], frag) {
+					t.Errorf("schema %s has $ref %q whose pointer %q does not resolve in %s", filename, ref, frag, targetFile)
+				}
 			}
 		}
 	}
