@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/writtendev/writ/engine/codec/canonicaljson"
 )
 
@@ -71,7 +73,7 @@ func BuildCommit(env Envelope, author Identity, parents []string) (*Commit, erro
 		When:  author.When.UTC(),
 	}
 
-	return &Commit{
+	c := &Commit{
 		Parents:   parents,
 		Author:    utcAuthor,
 		Committer: utcAuthor,
@@ -83,5 +85,20 @@ func BuildCommit(env Envelope, author Identity, parents []string) (*Commit, erro
 				Data: raw,
 			},
 		},
-	}, nil
+	}
+
+	gitCommit, err := ToGitCommit(*c)
+	if err == nil {
+		c.ID = gitCommit.Hash.String()
+		payloadObj := &plumbing.MemoryObject{}
+		if err := gitCommit.EncodeWithoutSignature(payloadObj); err == nil {
+			if r, err := payloadObj.Reader(); err == nil {
+				payload, _ := io.ReadAll(r)
+				_ = r.Close()
+				c.Payload = payload
+			}
+		}
+	}
+
+	return c, nil
 }

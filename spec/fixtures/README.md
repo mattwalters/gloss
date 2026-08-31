@@ -35,7 +35,7 @@ Fixture YAML descriptions under `testdata/descriptions/` support the following c
 ## The Fixture Families
 
 - **`manifest`:** Pinned repository manifest outputs (`testdata/golden/*.json`) covering all generated refs, commits, SHAs, and trees.
-- **`envelope`:** Golden envelope outputs (`testdata/golden/envelope/*.json`) verifying byte-for-byte canonicalization, schema conformance, tree structure, SSH signature verification via `ssh-keygen -Y verify`, and declared vs observed disposition equality.
+- **`envelope`:** Golden envelope outputs (`testdata/golden/envelope/*.json`) verifying byte-for-byte canonicalization, schema conformance, tree structure, pure-Go SSH signature verification (`codec.Verify`), and declared vs observed disposition equality.
 - **`forward-compat`:** Golden forward-compatibility outputs (`testdata/golden/forward-compat/*.json`) verifying that unknown op types, future op versions, and unknown fields are preserved byte-for-byte, classified according to the reader profile, and surfaced as opaque records without perturbing known state.
 
 ## The Golden-File Test Harness

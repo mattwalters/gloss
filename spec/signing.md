@@ -1,0 +1,83 @@
+# Op Signature and Verification
+
+Status: **normative**. The key words MUST, MUST NOT, SHOULD, and MAY are
+to be interpreted as described in RFC 2119.
+
+Every Writ operation is stored as a standard signed git commit under
+`refs/writ/*`. Signing uses git's commit-signature machinery (`gpgsig`
+header), SSH format (`gpg.format=ssh`). This document defines the wire
+format of op signatures, the signed payload, the trust store format, and
+the normative verification algorithm and outcome vocabulary.
+
+## Signature Scheme and Namespace
+
+- **Protocol:** Ops are signed using the OpenSSH SSHSIG protocol (`PROTOCOL.sshsig`).
+- **Armoring:** Signatures ride the git commit's `gpgsig` header as an armored
+  SSHSIG block delimited by `-----BEGIN SSH SIGNATURE-----` and
+  `-----END SSH SIGNATURE-----`.
+- **Namespace:** Op signatures MUST use the namespace `"git"`. Using the
+  standard `"git"` namespace ensures that op commits remain verifiable with
+  system `git verify-commit` and standard git hosting tools without modification.
+- **Hash Algorithms:** Conforming verifiers MUST support both `"sha512"` and
+  `"sha256"` hash algorithms.
+
+## Signed Payload and Op Identity
+
+- **Signed Bytes:** The bytes covered by the signature are the exact commit
+  object bytes excluding the `gpgsig` signature header (the byte sequence
+  produced by git's `EncodeWithoutSignature`).
+- **Op Identity:** The op id is the git commit object identifier (SHA) of
+  the **signed** commit object. Two conforming producers given the same logical
+  op and signing key generate the same op id.
+
+## Verification Model
+
+### Separation from Fold and Envelope Validation
+
+In accordance with AGENTS.md ("Fold is pure and deterministic: ops in,
+state out, no I/O") and WRIT-3:
+
+1. **Fold does not verify signatures:** Signature verification is not part
+   of fold and MUST NOT run during fold.
+2. **Reader validation is independent:** Envelope reader validation
+   ([`spec/op-envelope.md`](op-envelope.md) rules 1–4) validates tree structure,
+   payload canonicalization, envelope schema, and author/committer match
+   independently of signature state.
+3. **Ingest-time verification:** Signature verification is performed at the
+   ingest boundary (when an op is read from a ref into the local DAG store).
+   Its result travels with the op as data.
+
+### Trust Store and Principal Validation
+
+- **Explicit Input:** Verification is a pure function that accepts an op commit
+  and an explicit trust store (`allowed_signers` rules). Verification MUST NOT
+  read repository git config or invoke external subprocesses.
+- **Principal:** The principal verified against the trust store MUST be the
+  commit author's email address (`author.email`).
+- **Author Timestamp:** When an `allowed_signers` rule specifies validity
+  windows (`valid-after` and `valid-before`), the timestamp checked against
+  the window MUST be the commit author's timestamp (`author.when`).
+- **Unconfigured Trust Store:** When no trust store is configured or provided,
+  a cryptographically valid signature produces the outcome `wrong-key` (reporting
+  the key fingerprint), ensuring unconfigured trust is never treated as verified.
+
+## Verification Outcomes
+
+Verifiers MUST report one of the following closed set of outcomes:
+
+| Outcome | Meaning | Valid |
+| --- | --- | --- |
+| `valid` | Signature cryptographically verifies over the payload, and the signing key is authorized for the author principal in the trust store at the author timestamp. | `true` |
+| `unsigned` | The commit does not contain a signature header. | `false` |
+| `wrong-key` | Signature cryptographically verifies over the payload, but the signing key is not authorized for the author principal in the trust store (or no trust store is configured). | `false` |
+| `payload-mutated` | Cryptographic signature verification failed (the commit payload was modified after signing, or the signature does not match the public key). | `false` |
+| `corrupted-signature` | The signature header or binary SSHSIG payload is malformed, truncated, or unparseable. | `false` |
+
+## Format Limitations (v1)
+
+1. **`cert-authority` unsupported:** OpenSSH `allowed_signers` lines specifying
+   the `cert-authority` option are not supported in v1 and MUST be skipped
+   as untrusted rather than honoured.
+2. **SSH only:** PGP signatures are unsupported (`gpg.format=ssh` only).
+3. **Key distribution:** Public key distribution and directory-identity mapping
+   are out of scope for the op spec (per `ARCHITECTURE.md`).
