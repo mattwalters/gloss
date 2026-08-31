@@ -31,13 +31,19 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 		return fmt.Errorf("projection: order ops for object %s: %w", objectID, err)
 	}
 
-	lastOpID := orderedOps[len(orderedOps)-1].ID
+	firstOp := orderedOps[0]
+	lastOp := orderedOps[len(orderedOps)-1]
+	authorName := firstOp.Author.Name
+	authorEmail := firstOp.Author.Email
+	createdAt := firstOp.Author.When.UTC().Unix()
+	updatedAt := lastOp.Author.When.UTC().Unix()
+	lastOpID := lastOp.ID
 	objectType := determineObjectType(orderedOps)
 
 	// Insert objects row
 	_, err = tx.Exec(
-		"INSERT INTO objects (object_id, object_type, op_count, last_op_id) VALUES (?, ?, ?, ?)",
-		objectID, objectType, len(ops), lastOpID,
+		"INSERT INTO objects (object_id, object_type, op_count, last_op_id, author_name, author_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		objectID, objectType, len(ops), lastOpID, authorName, authorEmail, createdAt, updatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("projection: insert object %s: %w", objectID, err)
@@ -88,10 +94,10 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 			}
 		}
 
-		for _, u := range review.UnknownOps {
+		for i, u := range review.UnknownOps {
 			_, err = tx.Exec(
-				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, op_type, op_version) VALUES (?, ?, ?, ?)",
-				objectID, u.Commit, u.OpType, u.OpVersion,
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?)",
+				objectID, u.Commit, u.OpType, u.OpVersion, i,
 			)
 			if err != nil {
 				return fmt.Errorf("projection: insert unknown op %s: %w", u.Commit, err)
@@ -126,10 +132,132 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 			return fmt.Errorf("projection: insert comment %s: %w", objectID, err)
 		}
 
-		for _, u := range comment.UnknownOps {
+		for i, u := range comment.UnknownOps {
 			_, err = tx.Exec(
-				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, op_type, op_version) VALUES (?, ?, ?, ?)",
-				objectID, u.Commit, u.OpType, u.OpVersion,
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?)",
+				objectID, u.Commit, u.OpType, u.OpVersion, i,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert unknown op %s: %w", u.Commit, err)
+			}
+		}
+
+	case "issue":
+		issue, err := writ.FoldIssue(ops)
+		if err != nil {
+			return fmt.Errorf("projection: fold issue %s: %w", objectID, err)
+		}
+
+		_, err = tx.Exec(
+			"INSERT INTO issues (object_id, title, description, state, reason) VALUES (?, ?, ?, ?, ?)",
+			objectID, issue.Title, issue.Description, issue.State, issue.Reason,
+		)
+		if err != nil {
+			return fmt.Errorf("projection: insert issue %s: %w", objectID, err)
+		}
+
+		for _, assignee := range issue.Assignees {
+			_, err = tx.Exec(
+				"INSERT INTO issue_assignees (issue_object_id, assignee) VALUES (?, ?)",
+				objectID, assignee,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert issue assignee %s (%s): %w", objectID, assignee, err)
+			}
+		}
+
+		for _, label := range issue.Labels {
+			_, err = tx.Exec(
+				"INSERT INTO issue_labels (issue_object_id, label) VALUES (?, ?)",
+				objectID, label,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert issue label %s (%s): %w", objectID, label, err)
+			}
+		}
+
+		for _, link := range issue.Links {
+			_, err = tx.Exec(
+				"INSERT INTO issue_links (issue_object_id, target, target_type, relation) VALUES (?, ?, ?, ?)",
+				objectID, link.Target, link.TargetType, link.Relation,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert issue link %s (%s): %w", objectID, link.Target, err)
+			}
+		}
+
+		for i, u := range issue.UnknownOps {
+			_, err = tx.Exec(
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?)",
+				objectID, u.Commit, u.OpType, u.OpVersion, i,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert unknown op %s: %w", u.Commit, err)
+			}
+		}
+
+	case "project":
+		project, err := writ.FoldProject(ops)
+		if err != nil {
+			return fmt.Errorf("projection: fold project %s: %w", objectID, err)
+		}
+
+		_, err = tx.Exec(
+			"INSERT INTO projects (object_id, title, description, status, reason) VALUES (?, ?, ?, ?, ?)",
+			objectID, project.Title, project.Description, project.Status, project.Reason,
+		)
+		if err != nil {
+			return fmt.Errorf("projection: insert project %s: %w", objectID, err)
+		}
+
+		for _, iss := range project.Issues {
+			_, err = tx.Exec(
+				"INSERT INTO project_issues (project_object_id, issue) VALUES (?, ?)",
+				objectID, iss,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert project issue %s (%s): %w", objectID, iss, err)
+			}
+		}
+
+		for i, u := range project.UnknownOps {
+			_, err = tx.Exec(
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?)",
+				objectID, u.Commit, u.OpType, u.OpVersion, i,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert unknown op %s: %w", u.Commit, err)
+			}
+		}
+
+	case "cycle":
+		cycle, err := writ.FoldCycle(ops)
+		if err != nil {
+			return fmt.Errorf("projection: fold cycle %s: %w", objectID, err)
+		}
+
+		_, err = tx.Exec(
+			"INSERT INTO cycles (object_id, title, description, starts_at, ends_at) VALUES (?, ?, ?, ?, ?)",
+			objectID, cycle.Title, cycle.Description, cycle.StartsAt, cycle.EndsAt,
+		)
+		if err != nil {
+			return fmt.Errorf("projection: insert cycle %s: %w", objectID, err)
+		}
+
+		for _, iss := range cycle.Issues {
+			_, err = tx.Exec(
+				"INSERT INTO cycle_issues (cycle_object_id, issue) VALUES (?, ?)",
+				objectID, iss,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert cycle issue %s (%s): %w", objectID, iss, err)
+			}
+		}
+
+		for i, u := range cycle.UnknownOps {
+			_, err = tx.Exec(
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?)",
+				objectID, u.Commit, u.OpType, u.OpVersion, i,
 			)
 			if err != nil {
 				return fmt.Errorf("projection: insert unknown op %s: %w", u.Commit, err)
@@ -138,10 +266,10 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 
 	default:
 		// Preserved-but-unreduced ops: record in unknown_ops
-		for _, op := range ops {
+		for i, op := range ops {
 			_, err = tx.Exec(
-				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, op_type, op_version) VALUES (?, ?, ?, ?)",
-				objectID, op.ID, op.OpType, op.OpVersion,
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?)",
+				objectID, op.ID, op.OpType, op.OpVersion, i,
 			)
 			if err != nil {
 				return fmt.Errorf("projection: insert unreduced op %s: %w", op.ID, err)
@@ -159,11 +287,8 @@ func determineObjectType(ops []codec.Op) string {
 		}
 	}
 	for _, op := range ops {
-		if op.ObjectType == "review" {
-			return "review"
-		}
-		if op.ObjectType == "comment" {
-			return "comment"
+		if op.ObjectType != "" {
+			return op.ObjectType
 		}
 	}
 	if len(ops) > 0 {
@@ -182,6 +307,14 @@ func deleteObjectState(tx *sql.Tx, objectID string) error {
 		"DELETE FROM ci_statuses WHERE review_object_id = ?",
 		"DELETE FROM comments WHERE object_id = ?",
 		"DELETE FROM anchor_resolutions WHERE comment_object_id = ?",
+		"DELETE FROM issues WHERE object_id = ?",
+		"DELETE FROM issue_assignees WHERE issue_object_id = ?",
+		"DELETE FROM issue_labels WHERE issue_object_id = ?",
+		"DELETE FROM issue_links WHERE issue_object_id = ?",
+		"DELETE FROM projects WHERE object_id = ?",
+		"DELETE FROM project_issues WHERE project_object_id = ?",
+		"DELETE FROM cycles WHERE object_id = ?",
+		"DELETE FROM cycle_issues WHERE cycle_object_id = ?",
 	}
 	for _, q := range queries {
 		if _, err := tx.Exec(q, objectID); err != nil {

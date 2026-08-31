@@ -14,8 +14,8 @@ func TestOpenCloseMemory(t *testing.T) {
 	}
 	defer db.Close()
 
-	if v := projection.SchemaVersion(); v != 1 {
-		t.Fatalf("expected schema version 1, got %d", v)
+	if v := projection.SchemaVersion(); v != 2 {
+		t.Fatalf("expected schema version 2, got %d", v)
 	}
 
 	var version string
@@ -23,8 +23,8 @@ func TestOpenCloseMemory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query schema_version failed: %v", err)
 	}
-	if version != "1" {
-		t.Fatalf("expected stored schema_version '1', got %q", version)
+	if version != "2" {
+		t.Fatalf("expected stored schema_version '2', got %q", version)
 	}
 }
 
@@ -39,7 +39,7 @@ func TestSchemaVersionMismatchRecreates(t *testing.T) {
 	}
 
 	// Insert dummy object row
-	_, err = db.DB().Exec("INSERT INTO objects (object_id, object_type, op_count, last_op_id) VALUES ('obj-1', 'review', 1, 'sha-1')")
+	_, err = db.DB().Exec("INSERT INTO objects (object_id, object_type, op_count, last_op_id, author_name, author_email, created_at, updated_at) VALUES ('obj-1', 'review', 1, 'sha-1', 'alice', 'alice@example.com', 100, 100)")
 	if err != nil {
 		t.Fatalf("insert dummy object failed: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestSchemaVersionMismatchRecreates(t *testing.T) {
 	}
 	_ = db.Close()
 
-	// 2. Re-open: should detect mismatch, drop tables, and recreate with schema_version 1
+	// 2. Re-open: should detect mismatch, drop tables, and recreate with schema_version 2
 	db2, err := projection.Open(dbPath)
 	if err != nil {
 		t.Fatalf("re-open after mismatch failed: %v", err)
@@ -63,8 +63,8 @@ func TestSchemaVersionMismatchRecreates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query schema_version failed: %v", err)
 	}
-	if version != "1" {
-		t.Fatalf("expected recreated schema_version '1', got %q", version)
+	if version != "2" {
+		t.Fatalf("expected recreated schema_version '2', got %q", version)
 	}
 
 	// The dummy object must no longer exist (tables recreated)
@@ -77,3 +77,4 @@ func TestSchemaVersionMismatchRecreates(t *testing.T) {
 		t.Fatalf("expected objects to be wiped on schema mismatch, found %d rows", count)
 	}
 }
+
