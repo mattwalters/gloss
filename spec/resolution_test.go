@@ -6,9 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"reflect"
-	"sort"
-	"strings"
 	"testing"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -60,447 +57,91 @@ func gitBlobOID(content string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-type resolutionRange struct {
-	Start int `json:"start"`
-	End   int `json:"end"`
-}
-
-type resolutionContext struct {
-	Before  []string `json:"before"`
-	Lines   []string `json:"lines"`
-	Omitted int      `json:"omitted,omitempty"`
-	After   []string `json:"after"`
-}
-
-type resolutionSideAnchor struct {
-	Commit  string             `json:"commit"`
-	Path    string             `json:"path"`
-	Blob    string             `json:"blob"`
-	Range   *resolutionRange   `json:"range,omitempty"`
-	Context *resolutionContext `json:"context,omitempty"`
-}
-
-type resolutionAnchor struct {
-	Version int                   `json:"version"`
-	Old     *resolutionSideAnchor `json:"old,omitempty"`
-	New     *resolutionSideAnchor `json:"new,omitempty"`
-}
-
-type resolutionTarget struct {
-	Files map[string]string `json:"files"`
-}
-
-type resolutionSideResult struct {
-	Outcome string           `json:"outcome"`
-	Match   string           `json:"match,omitempty"`
-	Path    string           `json:"path,omitempty"`
-	Range   *resolutionRange `json:"range,omitempty"`
-	Reason  string           `json:"reason,omitempty"`
-}
-
-type resolutionOutcome struct {
-	Anchor any                   `json:"anchor"`
-	Old    *resolutionSideResult `json:"old,omitempty"`
-	New    *resolutionSideResult `json:"new,omitempty"`
-}
-
-type resolutionCase struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Anchor      resolutionAnchor  `json:"anchor"`
-	Target      resolutionTarget  `json:"target"`
-	Expect      resolutionOutcome `json:"expect"`
-}
-
-func prepareTargetLines(content string) []string {
-	rawLines := strings.Split(content, "\n")
-	if len(rawLines) > 0 && rawLines[len(rawLines)-1] == "" {
-		rawLines = rawLines[:len(rawLines)-1]
-	}
-	var lines []string
-	for _, l := range rawLines {
-		runes := []rune(l)
-		if len(runes) > 1000 {
-			runes = runes[:1000]
-		}
-		lines = append(lines, string(runes))
-	}
-	return lines
-}
-
-func absInt(a int) int {
-	if a < 0 {
-		return -a
-	}
-	return a
-}
-
-func executeResolveSide(version int, s *resolutionSideAnchor, target resolutionTarget) *resolutionSideResult {
-	if version != 1 {
-		return &resolutionSideResult{Outcome: "orphaned", Reason: "unsupported-version"}
-	}
-	if s == nil {
-		return nil
-	}
-
-	targetBlobs := make(map[string]string)
-	for p, content := range target.Files {
-		targetBlobs[p] = gitBlobOID(content)
-	}
-
-	// Whole-file anchor
-	if s.Range == nil {
-		if blob, ok := targetBlobs[s.Path]; ok && blob == s.Blob {
-			return &resolutionSideResult{Outcome: "resolved", Match: "exact-path-blob", Path: s.Path}
-		}
-		var movedPaths []string
-		for p, blob := range targetBlobs {
-			if blob == s.Blob && p != s.Path {
-				movedPaths = append(movedPaths, p)
-			}
-		}
-		if len(movedPaths) > 0 {
-			sort.Strings(movedPaths)
-			return &resolutionSideResult{Outcome: "resolved", Match: "exact-blob-moved", Path: movedPaths[0]}
-		}
-		if _, ok := target.Files[s.Path]; ok {
-			return &resolutionSideResult{Outcome: "orphaned", Reason: "no-candidate"}
-		}
-		return &resolutionSideResult{Outcome: "orphaned", Reason: "path-absent"}
-	}
-
-	// Ranged anchor:
-	// Rung 1: exact-path-blob
-	if blob, ok := targetBlobs[s.Path]; ok && blob == s.Blob {
-		return &resolutionSideResult{
-			Outcome: "resolved",
-			Match:   "exact-path-blob",
-			Path:    s.Path,
-			Range:   &resolutionRange{Start: s.Range.Start, End: s.Range.End},
-		}
-	}
-
-	// Rung 2: exact-blob-moved
-	var movedPaths []string
-	for p, blob := range targetBlobs {
-		if blob == s.Blob && p != s.Path {
-			movedPaths = append(movedPaths, p)
-		}
-	}
-	if len(movedPaths) > 0 {
-		sort.Strings(movedPaths)
-		return &resolutionSideResult{
-			Outcome: "resolved",
-			Match:   "exact-blob-moved",
-			Path:    movedPaths[0],
-			Range:   &resolutionRange{Start: s.Range.Start, End: s.Range.End},
-		}
-	}
-
-	// Candidate paths scope for Rung 3 and 4
-	var candidatePaths []string
-	if _, ok := target.Files[s.Path]; ok {
-		candidatePaths = []string{s.Path}
-	} else {
-		for p := range target.Files {
-			candidatePaths = append(candidatePaths, p)
-		}
-		sort.Strings(candidatePaths)
-	}
-
-	rangeLen := s.Range.End - s.Range.Start + 1
-	isElided := s.Context.Omitted > 0
-
-	// Rung 3: context-exact
-	type exactCandidate struct {
-		path        string
-		start       int
-		collarScore int
-		distance    int
-	}
-	var exactMatches []exactCandidate
-
-	for _, p := range candidatePaths {
-		lines := prepareTargetLines(target.Files[p])
-		if len(lines) < rangeLen {
-			continue
-		}
-		for start := 1; start <= len(lines)-rangeLen+1; start++ {
-			matched := true
-			if !isElided {
-				for i := 0; i < rangeLen; i++ {
-					if lines[start+i-1] != s.Context.Lines[i] {
-						matched = false
-						break
-					}
-				}
-			} else {
-				for i := 0; i < 32; i++ {
-					if lines[start+i-1] != s.Context.Lines[i] {
-						matched = false
-						break
-					}
-				}
-				if matched {
-					for j := 0; j < 32; j++ {
-						if lines[start+rangeLen-32+j-1] != s.Context.Lines[32+j] {
-							matched = false
-							break
-						}
-					}
-				}
-			}
-			if matched {
-				collarScore := 0
-				beforeLen := len(s.Context.Before)
-				for k := 1; k <= beforeLen; k++ {
-					if start-k >= 1 && lines[start-k-1] == s.Context.Before[beforeLen-k] {
-						collarScore++
-					}
-				}
-				afterLen := len(s.Context.After)
-				for k := 0; k < afterLen; k++ {
-					if start+rangeLen+k <= len(lines) && lines[start+rangeLen+k-1] == s.Context.After[k] {
-						collarScore++
-					}
-				}
-				exactMatches = append(exactMatches, exactCandidate{
-					path:        p,
-					start:       start,
-					collarScore: collarScore,
-					distance:    absInt(start - s.Range.Start),
-				})
-			}
-		}
-	}
-
-	if len(exactMatches) > 0 {
-		sort.Slice(exactMatches, func(i, j int) bool {
-			a, b := exactMatches[i], exactMatches[j]
-			if a.collarScore != b.collarScore {
-				return a.collarScore > b.collarScore
-			}
-			if a.distance != b.distance {
-				return a.distance < b.distance
-			}
-			if a.start != b.start {
-				return a.start < b.start
-			}
-			return a.path < b.path
-		})
-		best := exactMatches[0]
-		return &resolutionSideResult{
-			Outcome: "resolved",
-			Match:   "context-exact",
-			Path:    best.path,
-			Range:   &resolutionRange{Start: best.start, End: best.start + rangeLen - 1},
-		}
-	}
-
-	// Rung 4: context-fuzzy
-	maxAnchored := 2 * rangeLen
-	if isElided {
-		maxAnchored = 2 * 64
-	}
-	maxScore := maxAnchored + len(s.Context.Before) + len(s.Context.After)
-
-	type fuzzyWindow struct {
-		path  string
-		start int
-		score int
-	}
-	var windows []fuzzyWindow
-	totalWindowsChecked := 0
-
-	for _, p := range candidatePaths {
-		lines := prepareTargetLines(target.Files[p])
-		if len(lines) < rangeLen {
-			continue
-		}
-		for start := 1; start <= len(lines)-rangeLen+1; start++ {
-			totalWindowsChecked++
-			anchoredMatches := 0
-			if !isElided {
-				for i := 0; i < rangeLen; i++ {
-					if lines[start+i-1] == s.Context.Lines[i] {
-						anchoredMatches++
-					}
-				}
-			} else {
-				for i := 0; i < 32; i++ {
-					if lines[start+i-1] == s.Context.Lines[i] {
-						anchoredMatches++
-					}
-				}
-				for j := 0; j < 32; j++ {
-					if lines[start+rangeLen-32+j-1] == s.Context.Lines[32+j] {
-						anchoredMatches++
-					}
-				}
-			}
-			anchoredScore := 2 * anchoredMatches
-
-			collarScore := 0
-			beforeLen := len(s.Context.Before)
-			for k := 1; k <= beforeLen; k++ {
-				if start-k >= 1 && lines[start-k-1] == s.Context.Before[beforeLen-k] {
-					collarScore++
-				}
-			}
-			afterLen := len(s.Context.After)
-			for k := 0; k < afterLen; k++ {
-				if start+rangeLen+k <= len(lines) && lines[start+rangeLen+k-1] == s.Context.After[k] {
-					collarScore++
-				}
-			}
-
-			totalScore := anchoredScore + collarScore
-			windows = append(windows, fuzzyWindow{
-				path:  p,
-				start: start,
-				score: totalScore,
-			})
-		}
-	}
-
-	if totalWindowsChecked == 0 {
-		if _, ok := target.Files[s.Path]; ok {
-			return &resolutionSideResult{Outcome: "orphaned", Reason: "no-candidate"}
-		}
-		return &resolutionSideResult{Outcome: "orphaned", Reason: "path-absent"}
-	}
-
-	sort.Slice(windows, func(i, j int) bool {
-		return windows[i].score > windows[j].score
-	})
-
-	bestScore := windows[0].score
-	if bestScore == 0 {
-		if _, ok := target.Files[s.Path]; ok {
-			return &resolutionSideResult{Outcome: "orphaned", Reason: "no-candidate"}
-		}
-		return &resolutionSideResult{Outcome: "orphaned", Reason: "path-absent"}
-	}
-
-	// 60% threshold check
-	if bestScore*100 < 60*maxScore {
-		return &resolutionSideResult{Outcome: "orphaned", Reason: "below-threshold"}
-	}
-
-	// Strict winner check
-	if len(windows) > 1 && windows[1].score == bestScore {
-		return &resolutionSideResult{Outcome: "orphaned", Reason: "ambiguous"}
-	}
-
-	best := windows[0]
-	return &resolutionSideResult{
-		Outcome: "resolved",
-		Match:   "context-fuzzy",
-		Path:    best.path,
-		Range:   &resolutionRange{Start: best.start, End: best.start + rangeLen - 1},
-	}
-}
-
-func executeResolve(a resolutionAnchor, t resolutionTarget) resolutionOutcome {
-	out := resolutionOutcome{
-		Anchor: a,
-	}
-	if a.Old != nil {
-		out.Old = executeResolveSide(a.Version, a.Old, t)
-	}
-	if a.New != nil {
-		out.New = executeResolveSide(a.Version, a.New, t)
-	}
-	return out
-}
-
 func TestResolutionSchemaCompiles(t *testing.T) {
 	compileResolutionSchema(t)
 }
 
-func TestResolutionVectorsValidateAndExecute(t *testing.T) {
+func TestResolutionVectorsValidate(t *testing.T) {
 	anchorSch := compileAnchorSchema(t)
 	resSch := compileResolutionSchema(t)
 
-	caseFiles := readDirNames(t, "testdata/resolution/cases")
-	if len(caseFiles) == 0 {
-		t.Fatal("no resolution test cases found")
+	cases, err := spec.ResolutionVectors()
+	if err != nil {
+		t.Fatalf("loading resolution vectors: %v", err)
 	}
 
-	for _, name := range caseFiles {
-		t.Run(name, func(t *testing.T) {
-			raw, err := spec.FS.ReadFile("testdata/resolution/cases/" + name)
-			if err != nil {
-				t.Fatalf("reading case file %s: %v", name, err)
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			var anchorObj struct {
+				Version int `json:"version"`
+				Old     *struct {
+					Blob string `json:"blob"`
+				} `json:"old,omitempty"`
+				New *struct {
+					Blob string `json:"blob"`
+				} `json:"new,omitempty"`
 			}
-
-			var c resolutionCase
-			if err := json.Unmarshal(raw, &c); err != nil {
-				t.Fatalf("unmarshaling case %s: %v", name, err)
+			if err := json.Unmarshal(c.Anchor, &anchorObj); err != nil {
+				t.Fatalf("unmarshaling anchor: %v", err)
 			}
 
 			// Validate anchor against anchor.schema.json if version == 1
-			if c.Anchor.Version == 1 {
-				anchorRaw, err := json.Marshal(c.Anchor)
-				if err != nil {
-					t.Fatalf("marshaling anchor: %v", err)
-				}
-				if err := validateVector(t, anchorSch, anchorRaw); err != nil {
-					t.Errorf("anchor schema validation failed for %s: %v", name, err)
+			if anchorObj.Version == 1 {
+				if err := validateVector(t, anchorSch, c.Anchor); err != nil {
+					t.Errorf("anchor schema validation failed for %s: %v", c.Name, err)
 				}
 			}
 
 			// Validate expect against resolution.schema.json
-			expectRaw, err := json.Marshal(c.Expect)
-			if err != nil {
-				t.Fatalf("marshaling expect: %v", err)
-			}
-			inst, err := jsonschema.UnmarshalJSON(bytes.NewReader(expectRaw))
+			inst, err := jsonschema.UnmarshalJSON(bytes.NewReader(c.Expect))
 			if err != nil {
 				t.Fatalf("decoding expect instance: %v", err)
 			}
 			if err := resSch.Validate(inst); err != nil {
-				t.Errorf("expect schema validation failed for %s: %v", name, err)
+				t.Errorf("expect schema validation failed for %s: %v", c.Name, err)
+			}
+
+			var expectObj struct {
+				Old *struct {
+					Match string `json:"match,omitempty"`
+					Path  string `json:"path,omitempty"`
+				} `json:"old,omitempty"`
+				New *struct {
+					Match string `json:"match,omitempty"`
+					Path  string `json:"path,omitempty"`
+				} `json:"new,omitempty"`
+			}
+			if err := json.Unmarshal(c.Expect, &expectObj); err != nil {
+				t.Fatalf("unmarshaling expect: %v", err)
 			}
 
 			// Verify blob OID integrity for exact-blob matches
 			for path, content := range c.Target.Files {
 				computed := gitBlobOID(content)
-				if c.Expect.New != nil && c.Anchor.New != nil {
-					if c.Expect.New.Match == "exact-path-blob" && c.Expect.New.Path == path {
-						if c.Anchor.New.Blob != computed {
-							t.Errorf("%s: anchor.new.blob %q does not match computed blob %q of %s", name, c.Anchor.New.Blob, computed, path)
+				if expectObj.New != nil && anchorObj.New != nil {
+					if expectObj.New.Match == "exact-path-blob" && expectObj.New.Path == path {
+						if anchorObj.New.Blob != computed {
+							t.Errorf("%s: anchor.new.blob %q does not match computed blob %q of %s", c.Name, anchorObj.New.Blob, computed, path)
 						}
 					}
-					if c.Expect.New.Match == "exact-blob-moved" && c.Expect.New.Path == path {
-						if c.Anchor.New.Blob != computed {
-							t.Errorf("%s: anchor.new.blob %q does not match computed blob %q of %s", name, c.Anchor.New.Blob, computed, path)
-						}
-					}
-				}
-				if c.Expect.Old != nil && c.Anchor.Old != nil {
-					if c.Expect.Old.Match == "exact-path-blob" && c.Expect.Old.Path == path {
-						if c.Anchor.Old.Blob != computed {
-							t.Errorf("%s: anchor.old.blob %q does not match computed blob %q of %s", name, c.Anchor.Old.Blob, computed, path)
-						}
-					}
-					if c.Expect.Old.Match == "exact-blob-moved" && c.Expect.Old.Path == path {
-						if c.Anchor.Old.Blob != computed {
-							t.Errorf("%s: anchor.old.blob %q does not match computed blob %q of %s", name, c.Anchor.Old.Blob, computed, path)
+					if expectObj.New.Match == "exact-blob-moved" && expectObj.New.Path == path {
+						if anchorObj.New.Blob != computed {
+							t.Errorf("%s: anchor.new.blob %q does not match computed blob %q of %s", c.Name, anchorObj.New.Blob, computed, path)
 						}
 					}
 				}
-			}
-
-			// Execute reference resolver and assert outcome matches Expect
-			actual := executeResolve(c.Anchor, c.Target)
-			actualRaw, _ := json.Marshal(actual)
-			var actualMap, expectMap map[string]any
-			_ = json.Unmarshal(actualRaw, &actualMap)
-			_ = json.Unmarshal(expectRaw, &expectMap)
-
-			if !reflect.DeepEqual(actualMap, expectMap) {
-				t.Errorf("%s:\nactual: %s\nexpect: %s", name, string(actualRaw), string(expectRaw))
+				if expectObj.Old != nil && anchorObj.Old != nil {
+					if expectObj.Old.Match == "exact-path-blob" && expectObj.Old.Path == path {
+						if anchorObj.Old.Blob != computed {
+							t.Errorf("%s: anchor.old.blob %q does not match computed blob %q of %s", c.Name, anchorObj.Old.Blob, computed, path)
+						}
+					}
+					if expectObj.Old.Match == "exact-blob-moved" && expectObj.Old.Path == path {
+						if anchorObj.Old.Blob != computed {
+							t.Errorf("%s: anchor.old.blob %q does not match computed blob %q of %s", c.Name, anchorObj.Old.Blob, computed, path)
+						}
+					}
+				}
 			}
 		})
 	}

@@ -47,6 +47,7 @@ disagree, the fixtures win and the prose gets fixed.
 | `testdata/resolution/` | Normative | Resolution test vectors (`cases/*.json`) and outcome index (`index.json`) |
 | `spec.go` | Informative | Go embedding of `schemas/` and `testdata/` so every consumer reads the one committed copy |
 | `foldvectors.go` | Informative | Go loader and structural validation for fold ordering and merge test vectors |
+| `resolutionvectors.go` | Informative | Go loader and structural validation for resolution test cases |
 | `fixtures/` | Mixed | The fixture-repo generator and golden harness (informative tooling) producing the golden corpus under `fixtures/testdata/` (normative) |
 | `README.md` | Informative | This document: index, conformance model, independent-implementation guide |
 
@@ -71,6 +72,7 @@ spec/
 ├── resolution.md           — normative: re-anchoring & orphan degradation (v1)
 ├── spec.go                 — go:embed of schemas/ and testdata/ (package spec)
 ├── foldvectors.go          — loader and structural validation for fold test vectors
+├── resolutionvectors.go    — loader and structural validation for resolution test cases
 ├── schemas/
 │   ├── op-envelope.schema.json — draft 2020-12 schema for the op payload
 │   ├── anchor.schema.json  — draft 2020-12 schema for the anchor object
