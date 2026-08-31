@@ -18,7 +18,7 @@ import (
 func createSSHShim(t *testing.T) string {
 	t.Helper()
 	shimFile := filepath.Join(t.TempDir(), "git-ssh-shim.sh")
-	script := "#!/bin/sh\neval \"${@: -1}\"\n"
+	script := "#!/bin/sh\nfor a in \"$@\"; do last=\"$a\"; done\neval \"$last\"\n"
 	if err := os.WriteFile(shimFile, []byte(script), 0o755); err != nil {
 		t.Fatalf("write ssh shim: %v", err)
 	}
