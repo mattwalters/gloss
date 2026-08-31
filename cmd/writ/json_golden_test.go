@@ -1,0 +1,243 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/writtendev/writ/engine"
+	"github.com/writtendev/writ/spec/fixtures"
+)
+
+func compareOrUpdateGolden(t *testing.T, goldenName string, got []byte) {
+	t.Helper()
+	goldenPath := filepath.Join("testdata", "golden", goldenName)
+
+	if fixtures.UpdateGolden() {
+		if err := os.MkdirAll(filepath.Dir(goldenPath), 0o755); err != nil {
+			t.Fatalf("mkdir failed: %v", err)
+		}
+		if err := os.WriteFile(goldenPath, got, 0o644); err != nil {
+			t.Fatalf("write golden %s failed: %v", goldenPath, err)
+		}
+		t.Logf("[UPDATED GOLDEN] %s (%d bytes)", goldenPath, len(got))
+		return
+	}
+
+	want, err := os.ReadFile(goldenPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			t.Fatalf("golden file %s does not exist; run with -update-golden to generate it", goldenPath)
+		}
+		t.Fatalf("read golden %s failed: %v", goldenPath, err)
+	}
+
+	if !bytes.Equal(got, want) {
+		diff := fixtures.Diff(goldenPath+" (golden)", want, "got (actual output)", got)
+		t.Errorf("output does not match golden file %s\n\n%s", goldenPath, diff)
+	}
+}
+
+func loadFixtureRepo(t *testing.T, descName string) string {
+	t.Helper()
+	corpus, err := fixtures.LoadCorpus()
+	if err != nil {
+		t.Fatalf("load corpus failed: %v", err)
+	}
+	var desc *fixtures.Description
+	for _, d := range corpus {
+		if d.Name == descName {
+			desc = d
+			break
+		}
+	}
+	if desc == nil {
+		t.Fatalf("fixture description %q not found in corpus", descName)
+	}
+
+	repoDir := filepath.Join(t.TempDir(), "repo_"+descName)
+	if _, err := fixtures.Generate(desc, repoDir); err != nil {
+		t.Fatalf("generate fixture %s failed: %v", descName, err)
+	}
+
+	return repoDir
+}
+
+func TestGolden_ReviewList_Empty(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("init failed: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"review", "list", "-C", env.repoDir, "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review list --json failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	compareOrUpdateGolden(t, "review_list_empty.json", stdout.Bytes())
+}
+
+func TestGolden_ReviewList_Single(t *testing.T) {
+	repoDir := loadFixtureRepo(t, "fold-concurrent-review-edits")
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"review", "list", "-C", repoDir, "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review list --json failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	compareOrUpdateGolden(t, "review_list_single.json", stdout.Bytes())
+}
+
+func TestGolden_ReviewList_Multi(t *testing.T) {
+	repoDir := loadFixtureRepo(t, "multi-writer-chains")
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"review", "list", "-C", repoDir, "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review list --json failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	compareOrUpdateGolden(t, "review_list_multi.json", stdout.Bytes())
+}
+
+func TestGolden_ReviewStatus_Detail(t *testing.T) {
+	repoDir := loadFixtureRepo(t, "review-mixed-signals")
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"review", "status", "-C", repoDir, "r-mixed", "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review status --json failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	compareOrUpdateGolden(t, "review_status_detail.json", stdout.Bytes())
+}
+
+func TestGolden_ReviewStatus_UnknownOps(t *testing.T) {
+	repoDir := loadFixtureRepo(t, "forward-compat-unknown-ops")
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"review", "status", "-C", repoDir, "review-01", "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review status --json failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	compareOrUpdateGolden(t, "review_status_unknown_ops.json", stdout.Bytes())
+}
+
+func TestGolden_SyncStatus(t *testing.T) {
+	_, aliceDir, _ := setupSyncTestHarness(t)
+	ctx := context.Background()
+
+	// Alice creates a review so there is 1 unsynced op
+	sA, err := writ.Open(aliceDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open Alice failed: %v", err)
+	}
+	_, err = sA.Reviews.Create(ctx, writ.NewReview{
+		Title: "Unsynced Op Review",
+	})
+	if err != nil {
+		sA.Close()
+		t.Fatalf("Alice create review: %v", err)
+	}
+	sA.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := run(ctx, []string{"-C", aliceDir, "sync", "--status", "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("sync --status --json failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	compareOrUpdateGolden(t, "sync_status.json", stdout.Bytes())
+}
+
+func TestGolden_SyncResult(t *testing.T) {
+	_, aliceDir, _ := setupSyncTestHarness(t)
+	ctx := context.Background()
+
+	// Alice creates a review and then syncs
+	sA, err := writ.Open(aliceDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open Alice failed: %v", err)
+	}
+	_, err = sA.Reviews.Create(ctx, writ.NewReview{
+		Title: "Sync Result Review",
+	})
+	if err != nil {
+		sA.Close()
+		t.Fatalf("Alice create review: %v", err)
+	}
+	sA.Close()
+
+	var stdout, stderr bytes.Buffer
+	code := run(ctx, []string{"-C", aliceDir, "sync", "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("sync --json failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	compareOrUpdateGolden(t, "sync_result.json", stdout.Bytes())
+}
+
+func TestDeterminism_AllReadVerbs(t *testing.T) {
+	repoDir := loadFixtureRepo(t, "review-mixed-signals")
+	ctx := context.Background()
+
+	readCommands := [][]string{
+		{"review", "list", "-C", repoDir, "--json"},
+		{"review", "status", "-C", repoDir, "r-mixed", "--json"},
+	}
+
+	for _, cmd := range readCommands {
+		var out1, err1 bytes.Buffer
+		code1 := run(ctx, cmd, &out1, &err1)
+		if code1 != 0 {
+			t.Fatalf("run 1 for %v failed: %s", cmd, err1.String())
+		}
+
+		var out2, err2 bytes.Buffer
+		code2 := run(ctx, cmd, &out2, &err2)
+		if code2 != 0 {
+			t.Fatalf("run 2 for %v failed: %s", cmd, err2.String())
+		}
+
+		if !bytes.Equal(out1.Bytes(), out2.Bytes()) {
+			t.Fatalf("determinism violation for command %v:\nrun 1: %s\nrun 2: %s", cmd, out1.String(), out2.String())
+		}
+	}
+}
+
+func TestEveryReadVerbHasJSON(t *testing.T) {
+	readVerbs := []struct {
+		name string
+		args []string
+	}{
+		{name: "review list", args: []string{"review", "list", "-h"}},
+		{name: "review status", args: []string{"review", "status", "-h"}},
+		{name: "sync", args: []string{"sync", "-h"}},
+	}
+
+	for _, tc := range readVerbs {
+		t.Run(tc.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := run(context.Background(), tc.args, &stdout, &stderr)
+			if code != 0 {
+				t.Fatalf("help for %s exited with %d; stderr: %s", tc.name, code, stderr.String())
+			}
+
+			combined := stdout.String() + stderr.String()
+			if !strings.Contains(combined, "--json") && !strings.Contains(combined, "-json") {
+				t.Errorf("read verb %q help output does not advertise --json flag:\n%s", tc.name, combined)
+			}
+		})
+	}
+}

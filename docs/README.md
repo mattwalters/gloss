@@ -1,4 +1,5 @@
 # docs
 
-User- and contributor-facing documentation. Not yet written; see
-../VISION.md and ../ARCHITECTURE.md at the repo root in the meantime.
+User- and contributor-facing documentation. See [VISION.md](../VISION.md) and [ARCHITECTURE.md](../ARCHITECTURE.md) at the repo root.
+
+- [CLI JSON Plumbing Interface (`--json`)](cli-json.md)

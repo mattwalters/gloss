@@ -382,20 +382,25 @@ func TestSync_JSONOutput(t *testing.T) {
 	}
 
 	type statusEnvelope struct {
-		Remotes []struct {
+		SchemaVersion int `json:"schema_version"`
+		Kind          string `json:"kind"`
+		Data          []struct {
 			Remote   string `json:"remote"`
 			Unsynced int    `json:"unsynced"`
-		} `json:"remotes"`
+		} `json:"data"`
 	}
 	var envStatus statusEnvelope
 	if err := json.Unmarshal(stdoutStatus.Bytes(), &envStatus); err != nil {
 		t.Fatalf("unmarshal --status --json: %v (raw: %s)", err, stdoutStatus.String())
 	}
-	if len(envStatus.Remotes) != 1 {
-		t.Fatalf("expected 1 remote in status json, got %d", len(envStatus.Remotes))
+	if envStatus.SchemaVersion != 1 || envStatus.Kind != "sync.status" {
+		t.Errorf("unexpected envelope header: schema_version=%d, kind=%q", envStatus.SchemaVersion, envStatus.Kind)
 	}
-	if envStatus.Remotes[0].Remote != "origin" || envStatus.Remotes[0].Unsynced != 1 {
-		t.Errorf("status json remote = %+v, want {Remote: origin, Unsynced: 1}", envStatus.Remotes[0])
+	if len(envStatus.Data) != 1 {
+		t.Fatalf("expected 1 remote in status json, got %d", len(envStatus.Data))
+	}
+	if envStatus.Data[0].Remote != "origin" || envStatus.Data[0].Unsynced != 1 {
+		t.Errorf("status json remote = %+v, want {Remote: origin, Unsynced: 1}", envStatus.Data[0])
 	}
 
 	// 2. Sync with --json
@@ -406,22 +411,27 @@ func TestSync_JSONOutput(t *testing.T) {
 	}
 
 	type syncEnvelope struct {
-		Remotes []struct {
+		SchemaVersion int `json:"schema_version"`
+		Kind          string `json:"kind"`
+		Data          []struct {
 			Remote         string `json:"remote"`
 			OpsFetched     int    `json:"ops_fetched"`
 			OpsPushed      int    `json:"ops_pushed"`
 			ObjectsTouched int    `json:"objects_touched"`
 			Unsynced       int    `json:"unsynced"`
-		} `json:"remotes"`
+		} `json:"data"`
 	}
 	var envSync syncEnvelope
 	if err := json.Unmarshal(stdoutSync.Bytes(), &envSync); err != nil {
 		t.Fatalf("unmarshal sync --json: %v (raw: %s)", err, stdoutSync.String())
 	}
-	if len(envSync.Remotes) != 1 {
-		t.Fatalf("expected 1 remote in sync json, got %d", len(envSync.Remotes))
+	if envSync.SchemaVersion != 1 || envSync.Kind != "sync.result" {
+		t.Errorf("unexpected envelope header: schema_version=%d, kind=%q", envSync.SchemaVersion, envSync.Kind)
 	}
-	r := envSync.Remotes[0]
+	if len(envSync.Data) != 1 {
+		t.Fatalf("expected 1 remote in sync json, got %d", len(envSync.Data))
+	}
+	r := envSync.Data[0]
 	if r.Remote != "origin" || r.OpsPushed != 1 || r.Unsynced != 0 {
 		t.Errorf("sync json remote = %+v, want {Remote: origin, OpsPushed: 1, Unsynced: 0}", r)
 	}

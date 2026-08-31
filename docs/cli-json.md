@@ -1,0 +1,256 @@
+# CLI JSON Plumbing Interface (`--json`)
+
+The `--json` flag turns `writ` into a machine-readable plumbing tool for scripts, automation, and AI agents. Every read verb supports `--json` and emits a versioned, schema-stable JSON envelope on standard output.
+
+---
+
+## 1. The Common Envelope
+
+All plumbing commands emit a single top-level JSON document on `stdout` adhering to the standard envelope:
+
+```json
+{
+  "schema_version": 1,
+  "kind": "<verb.action>",
+  "data": ...
+}
+```
+
+### Top-Level Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `schema_version` | integer | Envelope schema version (currently `1`). Bumps only on breaking changes. |
+| `kind` | string | Discriminator for the payload schema (e.g. `review.list`, `review.status`, `sync.status`, `sync.result`). |
+| `data` | object or array | Verb-specific payload structure. |
+
+---
+
+## 2. Stability & Versioning Guarantees
+
+1. **Additive-Only Evolution:** Within `schema_version: 1`, fields may be added to payloads, but existing fields will never be removed, renamed, or retyped.
+2. **Forward Compatibility:** Consumers must ignore unknown fields without failing.
+3. **Decoupled Wire Model:** The CLI JSON wire schema is maintained in `cmd/writ/internal/wire` and is decoupled from internal engine and spec-fixture structures. Engine tag modifications do not alter plumbing outputs.
+4. **Clean Channel Separation:** Valid JSON is emitted strictly on `stdout`. Diagnostic messages, warnings, and error explanations are printed to `stderr` as plain text.
+5. **Machine-Readable Exit Codes:** Classification uses process exit codes:
+   - `0`: Success.
+   - `1`: Unclassified runtime failure or transport error.
+   - `2`: Usage error (invalid flag, missing required argument).
+   - `3`: Unknown or unconfigured git remote.
+   - `4`: Rejected non-fast-forward update.
+   - `5`: Not a git repository or store cannot be opened.
+6. **No Null Collections:** Empty collections serialize as `[]`, never `null`.
+7. **Deterministic Formatting & Ordering:** Timestamps are formatted as ISO 8601 / RFC 3339 UTC with a trailing `Z` (e.g. `2026-01-01T00:00:00Z`). All list responses have a deterministic total order, using object ID ascending as a tiebreaker.
+
+---
+
+## 3. Supported Verbs & Schema Reference
+
+### `writ review list --json`
+
+Lists code reviews matching optional filters.
+
+- **Envelope `kind`**: `"review.list"`
+- **`data` Type**: Array of `ReviewSummary` objects (`[]ReviewSummary`)
+
+#### `ReviewSummary` Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `object_id` | string | 32-character lowercase hex identifier for the review. |
+| `title` | string | Title of the code review. |
+| `status` | string | Lifecycle state (`draft`, `open`, `closed`, `merged`). |
+| `author` | object | Creator identity: `{ "name": string, "email": string }`. |
+| `created_at` | string | Creation timestamp in RFC 3339 UTC (`...Z`). |
+| `updated_at` | string | Last modification timestamp in RFC 3339 UTC (`...Z`). |
+
+#### Example Output
+
+```json
+{
+  "schema_version": 1,
+  "kind": "review.list",
+  "data": [
+    {
+      "object_id": "0123456789abcdef0123456789abcdef",
+      "title": "Add OAuth2 authentication provider",
+      "status": "open",
+      "author": {
+        "name": "Alice",
+        "email": "alice@example.com"
+      },
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:05:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### `writ review status <id> --json`
+
+Fetches detailed status and folded state for a single code review.
+
+- **Envelope `kind`**: `"review.status"`
+- **`data` Type**: `Review` object
+
+#### `Review` Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `object_id` | string | 32-character lowercase hex identifier for the review. |
+| `title` | string | Title of the code review. |
+| `description` | string (optional) | Extended review description or rationale. |
+| `status` | string | Lifecycle state (`draft`, `open`, `closed`, `merged`). |
+| `merge_commit` | string (optional) | Merge commit SHA if the review is merged. |
+| `reason` | string (optional) | Reason text supplied with status change. |
+| `author` | object | Creator identity: `{ "name": string, "email": string }`. |
+| `created_at` | string | Creation timestamp in RFC 3339 UTC. |
+| `updated_at` | string | Last modification timestamp in RFC 3339 UTC. |
+| `revisions` | array of objects | Pushed revisions: `[ { "base": string, "head": string } ]`. |
+| `approvals` | array of objects | Recorded review verdicts: `[ { "subject": string, "revision": string, "verdict": string, "message": string } ]`. |
+| `ci_statuses` | array of objects | Automated CI checks: `[ { "revision": string, "name": string, "state": string, "url": string, "description": string, "started_at": string, "completed_at": string, "external_id": string } ]`. |
+| `unknown_ops` | array of objects | Preserved forward-compatibility operations: `[ { "commit": string, "op_type": string, "op_version": integer } ]`. |
+
+#### Example Output
+
+```json
+{
+  "schema_version": 1,
+  "kind": "review.status",
+  "data": {
+    "object_id": "0123456789abcdef0123456789abcdef",
+    "title": "Add OAuth2 authentication provider",
+    "description": "Implements OAuth2 login flows",
+    "status": "open",
+    "author": {
+      "name": "Alice",
+      "email": "alice@example.com"
+    },
+    "created_at": "2026-01-01T00:00:00Z",
+    "updated_at": "2026-01-01T00:05:00Z",
+    "revisions": [
+      {
+        "base": "0123456789abcdef0123456789abcdef01234567",
+        "head": "1111111111111111111111111111111111111111"
+      }
+    ],
+    "approvals": [
+      {
+        "subject": "bob@example.com",
+        "revision": "1111111111111111111111111111111111111111",
+        "verdict": "approve",
+        "message": "Looks great!"
+      }
+    ],
+    "ci_statuses": [
+      {
+        "revision": "1111111111111111111111111111111111111111",
+        "name": "ci/test",
+        "state": "success",
+        "url": "https://ci.example.com/build/123",
+        "description": "All unit tests passed"
+      }
+    ],
+    "unknown_ops": []
+  }
+}
+```
+
+---
+
+### `writ sync --status --json [remote...]`
+
+Reports the count of unpushed local operations without performing network transport.
+
+- **Envelope `kind`**: `"sync.status"`
+- **`data` Type**: Array of `SyncStatus` objects (`[]SyncStatus`)
+
+#### `SyncStatus` Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `remote` | string | Name of the git remote (e.g. `origin`). |
+| `unsynced` | integer | Number of local operations not yet pushed to the remote. |
+
+#### Example Output
+
+```json
+{
+  "schema_version": 1,
+  "kind": "sync.status",
+  "data": [
+    {
+      "remote": "origin",
+      "unsynced": 2
+    }
+  ]
+}
+```
+
+---
+
+### `writ sync --json [remote...]`
+
+Synchronizes operations with remote git repositories (fetches, pushes, and refreshes the projection cache).
+
+- **Envelope `kind`**: `"sync.result"`
+- **`data` Type**: Array of `SyncResult` objects (`[]SyncResult`)
+
+#### `SyncResult` Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `remote` | string | Name of the git remote. |
+| `ops_fetched` | integer | Number of new operations fetched from the remote. |
+| `ops_pushed` | integer | Number of local operations pushed to the remote. |
+| `objects_touched` | integer | Number of collaborative objects updated in the projection cache. |
+| `unsynced` | integer | Remaining unsynced operations count for the remote. |
+
+#### Example Output
+
+```json
+{
+  "schema_version": 1,
+  "kind": "sync.result",
+  "data": [
+    {
+      "remote": "origin",
+      "ops_fetched": 1,
+      "ops_pushed": 2,
+      "objects_touched": 1,
+      "unsynced": 0
+    }
+  ]
+}
+```
+
+---
+
+## 4. Worked `jq` Examples
+
+### List open reviews
+```bash
+writ review list --json | jq -r '.data[] | select(.status == "open") | "\(.object_id) \(.title)"'
+```
+
+### Check if a review has approvals
+```bash
+writ review status <id> --json | jq -e '.data.approvals[] | select(.verdict == "approve")' > /dev/null
+```
+
+### Extract the latest revision head commit
+```bash
+writ review status <id> --json | jq -r '.data.revisions[-1].head'
+```
+
+### Check total unsynced operations before network sync
+```bash
+writ sync --status --json | jq '[.data[].unsynced] | add'
+```
+
+### Verify zero errors across all CI checks
+```bash
+writ review status <id> --json | jq 'all(.data.ci_statuses[]; .state == "success")'
+```
