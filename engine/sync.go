@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/writtendev/writ/engine/dag"
 	"github.com/writtendev/writ/engine/identity"
@@ -284,8 +283,3 @@ func (s *Store) countUnsynced(ctx context.Context, remote string) (int, error) {
 
 	return status.Unsynced, nil
 }
-
-func countCommitsBetween(repo *git.Repository, oldHash, newHash plumbing.Hash) int {
-	return writsync.CountCommitsBetween(repo, oldHash, newHash)
-}
-

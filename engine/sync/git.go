@@ -53,9 +53,11 @@ func ClassifyGitError(remote string, args []string, err error, stderr []byte, st
 		exitCode = exitErr.ExitCode()
 	}
 
-	kind := FailureKindUnknown
-	var sentinel error = err
-	var advice string
+	var (
+		kind     FailureKind
+		sentinel error
+		advice   string
+	)
 
 	switch {
 	case errors.Is(err, context.Canceled):
@@ -161,4 +163,3 @@ func ClassifyGitError(remote string, args []string, err error, stderr []byte, st
 func (c *Client) classifyGitError(remote string, args []string, err error, stderr []byte, stdout []byte) *GitError {
 	return ClassifyGitError(remote, args, err, stderr, stdout)
 }
-
