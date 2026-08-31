@@ -1,0 +1,24 @@
+{
+  "objects": [
+    {
+      "object_id": "r-approval",
+      "review": {
+        "title": "Approval Race Review",
+        "approvals": [
+          {
+            "subject": "bob",
+            "revision": "1111111111111111111111111111111111111111",
+            "verdict": "request-changes",
+            "message": "Bob requests changes on r1"
+          },
+          {
+            "subject": "bob",
+            "revision": "2222222222222222222222222222222222222222",
+            "verdict": "approve",
+            "message": "Bob approves r2"
+          }
+        ]
+      }
+    }
+  ]
+}
