@@ -25,6 +25,7 @@ disagree, the fixtures win and the prose gets fixed.
 | `identifiers.md` | Normative | Workspace-global IDs, repo designators, cross-repo references, workspace repo, and reference resolution |
 | `review-ops.md` | Normative | The review family operation vocabulary (v1): review creation, revisions, status transitions, approvals, and CI statuses |
 | `comments.md` | Normative | Comment op vocabulary (v1): object model, create/edit/delete ops, threading, anchor reference, GitHub shapes |
+| `issue-ops.md` | Normative | The issue family operation vocabulary (v1): issue creation, metadata updates, state transitions, assignments, labels, and cross-references |
 | `project-cycle.md` | Normative | Project and cycle operation vocabularies (v1): workspace-scoped grouping types, creation, status transitions, cycle dates, and issue membership |
 | `resolution.md` | Normative | Re-anchoring & orphan degradation (v1): the `resolve(anchor, tree)` ladder, tiebreaks, thresholds, and orphan semantics |
 | `schemas/op-envelope.schema.json` | Normative | JSON Schema (draft 2020-12) for the payload half of the envelope |
@@ -32,6 +33,7 @@ disagree, the fixtures win and the prose gets fixed.
 | `schemas/identifiers.schema.json` | Normative | JSON Schema (draft 2020-12) for identifiers, references, and the repo registry |
 | `schemas/review-ops.schema.json` | Normative | JSON Schema (draft 2020-12) for the review operations family |
 | `schemas/comment.schema.json` | Normative | JSON Schema (draft 2020-12) for comment op payloads |
+| `schemas/issue-ops.schema.json` | Normative | JSON Schema (draft 2020-12) for the issue operations family |
 | `schemas/project-ops.schema.json` | Normative | JSON Schema (draft 2020-12) for project operation payloads |
 | `schemas/cycle-ops.schema.json` | Normative | JSON Schema (draft 2020-12) for cycle operation payloads |
 | `schemas/resolution.schema.json` | Normative | JSON Schema (draft 2020-12) for the resolution outcome object |
@@ -48,6 +50,9 @@ disagree, the fixtures win and the prose gets fixed.
 | `testdata/review-ops/github/` | Informative | GitHub PR, review, status, and check-run conversion vectors |
 | `testdata/comments/valid/`, `testdata/comments/invalid/` | Normative | Comment op payload instances; `invalid/index.json` records each expected rejection |
 | `testdata/comments/github/` | Informative | GitHub comment conversion vectors (top-level, inline, reply) |
+| `testdata/issue-ops/valid/`, `testdata/issue-ops/invalid/` | Normative | Issue operation payload instances; `invalid/index.json` records each expected rejection |
+| `testdata/issue-ops/field-rules.json` | Normative | Field-by-field fold merge strategy declarations for the issue op vocabulary |
+| `testdata/issue-ops/github/` | Informative | GitHub issue conversion vectors (opened, labeled/assigned, closed-as-not-planned) |
 | `testdata/project/valid/`, `testdata/project/invalid/` | Normative | Project operation payload instances; `invalid/index.json` records each expected rejection |
 | `testdata/project/field-rules.json` | Normative | Field-by-field fold merge strategy declarations for the project op vocabulary |
 | `testdata/cycle/valid/`, `testdata/cycle/invalid/` | Normative | Cycle operation payload instances; `invalid/index.json` records each expected rejection |
@@ -78,6 +83,7 @@ spec/
 ├── identifiers.md          — normative: workspace-global IDs, references & workspace repo
 ├── review-ops.md           — normative: review family operation vocabulary (v1)
 ├── comments.md             — normative: comment op vocabulary (v1)
+├── issue-ops.md            — normative: issue family operation vocabulary (v1)
 ├── project-cycle.md        — normative: project & cycle grouping op vocabularies (v1)
 ├── resolution.md           — normative: re-anchoring & orphan degradation (v1)
 ├── spec.go                 — go:embed of schemas/ and testdata/ (package spec)
@@ -89,6 +95,7 @@ spec/
 │   ├── identifiers.schema.json — draft 2020-12 schema for identifiers & references
 │   ├── review-ops.schema.json  — draft 2020-12 schema for review operations
 │   ├── comment.schema.json — draft 2020-12 schema for comment op payloads
+│   ├── issue-ops.schema.json — draft 2020-12 schema for issue operations
 │   ├── project-ops.schema.json — draft 2020-12 schema for project operation payloads
 │   ├── cycle-ops.schema.json — draft 2020-12 schema for cycle operation payloads
 │   └── resolution.schema.json — draft 2020-12 schema for the resolution outcome object
@@ -116,6 +123,11 @@ spec/
 │   │   ├── valid/          — comment payloads that must validate
 │   │   ├── invalid/        — comment payloads that must be rejected (+ index.json of reasons)
 │   │   └── github/         — informative GitHub comment conversion vectors
+│   ├── issue-ops/
+│   │   ├── valid/          — issue op instances that must validate
+│   │   ├── invalid/        — issue op instances that must be rejected (+ index.json)
+│   │   ├── field-rules.json — fold merge strategies per field
+│   │   └── github/         — informative GitHub issue conversion vectors
 │   ├── project/
 │   │   ├── valid/          — project op instances that must validate
 │   │   ├── invalid/        — project op instances that must be rejected (+ index.json)
