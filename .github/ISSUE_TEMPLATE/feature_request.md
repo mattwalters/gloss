@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Propose a change to the spec, engine, CLI, TUI, or bridge
+about: Propose a change to the spec, engine, or CLI
 title: ""
 labels: enhancement
 ---

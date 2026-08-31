@@ -351,7 +351,7 @@ treated as unknown data, preserved in the DAG, and ignored during fold.
 
 ## Appendix A — GitHub PR Representability (Informative)
 
-To ensure full compatibility on the bridge read path (`/bridge/github`), every
+To ensure full compatibility on the GitHub bridge read path, every
 field in GitHub's pull request, review, and status/check-run payloads must be
 representable in Writ.
 

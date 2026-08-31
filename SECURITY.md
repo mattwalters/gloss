@@ -22,4 +22,4 @@ We'll acknowledge new reports within a few business days.
 ## Scope
 
 In scope: the spec, the engine (codec, dag, fold, projection, sync),
-the CLI, the TUI, and the GitHub bridge — anything in this monorepo.
+and the CLI — anything in this monorepo.

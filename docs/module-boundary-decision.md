@@ -17,27 +17,15 @@ and there is only one module.
 
 ## Why
 
-**A single module doesn't leak Bubble Tea or the GitHub client into an
-engine-only consumer's build.** That was never module-boundary-dependent —
-Go has always resolved a build from the actual per-package import graph, so
-a service importing only `.../writ/engine` and never reaching into `tui` or
-`bridge/github` doesn't compile or link those packages in, single module or
-not (verified: `go mod why` reports an unused sibling package's dependency
-as not needed, and it never gets a `go.sum` entry, even when the providing
-module is a real, checksummed dependency rather than a local `replace`).
-What Go 1.17+ module graph pruning adds on top is narrower but still
-relevant to "dependency-surface hygiene": it avoids needing to load the
-`go.mod` files of a module's *unused* transitive dependencies, which keeps
-`go.sum` for that consumer proportional to what it actually imports rather
-than to everything the monorepo's `go.mod` requires. One caveat: `go list -m
-all` still lists Bubble Tea and the GitHub client themselves as resolved
-versions in the module graph, since MVS operates module-by-module rather
-than package-by-package — that bookkeeping entry is harmless (nothing
-downloads, verifies, or links them) but it's why the claim above is scoped
-to `go.sum`, not the whole module graph. Splitting the module wouldn't
-improve on the `go.sum` property, which already holds for a single
-well-layered module — it would only trim that harmless `go list -m all`
-bookkeeping entry.
+**A single module keeps external consumers lean without multi-module overhead.**
+Go resolves builds from the actual per-package import graph, so a service or
+downstream tool importing `github.com/writtendev/writ/engine` only compiles and
+links packages in `engine` and its direct dependencies (verified: `go mod why`
+reports unused sibling packages as not needed, and they never get a `go.sum`
+entry). What Go 1.17+ module graph pruning adds on top is narrower but still
+relevant: it avoids loading `go.mod` files of unused transitive dependencies,
+keeping `go.sum` for an engine consumer proportional to what `engine` actually
+imports.
 
 **`internal/` enforces the API boundary regardless of module shape.** The
 house rule that "no SHAs or refspecs leak to callers unless they ask" is a
@@ -46,18 +34,14 @@ keeps codec/dag/fold plumbing unreachable from outside whether `engine` sits
 in its own `go.mod` or as a subtree of one. A second module buys no
 additional enforcement here.
 
-**A split module is a real, ongoing cost with no consumer yet to justify
-it.** Two `go.mod`/`go.sum` pairs to keep in sync, a `go.work` file to
-maintain, and — the part that actually matters once it happens — two
-separate version-tag lineages to reason about (is `v0.4.0` an engine change,
-a TUI change, or both?). That version-signal purity is the one real thing a
-split buys: a consumer pinning the engine shouldn't see a required-version
-bump because the TUI's Bubble Tea dependency changed. It's a legitimate
-concern, but it only bites once something outside this repo is pinning the
-engine independently — the hosted layer or a third party, both later per
-VISION.md's sequencing. Splitting now optimizes for a consumer that doesn't
-exist yet, against the one-monorepo rationale (a fold-rule change lands as
-one atomic PR across spec, fixtures, engine, and CLI) that does apply today.
+**A split module is a real, ongoing cost with no current need to justify it.**
+Two `go.mod`/`go.sum` pairs to keep in sync, a `go.work` file to maintain, and
+two separate version-tag lineages to reason about. With viewers (TUIs) and
+bridges (GitHub sync) decoupled into their own downstream repositories, the
+monorepo houses strictly the Go engine library and the Git-like CLI. Splitting
+the engine and CLI into separate in-repo modules today would introduce
+unnecessary overhead against the one-monorepo rationale (where fold-rule
+changes land as one atomic PR across spec, fixtures, engine, and CLI).
 
 **The move is cheap to make later and expensive to unmake now.** If a real
 external consumer shows up wanting independent engine versioning, extracting
@@ -82,12 +66,13 @@ WRIT-53 needs a concrete string to put in `go.mod`, and import-path
 renames are a mechanical `gofmt -r`-and-`go mod edit` exercise, not a
 design question.
 
-## What this means for WRIT-53
+## What this means for WRIT-53 and repository layout
 
-Root `go.mod` at module path `github.com/writtendev/writ`, covering
-`/engine`, `/cmd/writ`, `/tui`, `/bridge/github` per the layout ARCHITECTURE.md
-already specifies. No second `go.mod`, no `go.work`, until a real external
-consumer motivates the split described above.
+Root `go.mod` at module path `github.com/writtendev/writ`, covering `/engine`
+and `/cmd/writ` per the layout ARCHITECTURE.md specifies. Downstream viewers
+and bridges live in separate repositories and consume `.../writ/engine`. No
+second `go.mod`, no `go.work`, until a real external consumer motivates an
+independent engine module versioning split.
 
 ## Module path decision: keep `github.com/writtendev/writ` (WRIT-73)
 

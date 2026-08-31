@@ -30,7 +30,7 @@ This idea has a rich lineage, and each ancestor contributes a lesson we're grate
 
 The line: **everything that reads or writes the format is open; services that require running infrastructure may be offered as hosted products.** The guiding test: if something being closed would undermine a user's confidence that their data is portable and the format is neutral, it must be open.
 
-Open (Apache-2.0, this monorepo): the spec + conformance fixtures, the engine, the CLI, the TUI, and the GitHub bridge (the migration path in and out).
+Open (Apache-2.0, this monorepo): the spec + conformance fixtures, the engine, and the CLI. Downstream viewers (such as TUIs or web UIs) and bridges (such as GitHub sync) live in separate downstream repositories consuming the Go engine API and `--json` CLI plumbing.
 
 Potential hosted layer (separate, later): an **awareness service** — git has no push notifications, so a relay that watches remotes and fans out "refs changed" events over SSE/websocket can turn seconds-of-polling into sub-second multiplayer liveness; plus notifications, digests, chat integrations. And a **coordination service** — anything requiring a designated actor: merge queues, branch protection, approval policy, CI enforcement, org-wide search, identity mapping from signing keys to directory identities. Architecturally, any hosted service is _just another git client_ — an actor with a signing key that fetches, folds, and pushes ops like everyone else, consuming the public engine through its ordinary public API. No privileged database, no private forks of the format. Anyone else can build and host equivalent services on the same open floor; we intend to earn that business on quality, not lock-in.
 
@@ -62,4 +62,4 @@ Not a forge; not git hosting. No P2P networking (see Radicle for that mission, d
 
 ## Sequencing conviction
 
-Spec + fixtures → engine → CLI → GitHub bridge → TUI, with the ref-namespace spike before everything. Rationale: the moment `writ sync` can fold a real GitHub PR history into git objects in your own repo, the thesis is demonstrable with real data — and that demo is worth more than beautiful chrome on an empty log.
+Spec + fixtures → engine → CLI → downstream bridges & viewers, with the ref-namespace spike before everything. Rationale: the moment `writ` can fold and manipulate SDLC history inside git objects in your own repo, the thesis is demonstrable with real data — and that solid foundation is worth more than beautiful chrome on an empty log.

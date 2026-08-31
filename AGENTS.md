@@ -22,8 +22,8 @@ stubs alone. Same pattern as the rest of the studio.
 ## House rules
 
 - Boring, small, direct. Prefer the standard library; go-git for local
-  object I/O, system git for all transport, Bubble Tea for the TUI. New
-  dependencies need a reason.
+  object I/O, system git for all transport. New dependencies need a
+  reason.
 - Treat scope growth, speculative abstraction, and framework-building
   as bugs.
 - Match the style of surrounding code.
@@ -47,10 +47,8 @@ Planned monorepo layout (see `ARCHITECTURE.md` for the rationale):
 
 ```
 /spec          — convention doc, JSON schemas, conformance fixtures
-/engine        — codec, dag, fold, resolve, projection, sync
+/engine        — codec, dag, fold, resolve, projection, sync (public Go API)
 /cmd/writ      — CLI: porcelain for humans, --json for scripts/agents
-/tui           — Bubble Tea client
-/bridge/github — bidirectional PR/comment ⇄ ops sync
 /docs
 ```
 

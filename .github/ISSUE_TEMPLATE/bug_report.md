@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Something in the spec, engine, CLI, TUI, or bridge doesn't behave as documented
+about: Something in the spec, engine, or CLI doesn't behave as documented
 title: ""
 labels: bug
 ---

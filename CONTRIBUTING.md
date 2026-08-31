@@ -61,7 +61,7 @@ PR that makes that change includes:
    I/O — so the fixture is a direct, mechanical check on the reducer; keep
    it that way rather than smuggling in unrelated cleanup.
 
-If you're touching something else — a CLI flag, TUI layout, docs prose —
+If you're touching something else — a CLI flag, docs prose —
 the fixture-first rule doesn't apply, but the general one still does: keep
 the PR to what it says it does.
 
