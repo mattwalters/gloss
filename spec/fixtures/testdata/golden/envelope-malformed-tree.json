@@ -1,0 +1,69 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/alice/review",
+      "commit": "4e47c7d096a3b41415724eda3d69dd6851af8026"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/alice/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "a3fe7d6641fbd275e42316cd0eddb217b9dc142e",
+          "tree": "e671775504dc6334b60d0ee963f6e5306fb01db0",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create review/r1\n",
+          "signed": true
+        },
+        {
+          "sha": "8aeb3bb69a1c5a5ce8a0b454cbdc1af4be5b9e1c",
+          "tree": "f20bc19be816323d97fde7cf65100c89304a49b9",
+          "parents": [
+            "a3fe7d6641fbd275e42316cd0eddb217b9dc142e"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: create review/r1\n",
+          "signed": true
+        },
+        {
+          "sha": "0686f97e40fc893aeb63acfee80e46ab6052a740",
+          "tree": "343b1df2cc2dd7503a8bf0b43c5e237cc60224dc",
+          "parents": [
+            "8aeb3bb69a1c5a5ce8a0b454cbdc1af4be5b9e1c"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: create review/r1\n",
+          "signed": true
+        },
+        {
+          "sha": "68da5ceea0263d9d2ff710298db0abac67943985",
+          "tree": "a0db8b22c60633ba2ee9ecf1ee872724c3d3bc44",
+          "parents": [
+            "0686f97e40fc893aeb63acfee80e46ab6052a740"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:03:00Z",
+          "message": "writ: create review/r1\n",
+          "signed": true
+        },
+        {
+          "sha": "4e47c7d096a3b41415724eda3d69dd6851af8026",
+          "tree": "533309592982cbfed49e702383ee302f8e3a64c9",
+          "parents": [
+            "68da5ceea0263d9d2ff710298db0abac67943985"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:04:00Z",
+          "message": "writ: create review/r1\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

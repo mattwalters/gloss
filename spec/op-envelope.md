@@ -192,5 +192,8 @@ cannot live in fold, and this document does not define when it runs.
   `index.json` records each file's expected rejection (`schema` or
   `canonicalization`) and the reason.
 - Envelope fixtures as *generated git repositories* — full commits with
-  signatures, including tampered ones — are the WRIT-17 fixture family,
-  which needs the op vocabularies and the signing path first.
+  signatures, including tampered ones — are the WRIT-17 fixture family
+  (`spec/fixtures/testdata/descriptions/envelope-*.yaml` and
+  `spec/fixtures/testdata/golden/envelope/`), covering valid envelopes, bad
+  signatures, malformed payloads, and malformed trees. Per-op-type body
+  schemas and vocabularies defer to WRIT-8–11.

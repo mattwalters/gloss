@@ -1,0 +1,153 @@
+{
+  "ops": [
+    {
+      "ref": "refs/writ/alice/review",
+      "commit": "a3fe7d6641fbd275e42316cd0eddb217b9dc142e",
+      "parents": [],
+      "author": "Alice Example \u003calice@example.test\u003e",
+      "committer": "Alice Example \u003calice@example.test\u003e",
+      "timestamp": "2026-01-01T00:00:00Z",
+      "tree_entries": [
+        {
+          "name": "extra.txt",
+          "mode": "0100644",
+          "sha": "ca5736a68391fe8d757bf41491c0230d7bb7b297"
+        },
+        {
+          "name": "op.json",
+          "mode": "0100644",
+          "sha": "543e49a5d1c80c794c6d35b35c04e2b59f040557"
+        }
+      ],
+      "payload": "{\"body\":{},\"object_id\":\"r1\",\"object_type\":\"review\",\"op_type\":\"create\",\"op_version\":1}",
+      "canonical_payload": "{\"body\":{},\"object_id\":\"r1\",\"object_type\":\"review\",\"op_type\":\"create\",\"op_version\":1}",
+      "signed": true,
+      "signature_key_fingerprint": "SHA256:wDVIYagWNF4y7O9lMha3+MljfIDuV15tOKMYNG78oeA",
+      "verification_outcome": "valid",
+      "expected": {
+        "disposition": "reject",
+        "reason": "extra-tree-entry"
+      },
+      "observed": {
+        "disposition": "reject",
+        "reason": "extra-tree-entry"
+      }
+    },
+    {
+      "ref": "refs/writ/alice/review",
+      "commit": "8aeb3bb69a1c5a5ce8a0b454cbdc1af4be5b9e1c",
+      "parents": [
+        "a3fe7d6641fbd275e42316cd0eddb217b9dc142e"
+      ],
+      "author": "Alice Example \u003calice@example.test\u003e",
+      "committer": "Alice Example \u003calice@example.test\u003e",
+      "timestamp": "2026-01-01T00:01:00Z",
+      "tree_entries": [
+        {
+          "name": "subdir",
+          "mode": "0040000",
+          "sha": "533309592982cbfed49e702383ee302f8e3a64c9"
+        }
+      ],
+      "signed": true,
+      "signature_key_fingerprint": "SHA256:wDVIYagWNF4y7O9lMha3+MljfIDuV15tOKMYNG78oeA",
+      "verification_outcome": "valid",
+      "expected": {
+        "disposition": "reject",
+        "reason": "op-json-subdirectory"
+      },
+      "observed": {
+        "disposition": "reject",
+        "reason": "op-json-subdirectory"
+      }
+    },
+    {
+      "ref": "refs/writ/alice/review",
+      "commit": "0686f97e40fc893aeb63acfee80e46ab6052a740",
+      "parents": [
+        "8aeb3bb69a1c5a5ce8a0b454cbdc1af4be5b9e1c"
+      ],
+      "author": "Alice Example \u003calice@example.test\u003e",
+      "committer": "Alice Example \u003calice@example.test\u003e",
+      "timestamp": "2026-01-01T00:02:00Z",
+      "tree_entries": [
+        {
+          "name": "README.md",
+          "mode": "0100644",
+          "sha": "5be79edf670c1ed5ec2e0b18a4110c56c68f91e4"
+        }
+      ],
+      "signed": true,
+      "signature_key_fingerprint": "SHA256:wDVIYagWNF4y7O9lMha3+MljfIDuV15tOKMYNG78oeA",
+      "verification_outcome": "valid",
+      "expected": {
+        "disposition": "reject",
+        "reason": "missing-op-json"
+      },
+      "observed": {
+        "disposition": "reject",
+        "reason": "missing-op-json"
+      }
+    },
+    {
+      "ref": "refs/writ/alice/review",
+      "commit": "68da5ceea0263d9d2ff710298db0abac67943985",
+      "parents": [
+        "0686f97e40fc893aeb63acfee80e46ab6052a740"
+      ],
+      "author": "Alice Example \u003calice@example.test\u003e",
+      "committer": "Alice Example \u003calice@example.test\u003e",
+      "timestamp": "2026-01-01T00:03:00Z",
+      "tree_entries": [
+        {
+          "name": "op.json",
+          "mode": "0100755",
+          "sha": "543e49a5d1c80c794c6d35b35c04e2b59f040557"
+        }
+      ],
+      "payload": "{\"body\":{},\"object_id\":\"r1\",\"object_type\":\"review\",\"op_type\":\"create\",\"op_version\":1}",
+      "canonical_payload": "{\"body\":{},\"object_id\":\"r1\",\"object_type\":\"review\",\"op_type\":\"create\",\"op_version\":1}",
+      "signed": true,
+      "signature_key_fingerprint": "SHA256:wDVIYagWNF4y7O9lMha3+MljfIDuV15tOKMYNG78oeA",
+      "verification_outcome": "payload-mutated",
+      "expected": {
+        "disposition": "reject",
+        "reason": "invalid-op-json-mode"
+      },
+      "observed": {
+        "disposition": "reject",
+        "reason": "invalid-op-json-mode"
+      }
+    },
+    {
+      "ref": "refs/writ/alice/review",
+      "commit": "4e47c7d096a3b41415724eda3d69dd6851af8026",
+      "parents": [
+        "68da5ceea0263d9d2ff710298db0abac67943985"
+      ],
+      "author": "Alice Example \u003calice@example.test\u003e",
+      "committer": "Bob Example \u003cbob@example.test\u003e",
+      "timestamp": "2026-01-01T00:04:00Z",
+      "tree_entries": [
+        {
+          "name": "op.json",
+          "mode": "0100644",
+          "sha": "543e49a5d1c80c794c6d35b35c04e2b59f040557"
+        }
+      ],
+      "payload": "{\"body\":{},\"object_id\":\"r1\",\"object_type\":\"review\",\"op_type\":\"create\",\"op_version\":1}",
+      "canonical_payload": "{\"body\":{},\"object_id\":\"r1\",\"object_type\":\"review\",\"op_type\":\"create\",\"op_version\":1}",
+      "signed": true,
+      "signature_key_fingerprint": "SHA256:wDVIYagWNF4y7O9lMha3+MljfIDuV15tOKMYNG78oeA",
+      "verification_outcome": "valid",
+      "expected": {
+        "disposition": "reject",
+        "reason": "committer-mismatch"
+      },
+      "observed": {
+        "disposition": "reject",
+        "reason": "committer-mismatch"
+      }
+    }
+  ]
+}

@@ -11,19 +11,28 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/storer"
 )
 
-// treeNode is either file content (string) or a subdirectory
-// (map[string]*treeNode), built up from a flat map of slash-separated
-// paths before being written out as nested git tree objects.
+// treeNode is either file content (string) with an optional file mode or
+// a subdirectory (map[string]*treeNode), built up from a flat map of
+// slash-separated paths before being written out as nested git tree objects.
 type treeNode struct {
 	content  string
+	mode     filemode.FileMode
 	isDir    bool
 	children map[string]*treeNode
 }
 
-// buildTree writes files as a (possibly nested) git tree and returns its
-// hash. files maps a slash-separated path to full file content — each
-// commit specifies its complete tree, not a diff against the parent.
+// buildTree writes files as a (possibly nested) git tree with default regular
+// file mode (100644) and returns its hash. files maps a slash-separated path
+// to full file content — each commit specifies its complete tree, not a diff
+// against the parent.
 func buildTree(store storer.EncodedObjectStorer, files map[string]string) (plumbing.Hash, error) {
+	return buildTreeWithModes(store, files, nil)
+}
+
+// buildTreeWithModes writes files as a git tree using custom file modes for
+// paths specified in modes (defaulting to 100644 filemode.Regular if omitted
+// or zero).
+func buildTreeWithModes(store storer.EncodedObjectStorer, files map[string]string, modes map[string]filemode.FileMode) (plumbing.Hash, error) {
 	root := &treeNode{isDir: true, children: map[string]*treeNode{}}
 	paths := make([]string, 0, len(files))
 	for p := range files {
@@ -31,14 +40,21 @@ func buildTree(store storer.EncodedObjectStorer, files map[string]string) (plumb
 	}
 	sort.Strings(paths)
 	for _, p := range paths {
-		if err := insertPath(root, strings.Split(p, "/"), files[p]); err != nil {
+		var mode filemode.FileMode
+		if modes != nil {
+			mode = modes[p]
+		}
+		if mode == 0 {
+			mode = filemode.Regular
+		}
+		if err := insertPath(root, strings.Split(p, "/"), files[p], mode); err != nil {
 			return plumbing.ZeroHash, fmt.Errorf("fixtures: file path %q: %w", p, err)
 		}
 	}
 	return writeTreeNode(store, root)
 }
 
-func insertPath(node *treeNode, parts []string, content string) error {
+func insertPath(node *treeNode, parts []string, content string, mode filemode.FileMode) error {
 	name := parts[0]
 	if name == "" {
 		return fmt.Errorf("empty path segment")
@@ -55,7 +71,7 @@ func insertPath(node *treeNode, parts []string, content string) error {
 		if existing, ok := node.children[name]; ok && existing.isDir {
 			return fmt.Errorf("collides with directory %q", name)
 		}
-		node.children[name] = &treeNode{content: content}
+		node.children[name] = &treeNode{content: content, mode: mode}
 		return nil
 	}
 	child, ok := node.children[name]
@@ -65,7 +81,7 @@ func insertPath(node *treeNode, parts []string, content string) error {
 	} else if !child.isDir {
 		return fmt.Errorf("collides with file %q", name)
 	}
-	return insertPath(child, parts[1:], content)
+	return insertPath(child, parts[1:], content, mode)
 }
 
 // writeTreeNode recursively writes node's children as blobs/subtrees and
@@ -98,7 +114,11 @@ func writeTreeNode(store storer.EncodedObjectStorer, node *treeNode) (plumbing.H
 		if err != nil {
 			return plumbing.ZeroHash, err
 		}
-		tree.Entries = append(tree.Entries, object.TreeEntry{Name: name, Mode: filemode.Regular, Hash: blobHash})
+		mode := child.mode
+		if mode == 0 {
+			mode = filemode.Regular
+		}
+		tree.Entries = append(tree.Entries, object.TreeEntry{Name: name, Mode: mode, Hash: blobHash})
 	}
 
 	obj := store.NewEncodedObject()

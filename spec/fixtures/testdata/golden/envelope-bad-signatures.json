@@ -1,0 +1,58 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/alice/review",
+      "commit": "ea2337ebf81dfd463fcff45967aecbd8d76b08ce"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/alice/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "03d8a5475427965857083d7560d447c87e38fc87",
+          "tree": "db7b17e6360f99a193676042b881dd982ce63311",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create review/review-01\n",
+          "signed": true
+        },
+        {
+          "sha": "3719c01328cfc060198c89252845cd299ecb73f9",
+          "tree": "49adbbd9a34d0edfca3931c2dd53db578c1f28f7",
+          "parents": [
+            "03d8a5475427965857083d7560d447c87e38fc87"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: update review/review-01\n",
+          "signed": true
+        },
+        {
+          "sha": "54fc97b3f2149c868f32a071f68ecc47277ed7be",
+          "tree": "ad40a329c2e52d7804f9be2b7eac5661f33c6c62",
+          "parents": [
+            "3719c01328cfc060198c89252845cd299ecb73f9"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: update review/review-01\n",
+          "signed": true
+        },
+        {
+          "sha": "ea2337ebf81dfd463fcff45967aecbd8d76b08ce",
+          "tree": "5ab4b333e3dd963bc880aa2a04a234439a12df9c",
+          "parents": [
+            "54fc97b3f2149c868f32a071f68ecc47277ed7be"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:03:00Z",
+          "message": "writ: update review/review-01\n",
+          "signed": false
+        }
+      ]
+    }
+  ]
+}
