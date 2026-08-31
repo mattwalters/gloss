@@ -12,10 +12,13 @@ import (
 )
 
 var allowedImports = map[string]bool{
+	`"crypto/rand"`:                                true,
 	`"database/sql"`:                               true,
+	`"encoding/hex"`:                               true,
 	`"encoding/json"`:                              true,
 	`"errors"`:                                     true,
 	`"fmt"`:                                        true,
+	`"path/filepath"`:                              true,
 	`"sort"`:                                       true,
 	`"strconv"`:                                    true,
 	`"strings"`:                                    true,

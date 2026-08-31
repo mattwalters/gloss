@@ -3,6 +3,7 @@ package writ
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -31,6 +32,9 @@ type SyncStatus struct {
 
 	// Unsynced is the number of local op commits not yet pushed to the remote.
 	Unsynced int `json:"unsynced"`
+
+	// LastSyncedAt is the timestamp of the last successful sync against this remote, if any.
+	LastSyncedAt *time.Time `json:"last_synced_at,omitempty"`
 }
 
 // Sync ensures fetch refspecs in .git/config, fetches remote operations, pushes local operations,
@@ -77,6 +81,17 @@ func (s *Store) Sync(ctx context.Context, remote string) (SyncResult, error) {
 		return SyncResult{}, fmt.Errorf("writ: refresh after sync: %w", err)
 	}
 
+	// Record sync cursors in local DB
+	now := time.Now().UTC()
+	chains, err := dag.Chains(s.repo.Storer)
+	if err == nil {
+		for refName, chain := range chains {
+			if chain.Ref.Remote == remote || (chain.Ref.Remote == "" && s.hasIdentity && chain.Ref.WriterID == s.identity.WriterID) {
+				_ = s.projection.SetSyncCursor(remote, refName, chain.Tip.String(), now)
+			}
+		}
+	}
+
 	// 5. Compute remaining unsynced count
 	unsynced, err := s.countUnsynced(ctx, remote)
 	if err != nil {
@@ -105,9 +120,24 @@ func (s *Store) SyncStatus(ctx context.Context, remote string) (SyncStatus, erro
 		return SyncStatus{}, err
 	}
 
+	cursors, err := s.projection.SyncCursors(remote)
+	var lastSyncedAt *time.Time
+	if err == nil && len(cursors) > 0 {
+		var latest time.Time
+		for _, c := range cursors {
+			if c.LastSyncedAt.After(latest) {
+				latest = c.LastSyncedAt
+			}
+		}
+		if !latest.IsZero() {
+			lastSyncedAt = &latest
+		}
+	}
+
 	return SyncStatus{
-		Remote:   remote,
-		Unsynced: unsynced,
+		Remote:       remote,
+		Unsynced:     unsynced,
+		LastSyncedAt: lastSyncedAt,
 	}, nil
 }
 
