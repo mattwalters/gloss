@@ -142,6 +142,9 @@ func (c *Client) Check(ctx context.Context, remote string) (RefspecStatus, error
 // If the refspec already matches the canonical format, Ensure is a no-op.
 // Otherwise, it unsets any existing writ refspecs using a scoped pattern and adds
 // the canonical entry, preserving all unrelated refspecs (e.g. refs/heads/*).
+//
+// Ensure operates purely on git config and does not require a complete or signing-capable
+// identity on the Client (e.g. during 'writ init', before signing keys are configured).
 func (c *Client) Ensure(ctx context.Context, remote string) (RefspecStatus, error) {
 	status, err := c.Check(ctx, remote)
 	if err != nil {
