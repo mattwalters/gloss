@@ -1,45 +1,19 @@
 package fixtures_test
 
 import (
-	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/santhosh-tekuri/jsonschema/v6"
 
+	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/codec/canonicaljson"
-	"github.com/writtendev/writ/spec"
 	"github.com/writtendev/writ/spec/fixtures"
 )
-
-const envelopeSchemaPath = "schemas/op-envelope.schema.json"
-
-var envelopeSchemaOnce = sync.OnceValue(func() *jsonschema.Schema {
-	raw, err := spec.FS.ReadFile(envelopeSchemaPath)
-	if err != nil {
-		panic(fmt.Sprintf("read envelope schema: %v", err))
-	}
-	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
-	if err != nil {
-		panic(fmt.Sprintf("unmarshal envelope schema: %v", err))
-	}
-	c := jsonschema.NewCompiler()
-	if err := c.AddResource(envelopeSchemaPath, doc); err != nil {
-		panic(fmt.Sprintf("add schema resource: %v", err))
-	}
-	sch, err := c.Compile(envelopeSchemaPath)
-	if err != nil {
-		panic(fmt.Sprintf("compile envelope schema: %v", err))
-	}
-	return sch
-})
 
 // TestEnvelopeFamily registers the envelope fixture family and runs all
 // envelope-*.yaml descriptions through the golden test harness.
@@ -95,8 +69,6 @@ func runEnvelopeFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 	}
 	defer verifier.Close()
 
-	sch := envelopeSchemaOnce()
-
 	var golden EnvelopeGolden
 
 	// Map manifest generation commits to descriptions
@@ -121,7 +93,7 @@ func runEnvelopeFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 					return nil, fmt.Errorf("lookup commit %s: %w", cState.SHA, err)
 				}
 
-				opState, err := evaluateOpCommit(t, fix, ref.Name, commit, cd, verifier, sch)
+				opState, err := evaluateOpCommit(t, fix, ref.Name, commit, cd, verifier)
 				if err != nil {
 					return nil, err
 				}
@@ -137,48 +109,31 @@ func runEnvelopeFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 	return append(b, '\n'), nil
 }
 
-func evaluateOpCommit(t *testing.T, fix *fixtures.Fixture, refName string, commit *object.Commit, cd fixtures.CommitDesc, verifier *fixtures.Verifier, sch *jsonschema.Schema) (*OpGoldenState, error) {
-	tree, err := commit.Tree()
+func evaluateOpCommit(t *testing.T, fix *fixtures.Fixture, refName string, commit *object.Commit, cd fixtures.CommitDesc, verifier *fixtures.Verifier) (*OpGoldenState, error) {
+	pureCommit, err := codec.FromGitCommit(fix.Repo, commit)
 	if err != nil {
-		return nil, fmt.Errorf("commit tree: %w", err)
+		return nil, fmt.Errorf("from git commit: %w", err)
 	}
 
 	var treeEntries []TreeEntryState
 	var opBlobContent string
-	var opJsonFound bool
-	var opJsonInSubdir bool
-	var invalidMode bool
+	var canonicalPayload string
 
-	for _, entry := range tree.Entries {
+	for _, entry := range pureCommit.Tree {
 		treeEntries = append(treeEntries, TreeEntryState{
 			Name: entry.Name,
-			Mode: entry.Mode.String(),
-			SHA:  entry.Hash.String(),
+			Mode: entry.Mode,
+			SHA:  entry.Hash,
 		})
 		if entry.Name == "op.json" {
-			opJsonFound = true
-			if entry.Mode != filemode.Regular {
-				invalidMode = true
-			}
-			blob, err := tree.TreeEntryFile(&entry)
-			if err == nil {
-				r, err := blob.Reader()
-				if err == nil {
-					content, _ := io.ReadAll(r)
-					r.Close()
-					opBlobContent = string(content)
-				}
-			}
+			opBlobContent = string(entry.Data)
 		}
-		if entry.Mode == filemode.Dir {
-			subTree, err := fix.Repo.TreeObject(entry.Hash)
-			if err == nil {
-				for _, subEntry := range subTree.Entries {
-					if subEntry.Name == "op.json" {
-						opJsonInSubdir = true
-					}
-				}
-			}
+	}
+
+	if opBlobContent != "" {
+		canonBytes, canonErr := canonicaljson.Marshal([]byte(opBlobContent))
+		if canonErr == nil {
+			canonicalPayload = string(canonBytes)
 		}
 	}
 
@@ -196,56 +151,14 @@ func evaluateOpCommit(t *testing.T, fix *fixtures.Fixture, refName string, commi
 	// 2. Observed disposition evaluation
 	var observed DispositionState
 
-	// A. Tree validation
-	if !opJsonFound && opJsonInSubdir {
-		observed = DispositionState{Disposition: "reject", Reason: "op-json-subdirectory"}
-	} else if !opJsonFound {
-		observed = DispositionState{Disposition: "reject", Reason: "missing-op-json"}
-	} else if len(tree.Entries) > 1 {
-		observed = DispositionState{Disposition: "reject", Reason: "extra-tree-entry"}
-	} else if invalidMode {
-		observed = DispositionState{Disposition: "reject", Reason: "invalid-op-json-mode"}
-	}
-
-	// B. Committer validation
-	if observed.Disposition == "" {
-		if commit.Committer.Name != commit.Author.Name ||
-			commit.Committer.Email != commit.Author.Email ||
-			!commit.Committer.When.Equal(commit.Author.When) {
-			observed = DispositionState{Disposition: "reject", Reason: "committer-mismatch"}
-		}
-	}
-
-	// C. Payload validation
-	var canonicalPayload string
-	if observed.Disposition == "" {
-		canonBytes, canonErr := canonicaljson.Marshal([]byte(opBlobContent))
-		if canonErr != nil {
-			reason := "non-canonical-payload"
-			if strings.Contains(canonErr.Error(), "duplicate") {
-				reason = "duplicate-key"
-			} else if strings.Contains(canonErr.Error(), "lone surrogate") {
-				reason = "lone-surrogate"
-			}
-			observed = DispositionState{Disposition: "reject", Reason: reason}
+	// A-C. Decode and validate commit via codec
+	_, decErr := codec.DecodeCommit(pureCommit)
+	if decErr != nil {
+		var rej *codec.RejectError
+		if errors.As(decErr, &rej) {
+			observed = DispositionState{Disposition: "reject", Reason: string(rej.Reason)}
 		} else {
-			canonicalPayload = string(canonBytes)
-			if !bytes.Equal(canonBytes, []byte(opBlobContent)) {
-				observed = DispositionState{Disposition: "reject", Reason: "non-canonical-payload"}
-			} else {
-				// Validate against schema
-				inst, err := jsonschema.UnmarshalJSON(bytes.NewReader([]byte(opBlobContent)))
-				if err != nil {
-					observed = DispositionState{Disposition: "reject", Reason: "schema-violation"}
-				} else if err := sch.Validate(inst); err != nil {
-					observed = DispositionState{Disposition: "reject", Reason: "schema-violation"}
-				}
-			}
-		}
-	} else if opBlobContent != "" {
-		canonBytes, canonErr := canonicaljson.Marshal([]byte(opBlobContent))
-		if canonErr == nil {
-			canonicalPayload = string(canonBytes)
+			return nil, fmt.Errorf("unexpected decode error: %w", decErr)
 		}
 	}
 

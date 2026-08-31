@@ -192,9 +192,11 @@ cannot live in fold, and this document does not define when it runs.
 - `spec/schemas/op-envelope.schema.json` — the payload schema.
 - `spec/testdata/envelopes/valid/` — instances that validate and are
   byte-canonical.
-- `spec/testdata/envelopes/invalid/` — instances a reader must reject;
-  `index.json` records each file's expected rejection (`schema` or
-  `canonicalization`) and the reason.
+- `spec/testdata/envelopes/invalid/` — instances a reader must reject
+  (schema violations including non-object payloads and invalid identifiers,
+  plus canonicalization failures including trailing data, duplicate keys,
+  and lone surrogates); `index.json` records each file's expected rejection
+  (`schema` or `canonicalization`) and the reason.
 - Envelope fixtures as *generated git repositories* — full commits with
   signatures, including tampered ones — are the WRIT-17 fixture family
   (`spec/fixtures/testdata/descriptions/envelope-*.yaml` and
