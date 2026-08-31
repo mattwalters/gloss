@@ -478,6 +478,54 @@ func TestFoldReviewAgreement(t *testing.T) {
 			},
 			Author: codec.Identity{Email: "alice@example.com", When: now.Add(3 * time.Minute)},
 		},
+		{
+			ID:      "app1",
+			Parents: []string{"s1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-agree",
+				ObjectType: "review",
+				OpType:     "approval",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"approve","subject":"bob","message":"LGTM"}`),
+			},
+			Author: codec.Identity{Email: "bob@example.com", When: now.Add(4 * time.Minute)},
+		},
+		{
+			ID:      "app2",
+			Parents: []string{"s1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-agree",
+				ObjectType: "review",
+				OpType:     "approval",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"approve","subject":"alice"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(4 * time.Minute)},
+		},
+		{
+			ID:      "app2-retract",
+			Parents: []string{"app2"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-agree",
+				ObjectType: "review",
+				OpType:     "approval",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"none","subject":"alice"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(5 * time.Minute)},
+		},
+		{
+			ID:      "ci1",
+			Parents: []string{"s1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-agree",
+				ObjectType: "review",
+				OpType:     "ci-status",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","name":"ci/lint","state":"success"}`),
+			},
+			Author: codec.Identity{Email: "ci@example.com", When: now.Add(4 * time.Minute)},
+		},
 	}
 
 	reviewState, err := writ.FoldReview(ops)
@@ -511,5 +559,21 @@ func TestFoldReviewAgreement(t *testing.T) {
 		if rev.Base != baseList[i] {
 			t.Errorf("revision[%d].Base mismatch: got %q, want %v", i, rev.Base, baseList[i])
 		}
+	}
+
+	// Approvals: Bob active, Alice retracted
+	if len(reviewState.Approvals) != 1 {
+		t.Fatalf("expected 1 active approval in FoldReview, got %d", len(reviewState.Approvals))
+	}
+	if reviewState.Approvals[0].Subject != "bob" || reviewState.Approvals[0].Verdict != "approve" {
+		t.Errorf("unexpected active approval: %+v", reviewState.Approvals[0])
+	}
+
+	// CI Statuses: ci/lint success
+	if len(reviewState.CIStatuses) != 1 {
+		t.Fatalf("expected 1 active ci status in FoldReview, got %d", len(reviewState.CIStatuses))
+	}
+	if reviewState.CIStatuses[0].Name != "ci/lint" || reviewState.CIStatuses[0].State != "success" {
+		t.Errorf("unexpected active ci status: %+v", reviewState.CIStatuses[0])
 	}
 }

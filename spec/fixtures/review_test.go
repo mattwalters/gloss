@@ -132,6 +132,13 @@ func runReviewFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 			return nil, fmt.Errorf("writ.FoldReview for object %s in %s: %w", objID, fix.Name, err)
 		}
 
+		// Assert agreement between Fold(ops, ReviewRules()) and FoldReview(ops) across corpus (DoD #2)
+		objectState, err := writ.Fold(codecOps, writ.ReviewRules())
+		if err != nil {
+			return nil, fmt.Errorf("writ.Fold for object %s in %s: %w", objID, fix.Name, err)
+		}
+		assertReviewFoldAgreement(t, reviewState, objectState, fix.Name, objID)
+
 		expectedJSON, err := canonicaljson.Marshal(mustJSON(t, reviewState))
 		if err != nil {
 			return nil, fmt.Errorf("canonicalizing review state for %s: %w", objID, err)
@@ -176,4 +183,140 @@ func runReviewFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 		return nil, fmt.Errorf("marshal review golden: %w", err)
 	}
 	return append(b, '\n'), nil
+}
+
+func assertReviewFoldAgreement(t *testing.T, review writ.Review, state writ.ObjectState, fixtureName, objectID string) {
+	t.Helper()
+
+	// 1. Scalar fields
+	if title, ok := state.State["title"].(string); ok {
+		if review.Title != title {
+			t.Errorf("[%s/%s] agreement mismatch on title: FoldReview=%q, Fold=%q", fixtureName, objectID, review.Title, title)
+		}
+	} else if review.Title != "" {
+		t.Errorf("[%s/%s] title present in FoldReview (%q) but not in Fold", fixtureName, objectID, review.Title)
+	}
+
+	if status, ok := state.State["status"].(string); ok {
+		if review.Status != status {
+			t.Errorf("[%s/%s] agreement mismatch on status: FoldReview=%q, Fold=%q", fixtureName, objectID, review.Status, status)
+		}
+	} else if review.Status != "" {
+		t.Errorf("[%s/%s] status present in FoldReview (%q) but not in Fold", fixtureName, objectID, review.Status)
+	}
+
+	if mc, ok := state.State["merge_commit"].(string); ok {
+		if review.MergeCommit != mc {
+			t.Errorf("[%s/%s] agreement mismatch on merge_commit: FoldReview=%q, Fold=%q", fixtureName, objectID, review.MergeCommit, mc)
+		}
+	} else if review.MergeCommit != "" {
+		t.Errorf("[%s/%s] merge_commit present in FoldReview (%q) but not in Fold", fixtureName, objectID, review.MergeCommit)
+	}
+
+	if reason, ok := state.State["reason"].(string); ok {
+		if review.Reason != reason {
+			t.Errorf("[%s/%s] agreement mismatch on reason: FoldReview=%q, Fold=%q", fixtureName, objectID, review.Reason, reason)
+		}
+	} else if review.Reason != "" {
+		t.Errorf("[%s/%s] reason present in FoldReview (%q) but not in Fold", fixtureName, objectID, review.Reason)
+	}
+
+	// 2. Revisions pairing vs parallel append lists
+	var baseList, headList []string
+	if rawBases, ok := state.State["base"].([]any); ok {
+		for _, b := range rawBases {
+			baseList = append(baseList, fmt.Sprint(b))
+		}
+	}
+	if rawHeads, ok := state.State["head"].([]any); ok {
+		for _, h := range rawHeads {
+			headList = append(headList, fmt.Sprint(h))
+		}
+	}
+
+	if len(review.Revisions) != len(baseList) || len(review.Revisions) != len(headList) {
+		t.Errorf("[%s/%s] revisions count mismatch: FoldReview=%d, Fold base=%d, Fold head=%d",
+			fixtureName, objectID, len(review.Revisions), len(baseList), len(headList))
+	} else {
+		for i, rev := range review.Revisions {
+			if rev.Base != baseList[i] || rev.Head != headList[i] {
+				t.Errorf("[%s/%s] revision[%d] mismatch: FoldReview={%s, %s}, Fold={%s, %s}",
+					fixtureName, objectID, i, rev.Base, rev.Head, baseList[i], headList[i])
+			}
+		}
+	}
+
+	// 3. Approvals: compare active verdicts
+	if rawVerdicts, ok := state.State["verdict"].([]any); ok {
+		activeVerdicts := make(map[string]string)
+		for _, v := range rawVerdicts {
+			if m, ok := v.(map[string]any); ok {
+				var keyList []string
+				switch ks := m["key"].(type) {
+				case []string:
+					keyList = ks
+				case []any:
+					for _, k := range ks {
+						keyList = append(keyList, fmt.Sprint(k))
+					}
+				}
+				if len(keyList) >= 2 {
+					subj := keyList[0]
+					rev := keyList[1]
+					val := fmt.Sprint(m["value"])
+					if val != "none" && val != "" {
+						activeVerdicts[subj+":"+rev] = val
+					}
+				}
+			}
+		}
+
+		if len(review.Approvals) != len(activeVerdicts) {
+			t.Errorf("[%s/%s] approvals count mismatch: FoldReview=%d, Fold active=%d",
+				fixtureName, objectID, len(review.Approvals), len(activeVerdicts))
+		}
+		for _, app := range review.Approvals {
+			k := app.Subject + ":" + app.Revision
+			if expectedVerdict, exists := activeVerdicts[k]; !exists || expectedVerdict != app.Verdict {
+				t.Errorf("[%s/%s] approval %s mismatch: FoldReview verdict=%q, Fold=%q",
+					fixtureName, objectID, k, app.Verdict, expectedVerdict)
+			}
+		}
+	}
+
+	// 4. CIStatuses: compare active states
+	if rawStates, ok := state.State["state"].([]any); ok {
+		activeStates := make(map[string]string)
+		for _, s := range rawStates {
+			if m, ok := s.(map[string]any); ok {
+				var keyList []string
+				switch ks := m["key"].(type) {
+				case []string:
+					keyList = ks
+				case []any:
+					for _, k := range ks {
+						keyList = append(keyList, fmt.Sprint(k))
+					}
+				}
+				if len(keyList) >= 2 {
+					rev := keyList[0]
+					name := keyList[1]
+					val := fmt.Sprint(m["value"])
+					activeStates[rev+":"+name] = val
+				}
+			}
+		}
+
+		if len(review.CIStatuses) != len(activeStates) {
+			t.Errorf("[%s/%s] ci statuses count mismatch: FoldReview=%d, Fold active=%d",
+				fixtureName, objectID, len(review.CIStatuses), len(activeStates))
+		}
+		for _, ci := range review.CIStatuses {
+			k := ci.Revision + ":" + ci.Name
+			if expectedState, exists := activeStates[k]; !exists || expectedState != ci.State {
+				t.Errorf("[%s/%s] ci status %s mismatch: FoldReview state=%q, Fold=%q",
+					fixtureName, objectID, k, ci.State, expectedState)
+			}
+		}
+	}
 }
