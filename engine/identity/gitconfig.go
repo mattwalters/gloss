@@ -9,6 +9,12 @@ import (
 	"strings"
 )
 
+// ReadGitConfig executes git config --list --null in repoDir and parses the
+// output into a map of lowercase keys to values.
+func ReadGitConfig(ctx context.Context, repoDir string) (map[string]string, error) {
+	return readGitConfig(ctx, repoDir)
+}
+
 // readGitConfig executes git config --list --null in repoDir and parses the
 // output into a map of lowercase keys to values, with later entries overriding
 // earlier ones (matching git config precedence: local overrides global, etc.).

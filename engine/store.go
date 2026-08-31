@@ -2,6 +2,7 @@ package writ
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -38,6 +39,9 @@ type Store struct {
 	// Query provides read queries over reviews, issues, comments, threads, and objects.
 	Query *Query
 
+	// Workspace provides repository registry discovery, registration, and cross-repo resolution.
+	Workspace *Workspace
+
 	gitInfo     GitDirInfo
 	repo        *git.Repository
 	dagStore    *dag.Store
@@ -62,10 +66,35 @@ func (s *Store) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	var errs []error
 	if s.projection != nil {
-		return s.projection.Close()
+		if err := s.projection.Close(); err != nil {
+			errs = append(errs, err)
+		}
 	}
-	return nil
+	if s.Workspace != nil {
+		s.Workspace.mu.Lock()
+		if s.Workspace.wsStore != nil && s.Workspace.wsOpened {
+			if err := s.Workspace.wsStore.Close(); err != nil {
+				errs = append(errs, err)
+			}
+			s.Workspace.wsStore = nil
+		}
+		s.Workspace.mu.Unlock()
+	}
+	return errors.Join(errs...)
+}
+
+// Ref returns the fully-qualified reference string (<local-repo-id>#<object-id>) for a local
+// object ID when a local repo-id is known, or the bare objectID otherwise.
+func (s *Store) Ref(objectID string) string {
+	if s == nil || objectID == "" {
+		return objectID
+	}
+	if s.Workspace != nil && s.Workspace.localRepoID != "" {
+		return s.Workspace.localRepoID + "#" + objectID
+	}
+	return objectID
 }
 
 // Refresh brings the projection cache up to date with the latest DAG operations and target code tips.

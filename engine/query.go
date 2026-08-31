@@ -94,15 +94,30 @@ func (q *Query) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 	return q.store.projection.Reviews(f)
 }
 
-// Issues executes a list and filter query over issues.
-func (q *Query) Issues(f IssueFilter) ([]IssueResult, error) {
+func (q *Query) targetStoreForIssues(ctx context.Context) (*Store, error) {
 	if q == nil || q.store == nil {
 		return nil, fmt.Errorf("writ: store is nil")
 	}
-	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
+	if q.store.Workspace != nil && q.store.Workspace.IsConfigured() {
+		wsStore, err := q.store.Workspace.getStore(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return wsStore, nil
+	}
+	return q.store, nil
+}
+
+// Issues executes a list and filter query over issues.
+func (q *Query) Issues(f IssueFilter) ([]IssueResult, error) {
+	target, err := q.targetStoreForIssues(context.Background())
+	if err != nil {
 		return nil, err
 	}
-	return q.store.projection.Issues(f)
+	if err := target.maybeAutoRefresh(context.Background()); err != nil {
+		return nil, err
+	}
+	return target.projection.Issues(f)
 }
 
 // Comments executes a list and filter query over comments.
@@ -140,13 +155,14 @@ func (q *Query) Threads(subjectType, subjectID string) ([]CommentThread, error) 
 
 // GroupIssues partitions issues matching the filter by the specified grouping key.
 func (q *Query) GroupIssues(by GroupKey, f IssueFilter) ([]Group, error) {
-	if q == nil || q.store == nil {
-		return nil, fmt.Errorf("writ: store is nil")
-	}
-	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
+	target, err := q.targetStoreForIssues(context.Background())
+	if err != nil {
 		return nil, err
 	}
-	return q.store.projection.GroupIssues(by, f)
+	if err := target.maybeAutoRefresh(context.Background()); err != nil {
+		return nil, err
+	}
+	return target.projection.GroupIssues(by, f)
 }
 
 // Review fetches a single review by its object ID, returning ErrNotFound if not found.
@@ -162,11 +178,12 @@ func (q *Query) Review(id string) (ReviewResult, error) {
 
 // Issue fetches a single issue by its object ID, returning ErrNotFound if not found.
 func (q *Query) Issue(id string) (IssueResult, error) {
-	if q == nil || q.store == nil {
-		return IssueResult{}, fmt.Errorf("writ: store is nil")
-	}
-	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
+	target, err := q.targetStoreForIssues(context.Background())
+	if err != nil {
 		return IssueResult{}, err
 	}
-	return q.store.projection.Issue(id)
+	if err := target.maybeAutoRefresh(context.Background()); err != nil {
+		return IssueResult{}, err
+	}
+	return target.projection.Issue(id)
 }

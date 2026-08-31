@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"github.com/writtendev/writ/engine/codec"
+	"github.com/writtendev/writ/engine/identity"
+	"github.com/writtendev/writ/engine/state"
 )
 
 // Issues provides operations on issue collaborative objects.
@@ -31,12 +33,27 @@ type IssueState struct {
 	Reason string `json:"reason,omitempty"`
 }
 
+func (i *Issues) targetStore(ctx context.Context) (*Store, bool, error) {
+	if i == nil || i.store == nil {
+		return nil, false, fmt.Errorf("writ: store is nil")
+	}
+	if i.store.Workspace != nil && i.store.Workspace.IsConfigured() {
+		wsStore, err := i.store.Workspace.getStore(ctx)
+		if err != nil {
+			return nil, false, err
+		}
+		return wsStore, true, nil
+	}
+	return i.store, false, nil
+}
+
 // Create initializes a new issue collaborative object, minting an object ID.
 func (i *Issues) Create(ctx context.Context, n NewIssue) (string, error) {
-	if i == nil || i.store == nil {
-		return "", fmt.Errorf("writ: store is nil")
+	target, _, err := i.targetStore(ctx)
+	if err != nil {
+		return "", err
 	}
-	if err := i.store.ensureWritable(); err != nil {
+	if err := target.ensureWritable(); err != nil {
 		return "", err
 	}
 	if n.Title == "" {
@@ -65,20 +82,21 @@ func (i *Issues) Create(ctx context.Context, n NewIssue) (string, error) {
 		Body:       bodyBytes,
 	}
 
-	if _, err := i.store.dagStore.Append(ctx, env, nil); err != nil {
+	if _, err := target.dagStore.Append(ctx, env, nil); err != nil {
 		return "", fmt.Errorf("writ: create issue: %w", err)
 	}
 
-	_ = i.store.maybeAutoRefresh(ctx)
+	_ = target.maybeAutoRefresh(ctx)
 	return id, nil
 }
 
 // Update modifies title or description metadata for an existing issue.
 func (i *Issues) Update(ctx context.Context, id string, edit IssueEdit) error {
-	if i == nil || i.store == nil {
-		return fmt.Errorf("writ: store is nil")
+	target, _, err := i.targetStore(ctx)
+	if err != nil {
+		return err
 	}
-	if err := i.store.ensureWritable(); err != nil {
+	if err := target.ensureWritable(); err != nil {
 		return err
 	}
 	if id == "" {
@@ -88,15 +106,15 @@ func (i *Issues) Update(ctx context.Context, id string, edit IssueEdit) error {
 		return fmt.Errorf("writ: at least one of title or description must be provided")
 	}
 
-	if err := i.store.maybeAutoRefresh(ctx); err != nil {
+	if err := target.maybeAutoRefresh(ctx); err != nil {
 		return fmt.Errorf("writ: auto refresh: %w", err)
 	}
 
-	if _, err := i.store.projection.Issue(id); err != nil {
+	if _, err := target.projection.Issue(id); err != nil {
 		return err
 	}
 
-	frontier, err := i.store.projection.Frontier(id)
+	frontier, err := target.projection.Frontier(id)
 	if err != nil {
 		return fmt.Errorf("writ: get frontier: %w", err)
 	}
@@ -122,35 +140,36 @@ func (i *Issues) Update(ctx context.Context, id string, edit IssueEdit) error {
 		Body:       bodyBytes,
 	}
 
-	if _, err := i.store.dagStore.Append(ctx, env, frontier); err != nil {
+	if _, err := target.dagStore.Append(ctx, env, frontier); err != nil {
 		return fmt.Errorf("writ: update issue: %w", err)
 	}
 
-	_ = i.store.maybeAutoRefresh(ctx)
+	_ = target.maybeAutoRefresh(ctx)
 	return nil
 }
 
 // SetState transitions the issue state (e.g. "open", "closed") with an optional reason.
 func (i *Issues) SetState(ctx context.Context, id string, state IssueState) error {
-	if i == nil || i.store == nil {
-		return fmt.Errorf("writ: store is nil")
+	target, _, err := i.targetStore(ctx)
+	if err != nil {
+		return err
 	}
-	if err := i.store.ensureWritable(); err != nil {
+	if err := target.ensureWritable(); err != nil {
 		return err
 	}
 	if id == "" || state.State == "" {
 		return fmt.Errorf("writ: issue id and state must be non-empty")
 	}
 
-	if err := i.store.maybeAutoRefresh(ctx); err != nil {
+	if err := target.maybeAutoRefresh(ctx); err != nil {
 		return fmt.Errorf("writ: auto refresh: %w", err)
 	}
 
-	if _, err := i.store.projection.Issue(id); err != nil {
+	if _, err := target.projection.Issue(id); err != nil {
 		return err
 	}
 
-	frontier, err := i.store.projection.Frontier(id)
+	frontier, err := target.projection.Frontier(id)
 	if err != nil {
 		return fmt.Errorf("writ: get frontier: %w", err)
 	}
@@ -175,20 +194,21 @@ func (i *Issues) SetState(ctx context.Context, id string, state IssueState) erro
 		Body:       bodyBytes,
 	}
 
-	if _, err := i.store.dagStore.Append(ctx, env, frontier); err != nil {
+	if _, err := target.dagStore.Append(ctx, env, frontier); err != nil {
 		return fmt.Errorf("writ: set issue state: %w", err)
 	}
 
-	_ = i.store.maybeAutoRefresh(ctx)
+	_ = target.maybeAutoRefresh(ctx)
 	return nil
 }
 
 // Assign adds and/or removes assignees on an issue.
 func (i *Issues) Assign(ctx context.Context, id string, add, remove []string) error {
-	if i == nil || i.store == nil {
-		return fmt.Errorf("writ: store is nil")
+	target, _, err := i.targetStore(ctx)
+	if err != nil {
+		return err
 	}
-	if err := i.store.ensureWritable(); err != nil {
+	if err := target.ensureWritable(); err != nil {
 		return err
 	}
 	if id == "" {
@@ -198,15 +218,15 @@ func (i *Issues) Assign(ctx context.Context, id string, add, remove []string) er
 		return fmt.Errorf("writ: add or remove must be non-empty")
 	}
 
-	if err := i.store.maybeAutoRefresh(ctx); err != nil {
+	if err := target.maybeAutoRefresh(ctx); err != nil {
 		return fmt.Errorf("writ: auto refresh: %w", err)
 	}
 
-	if _, err := i.store.projection.Issue(id); err != nil {
+	if _, err := target.projection.Issue(id); err != nil {
 		return err
 	}
 
-	frontier, err := i.store.projection.Frontier(id)
+	frontier, err := target.projection.Frontier(id)
 	if err != nil {
 		return fmt.Errorf("writ: get frontier: %w", err)
 	}
@@ -232,20 +252,21 @@ func (i *Issues) Assign(ctx context.Context, id string, add, remove []string) er
 		Body:       bodyBytes,
 	}
 
-	if _, err := i.store.dagStore.Append(ctx, env, frontier); err != nil {
+	if _, err := target.dagStore.Append(ctx, env, frontier); err != nil {
 		return fmt.Errorf("writ: assign issue: %w", err)
 	}
 
-	_ = i.store.maybeAutoRefresh(ctx)
+	_ = target.maybeAutoRefresh(ctx)
 	return nil
 }
 
 // Label adds and/or removes labels on an issue.
 func (i *Issues) Label(ctx context.Context, id string, add, remove []string) error {
-	if i == nil || i.store == nil {
-		return fmt.Errorf("writ: store is nil")
+	target, _, err := i.targetStore(ctx)
+	if err != nil {
+		return err
 	}
-	if err := i.store.ensureWritable(); err != nil {
+	if err := target.ensureWritable(); err != nil {
 		return err
 	}
 	if id == "" {
@@ -255,15 +276,15 @@ func (i *Issues) Label(ctx context.Context, id string, add, remove []string) err
 		return fmt.Errorf("writ: add or remove must be non-empty")
 	}
 
-	if err := i.store.maybeAutoRefresh(ctx); err != nil {
+	if err := target.maybeAutoRefresh(ctx); err != nil {
 		return fmt.Errorf("writ: auto refresh: %w", err)
 	}
 
-	if _, err := i.store.projection.Issue(id); err != nil {
+	if _, err := target.projection.Issue(id); err != nil {
 		return err
 	}
 
-	frontier, err := i.store.projection.Frontier(id)
+	frontier, err := target.projection.Frontier(id)
 	if err != nil {
 		return fmt.Errorf("writ: get frontier: %w", err)
 	}
@@ -289,35 +310,60 @@ func (i *Issues) Label(ctx context.Context, id string, add, remove []string) err
 		Body:       bodyBytes,
 	}
 
-	if _, err := i.store.dagStore.Append(ctx, env, frontier); err != nil {
+	if _, err := target.dagStore.Append(ctx, env, frontier); err != nil {
 		return fmt.Errorf("writ: label issue: %w", err)
 	}
 
-	_ = i.store.maybeAutoRefresh(ctx)
+	_ = target.maybeAutoRefresh(ctx)
 	return nil
 }
 
 // Link creates or modifies a cross-reference link on an issue.
 func (i *Issues) Link(ctx context.Context, id string, l Link) error {
-	if i == nil || i.store == nil {
-		return fmt.Errorf("writ: store is nil")
+	target, isWorkspace, err := i.targetStore(ctx)
+	if err != nil {
+		return err
 	}
-	if err := i.store.ensureWritable(); err != nil {
+	if err := target.ensureWritable(); err != nil {
 		return err
 	}
 	if id == "" || l.Target == "" || l.Relation == "" {
 		return fmt.Errorf("writ: issue id, target, and relation must be non-empty")
 	}
 
-	if err := i.store.maybeAutoRefresh(ctx); err != nil {
+	des, objID, err := state.ParseReference(l.Target)
+	if err != nil {
+		return fmt.Errorf("writ: invalid link target: %w", err)
+	}
+
+	// When targeting a workspace-scoped issue from a code repo context,
+	// auto-qualify a bare target with the originating repo's repo-id
+	if isWorkspace && des == "" {
+		localRepoID := i.store.Workspace.localRepoID
+		if localRepoID == "" {
+			repoDir := i.store.gitInfo.WorkTree
+			if repoDir == "" {
+				repoDir = i.store.gitInfo.GitDir
+			}
+			minted, _, err := identity.EnsureRepoID(ctx, repoDir)
+			if err != nil {
+				return fmt.Errorf("writ: ensure local repo id for link: %w", err)
+			}
+			localRepoID = string(minted)
+			i.store.Workspace.localRepoID = localRepoID
+		}
+		l.Target = localRepoID + "#" + objID
+	}
+
+	if err := target.maybeAutoRefresh(ctx); err != nil {
 		return fmt.Errorf("writ: auto refresh: %w", err)
 	}
 
-	if _, err := i.store.projection.Issue(id); err != nil {
+	if _, err := target.projection.Issue(id); err != nil {
 		return err
 	}
 
-	frontier, err := i.store.projection.Frontier(id)
+	frontier, err := target.projection.Frontier(id)
 	if err != nil {
 		return fmt.Errorf("writ: get frontier: %w", err)
 	}
@@ -343,20 +389,21 @@ func (i *Issues) Link(ctx context.Context, id string, l Link) error {
 		Body:       bodyBytes,
 	}
 
-	if _, err := i.store.dagStore.Append(ctx, env, frontier); err != nil {
+	if _, err := target.dagStore.Append(ctx, env, frontier); err != nil {
 		return fmt.Errorf("writ: link issue: %w", err)
 	}
 
-	_ = i.store.maybeAutoRefresh(ctx)
+	_ = target.maybeAutoRefresh(ctx)
 	return nil
 }
 
 // Comment appends a new comment collaborative object attached to the issue.
 func (i *Issues) Comment(ctx context.Context, id string, c NewComment) (string, error) {
-	if i == nil || i.store == nil {
-		return "", fmt.Errorf("writ: store is nil")
+	target, _, err := i.targetStore(ctx)
+	if err != nil {
+		return "", err
 	}
-	if err := i.store.ensureWritable(); err != nil {
+	if err := target.ensureWritable(); err != nil {
 		return "", err
 	}
 	if id == "" {
@@ -366,15 +413,15 @@ func (i *Issues) Comment(ctx context.Context, id string, c NewComment) (string, 
 		return "", fmt.Errorf("writ: comment text cannot be empty")
 	}
 
-	if err := i.store.maybeAutoRefresh(ctx); err != nil {
+	if err := target.maybeAutoRefresh(ctx); err != nil {
 		return "", fmt.Errorf("writ: auto refresh: %w", err)
 	}
 
-	if _, err := i.store.projection.Issue(id); err != nil {
+	if _, err := target.projection.Issue(id); err != nil {
 		return "", err
 	}
 
-	issueFrontier, err := i.store.projection.Frontier(id)
+	issueFrontier, err := target.projection.Frontier(id)
 	if err != nil {
 		return "", fmt.Errorf("writ: get issue frontier: %w", err)
 	}
@@ -383,7 +430,7 @@ func (i *Issues) Comment(ctx context.Context, id string, c NewComment) (string, 
 	copy(causalParents, issueFrontier)
 
 	if c.InReplyTo != "" {
-		replyFrontier, err := i.store.projection.Frontier(c.InReplyTo)
+		replyFrontier, err := target.projection.Frontier(c.InReplyTo)
 		if err != nil {
 			return "", fmt.Errorf("writ: get reply frontier: %w", err)
 		}
@@ -423,10 +470,10 @@ func (i *Issues) Comment(ctx context.Context, id string, c NewComment) (string, 
 		Body:       bodyBytes,
 	}
 
-	if _, err := i.store.dagStore.Append(ctx, env, causalParents); err != nil {
+	if _, err := target.dagStore.Append(ctx, env, causalParents); err != nil {
 		return "", fmt.Errorf("writ: comment on issue: %w", err)
 	}
 
-	_ = i.store.maybeAutoRefresh(ctx)
+	_ = target.maybeAutoRefresh(ctx)
 	return commentID, nil
 }
