@@ -1,0 +1,44 @@
+{
+  "name": "append-thread",
+  "description": "Threaded messages or log entries appended strictly in total order",
+  "object_id": "obj-1",
+  "fields": {
+    "comments": { "strategy": "append" }
+  },
+  "ops": [
+    {
+      "id": "op-root",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "comments": ["First comment"]
+      }
+    },
+    {
+      "id": "op-w2",
+      "parents": ["op-root"],
+      "time": 300,
+      "object_id": "obj-1",
+      "body": {
+        "comments": ["Third comment"]
+      }
+    },
+    {
+      "id": "op-w1",
+      "parents": ["op-root"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "comments": ["Second comment"]
+      }
+    }
+  ],
+  "expected_state": {
+    "comments": [
+      "First comment",
+      "Second comment",
+      "Third comment"
+    ]
+  }
+}

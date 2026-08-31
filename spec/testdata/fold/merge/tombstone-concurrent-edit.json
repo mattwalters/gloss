@@ -1,0 +1,43 @@
+{
+  "name": "tombstone-concurrent-edit",
+  "description": "Delete wins over concurrent edit while edits still fold into state",
+  "object_id": "obj-1",
+  "fields": {
+    "title": { "strategy": "lww" },
+    "deleted": { "strategy": "tombstone" }
+  },
+  "ops": [
+    {
+      "id": "op-root",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "title": "Initial Title",
+        "deleted": false
+      }
+    },
+    {
+      "id": "op-edit",
+      "parents": ["op-root"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "title": "Edited Title"
+      }
+    },
+    {
+      "id": "op-del",
+      "parents": ["op-root"],
+      "time": 250,
+      "object_id": "obj-1",
+      "body": {
+        "deleted": true
+      }
+    }
+  ],
+  "expected_state": {
+    "title": "Edited Title",
+    "deleted": true
+  }
+}

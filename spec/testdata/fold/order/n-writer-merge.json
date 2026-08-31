@@ -1,0 +1,44 @@
+{
+  "name": "n-writer-merge",
+  "description": "Three concurrent branches merge into a single sync commit",
+  "object_id": "obj-1",
+  "ops": [
+    {
+      "id": "op-root",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-w1",
+      "parents": ["op-root"],
+      "time": 200,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-w2",
+      "parents": ["op-root"],
+      "time": 200,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-w3",
+      "parents": ["op-root"],
+      "time": 150,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-merge",
+      "parents": ["op-w1", "op-w2", "op-w3"],
+      "time": 300,
+      "object_id": "obj-1"
+    }
+  ],
+  "expected_order": [
+    "op-root",
+    "op-w3",
+    "op-w1",
+    "op-w2",
+    "op-merge"
+  ]
+}

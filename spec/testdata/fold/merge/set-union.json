@@ -1,0 +1,40 @@
+{
+  "name": "set-union",
+  "description": "Grow-only set union combining elements from concurrent ops",
+  "object_id": "obj-1",
+  "fields": {
+    "tags": { "strategy": "set-union" }
+  },
+  "ops": [
+    {
+      "id": "op-root",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "tags": ["alpha", "beta"]
+      }
+    },
+    {
+      "id": "op-a",
+      "parents": ["op-root"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "tags": ["gamma"]
+      }
+    },
+    {
+      "id": "op-b",
+      "parents": ["op-root"],
+      "time": 250,
+      "object_id": "obj-1",
+      "body": {
+        "tags": ["beta", "delta"]
+      }
+    }
+  ],
+  "expected_state": {
+    "tags": ["alpha", "beta", "delta", "gamma"]
+  }
+}

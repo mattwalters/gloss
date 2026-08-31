@@ -1,0 +1,16 @@
+{
+  "name": "truncated-ancestry",
+  "description": "Parent commit is absent from the input set; ancestry is truncated without error",
+  "object_id": "obj-1",
+  "ops": [
+    {
+      "id": "op-01",
+      "parents": ["op-missing-parent"],
+      "time": 200,
+      "object_id": "obj-1"
+    }
+  ],
+  "expected_order": [
+    "op-01"
+  ]
+}

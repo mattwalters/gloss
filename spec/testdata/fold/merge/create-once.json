@@ -1,0 +1,35 @@
+{
+  "name": "create-once",
+  "description": "Immutable field set by first op in total order, subsequent writes ignored",
+  "object_id": "obj-1",
+  "fields": {
+    "created_by": { "strategy": "create-once" },
+    "title": { "strategy": "lww" }
+  },
+  "ops": [
+    {
+      "id": "op-01",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "created_by": "alice",
+        "title": "V1"
+      }
+    },
+    {
+      "id": "op-02",
+      "parents": ["op-01"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "created_by": "bob",
+        "title": "V2"
+      }
+    }
+  ],
+  "expected_state": {
+    "created_by": "alice",
+    "title": "V2"
+  }
+}

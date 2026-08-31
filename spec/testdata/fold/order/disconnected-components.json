@@ -1,0 +1,37 @@
+{
+  "name": "disconnected-components",
+  "description": "Two disjoint causal trees for the same object interleaved by effective timestamp",
+  "object_id": "obj-1",
+  "ops": [
+    {
+      "id": "op-x1",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-x2",
+      "parents": ["op-x1"],
+      "time": 300,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-y1",
+      "parents": [],
+      "time": 200,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-y2",
+      "parents": ["op-y1"],
+      "time": 250,
+      "object_id": "obj-1"
+    }
+  ],
+  "expected_order": [
+    "op-x1",
+    "op-y1",
+    "op-y2",
+    "op-x2"
+  ]
+}

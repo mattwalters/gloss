@@ -1,0 +1,40 @@
+{
+  "name": "lww-concurrent-fork",
+  "description": "Concurrent edits to a field where later timestamp wins",
+  "object_id": "obj-1",
+  "fields": {
+    "title": { "strategy": "lww" }
+  },
+  "ops": [
+    {
+      "id": "op-root",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "title": "Initial Title"
+      }
+    },
+    {
+      "id": "op-a",
+      "parents": ["op-root"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "title": "Title A"
+      }
+    },
+    {
+      "id": "op-b",
+      "parents": ["op-root"],
+      "time": 300,
+      "object_id": "obj-1",
+      "body": {
+        "title": "Title B"
+      }
+    }
+  ],
+  "expected_state": {
+    "title": "Title B"
+  }
+}

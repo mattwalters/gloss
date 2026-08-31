@@ -1,0 +1,40 @@
+{
+  "name": "set-observed-remove-concurrent",
+  "description": "Concurrent add and remove of the same element resolves in favor of add (add-wins)",
+  "object_id": "obj-1",
+  "fields": {
+    "labels": { "strategy": "set-observed-remove" }
+  },
+  "ops": [
+    {
+      "id": "op-root",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "labels": { "add": ["feature"] }
+      }
+    },
+    {
+      "id": "op-a",
+      "parents": ["op-root"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "labels": { "remove": ["feature"] }
+      }
+    },
+    {
+      "id": "op-b",
+      "parents": ["op-root"],
+      "time": 250,
+      "object_id": "obj-1",
+      "body": {
+        "labels": { "add": ["feature"] }
+      }
+    }
+  ],
+  "expected_state": {
+    "labels": ["feature"]
+  }
+}

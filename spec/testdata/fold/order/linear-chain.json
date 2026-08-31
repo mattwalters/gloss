@@ -1,0 +1,30 @@
+{
+  "name": "linear-chain",
+  "description": "Sequential chain of operations from a single writer",
+  "object_id": "obj-1",
+  "ops": [
+    {
+      "id": "op-01",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-02",
+      "parents": ["op-01"],
+      "time": 200,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-03",
+      "parents": ["op-02"],
+      "time": 300,
+      "object_id": "obj-1"
+    }
+  ],
+  "expected_order": [
+    "op-01",
+    "op-02",
+    "op-03"
+  ]
+}

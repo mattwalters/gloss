@@ -1,0 +1,29 @@
+{
+  "name": "interleaved-objects",
+  "description": "Ops for multiple objects on one chain; fold restricts DAG to target object",
+  "object_id": "obj-1",
+  "ops": [
+    {
+      "id": "op-01",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1"
+    },
+    {
+      "id": "op-other",
+      "parents": ["op-01"],
+      "time": 150,
+      "object_id": "obj-2"
+    },
+    {
+      "id": "op-02",
+      "parents": ["op-other"],
+      "time": 200,
+      "object_id": "obj-1"
+    }
+  ],
+  "expected_order": [
+    "op-01",
+    "op-02"
+  ]
+}

@@ -172,7 +172,7 @@ cannot live in fold, and this document does not define when it runs.
 
 - Ref layout and the writer-id form a reader enumerates: **WRIT-7**.
 - Per-op-type body schemas and vocabularies: **WRIT-8–11**.
-- Fold semantics, ordering, and concurrency tiebreaks: **WRIT-12**.
+- Fold semantics, ordering, and concurrency tiebreaks: [`spec/fold.md`](fold.md).
 - Unknown-op handling inside fold: **WRIT-15**.
 - Workspace-global object-id format: **WRIT-16**.
 - Signature verification mechanics and caching: **WRIT-22**.

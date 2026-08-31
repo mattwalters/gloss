@@ -1,0 +1,43 @@
+{
+  "name": "tombstone-causal-undelete",
+  "description": "Undelete causally follows delete, restoring entity to active state",
+  "object_id": "obj-1",
+  "fields": {
+    "title": { "strategy": "lww" },
+    "deleted": { "strategy": "tombstone" }
+  },
+  "ops": [
+    {
+      "id": "op-01",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "title": "Item 1",
+        "deleted": false
+      }
+    },
+    {
+      "id": "op-02",
+      "parents": ["op-01"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "deleted": true
+      }
+    },
+    {
+      "id": "op-03",
+      "parents": ["op-02"],
+      "time": 300,
+      "object_id": "obj-1",
+      "body": {
+        "deleted": false
+      }
+    }
+  ],
+  "expected_state": {
+    "title": "Item 1",
+    "deleted": false
+  }
+}
