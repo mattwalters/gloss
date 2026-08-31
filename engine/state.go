@@ -33,8 +33,8 @@ type ObjectState struct {
 	UnknownOps []UnknownOp    `json:"unknown_ops,omitempty"`
 }
 
-// Review represents the materialized state of a code review collaborative object (v1).
-// Reducer implementation is in WRIT-26.
+// Review represents the materialized state of a code review collaborative object (v1),
+// produced by FoldReview.
 type Review struct {
 	Title       string     `json:"title,omitempty"`
 	Description string     `json:"description,omitempty"`

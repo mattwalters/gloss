@@ -1,0 +1,134 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/0123456789abcdef/review",
+      "commit": "39e5b3fd2293e2ac8d627c939b98ba31a1d8d74b"
+    },
+    {
+      "name": "refs/writ/fedcba9876543210/review",
+      "commit": "907c04881de30d68f94493d377bf63c48eb6bead"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/0123456789abcdef/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "0b26350a2ff58a9a16459205faac548e1be80fd7",
+          "tree": "a68530912a407bbdfe959f97c67eca0364dea2de",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create review/r-mixed\n",
+          "signed": true
+        },
+        {
+          "sha": "740e34e30f8407b18f96cf5c7152cd7545364197",
+          "tree": "b8638c5cf6282cfd151c38590a3294b604de9fb7",
+          "parents": [
+            "0b26350a2ff58a9a16459205faac548e1be80fd7"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: revision review/r-mixed\n",
+          "signed": true
+        },
+        {
+          "sha": "ad5936bdb38184d85e0abb0dda20c42c6a833afa",
+          "tree": "1f9e8f7a27dd446ad649a0ea9729c88b2d2c0b79",
+          "parents": [
+            "740e34e30f8407b18f96cf5c7152cd7545364197"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: revision review/r-mixed\n",
+          "signed": true
+        },
+        {
+          "sha": "13f35e829508ea02dcee22428c78adaa0ed978e7",
+          "tree": "29079b96f3ac0e743618eb35aaec72638c77ef08",
+          "parents": [
+            "ad5936bdb38184d85e0abb0dda20c42c6a833afa"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:03:00Z",
+          "message": "writ: approval review/r-mixed\n",
+          "signed": true
+        },
+        {
+          "sha": "eb4317215d170dca47af10f9ba6018bcc433a8a4",
+          "tree": "8b9dfb5ab1789bd371186a7d5ffa23c5c439835b",
+          "parents": [
+            "13f35e829508ea02dcee22428c78adaa0ed978e7"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:04:00Z",
+          "message": "writ: set-status review/r-mixed\n",
+          "signed": true
+        },
+        {
+          "sha": "39e5b3fd2293e2ac8d627c939b98ba31a1d8d74b",
+          "tree": "96069a36d913e5f4280f755bc7b886a41e0165d9",
+          "parents": [
+            "eb4317215d170dca47af10f9ba6018bcc433a8a4"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:05:00Z",
+          "message": "writ: ci-status review/r-mixed\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/fedcba9876543210/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "00ef6e7d762661b9e6a6a9b3f3540bad49ffdba7",
+          "tree": "99eba47bcf07df4f9bf5c979471626586fa82e81",
+          "parents": [
+            "0b26350a2ff58a9a16459205faac548e1be80fd7"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:30Z",
+          "message": "writ: approval review/r-mixed\n",
+          "signed": true
+        },
+        {
+          "sha": "ff0bbaf26ba2a005dfdf290ea0a72c60bff11df3",
+          "tree": "3c0f59e4999e641ccb6633e1e638cdee5b199d61",
+          "parents": [
+            "00ef6e7d762661b9e6a6a9b3f3540bad49ffdba7"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:30Z",
+          "message": "writ: approval review/r-mixed\n",
+          "signed": true
+        },
+        {
+          "sha": "fa4a68d311642f0c4191a96195a6ab38fdad4523",
+          "tree": "b558ac004b1718d49f3e9a1abe385c54309f1aa8",
+          "parents": [
+            "ff0bbaf26ba2a005dfdf290ea0a72c60bff11df3"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:04:30Z",
+          "message": "writ: set-status review/r-mixed\n",
+          "signed": true
+        },
+        {
+          "sha": "907c04881de30d68f94493d377bf63c48eb6bead",
+          "tree": "afa72e1ea00244b675fcc51905b2f6c380deb8fd",
+          "parents": [
+            "fa4a68d311642f0c4191a96195a6ab38fdad4523"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:05:30Z",
+          "message": "writ: ci-status review/r-mixed\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}
