@@ -1,0 +1,45 @@
+{
+  "name": "keyed-lww-per-key-registers",
+  "description": "Registers scoped by a composite key: a later write under one key must not disturb another. Concurrent writes to distinct keys both survive; the latest write within a key wins.",
+  "object_id": "obj-1",
+  "fields": {
+    "verdict": { "strategy": "keyed-lww", "key": ["subject", "revision"] }
+  },
+  "ops": [
+    {
+      "id": "op-root",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": { "subject": "alice", "revision": "r1", "verdict": "approve" }
+    },
+    {
+      "id": "op-a",
+      "parents": ["op-root"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": { "subject": "bob", "revision": "r1", "verdict": "request-changes" }
+    },
+    {
+      "id": "op-b",
+      "parents": ["op-root"],
+      "time": 300,
+      "object_id": "obj-1",
+      "body": { "subject": "alice", "revision": "r1", "verdict": "none" }
+    },
+    {
+      "id": "op-c",
+      "parents": ["op-root"],
+      "time": 250,
+      "object_id": "obj-1",
+      "body": { "subject": "alice", "revision": "r2", "verdict": "approve" }
+    }
+  ],
+  "expected_state": {
+    "verdict": [
+      { "key": ["alice", "r1"], "value": "none" },
+      { "key": ["alice", "r2"], "value": "approve" },
+      { "key": ["bob", "r1"], "value": "request-changes" }
+    ]
+  }
+}

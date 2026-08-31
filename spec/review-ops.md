@@ -1,0 +1,409 @@
+# Review Operations — review, approval, ci-status (v1)
+
+Status: **normative**. Schema: [`schemas/review-ops.schema.json`](schemas/review-ops.schema.json).
+Vectors: [`testdata/review-ops/`](testdata/review-ops/).
+Field rules: [`testdata/review-ops/field-rules.json`](testdata/review-ops/field-rules.json).
+
+This document defines the operation vocabulary, payload schemas, and fold
+semantics for code reviews in Writ (`object_type: "review"`). It covers
+review creation, revision pushes, status transitions, approvals and review
+votes, and CI status attachments (ARCHITECTURE.md §Object types).
+
+The key words MUST, MUST NOT, SHOULD, and MAY are to be interpreted as
+described in RFC 2119.
+
+## Scope & Object Model
+
+A code review is represented in Writ as a single collaborative object with
+`object_type: "review"`. Approvals, change requests, and CI status reports
+are operations that fold directly into fields of the `review` object rather
+than standalone collaborative objects.
+
+### Decision: what is an object, and what is an op
+
+ARCHITECTURE.md §Object types originally sketched `approval` and `ci-status`
+alongside `review` and `comment` as repo-scoped object types. Under the
+per-writer chain-ref layout (ARCHITECTURE.md §Ref layout, WRIT-7), object
+membership is determined by the payload's `object_id`. If approvals and CI
+statuses were standalone objects, each approval and status would require its
+own object ID and a back-reference to the review, forcing readers to walk
+every writer's approval and status chains and build secondary join indices
+just to materialize a single review.
+
+Comments justify separate object status (WRIT-9) because they carry rich
+text bodies, multi-turn threading, position edits, and are the primary volume
+driver in code reviews. A vote or a CI check status does not: an approval is
+a small vote record scoped to `(subject, revision)`, and a CI status is a
+status record scoped to `(revision, name)`.
+
+Therefore, `review` is the single collaborative object type defined in this
+specification. Approvals and CI statuses are operations on the review object
+that fold into the materialized `Review` state (`Review{status, revisions,
+approvals, ci_statuses}`), matching the reducer signature established in
+ARCHITECTURE.md §The six machines.
+
+### Scope boundaries
+
+- **Comments and inline threading:** Review comments and discussion threads
+  are defined in WRIT-9. Comments reference a review object by its `object_id`
+  and anchor to content via the dual-sided anchor format (WRIT-13).
+- **Cross-repo references:** Review objects are repo-scoped. Linking a review
+  to an issue or project across repositories uses workspace-global IDs
+  (WRIT-16).
+- **Fold driver and total ordering:** The deterministic linear extension
+  `t*(op)` and DAG ordering rules are specified in WRIT-12.
+
+## Envelope Binding
+
+Every review operation is carried in a git commit whose `op.json` payload
+conforms to `spec/schemas/op-envelope.schema.json` and
+`spec/schemas/review-ops.schema.json`:
+
+- `object_type` MUST be `"review"`.
+- `op_version` MUST be an integer ≥ 1. This document specifies version `1`.
+- `object_id` MUST be a non-empty string identifier (1–256 characters,
+  printable non-space ASCII `^[\x21-\x7e]+$`).
+- `op_type` MUST be one of the operation types defined below, or an unknown
+  string tolerated under forward-compatibility rules.
+- `body` MUST be a JSON object conforming to the schema for the declared
+  `op_type` and `op_version`.
+
+Commit OIDs within op bodies (e.g. `base`, `head`, `revision`,
+`merge_commit`) MUST be lowercase hexadecimal strings of either 40 characters
+(SHA-1) or 64 characters (SHA-256). All OIDs within an op payload MUST have
+uniform length, matching the repository's single object format.
+
+## Operation Vocabulary
+
+The review family defines six operation types for `op_version: 1`:
+
+| `op_type` | Body Schema | Description |
+| --- | --- | --- |
+| `create` | `{"title": string, "description"?: string}` | Review creation and metadata. |
+| `revision` | `{"base": oid, "head": oid}` | Code revision push (base and head commits). |
+| `update` | `{"title"?: string, "description"?: string}` | Metadata edits (title, description). |
+| `set-status` | `{"status": enum, "merge_commit"?: oid, "reason"?: string}` | Status transitions (`draft`, `open`, `closed`, `merged`). |
+| `approval` | `{"revision": oid, "verdict": enum, "subject"?: string, "message"?: string}` | Review vote (`approve`, `request-changes`, `none`). |
+| `ci-status` | `{"revision": oid, "name": string, "state": enum, "url"?: string, "description"?: string, "started_at"?: timestamp, "completed_at"?: timestamp, "external_id"?: string}` | CI check result on a revision head. |
+
+### 1. `create`
+
+Initializes a review object.
+
+```jsonc
+{
+  "object_id": "r-7f3a",
+  "object_type": "review",
+  "op_type": "create",
+  "op_version": 1,
+  "body": {
+    "title": "Add OAuth2 authentication provider",
+    "description": "Implements GitHub and Google OAuth2 login flows."
+  }
+}
+```
+
+- `title` (string, required): Summary title of the review, minLength 1.
+- `description` (string, optional): Full Markdown description / pull request body.
+
+**Load-bearing design: `create` carries no `base` or `head`.**
+Every revision — including the very first revision — is recorded as a
+`revision` op. Placing `base`/`head` in `revision` ensures that initial review
+creation, branch updates, and force-pushes share the exact same append
+pipeline and data structure. If `create` held base/head, revision 1 would have
+two competing representations and fold implementations would require special
+casing.
+
+### 2. `revision`
+
+Appends a code revision to the review.
+
+```jsonc
+{
+  "object_id": "r-7f3a",
+  "object_type": "review",
+  "op_type": "revision",
+  "op_version": 1,
+  "body": {
+    "base": "0123456789abcdef0123456789abcdef01234567",
+    "head": "89abcdef0123456789abcdef0123456789abcdef"
+  }
+}
+```
+
+- `base` (OID string, required): Base commit OID against which the revision
+  is compared.
+- `head` (OID string, required): Head commit OID of the revision.
+
+#### Revision model and force-pushes
+
+1. **Derived revision numbers:** Revision numbers are derived at fold time.
+   Revisions are numbered $1 \dots n$ according to their appearance in the
+   fold's deterministic total order (WRIT-12). Producers NEVER write revision
+   numbers. Two concurrent writers pushing revisions cannot conflict or both
+   claim "revision 2".
+2. **Preserving history across force-pushes:** A force-push (or `synchronize`
+   event) is simply a new `revision` op appended to the review's DAG. Previous
+   `revision` ops are never overwritten or deleted; historical revisions and
+   their associated comments remain preserved in the repository history by
+   construction.
+3. **Referencing revisions by head OID:** Subsequent ops that reference a
+   revision (such as `approval`, `ci-status`, or line comments) reference the
+   revision by its **`head` commit OID**, not by an ephemeral integer revision
+   number or the `revision` op's commit SHA. The head commit OID represents
+   what the reviewer or CI runner actually evaluated, matches external systems
+   (such as GitHub's `commit_id`), and allows an author to vote or attach CI
+   without having fetched the specific `revision` op commit beforehand.
+4. **Shared head tiebreak:** In the rare case where multiple revisions in a
+   review share the exact same `head` OID (e.g. a revert and re-push), any
+   reference to that `head` OID attaches to the **earliest revision** with that
+   head in the fold's total order.
+
+### 3. `update`
+
+Modifies review metadata.
+
+```jsonc
+{
+  "object_id": "r-7f3a",
+  "object_type": "review",
+  "op_type": "update",
+  "op_version": 1,
+  "body": {
+    "title": "Add OAuth2 authentication provider (Google & GitHub)"
+  }
+}
+```
+
+- `title` (string, optional): Updated review title, minLength 1.
+- `description` (string, optional): Updated review description.
+
+At least one of `title` or `description` MUST be present in an `update` body.
+An empty `{}` update body is invalid.
+
+### 4. `set-status`
+
+Transitions the review lifecycle state.
+
+```jsonc
+{
+  "object_id": "r-7f3a",
+  "object_type": "review",
+  "op_type": "set-status",
+  "op_version": 1,
+  "body": {
+    "status": "merged",
+    "merge_commit": "abcdef0123456789abcdef0123456789abcdef01"
+  }
+}
+```
+
+- `status` (string, required): One of `"draft"`, `"open"`, `"closed"`,
+  `"merged"`.
+- `merge_commit` (OID string, optional): Commit OID representing the merged
+  result in the target branch.
+- `reason` (string, optional): Human-readable explanation for the status
+  change (e.g. why a review was closed).
+
+**Producer rule on `merged` status:** Producers MUST NOT emit a status
+transition out of `"merged"` (e.g. transitioning `merged` $\to$ `open`).
+Readers MUST NOT reject such operations if encountered, ensuring fold
+determinism and forward tolerance without non-lattice joins.
+
+### 5. `approval`
+
+Records a review verdict (approval, change request, or dismissal) for a
+specific revision head.
+
+```jsonc
+{
+  "object_id": "r-7f3a",
+  "object_type": "review",
+  "op_type": "approval",
+  "op_version": 1,
+  "body": {
+    "revision": "89abcdef0123456789abcdef0123456789abcdef",
+    "verdict": "approve",
+    "subject": "alice",
+    "message": "Looks great, approved!"
+  }
+}
+```
+
+- `revision` (OID string, required): Head commit OID of the revision being
+  evaluated.
+- `verdict` (string, required): One of:
+  - `"approve"`: Approves the revision.
+  - `"request-changes"`: Requests changes before merging.
+  - `"none"`: Retracts or dismisses any existing verdict for the `(subject, revision)` pair.
+- `subject` (string, optional): Writer or user identity whose vote is recorded.
+  If omitted, defaults to the author identity of the op commit.
+- `message` (string, optional): Text summary or review message explaining the
+  verdict.
+
+#### Authorization & Dismissal Model
+
+The `subject` field allows recording an approval or dismissal on behalf of
+another writer, which is necessary when importing GitHub review dismissals or
+team approvals.
+
+**Writ has no authorization model at the specification layer.** Anyone with
+git push access to their namespace can push an `approval` op. Operations are
+cryptographically attributable (via commit signatures) and tamper-evident,
+not authoritative. Policy questions — such as which authors have write
+permissions, whose approval is required to merge, or whether a dismissal is
+authorized — belong to the coordination service or client application
+(VISION.md §The open core and the hosted layer). The spec provides faithful
+event capture without imposing an enforcement mechanism it cannot verify
+offline.
+
+### 6. `ci-status`
+
+Attaches a continuous integration or automated check result to a revision
+head.
+
+```jsonc
+{
+  "object_id": "r-7f3a",
+  "object_type": "review",
+  "op_type": "ci-status",
+  "op_version": 1,
+  "body": {
+    "revision": "89abcdef0123456789abcdef0123456789abcdef",
+    "name": "ci/test",
+    "state": "success",
+    "url": "https://ci.example.com/builds/9876",
+    "description": "All unit tests passed",
+    "started_at": "2026-08-30T18:00:00Z",
+    "completed_at": "2026-08-30T18:04:30Z",
+    "external_id": "9876"
+  }
+}
+```
+
+- `revision` (OID string, required): Head commit OID of the revision.
+- `name` (string, required): Unique name or context identifier for the check
+  (e.g. `"ci/test"`, `"lint"`), minLength 1.
+- `state` (string, required): One of `"pending"`, `"success"`, `"failure"`,
+  `"error"`, `"cancelled"`, `"neutral"`, `"skipped"`.
+- `url` (string, optional): Web URL linking to full build logs or status
+  details.
+- `description` (string, optional): Short summary message from CI.
+- `started_at` (RFC 3339 timestamp string, optional): When the check began.
+- `completed_at` (RFC 3339 timestamp string, optional): When the check completed.
+- `external_id` (string, optional): Identifier from the external CI provider
+  (e.g. GitHub check run ID).
+
+## Fold Implications & Merge Strategies
+
+Every body property defined in this vocabulary is mapped to one merge strategy
+from WRIT-12's closed catalogue. A machine-readable copy of these rules is
+published in `spec/testdata/review-ops/field-rules.json`.
+
+Per WRIT-12, **any field without a declared strategy is not merged**; it is
+treated as unknown data, preserved in the DAG, and ignored during fold.
+
+| `op_type` | Field | Merge Strategy | Key / Details |
+| --- | --- | --- | --- |
+| `create` | `title` | `lww` | Last writer wins in fold total order |
+| `create` | `description` | `lww` | Last writer wins |
+| `revision` | `base` | `append` | Appended to `revisions` list in total order |
+| `revision` | `head` | `append` | Appended to `revisions` list in total order |
+| `update` | `title` | `lww` | Last writer wins |
+| `update` | `description` | `lww` | Last writer wins |
+| `set-status` | `status` | `lww` | Last writer wins |
+| `set-status` | `merge_commit` | `lww` | Last writer wins |
+| `set-status` | `reason` | `lww` | Last writer wins |
+| `approval` | `revision` | `keyed-lww` | Scoped by key `[subject, revision]` |
+| `approval` | `verdict` | `keyed-lww` | Scoped by key `[subject, revision]`; `"none"` retracts verdict |
+| `approval` | `subject` | `keyed-lww` | Scoped by key `[subject, revision]` |
+| `approval` | `message` | `keyed-lww` | Scoped by key `[subject, revision]` |
+| `ci-status` | `revision` | `keyed-lww` | Scoped by key `[revision, name]` |
+| `ci-status` | `name` | `keyed-lww` | Scoped by key `[revision, name]` |
+| `ci-status` | `state` | `keyed-lww` | Scoped by key `[revision, name]` |
+| `ci-status` | `url` | `keyed-lww` | Scoped by key `[revision, name]` |
+| `ci-status` | `description` | `keyed-lww` | Scoped by key `[revision, name]` |
+| `ci-status` | `started_at` | `keyed-lww` | Scoped by key `[revision, name]` |
+| `ci-status` | `completed_at` | `keyed-lww` | Scoped by key `[revision, name]` |
+| `ci-status` | `external_id` | `keyed-lww` | Scoped by key `[revision, name]` |
+
+### Deletion and Retraction Semantics
+
+- **Review lifecycle:** A review is never deleted. Statuses such as `"closed"`
+  are lifecycle states, not tombstones. There are no tombstones defined for
+  the `review` object in v1.
+- **Approval retraction:** An approval verdict is retracted by emitting an
+  `approval` op with `verdict: "none"`. When folded, a verdict of `"none"`
+  causes the subject's vote to present as absent in materialized state, while
+  the operation itself remains intact in the DAG.
+- **CI status updates:** A CI status is superseded by emitting a new
+  `ci-status` op with the same `(revision, name)` key.
+
+## Forward Compatibility & Unknown Fields
+
+- **Unknown body fields:** Conforming implementations MUST preserve and
+  ignore any unknown fields in op bodies.
+- **Unknown `op_type` or future `op_version`:** Ops with unknown op types or
+  unsupported versions for `object_type: "review"` MUST remain in the DAG
+  and contribute to total ordering (`t*`) and ancestry, but contribute no
+  field mutations to known review state (WRIT-15).
+
+---
+
+## Appendix A — GitHub PR Representability (Informative)
+
+To ensure full compatibility on the bridge read path (`/bridge/github`), every
+field in GitHub's pull request, review, and status/check-run payloads must be
+representable in Writ.
+
+The conversion vectors under [`testdata/review-ops/github/`](testdata/review-ops/github/)
+demonstrate this mapping for opened PRs, force-pushes (`synchronize`), reviews,
+dismissals, check runs, commit statuses, and merges.
+
+### 1. Pull Request Payload Mapping
+
+| GitHub PR Field | Disposition in Writ |
+| --- | --- |
+| `title` | `create.title` / `update.title` (`lww`) |
+| `body` | `create.description` / `update.description` (`lww`) |
+| `base.sha`, `head.sha` | `revision` op (`base`, `head`) (`append`) |
+| `state` (`open`, `closed`), `draft` (`true`, `false`) | `set-status.status` (`"draft"`, `"open"`, `"closed"`) |
+| `merged` (`true`), `merge_commit_sha` | `set-status.status: "merged"`, `set-status.merge_commit` |
+| `user` | Op commit author on `create` / `update` |
+| `created_at`, `updated_at`, `closed_at`, `merged_at` | Op commit author timestamps on respective ops |
+| `number`, `id`, `node_id` | External metadata / workspace-global ID mapping (WRIT-16) |
+| `comments`, `review_comments` | Separate `comment` objects (WRIT-9) referencing `object_id` |
+| `assignees`, `labels`, `milestone` | Workspace metadata / issue links (WRIT-10, WRIT-11) |
+| `mergeable`, `rebaseable` | Derived state computed from git trees by client/projection |
+
+### 2. Pull Request Review Payload Mapping
+
+| GitHub Review Field | Disposition in Writ |
+| --- | --- |
+| `state: "APPROVED"` | `approval` op (`verdict: "approve"`) |
+| `state: "CHANGES_REQUESTED"` | `approval` op (`verdict: "request-changes"`) |
+| `state: "DISMISSED"` | `approval` op (`verdict: "none"`, `subject: <reviewer>`) |
+| `state: "COMMENTED"` | `comment` ops (WRIT-9); message carried as review comment |
+| `commit_id` | `approval.revision` (head commit OID) |
+| `user.login` | `approval.subject` (and op commit author) |
+| `body` | `approval.message` |
+| `submitted_at` | Op commit timestamp on `approval` op |
+| `id`, `node_id` | External bridge reference |
+
+### 3. Check Run and Commit Status Mapping
+
+| GitHub Status / Check Field | Disposition in Writ |
+| --- | --- |
+| `name` / `context` | `ci-status.name` |
+| `status: "completed"`, `conclusion: "success"` | `ci-status.state: "success"` |
+| `status: "completed"`, `conclusion: "failure"` | `ci-status.state: "failure"` |
+| `status: "completed"`, `conclusion: "cancelled"` | `ci-status.state: "cancelled"` |
+| `status: "completed"`, `conclusion: "neutral"` | `ci-status.state: "neutral"` |
+| `status: "completed"`, `conclusion: "skipped"` | `ci-status.state: "skipped"` |
+| `status: "in_progress"`, `status: "queued"`, status `pending` | `ci-status.state: "pending"` |
+| `target_url` / `html_url` | `ci-status.url` |
+| `description` / `output.summary` | `ci-status.description` |
+| `started_at` | `ci-status.started_at` |
+| `completed_at` | `ci-status.completed_at` |
+| `id` / `external_id` | `ci-status.external_id` |
+| `head_sha` / `sha` | `ci-status.revision` |

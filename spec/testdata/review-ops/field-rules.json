@@ -1,0 +1,176 @@
+[
+  {
+    "op_type": "create",
+    "op_version": 1,
+    "field": "title",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "create",
+    "op_version": 1,
+    "field": "description",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "revision",
+    "op_version": 1,
+    "field": "base",
+    "strategy": "append"
+  },
+  {
+    "op_type": "revision",
+    "op_version": 1,
+    "field": "head",
+    "strategy": "append"
+  },
+  {
+    "op_type": "update",
+    "op_version": 1,
+    "field": "title",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "update",
+    "op_version": 1,
+    "field": "description",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "set-status",
+    "op_version": 1,
+    "field": "status",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "set-status",
+    "op_version": 1,
+    "field": "merge_commit",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "set-status",
+    "op_version": 1,
+    "field": "reason",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "approval",
+    "op_version": 1,
+    "field": "revision",
+    "strategy": "keyed-lww",
+    "key": [
+      "subject",
+      "revision"
+    ]
+  },
+  {
+    "op_type": "approval",
+    "op_version": 1,
+    "field": "verdict",
+    "strategy": "keyed-lww",
+    "key": [
+      "subject",
+      "revision"
+    ]
+  },
+  {
+    "op_type": "approval",
+    "op_version": 1,
+    "field": "subject",
+    "strategy": "keyed-lww",
+    "key": [
+      "subject",
+      "revision"
+    ]
+  },
+  {
+    "op_type": "approval",
+    "op_version": 1,
+    "field": "message",
+    "strategy": "keyed-lww",
+    "key": [
+      "subject",
+      "revision"
+    ]
+  },
+  {
+    "op_type": "ci-status",
+    "op_version": 1,
+    "field": "revision",
+    "strategy": "keyed-lww",
+    "key": [
+      "revision",
+      "name"
+    ]
+  },
+  {
+    "op_type": "ci-status",
+    "op_version": 1,
+    "field": "name",
+    "strategy": "keyed-lww",
+    "key": [
+      "revision",
+      "name"
+    ]
+  },
+  {
+    "op_type": "ci-status",
+    "op_version": 1,
+    "field": "state",
+    "strategy": "keyed-lww",
+    "key": [
+      "revision",
+      "name"
+    ]
+  },
+  {
+    "op_type": "ci-status",
+    "op_version": 1,
+    "field": "url",
+    "strategy": "keyed-lww",
+    "key": [
+      "revision",
+      "name"
+    ]
+  },
+  {
+    "op_type": "ci-status",
+    "op_version": 1,
+    "field": "description",
+    "strategy": "keyed-lww",
+    "key": [
+      "revision",
+      "name"
+    ]
+  },
+  {
+    "op_type": "ci-status",
+    "op_version": 1,
+    "field": "started_at",
+    "strategy": "keyed-lww",
+    "key": [
+      "revision",
+      "name"
+    ]
+  },
+  {
+    "op_type": "ci-status",
+    "op_version": 1,
+    "field": "completed_at",
+    "strategy": "keyed-lww",
+    "key": [
+      "revision",
+      "name"
+    ]
+  },
+  {
+    "op_type": "ci-status",
+    "op_version": 1,
+    "field": "external_id",
+    "strategy": "keyed-lww",
+    "key": [
+      "revision",
+      "name"
+    ]
+  }
+]
