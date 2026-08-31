@@ -74,7 +74,7 @@ Exit codes:
 	store, err := writ.Open(targetDir)
 	if err != nil {
 		fmt.Fprintf(stderr, "writ sync: %v\n", err)
-		return exitCodeFor(err)
+		return 5
 	}
 	defer store.Close()
 
@@ -189,9 +189,12 @@ func exitCodeFor(err error) int {
 		return 4
 	}
 	if strings.Contains(err.Error(), "not a git repository") ||
+		strings.Contains(err.Error(), "stat path") ||
+		strings.Contains(err.Error(), "resolve absolute path") ||
 		strings.Contains(err.Error(), "open git repo") ||
 		strings.Contains(err.Error(), "open dag store") ||
 		strings.Contains(err.Error(), "open projection db") ||
+		strings.Contains(err.Error(), "open sync client") ||
 		strings.Contains(err.Error(), "create projection cache dir") ||
 		errors.Is(err, git.ErrRepositoryNotExists) {
 		return 5

@@ -286,6 +286,7 @@ func TestSync_ExitCodeClassification(t *testing.T) {
 			{name: "git error generic", err: &sync.GitError{Err: errors.New("exec error"), Stderr: "fatal: authentication failed"}, wantCode: 1},
 			{name: "generic transport error", err: errors.New("network timeout"), wantCode: 1},
 			{name: "not a git repo", err: errors.New("writ: not a git repository (or any parent up to mount point): /tmp/dir"), wantCode: 5},
+			{name: "stat path error", err: errors.New("writ: stat path \"/nonexistent/path\": no such file or directory"), wantCode: 5},
 			{name: "git.ErrRepositoryNotExists", err: git.ErrRepositoryNotExists, wantCode: 5},
 		}
 
@@ -314,6 +315,15 @@ func TestSync_ExitCodeClassification(t *testing.T) {
 		code := run(context.Background(), []string{"-C", nonRepoDir, "sync"}, &stdout, &stderr)
 		if code != 5 {
 			t.Errorf("sync on non-git dir exit code = %d (want 5); stderr: %s", code, stderr.String())
+		}
+	})
+
+	t.Run("e2e_nonexistent_dir", func(t *testing.T) {
+		nonexistentDir := filepath.Join(t.TempDir(), "does_not_exist")
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{"-C", nonexistentDir, "sync"}, &stdout, &stderr)
+		if code != 5 {
+			t.Errorf("sync on nonexistent dir exit code = %d (want 5); stderr: %s", code, stderr.String())
 		}
 	})
 
