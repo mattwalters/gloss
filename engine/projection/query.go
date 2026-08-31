@@ -784,6 +784,48 @@ func (d *DB) Objects(f ObjectFilter) ([]ObjectResult, error) {
 	return results, nil
 }
 
+// Object fetches summary metadata for a single collaborative object by its ID, returning ErrNotFound if not found.
+func (d *DB) Object(objectID string) (ObjectResult, error) {
+	if d == nil || d.db == nil {
+		return ObjectResult{}, fmt.Errorf("projection: database is closed")
+	}
+	if objectID == "" {
+		return ObjectResult{}, ErrNotFound
+	}
+
+	var (
+		res          ObjectResult
+		createdAtSec int64
+		updatedAtSec int64
+	)
+
+	err := d.db.QueryRow(`
+		SELECT object_id, object_type, op_count, last_op_id, author_name, author_email, created_at, updated_at
+		FROM objects
+		WHERE object_id = ?
+	`, objectID).Scan(
+		&res.ObjectID,
+		&res.ObjectType,
+		&res.OpCount,
+		&res.LastOpID,
+		&res.Author.Name,
+		&res.Author.Email,
+		&createdAtSec,
+		&updatedAtSec,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return ObjectResult{}, ErrNotFound
+		}
+		return ObjectResult{}, fmt.Errorf("projection: query object %s: %w", objectID, err)
+	}
+
+	res.CreatedAt = time.Unix(createdAtSec, 0).UTC()
+	res.UpdatedAt = time.Unix(updatedAtSec, 0).UTC()
+
+	return res, nil
+}
+
 // Threads retrieves and structures all comments attached to a subject into a comment reply forest.
 func (d *DB) Threads(subjectType, subjectID string) ([]state.CommentThread, error) {
 	if d == nil || d.db == nil {

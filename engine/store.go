@@ -36,6 +36,12 @@ type Store struct {
 	// Comments provides comment edits, deletions, and reply operations.
 	Comments *Comments
 
+	// Drafts provides local comment draft creation, updates, listing, discarding, and publishing.
+	Drafts *Drafts
+
+	// ReadState provides local read/unread tracking across collaborative objects.
+	ReadState *ReadState
+
 	// Query provides read queries over reviews, issues, comments, threads, and objects.
 	Query *Query
 
@@ -113,6 +119,27 @@ func (s *Store) Refresh(ctx context.Context) (RefreshStats, error) {
 	stats, err := s.projection.Refresh(s.dagStore, opts...)
 	if err != nil {
 		return RefreshStats{}, fmt.Errorf("writ: refresh projection: %w", err)
+	}
+	return RefreshStats(stats), nil
+}
+
+// Rebuild completely discards and recreates the folded projection cache from a cold walk of all writ chains.
+// Local-only state (drafts, read marks, sync cursors) is preserved. The cache file may also simply be deleted.
+func (s *Store) Rebuild(ctx context.Context) (RefreshStats, error) {
+	if s == nil {
+		return RefreshStats{}, fmt.Errorf("writ: store is nil")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var opts []projection.Option
+	if len(s.targetRefs) > 0 {
+		opts = append(opts, projection.WithTargetRefs(s.targetRefs...))
+	}
+
+	stats, err := s.projection.Rebuild(s.dagStore, opts...)
+	if err != nil {
+		return RefreshStats{}, fmt.Errorf("writ: rebuild projection: %w", err)
 	}
 	return RefreshStats(stats), nil
 }

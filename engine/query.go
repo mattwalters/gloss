@@ -195,3 +195,14 @@ func (q *Query) Issue(id string) (IssueResult, error) {
 	}
 	return target.projection.Issue(id)
 }
+
+// Object fetches summary metadata for a single collaborative object by its ID, returning ErrNotFound if not found.
+func (q *Query) Object(id string) (ObjectResult, error) {
+	if q == nil || q.store == nil {
+		return ObjectResult{}, fmt.Errorf("writ: store is nil")
+	}
+	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
+		return ObjectResult{}, err
+	}
+	return q.store.projection.Object(id)
+}

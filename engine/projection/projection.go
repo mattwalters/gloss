@@ -4,6 +4,7 @@ package projection
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -11,22 +12,53 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// DB represents a handle to the projection SQLite cache.
-type DB struct {
-	db   *sql.DB
-	path string
+// OpenOption configures an Open invocation on the projection database.
+type OpenOption func(*openConfig)
+
+type openConfig struct {
+	localPath string
 }
 
-// Open opens or creates a projection SQLite database at path, validating the schema version.
-// If the database is missing or the schema version does not match SchemaVersion(),
-// all existing tables are dropped and recreated cleanly without migration heroics.
-func Open(path string) (*DB, error) {
+// WithLocalPath configures an explicit custom filesystem path for the local SQLite database.
+func WithLocalPath(path string) OpenOption {
+	return func(c *openConfig) {
+		c.localPath = path
+	}
+}
+
+// DB represents a handle to the projection SQLite cache and accompanying local-only database.
+type DB struct {
+	db        *sql.DB
+	path      string
+	localDB   *sql.DB
+	localPath string
+}
+
+// Open opens or creates a projection SQLite database at path and an accompanying local-only database,
+// validating their respective schema versions. If the projection database is missing or the schema version
+// does not match SchemaVersion(), folded tables are dropped and recreated cleanly without migration heroics.
+// Local-only state is managed and preserved independently.
+func Open(path string, opts ...OpenOption) (*DB, error) {
+	cfg := &openConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	localPath := cfg.localPath
+	if localPath == "" {
+		if path == ":memory:" {
+			localPath = ":memory:"
+		} else {
+			localPath = strings.TrimSuffix(path, ".db") + ".local.db"
+		}
+	}
+
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("projection: open sqlite %q: %w", path, err)
 	}
 
-	// Configure pragmas
+	// Configure pragmas for projection db
 	_, _ = db.Exec("PRAGMA journal_mode = WAL;")
 	if _, err := db.Exec("PRAGMA busy_timeout = 5000;"); err != nil {
 		_ = db.Close()
@@ -37,25 +69,62 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("projection: set foreign_keys: %w", err)
 	}
 
+	localDB, err := sql.Open("sqlite", localPath)
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("projection: open local sqlite %q: %w", localPath, err)
+	}
+
+	// Configure pragmas for local db
+	_, _ = localDB.Exec("PRAGMA journal_mode = WAL;")
+	if _, err := localDB.Exec("PRAGMA busy_timeout = 5000;"); err != nil {
+		_ = db.Close()
+		_ = localDB.Close()
+		return nil, fmt.Errorf("projection: set busy_timeout on local: %w", err)
+	}
+	if _, err := localDB.Exec("PRAGMA foreign_keys = ON;"); err != nil {
+		_ = db.Close()
+		_ = localDB.Close()
+		return nil, fmt.Errorf("projection: set foreign_keys on local: %w", err)
+	}
+
 	proj := &DB{
-		db:   db,
-		path: path,
+		db:        db,
+		path:      path,
+		localDB:   localDB,
+		localPath: localPath,
 	}
 
 	if err := proj.ensureSchema(); err != nil {
-		_ = db.Close()
+		_ = proj.Close()
+		return nil, err
+	}
+
+	if err := proj.ensureLocalSchema(); err != nil {
+		_ = proj.Close()
 		return nil, err
 	}
 
 	return proj, nil
 }
 
-// Close closes the underlying SQLite database connection.
+// Close closes both the projection and local SQLite database connections.
 func (d *DB) Close() error {
-	if d == nil || d.db == nil {
+	if d == nil {
 		return nil
 	}
-	return d.db.Close()
+	var errs []error
+	if d.db != nil {
+		if err := d.db.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if d.localDB != nil {
+		if err := d.localDB.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // DB returns the underlying *sql.DB connection pool for custom queries.

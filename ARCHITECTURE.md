@@ -55,12 +55,15 @@ store, err := writ.Open(path, opts...)    // any git dir: clone, bare, worktree;
 store.Reviews.Create(ctx, newReview)     // .Update / .PushRevision / .Comment / .Approve / .SetStatus
 store.Issues.Create(ctx, newIssue)       // .Update / .SetState / .Assign / .Label / .Link / .Comment (workspace-routed if configured)
 store.Comments.Edit(ctx, id, text)       // .Delete(ctx, id)
+store.Drafts.Save(ctx, draft)            // .Get / .List / .Discard / .Publish (local-only state)
+store.ReadState.Mark(ctx, objectID)      // .Clear / .Unread (local-only state)
 store.Query.Reviews(filter)              // .Issues / .Comments / .Objects / .Threads / .GroupIssues / .Review / .Issue
 store.Workspace.Info()                   // .Repos / .Register / .Resolve (multi-repo workspace registry and cross-repo resolution)
 store.Ref(objectID)                      // returns <repo-id>#<object-id> when repo-id is configured
 store.Sync(ctx, remote)                  // ensures refspecs, fetches, pushes, refreshes
 store.SyncStatus(ctx, remote)            // per-remote unsynced op count
 store.Refresh(ctx)                       // explicit projection refresh
+store.Rebuild(ctx)                       // explicit drop-and-rebuild of folded projection cache
 // store.Watch() <-chan Event            // reserved for reactive event bus milestone
 ```
 

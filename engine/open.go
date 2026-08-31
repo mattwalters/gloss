@@ -162,7 +162,8 @@ func Open(path string, opts ...Option) (*Store, error) {
 	}
 
 	dbPath := filepath.Join(cacheDir, "projection.db")
-	projDB, err := projection.Open(dbPath)
+	localPath := filepath.Join(cacheDir, "local.db")
+	projDB, err := projection.Open(dbPath, projection.WithLocalPath(localPath))
 	if err != nil {
 		return nil, fmt.Errorf("writ: open projection db %s: %w", dbPath, err)
 	}
@@ -214,6 +215,8 @@ func Open(path string, opts ...Option) (*Store, error) {
 	s.Reviews = &Reviews{store: s}
 	s.Issues = &Issues{store: s}
 	s.Comments = &Comments{store: s}
+	s.Drafts = &Drafts{store: s}
+	s.ReadState = &ReadState{store: s}
 	s.Query = &Query{store: s}
 
 	return s, nil
