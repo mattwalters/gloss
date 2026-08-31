@@ -61,6 +61,8 @@ type Store struct {
 	signerErr   error
 	autoRefresh bool
 	targetRefs  []string
+	closed      bool
+	subscribers []*subscriber
 	mu          sync.Mutex
 }
 
@@ -71,6 +73,16 @@ func (s *Store) Close() error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if s.closed {
+		return nil
+	}
+	s.closed = true
+
+	for _, sub := range s.subscribers {
+		close(sub.ch)
+	}
+	s.subscribers = nil
 
 	var errs []error
 	if s.projection != nil {
@@ -111,6 +123,10 @@ func (s *Store) Refresh(ctx context.Context) (RefreshStats, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if s.closed {
+		return RefreshStats{}, fmt.Errorf("writ: store is closed")
+	}
+
 	var opts []projection.Option
 	if len(s.targetRefs) > 0 {
 		opts = append(opts, projection.WithTargetRefs(s.targetRefs...))
@@ -120,6 +136,9 @@ func (s *Store) Refresh(ctx context.Context) (RefreshStats, error) {
 	if err != nil {
 		return RefreshStats{}, fmt.Errorf("writ: refresh projection: %w", err)
 	}
+
+	s.emitLocked(stats)
+
 	return RefreshStats(stats), nil
 }
 
@@ -132,6 +151,10 @@ func (s *Store) Rebuild(ctx context.Context) (RefreshStats, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if s.closed {
+		return RefreshStats{}, fmt.Errorf("writ: store is closed")
+	}
+
 	var opts []projection.Option
 	if len(s.targetRefs) > 0 {
 		opts = append(opts, projection.WithTargetRefs(s.targetRefs...))
@@ -141,6 +164,9 @@ func (s *Store) Rebuild(ctx context.Context) (RefreshStats, error) {
 	if err != nil {
 		return RefreshStats{}, fmt.Errorf("writ: rebuild projection: %w", err)
 	}
+
+	s.emitLocked(stats)
+
 	return RefreshStats(stats), nil
 }
 

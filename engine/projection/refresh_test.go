@@ -80,6 +80,18 @@ func TestIncrementalRefoldMatchesColdRebuild(t *testing.T) {
 	if stats1.OpsDecoded != 1 || stats1.ObjectsTouched != 1 || stats1.Rebuilt {
 		t.Fatalf("unexpected stats1: %+v", stats1)
 	}
+	if len(stats1.Changed) != 1 {
+		t.Fatalf("expected 1 changed object in stats1, got %d", len(stats1.Changed))
+	}
+	expected1 := projection.ObjectChange{
+		ObjectID:   "rev-1",
+		ObjectType: "review",
+		OpTypes:    []string{"create"},
+		Created:    true,
+	}
+	if !reflect.DeepEqual(stats1.Changed[0], expected1) {
+		t.Fatalf("unexpected stats1.Changed: %+v, want %+v", stats1.Changed[0], expected1)
+	}
 
 	var title, desc string
 	err = db.DB().QueryRow("SELECT title, description FROM reviews WHERE object_id = 'rev-1'").Scan(&title, &desc)
@@ -115,6 +127,18 @@ func TestIncrementalRefoldMatchesColdRebuild(t *testing.T) {
 	if stats2.OpsDecoded != 2 || stats2.ObjectsTouched != 1 || stats2.Rebuilt {
 		t.Fatalf("unexpected stats2: %+v", stats2)
 	}
+	if len(stats2.Changed) != 1 {
+		t.Fatalf("expected 1 changed object in stats2, got %d", len(stats2.Changed))
+	}
+	expected2 := projection.ObjectChange{
+		ObjectID:   "rev-1",
+		ObjectType: "review",
+		OpTypes:    []string{"revision", "update"},
+		Created:    false,
+	}
+	if !reflect.DeepEqual(stats2.Changed[0], expected2) {
+		t.Fatalf("unexpected stats2.Changed: %+v, want %+v", stats2.Changed[0], expected2)
+	}
 
 	incrementalDump, err := db.DumpTables()
 	if err != nil {
@@ -126,7 +150,7 @@ func TestIncrementalRefoldMatchesColdRebuild(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Rebuild failed: %v", err)
 	}
-	if !statsCold.Rebuilt || statsCold.ObjectsTouched != 1 {
+	if !statsCold.Rebuilt || statsCold.ObjectsTouched != 1 || len(statsCold.Changed) != 0 {
 		t.Fatalf("unexpected statsCold: %+v", statsCold)
 	}
 

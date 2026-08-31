@@ -68,3 +68,41 @@ func ExampleQuery_Reviews() {
 		fmt.Printf("Review %s: %s (status: %s)\n", r.ObjectID, r.Review.Title, r.Review.Status)
 	}
 }
+
+func ExampleStore_Watch() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	store, err := writ.Open(".")
+	if err != nil {
+		log.Printf("open repo: %v", err)
+		return
+	}
+	defer store.Close()
+
+	// 1. Subscribe to change events first
+	events := store.Watch(ctx)
+
+	// 2. Query initial snapshot after subscribing
+	reviews, err := store.Query.Reviews(writ.ReviewFilter{
+		Status: []string{"open"},
+	})
+	if err != nil {
+		log.Printf("query initial reviews: %v", err)
+		return
+	}
+	fmt.Printf("Initial open reviews: %d\n", len(reviews))
+
+	// 3. React to incoming events in the background
+	go func() {
+		for ev := range events {
+			switch ev.Kind {
+			case writ.EventReset:
+				// Buffer overflowed or store rebuilt; re-query all state
+				log.Printf("Reset received, re-querying everything")
+			case writ.EventCreated, writ.EventChanged:
+				log.Printf("Object %s (%s) %s with ops %v", ev.ObjectID, ev.ObjectType, ev.Kind, ev.OpTypes)
+			}
+		}
+	}()
+}

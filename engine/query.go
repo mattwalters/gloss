@@ -50,6 +50,9 @@ type (
 
 	// RefreshStats reports the work performed during a Refresh pass.
 	RefreshStats = projection.Stats
+
+	// ObjectChange describes the modifications made to a collaborative object in an incremental refresh batch.
+	ObjectChange = projection.ObjectChange
 )
 
 const (
