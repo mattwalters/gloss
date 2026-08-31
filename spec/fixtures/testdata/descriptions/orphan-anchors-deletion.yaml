@@ -1,0 +1,62 @@
+name: orphan-anchors-deletion
+description: >
+  File and line deletion scenarios: a file deleted outright degrades to
+  orphan with reason path-absent, while anchored lines deleted from a surviving
+  file whose line count drops below the range size degrade to orphan with
+  reason no-candidate.
+
+refs:
+  - name: refs/heads/main
+    history:
+      - keep_as: refs/fixture-history/main/gen-0
+        commits:
+          - id: base
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: "initial files before deletions"
+            files:
+              deprecated/old_feature.go: |
+                package deprecated
+
+                func OldFeature() string {
+                	return "deprecated"
+                }
+              service/worker.go: |
+                package service
+
+                func Run() {
+                	task1()
+                	task2()
+                	task3()
+                }
+      - commits:
+          - id: rewritten
+            author: bob
+            timestamp: 2026-01-01T01:00:00Z
+            message: "remove deprecated file and truncate worker"
+            files:
+              service/worker.go: |
+                package service
+                // stub
+
+resolutions:
+  - name: file-deleted-path-absent
+    anchor:
+      at: base
+      path: deprecated/old_feature.go
+      side: new
+      range: [3, 5]
+    target: rewritten
+    expect:
+      outcome: orphaned
+      reason: path-absent
+  - name: lines-deleted-no-candidate
+    anchor:
+      at: base
+      path: service/worker.go
+      side: new
+      range: [4, 7]
+    target: rewritten
+    expect:
+      outcome: orphaned
+      reason: no-candidate

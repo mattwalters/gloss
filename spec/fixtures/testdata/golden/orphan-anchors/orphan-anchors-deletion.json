@@ -1,0 +1,148 @@
+{
+  "cases": [
+    {
+      "name": "file-deleted-path-absent",
+      "source": {
+        "commit": "d41d87159b0e364cbb4a21ef18b33ef27d7c774c",
+        "path": "deprecated/old_feature.go",
+        "range": {
+          "start": 3,
+          "end": 5
+        }
+      },
+      "target": {
+        "ref": "refs/heads/main",
+        "commit": "d0fd758826238675543acde4d4b2be3eb35cba4f"
+      },
+      "anchor": {
+        "version": 1,
+        "new": {
+          "commit": "d41d87159b0e364cbb4a21ef18b33ef27d7c774c",
+          "path": "deprecated/old_feature.go",
+          "blob": "4c5699c7c77a880d8cb26c5ea298aa2a8ac67a1c",
+          "range": {
+            "start": 3,
+            "end": 5
+          },
+          "context": {
+            "before": [
+              "package deprecated",
+              ""
+            ],
+            "lines": [
+              "func OldFeature() string {",
+              "\treturn \"deprecated\"",
+              "}"
+            ],
+            "after": []
+          }
+        }
+      },
+      "resolution": {
+        "anchor": {
+          "version": 1,
+          "new": {
+            "commit": "d41d87159b0e364cbb4a21ef18b33ef27d7c774c",
+            "path": "deprecated/old_feature.go",
+            "blob": "4c5699c7c77a880d8cb26c5ea298aa2a8ac67a1c",
+            "range": {
+              "start": 3,
+              "end": 5
+            },
+            "context": {
+              "before": [
+                "package deprecated",
+                ""
+              ],
+              "lines": [
+                "func OldFeature() string {",
+                "\treturn \"deprecated\"",
+                "}"
+              ],
+              "after": []
+            }
+          }
+        },
+        "new": {
+          "outcome": "orphaned",
+          "reason": "path-absent"
+        }
+      },
+      "status": "orphaned"
+    },
+    {
+      "name": "lines-deleted-no-candidate",
+      "source": {
+        "commit": "d41d87159b0e364cbb4a21ef18b33ef27d7c774c",
+        "path": "service/worker.go",
+        "range": {
+          "start": 4,
+          "end": 7
+        }
+      },
+      "target": {
+        "ref": "refs/heads/main",
+        "commit": "d0fd758826238675543acde4d4b2be3eb35cba4f"
+      },
+      "anchor": {
+        "version": 1,
+        "new": {
+          "commit": "d41d87159b0e364cbb4a21ef18b33ef27d7c774c",
+          "path": "service/worker.go",
+          "blob": "f34682ab38fb0c72fb5ac5d0b5f330319245c0fc",
+          "range": {
+            "start": 4,
+            "end": 7
+          },
+          "context": {
+            "before": [
+              "package service",
+              "",
+              "func Run() {"
+            ],
+            "lines": [
+              "\ttask1()",
+              "\ttask2()",
+              "\ttask3()",
+              "}"
+            ],
+            "after": []
+          }
+        }
+      },
+      "resolution": {
+        "anchor": {
+          "version": 1,
+          "new": {
+            "commit": "d41d87159b0e364cbb4a21ef18b33ef27d7c774c",
+            "path": "service/worker.go",
+            "blob": "f34682ab38fb0c72fb5ac5d0b5f330319245c0fc",
+            "range": {
+              "start": 4,
+              "end": 7
+            },
+            "context": {
+              "before": [
+                "package service",
+                "",
+                "func Run() {"
+              ],
+              "lines": [
+                "\ttask1()",
+                "\ttask2()",
+                "\ttask3()",
+                "}"
+              ],
+              "after": []
+            }
+          }
+        },
+        "new": {
+          "outcome": "orphaned",
+          "reason": "no-candidate"
+        }
+      },
+      "status": "orphaned"
+    }
+  ]
+}

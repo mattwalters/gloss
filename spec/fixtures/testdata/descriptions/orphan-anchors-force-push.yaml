@@ -1,0 +1,56 @@
+name: orphan-anchors-force-push
+description: >
+  Force-push rewrite scenario with a cross-side anchor:
+  the old side resolves against the target tree by exact-path-blob match,
+  while the new side orphans because the file was replaced by unrelated history,
+  yielding overall partially-resolved status.
+
+refs:
+  - name: refs/heads/main
+    history:
+      - keep_as: refs/fixture-history/main/gen-0
+        commits:
+          - id: base
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: "initial gen-0 commit before force-push"
+            files:
+              shared.txt: |
+                line 1
+                line 2
+                line 3
+              feature.txt: |
+                feature v1 content
+      - commits:
+          - id: rewritten
+            author: bob
+            timestamp: 2026-01-01T01:00:00Z
+            message: "force-pushed unrelated history"
+            files:
+              shared.txt: |
+                line 1
+                line 2
+                line 3
+              other.txt: |
+                unrelated branch content
+
+resolutions:
+  - name: cross-side-force-push-partial
+    anchor:
+      old:
+        at: base
+        path: shared.txt
+        range: [1, 2]
+      new:
+        at: base
+        path: feature.txt
+        range: [1, 1]
+    target: rewritten
+    expect:
+      status: partially-resolved
+      old:
+        outcome: resolved
+        match: exact-path-blob
+      new:
+        outcome: orphaned
+        reason: path-absent

@@ -81,6 +81,43 @@ type Fixture struct {
 
 	// Manifest is the manifest produced when generating the repo.
 	Manifest *Manifest
+
+	labels map[string]string
+}
+
+// CommitSHA returns the full commit SHA corresponding to a commit ID/label
+// defined in the fixture description, or false if the label is unknown.
+func (f *Fixture) CommitSHA(label string) (string, bool) {
+	if f.labels == nil {
+		return "", false
+	}
+	sha, ok := f.labels[label]
+	return sha, ok
+}
+
+// TargetRef returns the canonical ref name corresponding to the given commit SHA
+// in the generated repo manifest. If the commit was kept under a keep_as ref,
+// that ref name is returned. Otherwise, the containing ref name is returned.
+func (f *Fixture) TargetRef(commitSHA string) string {
+	if f.Manifest == nil {
+		return ""
+	}
+	for _, gs := range f.Manifest.Generations {
+		for _, c := range gs.Commits {
+			if c.SHA == commitSHA {
+				if gs.KeptAs != "" {
+					return gs.KeptAs
+				}
+				return gs.Ref
+			}
+		}
+	}
+	for _, r := range f.Manifest.Refs {
+		if r.Commit == commitSHA {
+			return r.Name
+		}
+	}
+	return ""
 }
 
 // RunnerFunc is the function that executes a fixture against the system under
@@ -237,12 +274,29 @@ func runSingleFixture(t TestReporter, desc *Description, goldenDir, goldenExt st
 		return
 	}
 
+	labels := make(map[string]string)
+	genIdx := 0
+	for _, ref := range desc.Refs {
+		for _, gen := range ref.History {
+			if genIdx < len(manifest.Generations) {
+				gs := manifest.Generations[genIdx]
+				for ci, cd := range gen.Commits {
+					if cd.ID != "" && ci < len(gs.Commits) {
+						labels[cd.ID] = gs.Commits[ci].SHA
+					}
+				}
+			}
+			genIdx++
+		}
+	}
+
 	fix := &Fixture{
 		Name:        desc.Name,
 		Description: desc,
 		RepoDir:     repoDir,
 		Repo:        repo,
 		Manifest:    manifest,
+		labels:      labels,
 	}
 
 	got, err := runner(t, fix)

@@ -274,3 +274,30 @@ func TestHarness_FilterMatchesZeroFails(t *testing.T) {
 		t.Errorf("expected 0 subtests to run, got %d", mock.subtestCount)
 	}
 }
+
+func TestHarness_CommitSHALookup(t *testing.T) {
+	family := Family{
+		Name:      "test-commit-sha",
+		GoldenDir: "testdata/golden",
+		Filter: func(desc *Description) bool {
+			return desc.Name == "envelope-valid-ops"
+		},
+		Runner: func(t *testing.T, fix *Fixture) ([]byte, error) {
+			sha, ok := fix.CommitSHA("alice-root")
+			if !ok || sha == "" {
+				t.Fatalf("expected to find SHA for alice-root, got sha=%q, ok=%v", sha, ok)
+			}
+			if _, ok := fix.CommitSHA("nonexistent-label"); ok {
+				t.Fatalf("expected false for nonexistent label")
+			}
+			ref := fix.TargetRef(sha)
+			if ref != "refs/writ/alice/review" {
+				t.Fatalf("expected target ref refs/writ/alice/review, got %q", ref)
+			}
+			return marshalManifest(t, fix.Manifest), nil
+		},
+	}
+
+	Run(t, family)
+}
+

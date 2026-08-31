@@ -1,0 +1,162 @@
+{
+  "cases": [
+    {
+      "name": "untouched-file-reanchor",
+      "source": {
+        "commit": "3c6851744aab484ae49937eda170c86f11c70f1a",
+        "path": "untouched.txt",
+        "range": {
+          "start": 1,
+          "end": 2
+        }
+      },
+      "target": {
+        "ref": "refs/heads/main",
+        "commit": "251be8a37cacf1e7acca556ff465c00b2481fd10"
+      },
+      "anchor": {
+        "version": 1,
+        "new": {
+          "commit": "3c6851744aab484ae49937eda170c86f11c70f1a",
+          "path": "untouched.txt",
+          "blob": "7a28df3c975fa62270a452251c4e0b24d685c4ba",
+          "range": {
+            "start": 1,
+            "end": 2
+          },
+          "context": {
+            "before": [],
+            "lines": [
+              "alpha",
+              "beta"
+            ],
+            "after": [
+              "gamma",
+              "delta"
+            ]
+          }
+        }
+      },
+      "resolution": {
+        "anchor": {
+          "version": 1,
+          "new": {
+            "commit": "3c6851744aab484ae49937eda170c86f11c70f1a",
+            "path": "untouched.txt",
+            "blob": "7a28df3c975fa62270a452251c4e0b24d685c4ba",
+            "range": {
+              "start": 1,
+              "end": 2
+            },
+            "context": {
+              "before": [],
+              "lines": [
+                "alpha",
+                "beta"
+              ],
+              "after": [
+                "gamma",
+                "delta"
+              ]
+            }
+          }
+        },
+        "new": {
+          "outcome": "resolved",
+          "match": "exact-path-blob",
+          "path": "untouched.txt",
+          "range": {
+            "start": 1,
+            "end": 2
+          }
+        }
+      },
+      "status": "resolved"
+    },
+    {
+      "name": "rebased-range-shifts",
+      "source": {
+        "commit": "3c6851744aab484ae49937eda170c86f11c70f1a",
+        "path": "parser.go",
+        "range": {
+          "start": 7,
+          "end": 9
+        }
+      },
+      "target": {
+        "ref": "refs/heads/main",
+        "commit": "251be8a37cacf1e7acca556ff465c00b2481fd10"
+      },
+      "anchor": {
+        "version": 1,
+        "new": {
+          "commit": "3c6851744aab484ae49937eda170c86f11c70f1a",
+          "path": "parser.go",
+          "blob": "beb8bc076e64ad645afa82b3a47329c2baccca9d",
+          "range": {
+            "start": 7,
+            "end": 9
+          },
+          "context": {
+            "before": [
+              "",
+              "// Parse parses input tokens.",
+              "func Parse(tokens []string) error {"
+            ],
+            "lines": [
+              "\tif len(tokens) == 0 {",
+              "\t\treturn fmt.Errorf(\"empty input\")",
+              "\t}"
+            ],
+            "after": [
+              "\tfor _, t := range tokens {",
+              "\t\tfmt.Println(t)",
+              "\t}"
+            ]
+          }
+        }
+      },
+      "resolution": {
+        "anchor": {
+          "version": 1,
+          "new": {
+            "commit": "3c6851744aab484ae49937eda170c86f11c70f1a",
+            "path": "parser.go",
+            "blob": "beb8bc076e64ad645afa82b3a47329c2baccca9d",
+            "range": {
+              "start": 7,
+              "end": 9
+            },
+            "context": {
+              "before": [
+                "",
+                "// Parse parses input tokens.",
+                "func Parse(tokens []string) error {"
+              ],
+              "lines": [
+                "\tif len(tokens) == 0 {",
+                "\t\treturn fmt.Errorf(\"empty input\")",
+                "\t}"
+              ],
+              "after": [
+                "\tfor _, t := range tokens {",
+                "\t\tfmt.Println(t)",
+                "\t}"
+              ]
+            }
+          }
+        },
+        "new": {
+          "outcome": "resolved",
+          "match": "context-exact",
+          "path": "parser.go",
+          "range": {
+            "start": 11,
+            "end": 13
+          }
+        }
+      },
+      "status": "resolved"
+    }
+  ]
+}

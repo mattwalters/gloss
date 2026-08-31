@@ -1,0 +1,45 @@
+{
+  "refs": [
+    {
+      "name": "refs/fixture-history/main/gen-0",
+      "commit": "cae7dc465d1fe225355eadc32df285880e5c5160"
+    },
+    {
+      "name": "refs/heads/main",
+      "commit": "72dd63f12adf88fb8a49ff38b1109ec4b7339b01"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/heads/main",
+      "index": 0,
+      "kept_as": "refs/fixture-history/main/gen-0",
+      "commits": [
+        {
+          "sha": "cae7dc465d1fe225355eadc32df285880e5c5160",
+          "tree": "a5527882423665f1444bc6a06d02a339564558f4",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "initial files before drift",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/heads/main",
+      "index": 1,
+      "commits": [
+        {
+          "sha": "72dd63f12adf88fb8a49ff38b1109ec4b7339b01",
+          "tree": "9fbf35118a35c707d0817c28b793c7ce5b776826",
+          "parents": [],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T01:00:00Z",
+          "message": "rewritten files with drift and duplication",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

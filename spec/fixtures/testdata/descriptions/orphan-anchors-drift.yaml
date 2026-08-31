@@ -1,0 +1,117 @@
+name: orphan-anchors-drift
+description: >
+  Content drift scenarios: moderate hunk drift resolves to context-fuzzy,
+  excessive drift falling below 60% threshold degrades to orphan below-threshold,
+  and identical duplicate blocks with tied fuzzy scores degrade to orphan ambiguous.
+
+refs:
+  - name: refs/heads/main
+    history:
+      - keep_as: refs/fixture-history/main/gen-0
+        commits:
+          - id: base
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            message: "initial files before drift"
+            files:
+              fuzzy.txt: |
+                pre_a
+                pre_b
+                pre_c
+                core_1
+                core_2
+                core_3
+                core_4
+                post_a
+                post_b
+                post_c
+              drifted.txt: |
+                alpha
+                beta
+                gamma
+                delta_1
+                delta_2
+                delta_3
+                delta_4
+                omega_1
+                omega_2
+                omega_3
+              duplicate.txt: |
+                collar_top
+                core_1
+                core_2
+                core_3
+                core_4
+                collar_bottom
+      - commits:
+          - id: rewritten
+            author: bob
+            timestamp: 2026-01-01T01:00:00Z
+            message: "rewritten files with drift and duplication"
+            files:
+              fuzzy.txt: |
+                pre_a
+                pre_b
+                pre_c
+                core_1
+                core_2_modified
+                core_3
+                core_4
+                post_a
+                post_b
+                post_c
+              drifted.txt: |
+                mutated_alpha
+                mutated_beta
+                mutated_gamma
+                delta_1
+                mutated_2
+                mutated_3
+                mutated_4
+                mutated_omega_1
+                mutated_omega_2
+                mutated_omega_3
+              duplicate.txt: |
+                collar_top
+                core_1
+                core_2_mutated
+                core_3
+                core_4
+                middle
+                core_1
+                core_2_mutated
+                core_3
+                core_4
+                collar_bottom
+
+resolutions:
+  - name: range-drift-fuzzy
+    anchor:
+      at: base
+      path: fuzzy.txt
+      side: new
+      range: [4, 7]
+    target: rewritten
+    expect:
+      outcome: resolved
+      match: context-fuzzy
+  - name: excessive-drift-below-threshold
+    anchor:
+      at: base
+      path: drifted.txt
+      side: new
+      range: [4, 7]
+    target: rewritten
+    expect:
+      outcome: orphaned
+      reason: below-threshold
+  - name: duplicated-block-ambiguous
+    anchor:
+      at: base
+      path: duplicate.txt
+      side: new
+      range: [2, 5]
+    target: rewritten
+    expect:
+      outcome: orphaned
+      reason: ambiguous

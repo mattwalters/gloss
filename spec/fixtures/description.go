@@ -16,9 +16,10 @@ import (
 // generation but the last represents history that was once at the ref's
 // tip and later got pushed over.
 type Description struct {
-	Name        string    `yaml:"name"`
-	Description string    `yaml:"description"`
-	Refs        []RefDesc `yaml:"refs"`
+	Name        string           `yaml:"name"`
+	Description string           `yaml:"description"`
+	Refs        []RefDesc        `yaml:"refs"`
+	Resolutions []ResolutionDesc `yaml:"resolutions,omitempty"`
 }
 
 // RefDesc describes one ref and everything ever pushed to it, oldest
@@ -104,6 +105,69 @@ type CommitDesc struct {
 	Unsigned    bool              `yaml:"unsigned,omitempty"`
 	Expect      *ExpectDesc       `yaml:"expect,omitempty"`
 	Disposition string            `yaml:"disposition,omitempty"`
+}
+
+// ResolutionDesc describes one resolution case in an orphan-anchors fixture.
+type ResolutionDesc struct {
+	Name   string               `yaml:"name"`
+	Anchor ResolutionAnchorDesc `yaml:"anchor"`
+	Target string               `yaml:"target"`
+	Expect ResolutionExpectDesc `yaml:"expect"`
+}
+
+// ResolutionAnchorDesc defines the anchor source to capture.
+type ResolutionAnchorDesc struct {
+	At    string              `yaml:"at,omitempty"`
+	Path  string              `yaml:"path,omitempty"`
+	Side  string              `yaml:"side,omitempty"` // "new" | "old" | "both" (defaults to "new")
+	Range []int               `yaml:"range,omitempty"` // [start, end]
+	Old   *ResolutionSideDesc `yaml:"old,omitempty"`
+	New   *ResolutionSideDesc `yaml:"new,omitempty"`
+}
+
+// ResolutionSideDesc defines the side anchor source for cross-side cases.
+type ResolutionSideDesc struct {
+	At    string `yaml:"at"`
+	Path  string `yaml:"path"`
+	Range []int  `yaml:"range,omitempty"`
+}
+
+// ResolutionExpectDesc specifies the expected outcome for a resolution case.
+type ResolutionExpectDesc struct {
+	Outcome string                    `yaml:"outcome,omitempty"`
+	Match   string                    `yaml:"match,omitempty"`
+	Reason  string                    `yaml:"reason,omitempty"`
+	Status  string                    `yaml:"status,omitempty"`
+	Old     *ResolutionSideExpectDesc `yaml:"old,omitempty"`
+	New     *ResolutionSideExpectDesc `yaml:"new,omitempty"`
+}
+
+// ResolutionSideExpectDesc specifies per-side expected outcome for cross-side cases.
+type ResolutionSideExpectDesc struct {
+	Outcome string `yaml:"outcome"`
+	Match   string `yaml:"match,omitempty"`
+	Reason  string `yaml:"reason,omitempty"`
+}
+
+var validMatchRungs = map[string]bool{
+	"exact-path-blob":  true,
+	"exact-blob-moved": true,
+	"context-exact":    true,
+	"context-fuzzy":    true,
+}
+
+var validOrphanReasons = map[string]bool{
+	"path-absent":         true,
+	"no-candidate":        true,
+	"below-threshold":     true,
+	"ambiguous":           true,
+	"unsupported-version": true,
+}
+
+var validOutcomes = map[string]bool{
+	"resolved":           true,
+	"orphaned":           true,
+	"partially-resolved": true,
 }
 
 var validRejectReasons = map[string]bool{
@@ -222,5 +286,126 @@ func Load(data []byte) (*Description, error) {
 			}
 		}
 	}
+
+	for _, res := range d.Resolutions {
+		if res.Name == "" {
+			return nil, fmt.Errorf("fixtures: description %q resolution case missing name", d.Name)
+		}
+		if res.Target == "" {
+			return nil, fmt.Errorf("fixtures: description %q resolution %q missing target", d.Name, res.Name)
+		}
+		if !seenLabels[res.Target] {
+			return nil, fmt.Errorf("fixtures: description %q resolution %q references unknown target commit label %q", d.Name, res.Name, res.Target)
+		}
+
+		if res.Anchor.Old != nil || res.Anchor.New != nil {
+			if res.Anchor.Old != nil {
+				if res.Anchor.Old.At == "" || !seenLabels[res.Anchor.Old.At] {
+					return nil, fmt.Errorf("fixtures: description %q resolution %q old anchor references unknown commit label %q", d.Name, res.Name, res.Anchor.Old.At)
+				}
+				if res.Anchor.Old.Path == "" {
+					return nil, fmt.Errorf("fixtures: description %q resolution %q old anchor missing path", d.Name, res.Name)
+				}
+				if res.Anchor.Old.Range != nil {
+					if len(res.Anchor.Old.Range) != 2 || res.Anchor.Old.Range[0] < 1 || res.Anchor.Old.Range[1] < res.Anchor.Old.Range[0] {
+						return nil, fmt.Errorf("fixtures: description %q resolution %q old anchor range must be 1-based [start, end] with end >= start", d.Name, res.Name)
+					}
+				}
+			}
+			if res.Anchor.New != nil {
+				if res.Anchor.New.At == "" || !seenLabels[res.Anchor.New.At] {
+					return nil, fmt.Errorf("fixtures: description %q resolution %q new anchor references unknown commit label %q", d.Name, res.Name, res.Anchor.New.At)
+				}
+				if res.Anchor.New.Path == "" {
+					return nil, fmt.Errorf("fixtures: description %q resolution %q new anchor missing path", d.Name, res.Name)
+				}
+				if res.Anchor.New.Range != nil {
+					if len(res.Anchor.New.Range) != 2 || res.Anchor.New.Range[0] < 1 || res.Anchor.New.Range[1] < res.Anchor.New.Range[0] {
+						return nil, fmt.Errorf("fixtures: description %q resolution %q new anchor range must be 1-based [start, end] with end >= start", d.Name, res.Name)
+					}
+				}
+			}
+		} else {
+			if res.Anchor.At == "" || !seenLabels[res.Anchor.At] {
+				return nil, fmt.Errorf("fixtures: description %q resolution %q anchor references unknown commit label %q", d.Name, res.Name, res.Anchor.At)
+			}
+			if res.Anchor.Path == "" {
+				return nil, fmt.Errorf("fixtures: description %q resolution %q anchor missing path", d.Name, res.Name)
+			}
+			if res.Anchor.Side != "" && res.Anchor.Side != "new" && res.Anchor.Side != "old" && res.Anchor.Side != "both" {
+				return nil, fmt.Errorf("fixtures: description %q resolution %q anchor invalid side %q (must be 'new', 'old', or 'both')", d.Name, res.Name, res.Anchor.Side)
+			}
+			if res.Anchor.Range != nil {
+				if len(res.Anchor.Range) != 2 || res.Anchor.Range[0] < 1 || res.Anchor.Range[1] < res.Anchor.Range[0] {
+					return nil, fmt.Errorf("fixtures: description %q resolution %q anchor range must be 1-based [start, end] with end >= start", d.Name, res.Name)
+				}
+			}
+		}
+
+		if res.Expect.Status != "" && !validOutcomes[res.Expect.Status] {
+			return nil, fmt.Errorf("fixtures: description %q resolution %q invalid status %q (must be closed enum)", d.Name, res.Name, res.Expect.Status)
+		}
+		if res.Expect.Old != nil {
+			if !validOutcomes[res.Expect.Old.Outcome] {
+				return nil, fmt.Errorf("fixtures: description %q resolution %q invalid old outcome %q (must be closed enum)", d.Name, res.Name, res.Expect.Old.Outcome)
+			}
+			if res.Expect.Old.Outcome == "resolved" {
+				if !validMatchRungs[res.Expect.Old.Match] {
+					return nil, fmt.Errorf("fixtures: description %q resolution %q invalid old match %q (must be closed enum)", d.Name, res.Name, res.Expect.Old.Match)
+				}
+				if res.Expect.Old.Reason != "" {
+					return nil, fmt.Errorf("fixtures: description %q resolution %q resolved old expect cannot specify orphan reason", d.Name, res.Name)
+				}
+			} else if res.Expect.Old.Outcome == "orphaned" {
+				if !validOrphanReasons[res.Expect.Old.Reason] {
+					return nil, fmt.Errorf("fixtures: description %q resolution %q invalid old reason %q (must be closed enum)", d.Name, res.Name, res.Expect.Old.Reason)
+				}
+				if res.Expect.Old.Match != "" {
+					return nil, fmt.Errorf("fixtures: description %q resolution %q orphaned old expect cannot specify match", d.Name, res.Name)
+				}
+			}
+		}
+		if res.Expect.New != nil {
+			if !validOutcomes[res.Expect.New.Outcome] {
+				return nil, fmt.Errorf("fixtures: description %q resolution %q invalid new outcome %q (must be closed enum)", d.Name, res.Name, res.Expect.New.Outcome)
+			}
+			if res.Expect.New.Outcome == "resolved" {
+				if !validMatchRungs[res.Expect.New.Match] {
+					return nil, fmt.Errorf("fixtures: description %q resolution %q invalid new match %q (must be closed enum)", d.Name, res.Name, res.Expect.New.Match)
+				}
+				if res.Expect.New.Reason != "" {
+					return nil, fmt.Errorf("fixtures: description %q resolution %q resolved new expect cannot specify orphan reason", d.Name, res.Name)
+				}
+			} else if res.Expect.New.Outcome == "orphaned" {
+				if !validOrphanReasons[res.Expect.New.Reason] {
+					return nil, fmt.Errorf("fixtures: description %q resolution %q invalid new reason %q (must be closed enum)", d.Name, res.Name, res.Expect.New.Reason)
+				}
+				if res.Expect.New.Match != "" {
+					return nil, fmt.Errorf("fixtures: description %q resolution %q orphaned new expect cannot specify match", d.Name, res.Name)
+				}
+			}
+		}
+		if res.Expect.Outcome != "" {
+			if !validOutcomes[res.Expect.Outcome] {
+				return nil, fmt.Errorf("fixtures: description %q resolution %q invalid outcome %q (must be closed enum)", d.Name, res.Name, res.Expect.Outcome)
+			}
+			if res.Expect.Outcome == "resolved" {
+				if !validMatchRungs[res.Expect.Match] {
+					return nil, fmt.Errorf("fixtures: description %q resolution %q invalid match %q (must be closed enum)", d.Name, res.Name, res.Expect.Match)
+				}
+				if res.Expect.Reason != "" {
+					return nil, fmt.Errorf("fixtures: description %q resolution %q resolved expect cannot specify orphan reason", d.Name, res.Name)
+				}
+			} else if res.Expect.Outcome == "orphaned" {
+				if !validOrphanReasons[res.Expect.Reason] {
+					return nil, fmt.Errorf("fixtures: description %q resolution %q invalid reason %q (must be closed enum)", d.Name, res.Name, res.Expect.Reason)
+				}
+				if res.Expect.Match != "" {
+					return nil, fmt.Errorf("fixtures: description %q resolution %q orphaned expect cannot specify match", d.Name, res.Name)
+				}
+			}
+		}
+	}
+
 	return &d, nil
 }

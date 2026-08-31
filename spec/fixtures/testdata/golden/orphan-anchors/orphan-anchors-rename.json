@@ -1,0 +1,199 @@
+{
+  "cases": [
+    {
+      "name": "moved-file-clean-range",
+      "source": {
+        "commit": "9047576a1f8de5584db60122546331ca736648af",
+        "path": "src/clean.go",
+        "range": {
+          "start": 3,
+          "end": 5
+        }
+      },
+      "target": {
+        "ref": "refs/heads/main",
+        "commit": "f169decdec21c2ca88a29a1db5a147b9ae0f47f8"
+      },
+      "anchor": {
+        "version": 1,
+        "new": {
+          "commit": "9047576a1f8de5584db60122546331ca736648af",
+          "path": "src/clean.go",
+          "blob": "f686a0e31fdf013f2bcb5f55cb8de50612bac8ef",
+          "range": {
+            "start": 3,
+            "end": 5
+          },
+          "context": {
+            "before": [
+              "package src",
+              ""
+            ],
+            "lines": [
+              "func Clean() string {",
+              "\treturn \"clean\"",
+              "}"
+            ],
+            "after": []
+          }
+        }
+      },
+      "resolution": {
+        "anchor": {
+          "version": 1,
+          "new": {
+            "commit": "9047576a1f8de5584db60122546331ca736648af",
+            "path": "src/clean.go",
+            "blob": "f686a0e31fdf013f2bcb5f55cb8de50612bac8ef",
+            "range": {
+              "start": 3,
+              "end": 5
+            },
+            "context": {
+              "before": [
+                "package src",
+                ""
+              ],
+              "lines": [
+                "func Clean() string {",
+                "\treturn \"clean\"",
+                "}"
+              ],
+              "after": []
+            }
+          }
+        },
+        "new": {
+          "outcome": "resolved",
+          "match": "exact-blob-moved",
+          "path": "pkg/clean.go",
+          "range": {
+            "start": 3,
+            "end": 5
+          }
+        }
+      },
+      "status": "resolved"
+    },
+    {
+      "name": "moved-file-edited-range",
+      "source": {
+        "commit": "9047576a1f8de5584db60122546331ca736648af",
+        "path": "src/edited.go",
+        "range": {
+          "start": 5,
+          "end": 9
+        }
+      },
+      "target": {
+        "ref": "refs/heads/main",
+        "commit": "f169decdec21c2ca88a29a1db5a147b9ae0f47f8"
+      },
+      "anchor": {
+        "version": 1,
+        "new": {
+          "commit": "9047576a1f8de5584db60122546331ca736648af",
+          "path": "src/edited.go",
+          "blob": "75692a7d35af9e712301e24c20991d7ebe910629",
+          "range": {
+            "start": 5,
+            "end": 9
+          },
+          "context": {
+            "before": [
+              "",
+              "import \"fmt\"",
+              ""
+            ],
+            "lines": [
+              "func Process() {",
+              "\tstep1()",
+              "\tstep2()",
+              "\tstep3()",
+              "\tfmt.Println(\"done\")"
+            ],
+            "after": [
+              "}"
+            ]
+          }
+        }
+      },
+      "resolution": {
+        "anchor": {
+          "version": 1,
+          "new": {
+            "commit": "9047576a1f8de5584db60122546331ca736648af",
+            "path": "src/edited.go",
+            "blob": "75692a7d35af9e712301e24c20991d7ebe910629",
+            "range": {
+              "start": 5,
+              "end": 9
+            },
+            "context": {
+              "before": [
+                "",
+                "import \"fmt\"",
+                ""
+              ],
+              "lines": [
+                "func Process() {",
+                "\tstep1()",
+                "\tstep2()",
+                "\tstep3()",
+                "\tfmt.Println(\"done\")"
+              ],
+              "after": [
+                "}"
+              ]
+            }
+          }
+        },
+        "new": {
+          "outcome": "resolved",
+          "match": "context-fuzzy",
+          "path": "pkg/edited.go",
+          "range": {
+            "start": 5,
+            "end": 9
+          }
+        }
+      },
+      "status": "resolved"
+    },
+    {
+      "name": "moved-whole-file",
+      "source": {
+        "commit": "9047576a1f8de5584db60122546331ca736648af",
+        "path": "docs/guide.md"
+      },
+      "target": {
+        "ref": "refs/heads/main",
+        "commit": "f169decdec21c2ca88a29a1db5a147b9ae0f47f8"
+      },
+      "anchor": {
+        "version": 1,
+        "new": {
+          "commit": "9047576a1f8de5584db60122546331ca736648af",
+          "path": "docs/guide.md",
+          "blob": "b3c971e716b509264efd7fa712106c2ddc95b1d8"
+        }
+      },
+      "resolution": {
+        "anchor": {
+          "version": 1,
+          "new": {
+            "commit": "9047576a1f8de5584db60122546331ca736648af",
+            "path": "docs/guide.md",
+            "blob": "b3c971e716b509264efd7fa712106c2ddc95b1d8"
+          }
+        },
+        "new": {
+          "outcome": "resolved",
+          "match": "exact-blob-moved",
+          "path": "documentation/guide.md"
+        }
+      },
+      "status": "resolved"
+    }
+  ]
+}
