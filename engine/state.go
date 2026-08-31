@@ -63,3 +63,20 @@ type Project = state.Project
 // Cycle represents the materialized state of a cycle collaborative object (v1),
 // produced by FoldCycle.
 type Cycle = state.Cycle
+
+// RepoEntry represents a repository registry entry collaborative object (v1),
+// produced by FoldRepo.
+type RepoEntry = state.RepoEntry
+
+// ResolvedReference represents the outcome of resolving a reference against a repository registry.
+type ResolvedReference = state.ResolvedReference
+
+// ParseReference parses a reference string into its repository designator and target object ID.
+func ParseReference(ref string) (string, string, error) {
+	return state.ParseReference(ref)
+}
+
+// ResolveReference executes the pure reference resolution algorithm from spec/identifiers.md §Reference resolution.
+func ResolveReference(ref string, localRepoID string, registry []RepoEntry) (ResolvedReference, error) {
+	return state.ResolveReference(ref, localRepoID, registry)
+}

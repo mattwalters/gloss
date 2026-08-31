@@ -264,6 +264,45 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 			}
 		}
 
+	case "repo":
+		repoEntry, err := state.FoldRepo(ops)
+		if err != nil {
+			return fmt.Errorf("projection: fold repo %s: %w", objectID, err)
+		}
+
+		isWorkspaceInt := 0
+		if repoEntry.IsWorkspace {
+			isWorkspaceInt = 1
+		}
+
+		_, err = tx.Exec(
+			"INSERT INTO repos (object_id, slug, is_workspace) VALUES (?, ?, ?)",
+			objectID, repoEntry.Slug, isWorkspaceInt,
+		)
+		if err != nil {
+			return fmt.Errorf("projection: insert repo %s: %w", objectID, err)
+		}
+
+		for _, remote := range repoEntry.Remotes {
+			_, err = tx.Exec(
+				"INSERT INTO repo_remotes (repo_object_id, remote) VALUES (?, ?)",
+				objectID, remote,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert repo remote %s (%s): %w", objectID, remote, err)
+			}
+		}
+
+		for i, u := range repoEntry.UnknownOps {
+			_, err = tx.Exec(
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?)",
+				objectID, u.Commit, u.OpType, u.OpVersion, i,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert unknown op %s: %w", u.Commit, err)
+			}
+		}
+
 	default:
 		// Preserved-but-unreduced ops: record in unknown_ops
 		for i, op := range ops {
@@ -315,6 +354,8 @@ func deleteObjectState(tx *sql.Tx, objectID string) error {
 		"DELETE FROM project_issues WHERE project_object_id = ?",
 		"DELETE FROM cycles WHERE object_id = ?",
 		"DELETE FROM cycle_issues WHERE cycle_object_id = ?",
+		"DELETE FROM repos WHERE object_id = ?",
+		"DELETE FROM repo_remotes WHERE repo_object_id = ?",
 	}
 	for _, q := range queries {
 		if _, err := tx.Exec(q, objectID); err != nil {

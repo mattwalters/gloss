@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/dag"
 	"github.com/writtendev/writ/engine/identity"
@@ -177,6 +178,97 @@ func TestInit_WriterIDPrecedence(t *testing.T) {
 			t.Errorf("git config --local writ.writerId should not be set, but got %q", string(out))
 		}
 	})
+}
+
+func TestInit_RepoIDPrecedence(t *testing.T) {
+	t.Run("local_preset", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setGitConfig(t, env.repoDir, "writ.repoId", "a1b2c3d4e5f60718293a4b5c6d7e8f90")
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
+		}
+		got := getGitConfigAll(t, env.repoDir, "writ.repoId")
+		if len(got) != 1 || got[0] != "a1b2c3d4e5f60718293a4b5c6d7e8f90" {
+			t.Errorf("repoId = %v, want [\"a1b2c3d4e5f60718293a4b5c6d7e8f90\"]", got)
+		}
+		if !strings.Contains(stdout.String(), "a1b2c3d4e5f60718293a4b5c6d7e8f90") {
+			t.Errorf("stdout does not contain local repo ID: %s", stdout.String())
+		}
+		if !strings.Contains(stdout.String(), "already configured") {
+			t.Errorf("stdout does not indicate already configured: %s", stdout.String())
+		}
+	})
+
+	t.Run("unset_mints", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
+		}
+		got := getGitConfigAll(t, env.repoDir, "writ.repoId")
+		re := regexp.MustCompile(`^[0-9a-f]{32}$`)
+		if len(got) != 1 || !re.MatchString(got[0]) {
+			t.Errorf("minted repoId = %v, want valid 32 hex chars", got)
+		}
+		if !strings.Contains(stdout.String(), "Repo ID:") || !strings.Contains(stdout.String(), "(minted)") {
+			t.Errorf("stdout does not indicate Repo ID minted: %s", stdout.String())
+		}
+	})
+}
+
+func TestInit_WorkspaceRegistration(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+
+	// Create a workspace repository
+	wsDir := t.TempDir()
+	initCmd := exec.Command("git", "init")
+	initCmd.Dir = wsDir
+	if out, err := initCmd.CombinedOutput(); err != nil {
+		t.Fatalf("init wsDir: %v (%s)", err, out)
+	}
+	setupSigningKey(t, wsDir)
+	setGitConfig(t, wsDir, "writ.writerId", "0000000000000001")
+
+	// Set writ.workspace on code repo
+	setGitConfig(t, env.repoDir, "writ.workspace", wsDir)
+	addRemote(t, env.repoDir, "origin", "git@github.com:acme/backend.git")
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("init with workspace exited with %d; stderr: %s", code, stderr.String())
+	}
+
+	if !strings.Contains(stdout.String(), "Registered repository in workspace") {
+		t.Errorf("stdout does not note workspace registration: %s", stdout.String())
+	}
+
+	// Verify workspace repo's projection contains the registered repo
+	wsStore, err := writ.Open(wsDir)
+	if err != nil {
+		t.Fatalf("open wsStore: %v", err)
+	}
+	defer wsStore.Close()
+
+	repos, err := wsStore.Workspace.Repos(context.Background())
+	if err != nil {
+		t.Fatalf("wsStore.Workspace.Repos: %v", err)
+	}
+	if len(repos) != 1 {
+		t.Fatalf("expected 1 registered repo in workspace, got %d", len(repos))
+	}
+	if repos[0].Slug != filepath.Base(env.repoDir) {
+		t.Errorf("registered repo slug = %q, want %q", repos[0].Slug, filepath.Base(env.repoDir))
+	}
+	if len(repos[0].Remotes) != 1 || repos[0].Remotes[0] != "git@github.com:acme/backend.git" {
+		t.Errorf("registered repo remotes = %v, want ['git@github.com:acme/backend.git']", repos[0].Remotes)
+	}
 }
 
 func TestInit_SigningKeyGuidance(t *testing.T) {

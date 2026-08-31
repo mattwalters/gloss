@@ -103,3 +103,11 @@ func (c *Client) Identity() identity.Identity {
 func (c *Client) WriterID() identity.WriterID {
 	return c.identity.WriterID
 }
+
+// GitBinary returns the configured git executable binary path.
+func (c *Client) GitBinary() string {
+	if c == nil || c.gitBin == "" {
+		return "git"
+	}
+	return c.gitBin
+}

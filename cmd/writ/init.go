@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/dag"
 	"github.com/writtendev/writ/engine/identity"
 	"github.com/writtendev/writ/engine/sync"
@@ -100,6 +102,18 @@ Flags:
 		fmt.Fprintf(stdout, "Writer ID: %s (already configured)\n", writerID)
 	}
 
+	repoID, repoMinted, err := identity.EnsureRepoID(ctx, repoRoot)
+	if err != nil {
+		fmt.Fprintf(stderr, "writ init: ensure repo ID: %v\n", err)
+		return 1
+	}
+
+	if repoMinted {
+		fmt.Fprintf(stdout, "Repo ID: %s (minted)\n", repoID)
+	} else {
+		fmt.Fprintf(stdout, "Repo ID: %s (already configured)\n", repoID)
+	}
+
 	// 3. Load identity to report author and key state
 	ident, err := identity.Load(ctx, repoRoot)
 	if err != nil {
@@ -152,25 +166,55 @@ Flags:
 
 	if len(remotes) == 0 {
 		fmt.Fprintln(stdout, "No git remotes configured; fetch refspec will be added when a remote is configured.")
-		return 0
-	}
-
-	client, err := sync.Open(repoRoot, identity.Identity{WriterID: writerID})
-	if err != nil {
-		fmt.Fprintf(stderr, "writ init: open sync client: %v\n", err)
-		return 1
-	}
-
-	for _, remote := range remotes {
-		status, err := client.Ensure(ctx, remote)
+	} else {
+		client, err := sync.Open(repoRoot, identity.Identity{WriterID: writerID})
 		if err != nil {
-			fmt.Fprintf(stderr, "writ init: remote %q: %v\n", remote, err)
+			fmt.Fprintf(stderr, "writ init: open sync client: %v\n", err)
 			return 1
 		}
-		if status.Repaired {
-			fmt.Fprintf(stdout, "Configured fetch refspec for remote %q (%s)\n", remote, status.Expected)
-		} else {
-			fmt.Fprintf(stdout, "Fetch refspec for remote %q is already configured (%s)\n", remote, status.Expected)
+
+		for _, remote := range remotes {
+			status, err := client.Ensure(ctx, remote)
+			if err != nil {
+				fmt.Fprintf(stderr, "writ init: remote %q: %v\n", remote, err)
+				return 1
+			}
+			if status.Repaired {
+				fmt.Fprintf(stdout, "Configured fetch refspec for remote %q (%s)\n", remote, status.Expected)
+			} else {
+				fmt.Fprintf(stdout, "Fetch refspec for remote %q is already configured (%s)\n", remote, status.Expected)
+			}
+		}
+	}
+
+	// 5. Register repository in workspace if writ.workspace is configured
+	gitCfg, _ := identity.ReadGitConfig(ctx, repoRoot)
+	if rawWs, ok := gitCfg["writ.workspace"]; ok && strings.TrimSpace(rawWs) != "" {
+		wsPath := strings.TrimSpace(rawWs)
+		if !filepath.IsAbs(wsPath) {
+			wsPath = filepath.Clean(filepath.Join(repoRoot, wsPath))
+		}
+		store, err := writ.Open(repoRoot)
+		if err == nil {
+			defer store.Close()
+			slug := filepath.Base(repoRoot)
+			if store.Workspace != nil && store.Workspace.IsConfigured() {
+				var remoteURLs []string
+				for _, r := range remotes {
+					cmdURL := exec.CommandContext(ctx, "git", "remote", "get-url", r)
+					cmdURL.Dir = repoRoot
+					if outURL, errURL := cmdURL.Output(); errURL == nil {
+						if u := strings.TrimSpace(string(outURL)); u != "" {
+							remoteURLs = append(remoteURLs, u)
+						}
+					}
+				}
+				if err := store.Workspace.Register(ctx, slug, remoteURLs); err == nil {
+					fmt.Fprintf(stdout, "Registered repository in workspace %s (%s)\n", wsPath, slug)
+				} else {
+					fmt.Fprintf(stderr, "warning: could not register in workspace: %v\n", err)
+				}
+			}
 		}
 	}
 
