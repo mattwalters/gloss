@@ -1,0 +1,46 @@
+{
+  "control-character.json": {
+    "kind": "schema",
+    "reason": "reference must not contain newline or control characters"
+  },
+  "duplicate-registry-repo-id.json": {
+    "kind": "invariant",
+    "reason": "registry repo IDs must be unique within a workspace"
+  },
+  "embedded-whitespace.json": {
+    "kind": "schema",
+    "reason": "reference must not contain whitespace"
+  },
+  "empty-designator.json": {
+    "kind": "schema",
+    "reason": "reference with a hash must include a non-empty repo designator"
+  },
+  "empty-object-id.json": {
+    "kind": "schema",
+    "reason": "reference must include a non-empty object id following the hash"
+  },
+  "empty-reference.json": {
+    "kind": "schema",
+    "reason": "reference must not be empty"
+  },
+  "missing-reference.json": {
+    "kind": "schema",
+    "reason": "reference field is required"
+  },
+  "non-hex-repo-id.json": {
+    "kind": "schema",
+    "reason": "repo designator must contain only hexadecimal digits"
+  },
+  "short-repo-id.json": {
+    "kind": "schema",
+    "reason": "repo designator must be exactly 32 hexadecimal characters"
+  },
+  "two-hashes.json": {
+    "kind": "schema",
+    "reason": "reference must contain at most one hash separator"
+  },
+  "uppercase-repo-id.json": {
+    "kind": "schema",
+    "reason": "repo designator must be lowercase hexadecimal characters"
+  }
+}
