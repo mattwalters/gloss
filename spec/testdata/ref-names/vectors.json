@@ -1,0 +1,207 @@
+{
+  "refspecs": {
+    "fetch": "refs/writ/*:refs/remotes/<remote>/writ/*",
+    "push": "refs/writ/<writer-id>/*:refs/writ/<writer-id>/*"
+  },
+  "valid": [
+    {
+      "ref": "refs/writ/0123456789abcdef/review",
+      "writer_id": "0123456789abcdef",
+      "object_type": "review"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/comment",
+      "writer_id": "0123456789abcdef",
+      "object_type": "comment"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/approval",
+      "writer_id": "0123456789abcdef",
+      "object_type": "approval"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/ci-status",
+      "writer_id": "0123456789abcdef",
+      "object_type": "ci-status"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/issue",
+      "writer_id": "0123456789abcdef",
+      "object_type": "issue"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/project",
+      "writer_id": "0123456789abcdef",
+      "object_type": "project"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/cycle",
+      "writer_id": "0123456789abcdef",
+      "object_type": "cycle"
+    },
+    {
+      "ref": "refs/writ/0000000000000000/a",
+      "writer_id": "0000000000000000",
+      "object_type": "a"
+    },
+    {
+      "ref": "refs/writ/ffffffffffffffff/custom-type-123",
+      "writer_id": "ffffffffffffffff",
+      "object_type": "custom-type-123"
+    },
+    {
+      "ref": "refs/writ/fedcba9876543210/type--with--hyphens-",
+      "writer_id": "fedcba9876543210",
+      "object_type": "type--with--hyphens-"
+    },
+    {
+      "ref": "refs/writ/1029384756afbecd/type2",
+      "writer_id": "1029384756afbecd",
+      "object_type": "type2"
+    },
+    {
+      "ref": "refs/writ/abcdef0123456789/a-1-b-2-c-3",
+      "writer_id": "abcdef0123456789",
+      "object_type": "a-1-b-2-c-3"
+    },
+    {
+      "ref": "refs/writ/550e8400e29b41d4/a012345678901234567890123456789012345678901234567890123456789012",
+      "writer_id": "550e8400e29b41d4",
+      "object_type": "a012345678901234567890123456789012345678901234567890123456789012"
+    }
+  ],
+  "invalid": [
+    {
+      "ref": "refs/heads/main",
+      "reason": "missing refs/writ/ prefix"
+    },
+    {
+      "ref": "refs/writ",
+      "reason": "missing writer-id and object-type segments"
+    },
+    {
+      "ref": "refs/writ/",
+      "reason": "empty writer-id and missing object-type segments"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef",
+      "reason": "missing object-type segment"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/",
+      "reason": "empty object-type segment"
+    },
+    {
+      "ref": "refs/writ//review",
+      "reason": "empty writer-id segment"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/review/extra",
+      "reason": "too many path segments"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/cobs/review/123",
+      "reason": "too many path segments (legacy per-object format)"
+    },
+    {
+      "ref": "refs/writ/0123456789abcde/review",
+      "reason": "writer-id too short (15 chars, want 16)"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef0/review",
+      "reason": "writer-id too long (17 chars, want 16)"
+    },
+    {
+      "ref": "refs/writ/0123456789ABCDEF/review",
+      "reason": "writer-id contains uppercase hex"
+    },
+    {
+      "ref": "refs/writ/0123456789Abcdef/review",
+      "reason": "writer-id contains mixed-case hex"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdeg/review",
+      "reason": "writer-id contains non-hex character"
+    },
+    {
+      "ref": "refs/writ/0123456789abc-ef/review",
+      "reason": "writer-id contains hyphen"
+    },
+    {
+      "ref": "refs/writ/alice-workstation/review",
+      "reason": "writer-id is not 16 hex characters"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/1review",
+      "reason": "object-type must start with lowercase letter"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/-review",
+      "reason": "object-type must start with lowercase letter"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/Review",
+      "reason": "object-type contains uppercase letters"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/ci_status",
+      "reason": "object-type contains underscore"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/review.lock",
+      "reason": "object-type contains dot and ends in .lock"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/review/sub",
+      "reason": "object-type contains slash (extra segment)"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/a0123456789012345678901234567890123456789012345678901234567890123",
+      "reason": "object-type exceeds 64 characters (65 chars)"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/..",
+      "reason": "object-type contains dot-dot"
+    },
+    {
+      "ref": "refs/writ/../0123456789abcdef/review",
+      "reason": "path contains dot-dot segment"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/review@{1}",
+      "reason": "object-type contains invalid ref character @"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/review~1",
+      "reason": "object-type contains invalid ref character ~"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/review^2",
+      "reason": "object-type contains invalid ref character ^"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/review:test",
+      "reason": "object-type contains invalid ref character :"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/review?test",
+      "reason": "object-type contains invalid ref character ?"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/review*test",
+      "reason": "object-type contains invalid ref character *"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/review[test]",
+      "reason": "object-type contains invalid ref character ["
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/review\\test",
+      "reason": "object-type contains invalid ref character \\"
+    },
+    {
+      "ref": "refs/writ/0123456789abcdef/review test",
+      "reason": "object-type contains space"
+    }
+  ]
+}

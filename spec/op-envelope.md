@@ -58,10 +58,16 @@ same signing key then mint the same op id.
   `op.json` with file mode `100644` at the root of the tree, holding the
   payload described in the next section. No subdirectories, no other
   files.
-- **Parents.** The commit's parents are the op's DAG parents, in the
-  order the producer observed them. The first op of an object has no
-  parents. Parent ops live under the same object; edges MUST NOT point
-  at non-op commits.
+- **Parents.** Every commit parent is a happens-before edge. For a
+  non-empty chain, `parents[0]` MUST be the writer's previous op commit
+  on that chain (the chain predecessor). Additional parents
+  (`parents[1:]`) are causal references to other ops that this op
+  observed or depended on. When a chain is empty (the writer's first op
+  on that chain), causal references start at `parents[0]`; if there are
+  no causal dependencies, the op has zero parents. Parent ops MUST NOT
+  point at non-op commits. (See [`spec/ref-layout.md`](ref-layout.md) for
+  ref layout and edge rules; an object's op-DAG is the
+  ancestry-restricted subgraph over its `object_id`.)
 - **Author and committer.** The committer identity and timestamp MUST be
   byte-identical to the author identity and timestamp. There is no
   separate "committer" concept in the op model.
@@ -170,7 +176,7 @@ cannot live in fold, and this document does not define when it runs.
 
 ## Out of scope, with forward references
 
-- Ref layout and the writer-id form a reader enumerates: **WRIT-7**.
+- Ref layout, writer-id convention, and refspecs: [`spec/ref-layout.md`](ref-layout.md).
 - Per-op-type body schemas and vocabularies: **WRIT-8–11**.
 - Fold semantics, ordering, and concurrency tiebreaks: [`spec/fold.md`](fold.md).
 - Unknown-op handling inside fold: **WRIT-15**.
