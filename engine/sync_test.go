@@ -15,11 +15,11 @@ func setupSyncHarness(t *testing.T) (bareDir, aliceDir, bobDir string) {
 
 	// 1. Bare remote
 	bareDir = filepath.Join(tempDir, "remote.git")
-	runGitCmd(t, tempDir, "init", "--bare", bareDir)
+	runGitCmd(t, tempDir, "init", "--bare", "--initial-branch=main", bareDir)
 
 	// 2. Alice's clone
 	aliceDir = filepath.Join(tempDir, "alice")
-	runGitCmd(t, tempDir, "init", aliceDir)
+	runGitCmd(t, tempDir, "init", "--initial-branch=main", aliceDir)
 	runGitCmd(t, aliceDir, "config", "user.name", "Alice")
 	runGitCmd(t, aliceDir, "config", "user.email", "alice@example.com")
 	runGitCmd(t, aliceDir, "config", "writ.writerId", "0123456789abcdef")

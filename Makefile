@@ -13,7 +13,8 @@ api:
 	$(APIDIFF) -w api/engine.api github.com/writtendev/writ/engine
 
 api-check:
-	@out=$$($(APIDIFF) -incompatible api/engine.api github.com/writtendev/writ/engine 2>&1); \
+	@set -e; \
+	out=$$($(APIDIFF) -incompatible api/engine.api github.com/writtendev/writ/engine); \
 	if [ -n "$$out" ]; then \
 		echo "Incompatible API changes detected in github.com/writtendev/writ/engine:"; \
 		echo "$$out"; \
