@@ -1,0 +1,513 @@
+// Package wire defines the CLI-owned JSON wire format for writ plumbing mode (--json).
+//
+// These wire types are deliberately decoupled from domain serialization and engine state tags
+// so that internal engine changes cannot silently break scripted consumers.
+package wire
+
+import (
+	"time"
+
+	"github.com/writtendev/writ/engine"
+	"github.com/writtendev/writ/engine/resolve"
+	"github.com/writtendev/writ/engine/state"
+)
+
+// CurrentSchemaVersion is the version of the JSON plumbing envelope schema.
+const CurrentSchemaVersion = 1
+
+// Envelope kinds for plumbing commands.
+const (
+	KindReviewList   = "review.list"
+	KindReviewStatus = "review.status"
+	KindIssueList    = "issue.list"
+	KindIssueStatus  = "issue.status"
+	KindSyncStatus   = "sync.status"
+	KindSyncResult   = "sync.result"
+)
+
+// Envelope wraps all machine-readable output in a single versioned container.
+type Envelope struct {
+	SchemaVersion int    `json:"schema_version"`
+	Kind          string `json:"kind"`
+	Data          any    `json:"data"`
+}
+
+// Author represents the display name and email address of an author.
+type Author struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+// Revision represents a code revision push (base and head commit SHAs).
+type Revision struct {
+	Base string `json:"base"`
+	Head string `json:"head"`
+}
+
+// Approval represents an approval or review verdict.
+type Approval struct {
+	Subject  string `json:"subject"`
+	Revision string `json:"revision"`
+	Verdict  string `json:"verdict"`
+	Message  string `json:"message,omitempty"`
+}
+
+// CIStatus represents an automated CI check result.
+type CIStatus struct {
+	Revision    string `json:"revision"`
+	Name        string `json:"name"`
+	State       string `json:"state"`
+	URL         string `json:"url,omitempty"`
+	Description string `json:"description,omitempty"`
+	StartedAt   string `json:"started_at,omitempty"`
+	CompletedAt string `json:"completed_at,omitempty"`
+	ExternalID  string `json:"external_id,omitempty"`
+}
+
+// UnknownOp records an unrecognized operation preserved for forward compatibility.
+type UnknownOp struct {
+	Commit    string `json:"commit"`
+	OpType    string `json:"op_type"`
+	OpVersion int64  `json:"op_version"`
+}
+
+// ReviewSummary is a single row in the review list output.
+type ReviewSummary struct {
+	ObjectID  string    `json:"object_id"`
+	Title     string    `json:"title"`
+	Status    string    `json:"status"`
+	Author    Author    `json:"author"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Review is the full detail view of a code review collaborative object.
+type Review struct {
+	ObjectID    string      `json:"object_id"`
+	Title       string      `json:"title"`
+	Description string      `json:"description,omitempty"`
+	Status      string      `json:"status"`
+	MergeCommit string      `json:"merge_commit,omitempty"`
+	Reason      string      `json:"reason,omitempty"`
+	Author      Author      `json:"author"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	Revisions   []Revision  `json:"revisions"`
+	Approvals   []Approval  `json:"approvals"`
+	CIStatuses  []CIStatus  `json:"ci_statuses"`
+	UnknownOps  []UnknownOp `json:"unknown_ops"`
+}
+
+// IssueSummary is a single row in the issue list output.
+type IssueSummary struct {
+	ObjectID  string    `json:"object_id"`
+	Title     string    `json:"title"`
+	State     string    `json:"state"`
+	Author    Author    `json:"author"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// IssueLink represents a cross-reference link attached to an issue.
+type IssueLink struct {
+	Target     string `json:"target"`
+	TargetType string `json:"target_type,omitempty"`
+	Relation   string `json:"relation"`
+}
+
+// Issue is the full detail view of an issue collaborative object.
+type Issue struct {
+	ObjectID    string      `json:"object_id"`
+	Title       string      `json:"title"`
+	Description string      `json:"description,omitempty"`
+	State       string      `json:"state"`
+	Reason      string      `json:"reason,omitempty"`
+	Author      Author      `json:"author"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	Assignees   []string    `json:"assignees"`
+	Labels      []string    `json:"labels"`
+	Links       []IssueLink `json:"links"`
+	UnknownOps  []UnknownOp `json:"unknown_ops"`
+}
+
+// Range is a 1-based inclusive line range [Start, End].
+type Range struct {
+	Start int `json:"start"`
+	End   int `json:"end"`
+}
+
+// Context holds captured line content and surrounding context.
+type Context struct {
+	Before  []string `json:"before,omitempty"`
+	Lines   []string `json:"lines,omitempty"`
+	Omitted int      `json:"omitted,omitempty"`
+	After   []string `json:"after,omitempty"`
+}
+
+// SideAnchor describes the position on one side of a diff.
+type SideAnchor struct {
+	Commit  string   `json:"commit"`
+	Path    string   `json:"path"`
+	Blob    string   `json:"blob"`
+	Range   *Range   `json:"range,omitempty"`
+	Context *Context `json:"context,omitempty"`
+}
+
+// Anchor is a content-based comment anchor.
+type Anchor struct {
+	Version int         `json:"version"`
+	Old     *SideAnchor `json:"old,omitempty"`
+	New     *SideAnchor `json:"new,omitempty"`
+}
+
+// ResolvedPosition describes the resolved anchor position for a comment side.
+type ResolvedPosition struct {
+	Side      string `json:"side"`
+	Outcome   string `json:"outcome"`
+	Match     string `json:"match,omitempty"`
+	Path      string `json:"path,omitempty"`
+	StartLine int    `json:"start_line,omitempty"`
+	EndLine   int    `json:"end_line,omitempty"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+// CommentSubject identifies the collaborative object a comment is attached to.
+type CommentSubject struct {
+	ObjectType string `json:"object_type"`
+	ObjectID   string `json:"object_id"`
+}
+
+// Comment represents a comment on a collaborative object.
+type Comment struct {
+	ObjectID   string             `json:"object_id"`
+	Subject    CommentSubject     `json:"subject"`
+	Author     Author             `json:"author"`
+	CreatedAt  time.Time          `json:"created_at"`
+	UpdatedAt  time.Time          `json:"updated_at"`
+	Text       string             `json:"text"`
+	InReplyTo  string             `json:"in_reply_to,omitempty"`
+	Anchor     *Anchor            `json:"anchor,omitempty"`
+	Deleted    bool               `json:"deleted"`
+	Resolved   []ResolvedPosition `json:"resolved,omitempty"`
+	UnknownOps []UnknownOp        `json:"unknown_ops"`
+}
+
+// CommentThread represents a root comment and its nested replies.
+type CommentThread struct {
+	ObjectID   string          `json:"object_id"`
+	Comment    Comment         `json:"comment"`
+	Replies    []CommentThread `json:"replies"`
+	UnknownOps []UnknownOp     `json:"unknown_ops"`
+}
+
+// SyncStatus reports synchronization status for a single remote.
+type SyncStatus struct {
+	Remote   string `json:"remote"`
+	Unsynced int    `json:"unsynced"`
+}
+
+// SyncResult reports aggregate statistics from a sync operation for a single remote.
+type SyncResult struct {
+	Remote         string `json:"remote"`
+	OpsFetched     int    `json:"ops_fetched"`
+	OpsPushed      int    `json:"ops_pushed"`
+	ObjectsTouched int    `json:"objects_touched"`
+	Unsynced       int    `json:"unsynced"`
+}
+
+// FromReviewResultSummary converts a writ.ReviewResult into a ReviewSummary wire struct.
+func FromReviewResultSummary(r writ.ReviewResult) ReviewSummary {
+	return ReviewSummary{
+		ObjectID:  r.ObjectID,
+		Title:     r.Review.Title,
+		Status:    r.Review.Status,
+		Author:    Author{Name: r.Author.Name, Email: r.Author.Email},
+		CreatedAt: r.CreatedAt.UTC(),
+		UpdatedAt: r.UpdatedAt.UTC(),
+	}
+}
+
+// FromReviewResultSummaries converts a slice of writ.ReviewResults into a slice of ReviewSummaries.
+// An empty slice is returned rather than nil to ensure JSON serialization as `[]`.
+func FromReviewResultSummaries(reviews []writ.ReviewResult) []ReviewSummary {
+	if len(reviews) == 0 {
+		return []ReviewSummary{}
+	}
+	out := make([]ReviewSummary, len(reviews))
+	for i, r := range reviews {
+		out[i] = FromReviewResultSummary(r)
+	}
+	return out
+}
+
+// FromReviewResult converts a writ.ReviewResult into a full detail Review wire struct.
+// Collections are always initialized to empty non-nil slices so they serialize as `[]`.
+func FromReviewResult(r writ.ReviewResult) Review {
+	revisions := make([]Revision, len(r.Review.Revisions))
+	for i, rev := range r.Review.Revisions {
+		revisions[i] = Revision{
+			Base: rev.Base,
+			Head: rev.Head,
+		}
+	}
+	approvals := make([]Approval, len(r.Review.Approvals))
+	for i, app := range r.Review.Approvals {
+		approvals[i] = Approval{
+			Subject:  app.Subject,
+			Revision: app.Revision,
+			Verdict:  app.Verdict,
+			Message:  app.Message,
+		}
+	}
+	ciStatuses := make([]CIStatus, len(r.Review.CIStatuses))
+	for i, ci := range r.Review.CIStatuses {
+		ciStatuses[i] = CIStatus{
+			Revision:    ci.Revision,
+			Name:        ci.Name,
+			State:       ci.State,
+			URL:         ci.URL,
+			Description: ci.Description,
+			StartedAt:   ci.StartedAt,
+			CompletedAt: ci.CompletedAt,
+			ExternalID:  ci.ExternalID,
+		}
+	}
+	unknownOps := make([]UnknownOp, len(r.Review.UnknownOps))
+	for i, u := range r.Review.UnknownOps {
+		unknownOps[i] = UnknownOp{
+			Commit:    u.Commit,
+			OpType:    u.OpType,
+			OpVersion: u.OpVersion,
+		}
+	}
+
+	return Review{
+		ObjectID:    r.ObjectID,
+		Title:       r.Review.Title,
+		Description: r.Review.Description,
+		Status:      r.Review.Status,
+		MergeCommit: r.Review.MergeCommit,
+		Reason:      r.Review.Reason,
+		Author:      Author{Name: r.Author.Name, Email: r.Author.Email},
+		CreatedAt:   r.CreatedAt.UTC(),
+		UpdatedAt:   r.UpdatedAt.UTC(),
+		Revisions:   revisions,
+		Approvals:   approvals,
+		CIStatuses:  ciStatuses,
+		UnknownOps:  unknownOps,
+	}
+}
+
+// FromIssueResultSummary converts a writ.IssueResult into an IssueSummary wire struct.
+func FromIssueResultSummary(r writ.IssueResult) IssueSummary {
+	return IssueSummary{
+		ObjectID:  r.ObjectID,
+		Title:     r.Issue.Title,
+		State:     r.Issue.State,
+		Author:    Author{Name: r.Author.Name, Email: r.Author.Email},
+		CreatedAt: r.CreatedAt.UTC(),
+		UpdatedAt: r.UpdatedAt.UTC(),
+	}
+}
+
+// FromIssueResultSummaries converts a slice of writ.IssueResults into a slice of IssueSummaries.
+// An empty slice is returned rather than nil to ensure JSON serialization as `[]`.
+func FromIssueResultSummaries(issues []writ.IssueResult) []IssueSummary {
+	if len(issues) == 0 {
+		return []IssueSummary{}
+	}
+	out := make([]IssueSummary, len(issues))
+	for i, r := range issues {
+		out[i] = FromIssueResultSummary(r)
+	}
+	return out
+}
+
+// FromIssueResult converts a writ.IssueResult into a full detail Issue wire struct.
+// Collections are always initialized to empty non-nil slices so they serialize as `[]`.
+func FromIssueResult(r writ.IssueResult) Issue {
+	assignees := r.Issue.Assignees
+	if assignees == nil {
+		assignees = []string{}
+	}
+	labels := r.Issue.Labels
+	if labels == nil {
+		labels = []string{}
+	}
+	links := make([]IssueLink, len(r.Issue.Links))
+	for i, l := range r.Issue.Links {
+		links[i] = IssueLink{
+			Target:     l.Target,
+			TargetType: l.TargetType,
+			Relation:   l.Relation,
+		}
+	}
+	unknownOps := make([]UnknownOp, len(r.Issue.UnknownOps))
+	for i, u := range r.Issue.UnknownOps {
+		unknownOps[i] = UnknownOp{
+			Commit:    u.Commit,
+			OpType:    u.OpType,
+			OpVersion: u.OpVersion,
+		}
+	}
+
+	return Issue{
+		ObjectID:    r.ObjectID,
+		Title:       r.Issue.Title,
+		Description: r.Issue.Description,
+		State:       r.Issue.State,
+		Reason:      r.Issue.Reason,
+		Author:      Author{Name: r.Author.Name, Email: r.Author.Email},
+		CreatedAt:   r.CreatedAt.UTC(),
+		UpdatedAt:   r.UpdatedAt.UTC(),
+		Assignees:   assignees,
+		Labels:      labels,
+		Links:       links,
+		UnknownOps:  unknownOps,
+	}
+}
+
+// FromSyncStatus converts a writ.SyncStatus into a SyncStatus wire struct.
+func FromSyncStatus(s writ.SyncStatus) SyncStatus {
+	return SyncStatus{
+		Remote:   s.Remote,
+		Unsynced: s.Unsynced,
+	}
+}
+
+// FromSyncResult converts a remote name and writ.SyncResult into a SyncResult wire struct.
+func FromSyncResult(remote string, res writ.SyncResult) SyncResult {
+	return SyncResult{
+		Remote:         remote,
+		OpsFetched:     res.OpsFetched,
+		OpsPushed:      res.OpsPushed,
+		ObjectsTouched: res.ObjectsTouched,
+		Unsynced:       res.Unsynced,
+	}
+}
+
+func fromResolveAnchor(a resolve.Anchor) *Anchor {
+	var oldSide, newSide *SideAnchor
+	if a.Old != nil {
+		oldSide = fromResolveSideAnchor(a.Old)
+	}
+	if a.New != nil {
+		newSide = fromResolveSideAnchor(a.New)
+	}
+	return &Anchor{
+		Version: a.Version,
+		Old:     oldSide,
+		New:     newSide,
+	}
+}
+
+func fromResolveSideAnchor(s *resolve.SideAnchor) *SideAnchor {
+	if s == nil {
+		return nil
+	}
+	var rng *Range
+	if s.Range != nil {
+		rng = &Range{Start: s.Range.Start, End: s.Range.End}
+	}
+	var ctx *Context
+	if s.Context != nil {
+		ctx = &Context{
+			Before:  s.Context.Before,
+			Lines:   s.Context.Lines,
+			Omitted: s.Context.Omitted,
+			After:   s.Context.After,
+		}
+	}
+	return &SideAnchor{
+		Commit:  s.Commit,
+		Path:    s.Path,
+		Blob:    s.Blob,
+		Range:   rng,
+		Context: ctx,
+	}
+}
+
+// FromCommentResult converts a writ.CommentResult into a Comment wire struct.
+func FromCommentResult(c writ.CommentResult) Comment {
+	unknownOps := make([]UnknownOp, len(c.Comment.UnknownOps))
+	for i, u := range c.Comment.UnknownOps {
+		unknownOps[i] = UnknownOp{
+			Commit:    u.Commit,
+			OpType:    u.OpType,
+			OpVersion: u.OpVersion,
+		}
+	}
+	var anchor *Anchor
+	if c.Comment.Anchor != nil {
+		anchor = fromResolveAnchor(*c.Comment.Anchor)
+	}
+	var resolved []ResolvedPosition
+	if len(c.Resolved) > 0 {
+		resolved = make([]ResolvedPosition, len(c.Resolved))
+		for i, r := range c.Resolved {
+			resolved[i] = ResolvedPosition{
+				Side:      r.Side,
+				Outcome:   r.Outcome,
+				Match:     r.Match,
+				Path:      r.Path,
+				StartLine: r.StartLine,
+				EndLine:   r.EndLine,
+				Reason:    r.Reason,
+			}
+		}
+	}
+	return Comment{
+		ObjectID: c.ObjectID,
+		Subject: CommentSubject{
+			ObjectType: c.Comment.Subject.ObjectType,
+			ObjectID:   c.Comment.Subject.ObjectID,
+		},
+		Author:     Author{Name: c.Author.Name, Email: c.Author.Email},
+		CreatedAt:  c.CreatedAt.UTC(),
+		UpdatedAt:  c.UpdatedAt.UTC(),
+		Text:       c.Comment.Text,
+		InReplyTo:  c.Comment.InReplyTo,
+		Anchor:     anchor,
+		Deleted:    c.Comment.Deleted,
+		Resolved:   resolved,
+		UnknownOps: unknownOps,
+	}
+}
+
+// FromCommentThread converts a state.CommentThread into a CommentThread wire struct.
+func FromCommentThread(t state.CommentThread) CommentThread {
+	replies := make([]CommentThread, len(t.Replies))
+	for i, rep := range t.Replies {
+		replies[i] = FromCommentThread(rep)
+	}
+	unknownOps := make([]UnknownOp, len(t.UnknownOps))
+	for i, u := range t.UnknownOps {
+		unknownOps[i] = UnknownOp{
+			Commit:    u.Commit,
+			OpType:    u.OpType,
+			OpVersion: u.OpVersion,
+		}
+	}
+	var anchor *Anchor
+	if t.Comment.Anchor != nil {
+		anchor = fromResolveAnchor(*t.Comment.Anchor)
+	}
+	return CommentThread{
+		ObjectID: t.ObjectID,
+		Comment: Comment{
+			ObjectID: t.ObjectID,
+			Subject: CommentSubject{
+				ObjectType: t.Comment.Subject.ObjectType,
+				ObjectID:   t.Comment.Subject.ObjectID,
+			},
+			Text:       t.Comment.Text,
+			InReplyTo:  t.Comment.InReplyTo,
+			Anchor:     anchor,
+			Deleted:    t.Comment.Deleted,
+			UnknownOps: unknownOps,
+		},
+		Replies:    replies,
+		UnknownOps: unknownOps,
+	}
+}

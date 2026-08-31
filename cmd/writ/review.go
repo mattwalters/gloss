@@ -9,6 +9,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/writtendev/writ/cmd/writ/internal/wire"
 	"github.com/writtendev/writ/engine"
 )
 
@@ -423,13 +424,15 @@ func runReviewStatus(ctx context.Context, defaultDir string, args []string, stdo
 	var dir string
 	var reason string
 	var mergeCommit string
+	var jsonMode bool
 
 	fs.StringVar(&dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
 	fs.StringVar(&reason, "reason", "", "Reason for status transition")
 	fs.StringVar(&mergeCommit, "merge-commit", "", "Merge commit ref or SHA (valid with status merged)")
+	fs.BoolVar(&jsonMode, "json", false, "Output result as JSON (view mode only)")
 
 	fs.Usage = func() {
-		fmt.Fprint(stderr, `Usage: writ review status [-C <dir>] <id> [<state>] [-reason <r>] [-merge-commit <ref>]
+		fmt.Fprint(stderr, `Usage: writ review status [-C <dir>] <id> [<state>] [-reason <r>] [-merge-commit <ref>] [--json]
 
 View or update review status.
 
@@ -440,6 +443,7 @@ Flags:
   -C <dir>              Run as if writ was started in <dir>
   -reason <r>           Reason for status change
   -merge-commit <ref>   Merge commit ref or SHA (valid when setting status to merged)
+  --json                Output result as JSON (view mode only)
 `)
 	}
 
@@ -475,6 +479,12 @@ Flags:
 			return 2
 		}
 	} else {
+		if jsonMode {
+			fmt.Fprintln(stderr, "writ review status: --json is only valid when viewing status")
+			fs.Usage()
+			return 2
+		}
+
 		newState = posArgs[1]
 		switch newState {
 		case "draft", "open", "closed", "merged":
@@ -513,6 +523,15 @@ Flags:
 		res, err := store.Query.Review(reviewID)
 		if err != nil {
 			return renderErr(stderr, err)
+		}
+
+		if jsonMode {
+			wireReview := wire.FromReviewResult(res)
+			if err := emitJSON(stdout, wire.KindReviewStatus, wireReview); err != nil {
+				fmt.Fprintf(stderr, "writ review status: marshal json: %v\n", err)
+				return 1
+			}
+			return 0
 		}
 
 		status := res.Review.Status
@@ -587,6 +606,7 @@ func runReviewList(ctx context.Context, defaultDir string, args []string, stdout
 	var text string
 	var limit int
 	var sortOrder string
+	var jsonMode bool
 
 	fs.StringVar(&dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
 	fs.Var(&statuses, "status", "Filter by review status (repeatable: -status open -status draft)")
@@ -594,9 +614,10 @@ func runReviewList(ctx context.Context, defaultDir string, args []string, stdout
 	fs.StringVar(&text, "text", "", "Filter by title or description text query")
 	fs.IntVar(&limit, "limit", 0, "Maximum number of reviews to return")
 	fs.StringVar(&sortOrder, "sort", "", "Sort order: created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc")
+	fs.BoolVar(&jsonMode, "json", false, "Output result as JSON")
 
 	fs.Usage = func() {
-		fmt.Fprint(stderr, `Usage: writ review list [-C <dir>] [-status <s>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>]
+		fmt.Fprint(stderr, `Usage: writ review list [-C <dir>] [-status <s>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>] [--json]
 
 List code reviews.
 
@@ -607,6 +628,7 @@ Flags:
   -text <q>        Filter by text match in title or description
   -limit N         Maximum number of reviews to return
   -sort <order>    Sort order (created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc)
+  --json           Output result as JSON
 `)
 	}
 
@@ -661,6 +683,15 @@ Flags:
 	})
 	if err != nil {
 		return renderErr(stderr, err)
+	}
+
+	if jsonMode {
+		wireSummaries := wire.FromReviewResultSummaries(reviews)
+		if err := emitJSON(stdout, wire.KindReviewList, wireSummaries); err != nil {
+			fmt.Fprintf(stderr, "writ review list: marshal json: %v\n", err)
+			return 1
+		}
+		return 0
 	}
 
 	tw := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)

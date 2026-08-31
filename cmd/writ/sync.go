@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -11,18 +10,10 @@ import (
 	"strings"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/writtendev/writ/cmd/writ/internal/wire"
 	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/sync"
 )
-
-type syncResultJSON struct {
-	Remote string `json:"remote"`
-	writ.SyncResult
-}
-
-type jsonResponse struct {
-	Remotes []any `json:"remotes"`
-}
 
 func runSync(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("sync", flag.ContinueOnError)
@@ -110,9 +101,8 @@ Exit codes:
 	}
 
 	var firstExitCode int
-	jsonResp := jsonResponse{
-		Remotes: make([]any, 0, len(remotes)),
-	}
+	var syncStatuses []wire.SyncStatus
+	var syncResults []wire.SyncResult
 
 	for _, remote := range remotes {
 		if statusMode {
@@ -125,7 +115,7 @@ Exit codes:
 				continue
 			}
 			if jsonMode {
-				jsonResp.Remotes = append(jsonResp.Remotes, status)
+				syncStatuses = append(syncStatuses, wire.FromSyncStatus(status))
 			} else {
 				fmt.Fprintln(stdout, formatSyncStatus(remote, status))
 			}
@@ -139,10 +129,7 @@ Exit codes:
 				continue
 			}
 			if jsonMode {
-				jsonResp.Remotes = append(jsonResp.Remotes, syncResultJSON{
-					Remote:     remote,
-					SyncResult: res,
-				})
+				syncResults = append(syncResults, wire.FromSyncResult(remote, res))
 			} else {
 				fmt.Fprintln(stdout, formatSyncResult(remote, res))
 			}
@@ -150,10 +137,22 @@ Exit codes:
 	}
 
 	if jsonMode && firstExitCode == 0 {
-		enc := json.NewEncoder(stdout)
-		if err := enc.Encode(jsonResp); err != nil {
-			fmt.Fprintf(stderr, "writ sync: marshal json: %v\n", err)
-			return 1
+		if statusMode {
+			if syncStatuses == nil {
+				syncStatuses = []wire.SyncStatus{}
+			}
+			if err := emitJSON(stdout, wire.KindSyncStatus, syncStatuses); err != nil {
+				fmt.Fprintf(stderr, "writ sync: marshal json: %v\n", err)
+				return 1
+			}
+		} else {
+			if syncResults == nil {
+				syncResults = []wire.SyncResult{}
+			}
+			if err := emitJSON(stdout, wire.KindSyncResult, syncResults); err != nil {
+				fmt.Fprintf(stderr, "writ sync: marshal json: %v\n", err)
+				return 1
+			}
 		}
 	}
 

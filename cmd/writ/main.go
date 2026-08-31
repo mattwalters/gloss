@@ -71,6 +71,9 @@ Commands:
   review    Manage code reviews (open, comment, approve, status, list)
   sync      Synchronize operations with git remotes
 
+Plumbing:
+  Every read verb supports --json for machine-readable output.
+
 Run 'writ <command> -h' for more information on a command.
 `)
 }

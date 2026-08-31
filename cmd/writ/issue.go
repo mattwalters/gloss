@@ -9,6 +9,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/writtendev/writ/cmd/writ/internal/wire"
 	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/state"
 )
@@ -187,12 +188,14 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 
 	var dir string
 	var reason string
+	var jsonMode bool
 
 	fs.StringVar(&dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
 	fs.StringVar(&reason, "reason", "", "Reason for status change")
+	fs.BoolVar(&jsonMode, "json", false, "Output result as JSON (view mode only)")
 
 	fs.Usage = func() {
-		fmt.Fprint(stderr, `Usage: writ issue status [-C <dir>] <id> [<state>] [-reason <r>]
+		fmt.Fprint(stderr, `Usage: writ issue status [-C <dir>] <id> [<state>] [-reason <r>] [--json]
 
 View or update issue status.
 
@@ -202,6 +205,7 @@ States:
 Flags:
   -C <dir>      Run as if writ was started in <dir>
   -reason <r>   Reason for status change
+  --json        Output result as JSON (view mode only)
 `)
 	}
 
@@ -232,6 +236,12 @@ Flags:
 			return 2
 		}
 	} else {
+		if jsonMode {
+			fmt.Fprintln(stderr, "writ issue status: --json is only valid when viewing status")
+			fs.Usage()
+			return 2
+		}
+
 		newState = posArgs[1]
 		if newState != "open" && newState != "closed" {
 			fmt.Fprintf(stderr, "writ issue status: invalid status %q (must be open or closed)\n", newState)
@@ -261,6 +271,15 @@ Flags:
 		res, err := store.Query.Issue(issueID)
 		if err != nil {
 			return renderErr(stderr, err)
+		}
+
+		if jsonMode {
+			wireIssue := wire.FromIssueResult(res)
+			if err := emitJSON(stdout, wire.KindIssueStatus, wireIssue); err != nil {
+				fmt.Fprintf(stderr, "writ issue status: marshal json: %v\n", err)
+				return 1
+			}
+			return 0
 		}
 
 		stateVal := res.Issue.State
@@ -421,6 +440,7 @@ func runIssueList(ctx context.Context, defaultDir string, args []string, stdout,
 	var text string
 	var limit int
 	var sortOrder string
+	var jsonMode bool
 
 	fs.StringVar(&dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
 	fs.Var(&states, "state", "Filter by issue state (repeatable: -state open -state closed)")
@@ -430,9 +450,10 @@ func runIssueList(ctx context.Context, defaultDir string, args []string, stdout,
 	fs.StringVar(&text, "text", "", "Filter by text match in title or description")
 	fs.IntVar(&limit, "limit", 0, "Maximum number of issues to return")
 	fs.StringVar(&sortOrder, "sort", "", "Sort order: created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc")
+	fs.BoolVar(&jsonMode, "json", false, "Output result as JSON")
 
 	fs.Usage = func() {
-		fmt.Fprint(stderr, `Usage: writ issue list [-C <dir>] [-state <s>]... [-assignee <a>]... [-label <l>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>]
+		fmt.Fprint(stderr, `Usage: writ issue list [-C <dir>] [-state <s>]... [-assignee <a>]... [-label <l>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>] [--json]
 
 List issues.
 
@@ -445,6 +466,7 @@ Flags:
   -text <q>        Filter by text match in title or description
   -limit N         Maximum number of issues to return
   -sort <order>    Sort order (created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc)
+  --json           Output result as JSON
 `)
 	}
 
@@ -501,6 +523,15 @@ Flags:
 	})
 	if err != nil {
 		return renderErr(stderr, err)
+	}
+
+	if jsonMode {
+		wireSummaries := wire.FromIssueResultSummaries(issues)
+		if err := emitJSON(stdout, wire.KindIssueList, wireSummaries); err != nil {
+			fmt.Fprintf(stderr, "writ issue list: marshal json: %v\n", err)
+			return 1
+		}
+		return 0
 	}
 
 	tw := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
