@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/writtendev/writ/spec/schemas/op-envelope.schema.json",
+  "$id": "https://writ.dev/spec/op-envelope.schema.json",
   "title": "Writ op envelope payload",
   "description": "The payload half of the op envelope: the canonical JSON blob stored at op.json in an op commit's tree. The other half of the envelope (op id, parent op ids, author, timestamp, signature) is carried by the commit itself and is not represented here. See spec/op-envelope.md for field semantics and spec/canonicalization.md for the byte encoding this blob must use. Unknown top-level fields are permitted: readers preserve and ignore fields they do not understand.",
   "type": "object",

@@ -50,6 +50,10 @@ disagree, the fixtures win and the prose gets fixed.
 | `fixtures/` | Mixed | The fixture-repo generator and golden harness (informative tooling) producing the golden corpus under `fixtures/testdata/` (normative) |
 | `README.md` | Informative | This document: index, conformance model, independent-implementation guide |
 
+### Schema Identity ($id)
+
+Every schema under `schemas/` must declare a `$id` URI of the form `https://writ.dev/spec/<filename>` matching its file name (for example, `https://writ.dev/spec/op-envelope.schema.json`), because spec identity is independent of repository hosting. Absolute `$ref` references between schemas cite these `$id` URIs directly.
+
 ## Repository Layout
 
 ```

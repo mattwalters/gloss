@@ -88,3 +88,17 @@ Root `go.mod` at module path `github.com/writtendev/writ`, covering
 `/engine`, `/cmd/writ`, `/tui`, `/bridge/github` per the layout ARCHITECTURE.md
 already specifies. No second `go.mod`, no `go.work`, until a real external
 consumer motivates the split described above.
+
+## Module path decision: keep `github.com/writtendev/writ` (WRIT-73)
+
+The root module path remains `github.com/writtendev/writ`.
+
+A vanity import path (such as `writ.dev/writ`) buys cosmetics at the ongoing
+operational cost of hosting and serving a `go-import` meta tag in perpetuity.
+If that domain or its redirect infrastructure ever lapses, `go get` breaks
+permanently for every version ever published under that path.
+
+Revisit rule and deadline: The module path decision is closed and should only
+be revisited before the first release tag (WRIT-58). Changing a module path
+after public release tags exist is a v2-shaped break across the ecosystem.
+
