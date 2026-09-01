@@ -137,8 +137,8 @@ func (c *Comments) Resolve(ctx context.Context, id string, res CommentResolve) e
 	body := map[string]any{
 		"resolved": res.Resolved,
 	}
-	if res.Actor != "" {
-		body["actor"] = NormalizePerson(res.Actor)
+	if actor := NormalizePerson(res.Actor); actor != "" {
+		body["actor"] = actor
 	}
 
 	bodyBytes, err := json.Marshal(body)
