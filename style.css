@@ -40,6 +40,8 @@ body {
   display: flex;
   align-items: center;
   gap: 1.5rem;
+  /* Five links and a version control is enough to overflow a phone. */
+  flex-wrap: wrap;
 }
 
 .site-title {
@@ -49,9 +51,14 @@ body {
   color: var(--fg);
 }
 
+/* Wordmark left, navigation right: the auto margin is what balances the
+   bar. Everything after .nav-links in the flow — the version label or
+   picker — rides along to the right edge with it. */
 .nav-links {
   display: flex;
   gap: 1rem;
+  margin-left: auto;
+  flex-wrap: wrap;
 }
 
 .nav-links a {
@@ -62,8 +69,18 @@ body {
 
 .nav-links a:hover { opacity: 1; }
 
-.version-picker {
-  margin-left: auto;
+/* Was `.version-picker`, which matches nothing in baseof.html — the
+   markup uses .version, .version-label, #version-picker and
+   .version-latest. Dead since the header was written. */
+.version,
+.version-latest {
+  display: flex;
+  align-items: center;
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+#version-picker {
   padding: 0.25rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -125,7 +142,20 @@ article th { background: var(--code-bg); }
 .home { text-align: center; padding: 4rem 0; }
 .home h1 { font-size: 3rem; margin-bottom: 0.5rem; }
 .home .tagline { font-size: 1.25rem; opacity: 0.7; margin-bottom: 1.5rem; }
-.home .cta { display: flex; gap: 1rem; justify-content: center; margin-top: 2rem; }
+.home .cta {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 2rem;
+  flex-wrap: wrap;
+}
+
+/* Three buttons shrink-wrap their labels onto three lines each at phone
+   widths. Stack them full-width instead. */
+@media (max-width: 30rem) {
+  .home .cta { flex-direction: column; align-items: stretch; }
+  .home .cta .btn { text-align: center; }
+}
 
 .btn {
   display: inline-block;
