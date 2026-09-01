@@ -2,27 +2,29 @@ package main
 
 import (
 	"flag"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
 )
 
-func TestCommands_Drift(t *testing.T) {
-	constructors := map[string]func() *flag.FlagSet{
-		"init":           func() *flag.FlagSet { fs, _ := newInitFlagSet(""); return fs },
-		"issue create":   func() *flag.FlagSet { fs, _ := newIssueCreateFlagSet(""); return fs },
-		"issue status":   func() *flag.FlagSet { fs, _ := newIssueStatusFlagSet(""); return fs },
-		"issue assign":   func() *flag.FlagSet { fs, _ := newIssueAssignFlagSet(""); return fs },
-		"issue list":     func() *flag.FlagSet { fs, _ := newIssueListFlagSet(""); return fs },
-		"issue link":     func() *flag.FlagSet { fs, _ := newIssueLinkFlagSet(""); return fs },
-		"review open":    func() *flag.FlagSet { fs, _ := newReviewOpenFlagSet(""); return fs },
-		"review comment": func() *flag.FlagSet { fs, _ := newReviewCommentFlagSet(""); return fs },
-		"review approve": func() *flag.FlagSet { fs, _ := newReviewApproveFlagSet(""); return fs },
-		"review status":  func() *flag.FlagSet { fs, _ := newReviewStatusFlagSet(""); return fs },
-		"review list":    func() *flag.FlagSet { fs, _ := newReviewListFlagSet(""); return fs },
-		"sync":           func() *flag.FlagSet { fs, _ := newSyncFlagSet(""); return fs },
-	}
+var synopsisFlagRe = regexp.MustCompile(`(?:^|[\s\[])--?([a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*)`)
 
+func extractSynopsisFlags(usageLine string) []string {
+	matches := synopsisFlagRe.FindAllStringSubmatch(usageLine, -1)
+	seen := make(map[string]bool)
+	var flags []string
+	for _, m := range matches {
+		if len(m) > 1 && !seen[m[1]] {
+			seen[m[1]] = true
+			flags = append(flags, m[1])
+		}
+	}
+	sort.Strings(flags)
+	return flags
+}
+
+func TestCommands_Drift(t *testing.T) {
 	var collectLeaves func(path []string, cmd *command) []struct {
 		path string
 		cmd  *command
@@ -63,7 +65,7 @@ func TestCommands_Drift(t *testing.T) {
 			continue
 		}
 
-		ctor, ok := constructors[cmdPath]
+		ctor, ok := flagSetConstructors[cmdPath]
 		if !ok {
 			t.Errorf("missing FlagSet constructor for command %q", cmdPath)
 			continue
@@ -73,6 +75,11 @@ func TestCommands_Drift(t *testing.T) {
 		var fsFlags []string
 		fs.VisitAll(func(f *flag.Flag) {
 			fsFlags = append(fsFlags, f.Name)
+			arg, usage := flag.UnquoteUsage(f)
+			if usage == "" {
+				t.Errorf("command %q flag %q has empty usage string", cmdPath, f.Name)
+			}
+			_ = arg
 		})
 		sort.Strings(fsFlags)
 
@@ -87,6 +94,13 @@ func TestCommands_Drift(t *testing.T) {
 
 		if fsJoined != tableJoined {
 			t.Errorf("command %q flag drift: FlagSet has [%s] but table has [%s]", cmdPath, fsJoined, tableJoined)
+		}
+
+		// Gate the synopsis line: extracted flag tokens must match the command's FlagSet
+		synopsisFlags := extractSynopsisFlags(cmd.UsageLine)
+		synopsisJoined := strings.Join(synopsisFlags, ",")
+		if fsJoined != synopsisJoined {
+			t.Errorf("command %q synopsis flag drift: FlagSet has [%s] but UsageLine has [%s]", cmdPath, fsJoined, synopsisJoined)
 		}
 	}
 }
@@ -119,5 +133,50 @@ func TestCommands_ExamplesAndMetadata(t *testing.T) {
 
 	for _, sub := range rootCommand.Subs {
 		walk([]string{sub.Name}, sub)
+	}
+}
+
+func TestExtractSynopsisFlags(t *testing.T) {
+	tests := []struct {
+		usageLine string
+		want      []string
+	}{
+		{
+			usageLine: "Usage: writ init [-C <dir>] [remote...]",
+			want:      []string{"C"},
+		},
+		{
+			usageLine: "Usage: writ issue create [-C <dir>] -title <t> [-description <d>] [-state open|closed] [-fixes <ref>]... [-relates <ref>]...",
+			want:      []string{"C", "description", "fixes", "relates", "state", "title"},
+		},
+		{
+			usageLine: "Usage: writ sync [-C <dir>] [--status] [--json] [remote...]",
+			want:      []string{"C", "json", "status"},
+		},
+		{
+			usageLine: "Usage: writ review comment [-C <dir>] <id> -m <text> [-reply-to <comment-id>]",
+			want:      []string{"C", "m", "reply-to"},
+		},
+		{
+			usageLine: "Usage: writ version",
+			want:      nil,
+		},
+		{
+			usageLine: "Usage: writ completion <shell>",
+			want:      nil,
+		},
+		{
+			usageLine: "Usage: writ help [<command> [<subcommand>]]",
+			want:      nil,
+		},
+	}
+
+	for _, tt := range tests {
+		got := extractSynopsisFlags(tt.usageLine)
+		gotJoined := strings.Join(got, ",")
+		wantJoined := strings.Join(tt.want, ",")
+		if gotJoined != wantJoined {
+			t.Errorf("extractSynopsisFlags(%q) = [%s], want [%s]", tt.usageLine, gotJoined, wantJoined)
+		}
 	}
 }

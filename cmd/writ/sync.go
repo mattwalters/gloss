@@ -24,7 +24,7 @@ type syncOpts struct {
 func newSyncFlagSet(defaultDir string) (*flag.FlagSet, *syncOpts) {
 	fs := flag.NewFlagSet("sync", flag.ContinueOnError)
 	opts := &syncOpts{}
-	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in <dir>")
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
 	fs.BoolVar(&opts.statusMode, "status", false, "Report unpushed ops count without network transport")
 	fs.BoolVar(&opts.jsonMode, "json", false, "Output result as JSON")
 	fs.Usage = func() {
@@ -306,4 +306,3 @@ func formatSyncStatus(remote string, status writ.SyncStatus) string {
 	}
 	return fmt.Sprintf("%s: %d %s unsynced", remote, status.Unsynced, plural(status.Unsynced, "op", "ops"))
 }
-

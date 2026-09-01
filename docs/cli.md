@@ -70,11 +70,11 @@ Create a new issue.
 #### Flags
 
 - `-C <dir>`: Run as if writ was started in <dir>
-- `-title <t>`: Issue title (required)
-- `-description <d>`: Issue description
-- `-state <state>`: Initial issue state (open or closed)
-- `-fixes <ref>`: Add a 'fixes' cross-reference link (repeatable)
-- `-relates <ref>`: Add a 'relates' cross-reference link (repeatable)
+- `-title <t>`: Issue title <t> (required)
+- `-description <d>`: Issue description <d>
+- `-state <state>`: Initial issue state <state> (open or closed)
+- `-fixes <ref>`: Add a 'fixes' cross-reference link <ref> (repeatable)
+- `-relates <ref>`: Add a 'relates' cross-reference link <ref> (repeatable)
 
 #### Examples
 
@@ -103,7 +103,7 @@ States:
 #### Flags
 
 - `-C <dir>`: Run as if writ was started in <dir>
-- `-reason <r>`: Reason for status change
+- `-reason <r>`: Reason <r> for status change
 - `-json`: Output result as JSON (view mode only)
 
 #### Examples
@@ -131,8 +131,8 @@ Add or remove issue assignees.
 #### Flags
 
 - `-C <dir>`: Run as if writ was started in <dir>
-- `-add <a>`: Add assignee email or ID (repeatable)
-- `-remove <a>`: Remove assignee email or ID (repeatable)
+- `-add <a>`: Add assignee <a> email or ID (repeatable)
+- `-remove <a>`: Remove assignee <a> email or ID (repeatable)
 
 #### Examples
 
@@ -158,13 +158,13 @@ List issues.
 #### Flags
 
 - `-C <dir>`: Run as if writ was started in <dir>
-- `-state <s>`: Filter by issue state (repeatable)
-- `-assignee <a>`: Filter by assignee name or email (repeatable)
-- `-label <l>`: Filter by label (repeatable)
-- `-author <a>`: Filter by author name or email (repeatable)
-- `-text <q>`: Filter by text match in title or description
-- `-limit N`: Maximum number of issues to return
-- `-sort <order>`: Sort order (created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc)
+- `-state <s>`: Filter by issue state <s> (repeatable)
+- `-assignee <a>`: Filter by assignee <a> name or email (repeatable)
+- `-label <l>`: Filter by label <l> (repeatable)
+- `-author <a>`: Filter by author <a> name or email (repeatable)
+- `-text <q>`: Filter by text <q> match in title or description
+- `-limit N`: Maximum number N of issues to return
+- `-sort <order>`: Sort order <order> (created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc)
 - `-json`: Output result as JSON
 
 #### Examples
@@ -192,9 +192,9 @@ Manage issue cross-reference links.
 #### Flags
 
 - `-C <dir>`: Run as if writ was started in <dir>
-- `-target <ref>`: Target reference (required, e.g. <repo-id>#<object-id> or <object-id>)
-- `-relation <rel>`: Link relation: fixes, relates, or none (required)
-- `-target-type <t>`: Target object type
+- `-target <ref>`: Target reference <ref> (required, e.g. <repo-id>#<object-id> or <object-id>)
+- `-relation <rel>`: Link relation <rel>: fixes, relates, or none (required)
+- `-target-type <t>`: Target object type <t>
 
 #### Examples
 
@@ -220,10 +220,10 @@ Create a new code review.
 #### Flags
 
 - `-C <dir>`: Run as if writ was started in <dir>
-- `-title <t>`: Review title (required)
-- `-description <d>`: Review description
-- `-base <ref>`: Base revision commit or ref
-- `-head <ref>`: Head revision commit or ref
+- `-title <t>`: Review title <t> (required)
+- `-description <d>`: Review description <d>
+- `-base <ref>`: Base revision <ref> commit or ref
+- `-head <ref>`: Head revision <ref> commit or ref
 - `-draft`: Create review in draft state
 
 #### Examples
@@ -251,8 +251,8 @@ Add a comment to a review.
 #### Flags
 
 - `-C <dir>`: Run as if writ was started in <dir>
-- `-m <text>`: Comment message text (required)
-- `-reply-to <comment-id>`: Comment ID to reply to
+- `-m <text>`: Comment message text <text> (required)
+- `-reply-to <comment-id>`: Comment ID <comment-id> to reply to
 
 #### Examples
 
@@ -278,10 +278,10 @@ Record a review verdict.
 #### Flags
 
 - `-C <dir>`: Run as if writ was started in <dir>
-- `-verdict approve|request-changes|none`: Verdict (default: approve)
-- `-revision <ref>`: Revision commit ref or SHA (defaults to latest head)
-- `-m <msg>`: Verdict message
-- `-subject <s>`: Subject identity (defaults to writer email or writer ID)
+- `-verdict approve|request-changes|none`: Verdict approve|request-changes|none (default: approve)
+- `-revision <ref>`: Revision commit ref or SHA <ref> (defaults to latest head)
+- `-m <msg>`: Verdict message <msg>
+- `-subject <s>`: Subject identity <s> (defaults to writer email or writer ID)
 
 #### Examples
 
@@ -310,8 +310,8 @@ States:
 #### Flags
 
 - `-C <dir>`: Run as if writ was started in <dir>
-- `-reason <r>`: Reason for status change
-- `-merge-commit <ref>`: Merge commit ref or SHA (valid when setting status to merged)
+- `-reason <r>`: Reason <r> for status change
+- `-merge-commit <ref>`: Merge commit ref or SHA <ref> (valid when setting status to merged)
 - `-json`: Output result as JSON (view mode only)
 
 #### Examples
@@ -340,11 +340,11 @@ List code reviews.
 #### Flags
 
 - `-C <dir>`: Run as if writ was started in <dir>
-- `-status <s>`: Filter by review status (repeatable)
-- `-author <a>`: Filter by author name or email (repeatable)
-- `-text <q>`: Filter by text match in title or description
-- `-limit N`: Maximum number of reviews to return
-- `-sort <order>`: Sort order (created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc)
+- `-status <s>`: Filter by review status <s> (repeatable)
+- `-author <a>`: Filter by author <a> name or email (repeatable)
+- `-text <q>`: Filter by text <q> match in title or description
+- `-limit N`: Maximum number N of reviews to return
+- `-sort <order>`: Sort order <order> (created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc)
 - `-json`: Output result as JSON
 
 #### Examples

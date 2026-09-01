@@ -38,7 +38,6 @@ func escapeFishDesc(s string) string {
 	return s
 }
 
-
 func flagEnumChoices(flagName string, cmdPath []string) string {
 	p := strings.Join(cmdPath, " ")
 	switch flagName {
@@ -651,7 +650,7 @@ complete -c writ -n '__fish_writ_needs_subcommand help review' -f -a 'open comme
 		}
 
 		cond := fmt.Sprintf("__fish_writ_using_command %s", strings.Join(path, " "))
-		for _, f := range cmd.Flags {
+		for _, f := range commandFlags(path, cmd) {
 			optFlag := "-l " + f.Name
 			if len(f.Name) == 1 {
 				optFlag = "-s " + f.Name
