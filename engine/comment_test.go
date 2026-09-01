@@ -537,3 +537,115 @@ func TestCommentsResolvePersonIDLengthBound(t *testing.T) {
 		t.Errorf("accepted comment %s not found in query results", acceptedID)
 	}
 }
+
+// TestCommentsResolvePersonIDBoundCountsCodePoints pins the unit the person-id
+// bound is measured in. JSON Schema maxLength counts code points, so the engine
+// guard has to as well: 320 "é" characters are 640 bytes, so a byte-counting
+// guard would refuse an identifier spec/schemas/identifiers.schema.json accepts,
+// and the engine would disagree with the conformance corpus on every non-ASCII
+// person identifier. The ASCII bracket in
+// TestCommentsResolvePersonIDLengthBound cannot see this: there bytes and code
+// points coincide.
+func TestCommentsResolvePersonIDBoundCountsCodePoints(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+
+	headHash := runGitCmd(t, repoDir, "rev-parse", "HEAD")[:40]
+	reviewID, err := s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Multi-byte Person ID Review",
+		Base:  headHash,
+		Head:  headHash,
+	})
+	if err != nil {
+		t.Fatalf("Create review failed: %v", err)
+	}
+
+	atLimit := strings.Repeat("é", 320)
+	overLimit := strings.Repeat("é", 321)
+	if len(atLimit) != 640 || len(overLimit) != 642 {
+		t.Fatalf("test setup: identifiers are %d and %d bytes, want 640 and 642 — a byte-counting guard must see both as over-length",
+			len(atLimit), len(overLimit))
+	}
+
+	// 320 code points is at the bound and accepted, however many bytes that is.
+	acceptedID, err := s.Reviews.Comment(ctx, reviewID, writ.NewComment{Text: "At the bound"})
+	if err != nil {
+		t.Fatalf("Comment failed: %v", err)
+	}
+	if err := s.Comments.Resolve(ctx, acceptedID, writ.CommentResolve{
+		Resolved:   true,
+		ResolvedBy: atLimit,
+	}); err != nil {
+		t.Fatalf("Resolve with a 320-code-point (640-byte) identifier failed: %v", err)
+	}
+
+	// One code point over, and the write is refused — counted in code points,
+	// so the error names 321 rather than the byte length.
+	rejectedID, err := s.Reviews.Comment(ctx, reviewID, writ.NewComment{Text: "Over the bound"})
+	if err != nil {
+		t.Fatalf("Comment failed: %v", err)
+	}
+	err = s.Comments.Resolve(ctx, rejectedID, writ.CommentResolve{
+		Resolved:   true,
+		ResolvedBy: overLimit,
+	})
+	if err == nil {
+		t.Fatal("expected Resolve to reject a 321-code-point identifier, got nil error")
+	}
+	if !strings.Contains(err.Error(), "321") || !strings.Contains(err.Error(), "320") {
+		t.Errorf("expected an error counting 321 code points against the 320-character limit, got %q", err)
+	}
+
+	// What the guard accepted, comment.schema.json accepts too: the whole point
+	// of counting the same unit is that the engine and the conformance corpus
+	// never disagree about a person identifier.
+	ident, _ := identity.ParseWriterID("0123456789abcdef")
+	dagStore, err := dag.Open(repoDir, identity.Identity{WriterID: ident})
+	if err != nil {
+		t.Fatalf("dag.Open failed: %v", err)
+	}
+	enumRes, err := dagStore.Enumerate()
+	if err != nil {
+		t.Fatalf("dagStore.Enumerate failed: %v", err)
+	}
+	var resolveOps int
+	for _, op := range enumRes.Ops[acceptedID] {
+		if op.OpType != "resolve" {
+			continue
+		}
+		resolveOps++
+		if err := codec.ValidateBody(op.Envelope); err != nil {
+			t.Errorf("the accepted 320-code-point identifier produced an op the comment schema rejects: %v", err)
+		}
+	}
+	if resolveOps != 1 {
+		t.Fatalf("expected 1 resolve op on the accepted comment, got %d", resolveOps)
+	}
+
+	// The accepted identifier round-trips unchanged — not truncated to 320
+	// bytes, which would corrupt it mid-rune.
+	comments, err := s.Query.Comments(writ.CommentFilter{SubjectID: reviewID})
+	if err != nil {
+		t.Fatalf("Query.Comments failed: %v", err)
+	}
+	var found bool
+	for _, c := range comments {
+		if c.ObjectID != acceptedID {
+			continue
+		}
+		found = true
+		if c.Comment.ResolvedBy != atLimit {
+			t.Errorf("expected the 320-code-point identifier to round-trip unchanged, got %d bytes", len(c.Comment.ResolvedBy))
+		}
+	}
+	if !found {
+		t.Errorf("accepted comment %s not found in query results", acceptedID)
+	}
+}

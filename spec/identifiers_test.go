@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
@@ -335,12 +336,23 @@ func TestPersonIdentifierSchema(t *testing.T) {
 		t.Fatalf("test setup: overLimit is %d characters, want 321", len(overLimit))
 	}
 
+	// maxLength counts code points, not bytes, and the engine guard counts them
+	// the same way. The ASCII pair above cannot show the difference — there
+	// bytes and code points coincide — so bracket the bound again with a
+	// multi-byte identifier, where 320 characters are 640 bytes.
+	atLimitMultiByte := strings.Repeat("é", 320)
+	overLimitMultiByte := strings.Repeat("é", 321)
+	if n := utf8.RuneCountInString(atLimitMultiByte); n != 320 || len(atLimitMultiByte) != 640 {
+		t.Fatalf("test setup: atLimitMultiByte is %d characters / %d bytes, want 320 / 640", n, len(atLimitMultiByte))
+	}
+
 	validCases := []string{
 		"alice@example.com",
 		"bob.builder+test@example.co.uk",
 		"ci-bot@internal.domain",
 		"  alice@example.com  ",
 		atLimit,
+		atLimitMultiByte,
 	}
 	for _, v := range validCases {
 		inst := map[string]any{"person": v}
@@ -350,11 +362,12 @@ func TestPersonIdentifierSchema(t *testing.T) {
 	}
 
 	invalidCases := []any{
-		"",        // minLength: 1
-		overLimit, // maxLength: 320
-		12345,     // not a string
-		nil,       // null
-		[]any{},   // array
+		"",                 // minLength: 1
+		overLimit,          // maxLength: 320
+		overLimitMultiByte, // maxLength: 320, counted in code points
+		12345,              // not a string
+		nil,                // null
+		[]any{},            // array
 	}
 	for _, inv := range invalidCases {
 		inst := map[string]any{"person": inv}
