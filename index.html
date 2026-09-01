@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta name="generator" content="Hugo 0.165.0">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Writ</title>
+  <meta name="description" content="Open SDLC layer in git">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  
+  
+  <header class="site-header">
+    <nav>
+      <a href="./" class="site-title">writ</a>
+      <span class="nav-links">
+        <a href="./latest/docs/">Docs</a>
+        <a href="./latest/spec/">Spec</a>
+        <a href="./latest/cli/">CLI Reference</a>
+        <a href="https://github.com/writtendev/writ">GitHub</a>
+      </span>
+      
+      <a class="version-latest" id="version-latest" hidden></a>
+      
+    </nav>
+  </header>
+
+  <main>
+    
+<article class="home">
+  <h1>writ</h1>
+  <p class="tagline">Open SDLC layer in git</p>
+  <p>
+    Code review — and eventually the whole software development lifecycle —
+    stored inside the git repository itself, as signed, append-only operations.
+    No server, no API tokens, works with every git host.
+  </p>
+  <div class="cta">
+    <a href="./docs/" class="btn">Get Started</a>
+    <a href="./spec/" class="btn btn-outline">Read the Spec</a>
+  </div>
+</article>
+
+  </main>
+
+  <footer class="site-footer">
+    <p>Writ is open source under the <a href="https://github.com/writtendev/writ/blob/main/LICENSE">Apache-2.0 license</a>.</p>
+  </footer>
+
+  
+  <script>
+    
+    (function () {
+      var here = new URL(".", document.querySelector('link[rel="stylesheet"]').href);
+      var root = new URL("." + "/", here);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          if (!versions.length) { return; }
+          var latest = document.getElementById("version-latest");
+          latest.textContent = versions[0];
+          latest.href = new URL("latest/docs/", root);
+          latest.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+  
+</body>
+</html>
