@@ -14,9 +14,9 @@ described in RFC 2119.
 ## Scope
 
 This section defines the comment **op vocabulary** (`op_version: 1`):
-the collaborative object model, the three operations (`create`, `edit`,
-`delete`), body fields, threading, edit and deletion semantics, anchor
-delegation, and GitHub review-comment mappings. It deliberately does not
+the collaborative object model, the four operations (`create`, `edit`,
+`delete`, `resolve`), body fields, threading, edit, deletion, and resolution
+semantics, anchor delegation, and GitHub review-comment mappings. It deliberately does not
 define:
 
 - **The anchor format and invariants** — dual-sided line ranges and hunk
@@ -26,9 +26,8 @@ define:
   a new git tree (`resolve(anchor, tree) → position | orphaned`) is
   specified in WRIT-14 and implemented by the engine's anchor resolver
   (WRIT-66).
-- **Review workflow and thread resolution** — batch submission of review
-  comments with an approval state, and thread resolution states
-  (`resolve` / `unresolve`), belong to the review op vocabulary (WRIT-8).
+- **Review workflow** — batch submission of review
+  comments with an approval state belongs to the review op vocabulary (WRIT-8).
   Comments remain subject-agnostic discussion primitives.
 - **Fold reduction, ordering, and concurrency tiebreaks** — how the
   engine reduces the op DAG into materialized comment state is specified
@@ -48,9 +47,9 @@ A comment **is its own collaborative object**:
 - `object_type`: `"comment"`
 - `object_id`: the comment's own unique identifier.
 
-Every op on a comment (`create`, `edit`, `delete`) carries the comment's
+Every op on a comment (`create`, `edit`, `delete`, `resolve`) carries the comment's
 `object_id` in its envelope. The envelope already names the target object,
-so `edit` and `delete` require no separate target field.
+so `edit`, `delete`, and `resolve` require no separate target field.
 
 Making comments first-class objects rather than operations on a review
 ensures a single, uniform comment vocabulary serves reviews, issues, and
@@ -66,13 +65,14 @@ mirrored fields if present.
 
 ## Operations (`op_version: 1`)
 
-The comment vocabulary defines three operations:
+The comment vocabulary defines four operations:
 
 | `op_type` | Meaning | Body |
 | --------- | ------- | ---- |
 | `create`  | Brings the comment into existence | `subject`, `text`, optional `in_reply_to`, optional `anchor` |
 | `edit`    | Replacement markdown text | `text` |
 | `delete`  | Tombstone withdrawing the comment | `{}` |
+| `resolve` | Sets thread resolution state (resolve/unresolve) | `resolved`, optional `actor` |
 
 ### 1. `create`
 
@@ -177,6 +177,47 @@ A `delete` op is a tombstone indicating that the comment is withdrawn.
 - `body` MUST be an empty object `{}` (`maxProperties: 0`).
 - No `reason` or payload fields are defined in v1.
 
+### 4. `resolve`
+
+A `resolve` op records or updates the resolution state of a comment thread.
+
+```jsonc
+{
+  "object_id": "c-9a4f",
+  "object_type": "comment",
+  "op_type": "resolve",
+  "op_version": 1,
+  "body": {
+    "resolved": true,
+    "actor": "alice"
+  }
+}
+```
+
+#### Body fields
+
+- `resolved` (boolean, required) — resolution status of the thread:
+  - `true`: marks the thread as resolved.
+  - `false`: marks the thread as unresolved (reopened).
+- `actor` (string, optional) — writer or user identity on whose behalf the
+  resolution is recorded (`minLength: 1`, `maxLength: 256`).
+
+#### Target & Threading Invariants
+
+- **Thread root attachment:** Resolution attaches to the comment object
+  identified by `object_id`. In workflow and UI conventions, resolution applies
+  to the **thread root** (the comment with no `in_reply_to`), resolving the
+  entire discussion thread. If a `resolve` op targets a reply comment, the fold
+  reduces resolution on that comment object, but standard thread resolution
+  queries evaluate state at the thread root.
+- **Reply-after-resolve behavior:** A new reply to a resolved thread does
+  **not** automatically reopen the thread (matching GitHub convention). An
+  explicit unresolve operation (`resolve` with `resolved: false`) is required
+  to reopen the thread.
+- **Reversibility:** Resolution is fully reversible. Multiple `resolve` and
+  unresolve ops fold deterministically via Last-Writer-Wins (`lww`) in total
+  order.
+
 ## Threading model
 
 Threading in Writ is represented entirely without mutable state:
@@ -214,8 +255,10 @@ treated as unknown data, preserved in the DAG, and ignored during fold.
 | `create` | `anchor` | `create-once` | Immutable anchor binding |
 | `edit` | `text` | `lww` | Last writer wins in total order |
 | `delete` | `deleted` | `tombstone` | Entity-level tombstone; deletion wins over concurrent edits |
+| `resolve` | `resolved` | `lww` | Last writer wins in total order |
+| `resolve` | `actor` | `lww` | Last writer wins in total order |
 
-### Edit and Deletion Semantics
+### Edit, Deletion, and Resolution Semantics
 
 #### Edit Semantics
 
@@ -238,13 +281,25 @@ treated as unknown data, preserved in the DAG, and ignored during fold.
   subsequent `edit` ops on that comment object fold to nothing (the comment
   remains deleted).
 
+#### Resolution Semantics
+
+- A `resolve` op updates `resolved` (and optional `actor`) via `lww`.
+- If concurrent `resolve` and unresolve ops are authored across branches,
+  deterministic LWW total order tiebreaks decide the winning resolution state.
+- In folded state, a comment object records `resolved: true/false` and
+  `resolved_by: string`. If `resolved` is `false`, the comment thread is open.
+
 ### Representability vs. Authorization
 
-The comment op schema permits any writer with commit access to author an
-`edit` or `delete` op. Whether a fold reducer accepts edits or deletions
-authored by an identity other than the original comment author is an
-authorization policy evaluated during fold (WRIT-12), not a structural
-schema constraint.
+**Writ has no authorization model at the specification layer.** Consistent with
+review approvals and issue operations, anyone with git push access can push
+an `edit`, `delete`, or `resolve` op. Operations are cryptographically
+attributable (via commit signatures) and tamper-evident, not authoritative.
+Policy questions — such as whether only the comment author, PR author, or
+designated reviewers can resolve a thread — belong to the coordination service
+or client application (VISION.md §The open core and the hosted layer). The spec
+provides faithful event capture without imposing an enforcement mechanism it
+cannot verify offline.
 
 ## Anchor delegation
 
@@ -271,8 +326,7 @@ In accordance with `spec/op-envelope.md` and WRIT-15:
 
 - **Ref layout and writer identification**: `refs/writ/comments/*` vs
   per-writer refs (WRIT-7).
-- **Review vocabulary**: approval status, review submission batching,
-  thread resolve/unresolve ops (WRIT-8).
+- **Review vocabulary**: approval status, review submission batching (WRIT-8).
 - **Fold reduction and concurrency rules**: LWW tiebreaks, tombstone
   fold reduction (WRIT-12).
 - **Anchor resolution and orphaning**: pure resolver algorithm (WRIT-14 /

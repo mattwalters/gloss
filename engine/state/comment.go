@@ -85,6 +85,8 @@ func convertCommentFold(cf fold.CommentFold) (Comment, error) {
 		Text:       cf.Text,
 		InReplyTo:  cf.InReplyTo,
 		Deleted:    cf.Deleted,
+		Resolved:   cf.Resolved,
+		Actor:      cf.Actor,
 		UnknownOps: unknownOps,
 	}
 

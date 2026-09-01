@@ -34,5 +34,17 @@
     "op_version": 1,
     "field": "deleted",
     "strategy": "tombstone"
+  },
+  {
+    "op_type": "resolve",
+    "op_version": 1,
+    "field": "resolved",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "resolve",
+    "op_version": 1,
+    "field": "actor",
+    "strategy": "lww"
   }
 ]

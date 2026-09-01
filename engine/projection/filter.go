@@ -47,6 +47,7 @@ type CommentFilter struct {
 	Author         []string
 	Text           string
 	IncludeDeleted bool
+	Resolved       *bool
 	TargetCommit   string
 	OrderBy        OrderBy
 	Limit          int

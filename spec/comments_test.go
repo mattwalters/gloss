@@ -364,9 +364,10 @@ func TestCommentFieldRules(t *testing.T) {
 
 	// Verify that all properties in comment schema have matching field rules.
 	expectedFields := map[string][]string{
-		"create": {"subject", "text", "in_reply_to", "anchor"},
-		"edit":   {"text"},
-		"delete": {"deleted"},
+		"create":  {"subject", "text", "in_reply_to", "anchor"},
+		"edit":    {"text"},
+		"delete":  {"deleted"},
+		"resolve": {"resolved", "actor"},
 	}
 
 	for opType, fields := range expectedFields {

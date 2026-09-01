@@ -102,3 +102,62 @@ func (c *Comments) Delete(ctx context.Context, id string) error {
 	_ = c.store.maybeAutoRefresh(ctx)
 	return nil
 }
+
+// CommentResolve specifies parameters for resolving or unresolving a comment thread.
+type CommentResolve struct {
+	Resolved bool   `json:"resolved"`
+	Actor    string `json:"actor,omitempty"`
+}
+
+// Resolve updates the resolution status of a comment (or thread root).
+// When res.Resolved is true, the comment is marked as resolved; when false, it is unresolved.
+func (c *Comments) Resolve(ctx context.Context, id string, res CommentResolve) error {
+	if c == nil || c.store == nil {
+		return fmt.Errorf("writ: store is nil")
+	}
+	if err := c.store.ensureWritable(); err != nil {
+		return err
+	}
+	if id == "" {
+		return fmt.Errorf("writ: comment id cannot be empty")
+	}
+
+	if err := c.store.maybeAutoRefresh(ctx); err != nil {
+		return fmt.Errorf("writ: auto refresh: %w", err)
+	}
+
+	frontier, err := c.store.projection.Frontier(id)
+	if err != nil {
+		return fmt.Errorf("writ: get frontier: %w", err)
+	}
+	if len(frontier) == 0 {
+		return ErrNotFound
+	}
+
+	body := map[string]any{
+		"resolved": res.Resolved,
+	}
+	if res.Actor != "" {
+		body["actor"] = res.Actor
+	}
+
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("writ: marshal comment resolve body: %w", err)
+	}
+
+	env := codec.Envelope{
+		ObjectID:   id,
+		ObjectType: "comment",
+		OpType:     "resolve",
+		OpVersion:  1,
+		Body:       bodyBytes,
+	}
+
+	if _, err := c.store.dagStore.Append(ctx, env, frontier); err != nil {
+		return fmt.Errorf("writ: resolve comment: %w", err)
+	}
+
+	_ = c.store.maybeAutoRefresh(ctx)
+	return nil
+}

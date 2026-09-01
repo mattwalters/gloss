@@ -1,0 +1,123 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/0123456789abcdef/comment",
+      "commit": "49288c80b90a74f2d64c69a0780d79125a30dc60"
+    },
+    {
+      "name": "refs/writ/fedcba9876543210/comment",
+      "commit": "8f5375a48d5d9dea784e417d12632e6fe7be3d70"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/0123456789abcdef/comment",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "47bf0fb9563217c66cf276fbb7a99e308de26217",
+          "tree": "bf9c7e22837cad81c10c47f1f1b545445f51f1a3",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create comment/c-res-root\n",
+          "signed": true
+        },
+        {
+          "sha": "977fda3cc151f4aba1ec2935c5e6c65e5b6f67f2",
+          "tree": "12e536fec37a2ee73a18d66c6565140999b9c6f1",
+          "parents": [
+            "47bf0fb9563217c66cf276fbb7a99e308de26217"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: resolve comment/c-res-root\n",
+          "signed": true
+        },
+        {
+          "sha": "afc3a005f393ea3ad68e9c53ccbf733a7ec16445",
+          "tree": "fa6cc3e2098a40d45ca77fe9f4e35b2b5e76d8df",
+          "parents": [
+            "977fda3cc151f4aba1ec2935c5e6c65e5b6f67f2"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: create comment/c-unres-root\n",
+          "signed": true
+        },
+        {
+          "sha": "de9881778fee2dec239d6ab90d0a9c674021c75a",
+          "tree": "80546ab6c4d5d6f620a0e6dd3edc82d9a6c4acd0",
+          "parents": [
+            "afc3a005f393ea3ad68e9c53ccbf733a7ec16445"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:03:00Z",
+          "message": "writ: resolve comment/c-unres-root\n",
+          "signed": true
+        },
+        {
+          "sha": "801505b7438af0ba017a6528569e560b28209be6",
+          "tree": "9543095e7c41a1d469ea113c30591f4db9c391ff",
+          "parents": [
+            "de9881778fee2dec239d6ab90d0a9c674021c75a"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:04:00Z",
+          "message": "writ: resolve comment/c-unres-root\n",
+          "signed": true
+        },
+        {
+          "sha": "4bcc2b7778e546e91f8d83776a6f004497aae102",
+          "tree": "bc348a39250a1b1c572b689e57c33789bf9fb94b",
+          "parents": [
+            "801505b7438af0ba017a6528569e560b28209be6"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:05:00Z",
+          "message": "writ: create comment/c-race-root\n",
+          "signed": true
+        },
+        {
+          "sha": "49288c80b90a74f2d64c69a0780d79125a30dc60",
+          "tree": "1e0a661c3d4410cdb2bc8c263efadd46f08232c9",
+          "parents": [
+            "4bcc2b7778e546e91f8d83776a6f004497aae102"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:06:00Z",
+          "message": "writ: resolve comment/c-race-root\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/fedcba9876543210/comment",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "67b067957ed34070b97f052acd96ad1abc4f79e2",
+          "tree": "fbafcebf92a62350a48c7eb07e0fad32d98cd1ee",
+          "parents": [
+            "977fda3cc151f4aba1ec2935c5e6c65e5b6f67f2"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:30Z",
+          "message": "writ: create comment/c-res-reply\n",
+          "signed": true
+        },
+        {
+          "sha": "8f5375a48d5d9dea784e417d12632e6fe7be3d70",
+          "tree": "6822112967025fa5284a58492418d337d4b811a6",
+          "parents": [
+            "4bcc2b7778e546e91f8d83776a6f004497aae102"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:06:30Z",
+          "message": "writ: resolve comment/c-race-root\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

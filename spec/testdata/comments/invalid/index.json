@@ -33,11 +33,15 @@
   },
   "invalid-op-type.json": {
     "kind": "schema",
-    "reason": "comment op_type must be create, edit, or delete"
+    "reason": "comment op_type must be create, edit, delete, or resolve"
   },
   "invalid-op-version.json": {
     "kind": "schema",
     "reason": "v1 comment schema requires op_version 1"
+  },
+  "invalid-resolved-type.json": {
+    "kind": "schema",
+    "reason": "resolve body resolved must be a boolean"
   },
   "malformed-subject-id.json": {
     "kind": "schema",
@@ -46,6 +50,10 @@
   "malformed-subject-type.json": {
     "kind": "schema",
     "reason": "subject object_type must be a valid lowercase type name"
+  },
+  "missing-resolved-in-resolve.json": {
+    "kind": "schema",
+    "reason": "resolve body requires resolved"
   },
   "missing-subject.json": {
     "kind": "schema",

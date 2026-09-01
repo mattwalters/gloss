@@ -251,7 +251,7 @@ _writ() {
                     ;;
                 comment)
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "-C -m -reply-to -h -help --help" -- "$cur"))
+                        COMPREPLY=($(compgen -W "-C -m -reply-to -resolve -unresolve -h -help --help" -- "$cur"))
                         return 0
                     fi
                     ;;
@@ -498,6 +498,8 @@ _writ_review() {
                         '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
                         '-m[Comment message text]:message:' \
                         '-reply-to[Comment ID to reply to]:comment ID:' \
+                        '-resolve[Mark comment thread as resolved]' \
+                        '-unresolve[Mark comment thread as unresolved]' \
                         '(-h -help --help)'{-h,-help,--help}'[Show help]' \
                         '1:review ID:'
                     ;;
@@ -667,7 +669,7 @@ complete -c writ -n '__fish_writ_needs_subcommand help review' -f -a 'open comme
 			} else if f.Name == "C" {
 				fmt.Fprintf(w, "complete -c writ -n '%s' %s -d '%s' -r -a '(__fish_complete_directories)'\n",
 					cond, optFlag, desc)
-			} else if f.Name == "draft" || f.Name == "json" || f.Name == "status" && cmd.Name == "sync" {
+			} else if f.Name == "draft" || f.Name == "json" || f.Name == "resolve" || f.Name == "unresolve" || f.Name == "status" && cmd.Name == "sync" {
 				fmt.Fprintf(w, "complete -c writ -n '%s' %s -d '%s'\n",
 					cond, optFlag, desc)
 			} else {

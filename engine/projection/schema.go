@@ -1,6 +1,6 @@
 package projection
 
-const schemaVersion = 3
+const schemaVersion = 4
 
 var projectionTables = []string{
 	"meta",
@@ -162,7 +162,9 @@ CREATE TABLE IF NOT EXISTS comments (
     text TEXT NOT NULL,
     in_reply_to TEXT NOT NULL,
     anchor TEXT NOT NULL,
-    deleted INTEGER NOT NULL
+    deleted INTEGER NOT NULL,
+    resolved INTEGER,
+    resolved_by TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_comments_subject ON comments(subject_id);
 

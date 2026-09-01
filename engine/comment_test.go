@@ -1,6 +1,7 @@
 package writ_test
 
 import (
+	"context"
 	"math/rand"
 	"path/filepath"
 	"reflect"
@@ -194,5 +195,147 @@ func TestFoldCommentUnknownOps(t *testing.T) {
 	}
 	if threads[0].UnknownOps[0].Commit != "c1-future" {
 		t.Errorf("unexpected thread UnknownOp: %+v", threads[0].UnknownOps[0])
+	}
+}
+
+func TestCommentsResolveWorkflow(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+
+	// 1. Create a Review
+	headHash := runGitCmd(t, repoDir, "rev-parse", "HEAD")[:40]
+	reviewID, err := s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Test Review for Comments",
+		Base:  headHash,
+		Head:  headHash,
+	})
+	if err != nil {
+		t.Fatalf("Create review failed: %v", err)
+	}
+
+	// 2. Add root comment
+	commentID, err := s.Reviews.Comment(ctx, reviewID, writ.NewComment{
+		Text: "Root comment requesting changes",
+	})
+	if err != nil {
+		t.Fatalf("Comment failed: %v", err)
+	}
+
+	// Verify initially unresolved
+	comments, err := s.Query.Comments(writ.CommentFilter{SubjectID: reviewID})
+	if err != nil {
+		t.Fatalf("Query.Comments failed: %v", err)
+	}
+	if len(comments) != 1 {
+		t.Fatalf("expected 1 comment, got %d", len(comments))
+	}
+	if comments[0].Comment.IsResolved() {
+		t.Errorf("expected comment to initially be unresolved")
+	}
+	if comments[0].Comment.Resolved != nil {
+		t.Errorf("expected initial Resolved pointer to be nil, got %+v", comments[0].Comment.Resolved)
+	}
+
+	// 3. Resolve thread
+	if err := s.Comments.Resolve(ctx, commentID, writ.CommentResolve{
+		Resolved: true,
+		Actor:    "alice",
+	}); err != nil {
+		t.Fatalf("Resolve failed: %v", err)
+	}
+
+	// Verify resolved state
+	comments, err = s.Query.Comments(writ.CommentFilter{SubjectID: reviewID})
+	if err != nil {
+		t.Fatalf("Query.Comments failed: %v", err)
+	}
+	if len(comments) != 1 {
+		t.Fatalf("expected 1 comment, got %d", len(comments))
+	}
+	if !comments[0].Comment.IsResolved() {
+		t.Errorf("expected comment to be resolved")
+	}
+	if comments[0].Comment.Actor != "alice" {
+		t.Errorf("expected comment actor 'alice', got %q", comments[0].Comment.Actor)
+	}
+
+	// 4. Post reply after resolve - verify thread root remains resolved
+	replyID, err := s.Reviews.Comment(ctx, reviewID, writ.NewComment{
+		Text:      "Reply after resolve",
+		InReplyTo: commentID,
+	})
+	if err != nil {
+		t.Fatalf("Reply comment failed: %v", err)
+	}
+	if replyID == "" {
+		t.Fatal("expected non-empty replyID")
+	}
+
+	threads, err := s.Query.Threads("review", reviewID)
+	if err != nil {
+		t.Fatalf("Query.Threads failed: %v", err)
+	}
+	if len(threads) != 1 {
+		t.Fatalf("expected 1 thread, got %d", len(threads))
+	}
+	if !threads[0].Comment.IsResolved() {
+		t.Errorf("expected thread root to remain resolved after reply")
+	}
+	if len(threads[0].Replies) != 1 {
+		t.Fatalf("expected 1 reply, got %d", len(threads[0].Replies))
+	}
+
+	// 5. Explicitly unresolve thread
+	if err := s.Comments.Resolve(ctx, commentID, writ.CommentResolve{
+		Resolved: false,
+	}); err != nil {
+		t.Fatalf("Unresolve failed: %v", err)
+	}
+
+	comments, err = s.Query.Comments(writ.CommentFilter{SubjectID: reviewID})
+	if err != nil {
+		t.Fatalf("Query.Comments failed: %v", err)
+	}
+	var rootComment *writ.CommentResult
+	for i := range comments {
+		if comments[i].ObjectID == commentID {
+			rootComment = &comments[i]
+			break
+		}
+	}
+	if rootComment == nil {
+		t.Fatalf("root comment not found in results")
+	}
+	if rootComment.Comment.IsResolved() {
+		t.Errorf("expected comment to be unresolved after explicit unresolve")
+	}
+	if rootComment.Comment.Resolved == nil || *rootComment.Comment.Resolved != false {
+		t.Errorf("expected Resolved pointer to be &false, got %+v", rootComment.Comment.Resolved)
+	}
+
+	// 6. Test Query filters
+	trueVal := true
+	falseVal := false
+	resolvedComments, err := s.Query.Comments(writ.CommentFilter{SubjectID: reviewID, Resolved: &trueVal})
+	if err != nil {
+		t.Fatalf("Query resolved comments failed: %v", err)
+	}
+	if len(resolvedComments) != 0 {
+		t.Errorf("expected 0 resolved comments, got %d", len(resolvedComments))
+	}
+
+	unresolvedComments, err := s.Query.Comments(writ.CommentFilter{SubjectID: reviewID, Resolved: &falseVal})
+	if err != nil {
+		t.Fatalf("Query unresolved comments failed: %v", err)
+	}
+	if len(unresolvedComments) != 2 {
+		t.Errorf("expected 2 unresolved comments (root + reply), got %d", len(unresolvedComments))
 	}
 }
