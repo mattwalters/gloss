@@ -8,9 +8,13 @@ description: >
   reference fold, and the typed FoldReview reducer must agree. Object
   r-empty-items mixes empty and real items on both the add and remove sides; the
   empty label item is only ever removed concurrently (Bob), never causally, so
-  add-wins would keep it present in a reducer that failed to drop it. Object
-  r-empty-only carries nothing but empty items, pinning that the field is still
-  written and folds to the empty set.
+  add-wins would keep it present in a reducer that failed to drop it. It also
+  pins the negative case: the whitespace-only label item "  " is KEPT verbatim,
+  because label items are not normalized before the emptiness test, while the
+  whitespace-only assign item is normalized to empty and therefore dropped. A
+  reducer that trimmed label items would fold the two identically and fail here.
+  Object r-empty-only carries nothing but empty items, pinning that the field is
+  still written and folds to the empty set in the generic state map.
 
 refs:
   - name: refs/writ/0123456789abcdef/review
@@ -39,7 +43,7 @@ refs:
               op_type: label
               op_version: 1
               body:
-                add: ["", "area/fold", "wip"]
+                add: ["", "  ", "area/fold", "wip"]
             expect: accept
 
           - id: alice-assign-with-empty
