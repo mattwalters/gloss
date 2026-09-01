@@ -355,3 +355,55 @@ func TestDisappearedChainTriggersRebuild(t *testing.T) {
 		t.Fatalf("expected 0 objects after all refs deleted, got %d", count)
 	}
 }
+
+func TestRefresh_WithTargetRefsResolution(t *testing.T) {
+	ctx := context.Background()
+	repo, store := createTestStore(t, "0123456789abcdef")
+
+	// Create a dummy commit for a branch
+	testCommitHash := plumbing.NewHash("0123456789abcdef0123456789abcdef01234567")
+	_ = repo.Storer.SetReference(plumbing.NewHashReference(plumbing.ReferenceName("refs/heads/main"), testCommitHash))
+	_ = repo.Storer.SetReference(plumbing.NewHashReference(plumbing.ReferenceName("refs/remotes/origin/feat"), testCommitHash))
+	_ = repo.Storer.SetReference(plumbing.NewHashReference(plumbing.ReferenceName("refs/tags/v1.0"), testCommitHash))
+
+	db, err := projection.Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open projection failed: %v", err)
+	}
+	defer db.Close()
+
+	env := makeReviewEnv("rev-target", "create", 1, map[string]any{"title": "Target Ref Test"})
+	_, _ = store.Append(ctx, env, nil)
+
+	// Refresh with short branch name "main", remote branch "origin/feat", and tag "v1.0"
+	_, err = db.Refresh(store, projection.WithTargetRefs("main", "origin/feat", "v1.0"))
+	if err != nil {
+		t.Fatalf("Refresh with target refs failed: %v", err)
+	}
+
+	rows, err := db.DB().Query("SELECT ref_name, tip FROM code_tips ORDER BY ref_name")
+	if err != nil {
+		t.Fatalf("Query code_tips failed: %v", err)
+	}
+	defer rows.Close()
+
+	tips := make(map[string]string)
+	for rows.Next() {
+		var refName, tip string
+		if err := rows.Scan(&refName, &tip); err != nil {
+			t.Fatal(err)
+		}
+		tips[refName] = tip
+	}
+
+	if tips["main"] != testCommitHash.String() {
+		t.Errorf("code_tips[main] = %s, want %s", tips["main"], testCommitHash.String())
+	}
+	if tips["origin/feat"] != testCommitHash.String() {
+		t.Errorf("code_tips[origin/feat] = %s, want %s", tips["origin/feat"], testCommitHash.String())
+	}
+	if tips["v1.0"] != testCommitHash.String() {
+		t.Errorf("code_tips[v1.0] = %s, want %s", tips["v1.0"], testCommitHash.String())
+	}
+}
+

@@ -480,9 +480,25 @@ func resolveTargetTips(s storage.Storer, explicitRefs []string) (map[string]stri
 			continue
 		}
 
-		ref, err := storer.ResolveReference(s, plumbing.ReferenceName(refName))
-		if err == nil && ref != nil {
-			targetTips[refName] = ref.Hash().String()
+		// Try explicit reference and standard git revision prefix candidates
+		candidates := []plumbing.ReferenceName{
+			plumbing.ReferenceName(refName),
+			plumbing.ReferenceName("refs/" + refName),
+			plumbing.ReferenceName("refs/heads/" + refName),
+			plumbing.ReferenceName("refs/tags/" + refName),
+			plumbing.ReferenceName("refs/remotes/" + refName),
+			plumbing.ReferenceName("refs/remotes/" + refName + "/HEAD"),
+		}
+		resolved := false
+		for _, cand := range candidates {
+			ref, err := storer.ResolveReference(s, cand)
+			if err == nil && ref != nil {
+				targetTips[refName] = ref.Hash().String()
+				resolved = true
+				break
+			}
+		}
+		if resolved {
 			continue
 		}
 

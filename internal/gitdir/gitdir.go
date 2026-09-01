@@ -55,18 +55,7 @@ func Resolve(path string) (Info, error) {
 			if entryInfo.IsDir() {
 				// Standard working tree
 				gitDir := gitEntry
-				commonDir := gitDir
-				commondirFile := filepath.Join(gitDir, "commondir")
-				if data, err := os.ReadFile(commondirFile); err == nil {
-					relCommon := strings.TrimSpace(string(data))
-					if relCommon != "" {
-						if filepath.IsAbs(relCommon) {
-							commonDir = filepath.Clean(relCommon)
-						} else {
-							commonDir = filepath.Clean(filepath.Join(gitDir, relCommon))
-						}
-					}
-				}
+				commonDir := readCommonDir(gitDir)
 				return Info{
 					WorkTree:  curr,
 					GitDir:    gitDir,
@@ -91,19 +80,7 @@ func Resolve(path string) (Info, error) {
 					gitDir = filepath.Clean(filepath.Join(curr, rawTarget))
 				}
 
-				commonDir := gitDir
-				commondirFile := filepath.Join(gitDir, "commondir")
-				if data, err := os.ReadFile(commondirFile); err == nil {
-					relCommon := strings.TrimSpace(string(data))
-					if relCommon != "" {
-						if filepath.IsAbs(relCommon) {
-							commonDir = filepath.Clean(relCommon)
-						} else {
-							commonDir = filepath.Clean(filepath.Join(gitDir, relCommon))
-						}
-					}
-				}
-
+				commonDir := readCommonDir(gitDir)
 				return Info{
 					WorkTree:  curr,
 					GitDir:    gitDir,
@@ -119,29 +96,42 @@ func Resolve(path string) (Info, error) {
 		curr = parent
 	}
 
-	// 2. Check if startDir itself is a bare repository (contains HEAD, objects, refs)
-	if isBareRepo(startDir) {
-		gitDir := startDir
-		commonDir := gitDir
-		commondirFile := filepath.Join(gitDir, "commondir")
-		if data, err := os.ReadFile(commondirFile); err == nil {
-			relCommon := strings.TrimSpace(string(data))
-			if relCommon != "" {
-				if filepath.IsAbs(relCommon) {
-					commonDir = filepath.Clean(relCommon)
-				} else {
-					commonDir = filepath.Clean(filepath.Join(gitDir, relCommon))
-				}
-			}
+	// 2. Check if startDir or any parent is a bare repository (contains HEAD, objects, refs)
+	curr = startDir
+	for {
+		if isBareRepo(curr) {
+			gitDir := curr
+			commonDir := readCommonDir(gitDir)
+			return Info{
+				WorkTree:  "",
+				GitDir:    gitDir,
+				CommonDir: commonDir,
+			}, nil
 		}
-		return Info{
-			WorkTree:  "",
-			GitDir:    gitDir,
-			CommonDir: commonDir,
-		}, nil
+		parent := filepath.Dir(curr)
+		if parent == curr {
+			break
+		}
+		curr = parent
 	}
 
 	return Info{}, fmt.Errorf("gitdir: not a git repository (or any parent up to mount point): %s", path)
+}
+
+func readCommonDir(gitDir string) string {
+	commondirFile := filepath.Join(gitDir, "commondir")
+	data, err := os.ReadFile(commondirFile)
+	if err != nil {
+		return gitDir
+	}
+	relCommon := strings.TrimSpace(string(data))
+	if relCommon == "" {
+		return gitDir
+	}
+	if filepath.IsAbs(relCommon) {
+		return filepath.Clean(relCommon)
+	}
+	return filepath.Clean(filepath.Join(gitDir, relCommon))
 }
 
 // OpenStorage initializes a filesystem-backed Storage storer for the given git info.
