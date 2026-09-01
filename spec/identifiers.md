@@ -17,6 +17,8 @@ described in RFC 2119.
 This section defines:
 
 - **Object identifiers** — the canonical form minted by Writ producers.
+- **Person identifiers** — format, normalization, and byte-comparison rules for
+  collaborative actor identities (assignees, approval subjects).
 - **Repository designators** — the immutable identifier of a git repository
   within a Writ workspace.
 - **Reference grammar** — the syntax for bare local and fully-qualified
@@ -99,6 +101,91 @@ Two alternative identification schemes were considered and rejected:
   non-conforming or foreign IDs as opaque identifiers. This forward-compatibility
   rule ensures older readers do not discard objects created by newer or
   third-party producers.
+
+## Person identifiers (`person-id`)
+
+A collaborative actor in Writ (a human author, reviewer, assignee, or bot) is
+identified in operation payloads using a **person identifier**.
+
+```jsonc
+"alice@example.com"
+```
+
+Person identifiers appear in op payloads across the SDLC vocabulary:
+- **Assignees** on reviews ([`spec/review-ops.md`](review-ops.md) §5 `assign`)
+- **Assignees** on issues ([`spec/issue-ops.md`](issue-ops.md) §4 `assign`)
+- **Approval and dismissal subjects** on reviews ([`spec/review-ops.md`](review-ops.md) §6 `approval`)
+- **Resolution actors** on comments ([`spec/comments.md`](comments.md) §5 `resolve`)
+
+### Format
+
+The canonical person identifier format is an **email address** (e.g.
+`alice@example.com`, `bot@ci.writ.dev`).
+
+Email addresses match git author identities (`user.email`), git commit signatures,
+and forge export formats (GitHub, GitLab, Gerrit).
+
+### Normalization rules
+
+To guarantee deterministic comparison, portable queries, and interoperability
+across independent implementations, person identifiers MUST be normalized:
+
+1. **Whitespace trimming:** All leading and trailing whitespace characters
+   (ASCII space `\x20`, tab `\t`, newline `\n`, carriage return `\r`, and
+   Unicode whitespace) MUST be removed.
+2. **Case folding:** All characters MUST be converted to lowercase ASCII
+   (`a-z`).
+3. **Non-empty:** After trimming, the normalized string MUST contain at least
+   one character.
+
+$$\text{norm}(s) = \text{lowercase}(\text{trim\_whitespace}(s))$$
+
+### Comparison and equality
+
+Two person identifiers $A$ and $B$ denote the same person if and only if their
+normalized byte representations are equal:
+
+$$\text{equal}(A, B) \iff \text{norm}(A) == \text{norm}(B)$$
+
+For example:
+- `"  Alice@Example.COM  "` normalizes to `"alice@example.com"`.
+- `"alice@example.com"` and `"  ALICE@EXAMPLE.COM  "` compare as equal.
+- Deduplication, set membership tests in add-wins OR-sets (`set-observed-remove`),
+  and keyed LWW lookups (`keyed-lww`) operate on the normalized string.
+
+### Producer and reader conformance
+
+- **Producers MUST** emit normalized person identifiers (trimmed, lowercase)
+  when writing operation payloads.
+- **Readers and Reducers MUST** normalize person identifiers upon reading op
+  payloads prior to evaluating set membership, keyed lookups, deduplication,
+  or projection indices.
+
+### Relationship to `writer-id`
+
+Writ clearly separates device-scoped physical namespaces from collaborative actor
+identities:
+
+| Concept | Format | Scope | Purpose |
+| --- | --- | --- | --- |
+| **`writer-id`** | 16 lowercase hex characters (`^[0-9a-f]{16}$`) | Device-scoped `(user, device)` | Git ref namespace (`refs/writ/<writer-id>/`) for append-only concurrent writes without locking. |
+| **`person-id`** | Email address string (normalized lowercase, trimmed) | Workspace-global collaborative actor | Collaborative actor identity (assignee, reviewer, voter) across multiple devices and repositories. |
+
+A single person (e.g. `alice@example.com`) may author ops from multiple machines
+and devices, each with its own distinct `writer-id` (e.g. laptop `4d8a23b35dd50102`
+and desktop `0123456789abcdef`). The `writer-id` partitions the git refspace; the
+`person-id` identifies the collaborative actor.
+
+### Identity mapping out of scope
+
+Mapping cryptographic signing keys (SSH/GPG) or person email addresses to
+central directory identities (such as LDAP, SSO, or corporate IAM) is
+**deliberately out of scope** for the open format and specification
+(ARCHITECTURE.md §Known-hard list, "identity mapping").
+
+Writ's open format records what was declared in op payloads and verifies
+tamper-evident commit signatures; organizational authority and identity verification
+policies belong to the hosting forge or coordination service.
 
 ## Repository designators (`repo-id`)
 

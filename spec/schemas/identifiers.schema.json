@@ -15,6 +15,11 @@
   },
   "required": ["reference"],
   "$defs": {
+    "person-id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Person identifier: normalized collaborative actor identity (email address, lowercase, trimmed whitespace) per spec/identifiers.md."
+    },
     "object-id": {
       "type": "string",
       "pattern": "^[0-9a-f]{32}$",

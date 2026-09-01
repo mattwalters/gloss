@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/writtendev/writ/engine/codec"
 )
@@ -185,23 +186,38 @@ func (a *setObservedRemoveAccumulator) Apply(op codec.Op, body map[string]any, _
 	}
 	a.hasOps = true
 
+	normalizeItem := func(it string) string {
+		if op.OpType == "assign" {
+			return strings.ToLower(strings.TrimSpace(it))
+		}
+		return it
+	}
+
 	if slice, ok := addRaw.([]any); ok {
 		for _, it := range slice {
-			a.adds = append(a.adds, orSetAddRecord{opID: op.ID, item: fmt.Sprint(it)})
+			if item := normalizeItem(fmt.Sprint(it)); item != "" {
+				a.adds = append(a.adds, orSetAddRecord{opID: op.ID, item: item})
+			}
 		}
 	} else if slice, ok := addRaw.([]string); ok {
 		for _, it := range slice {
-			a.adds = append(a.adds, orSetAddRecord{opID: op.ID, item: it})
+			if item := normalizeItem(it); item != "" {
+				a.adds = append(a.adds, orSetAddRecord{opID: op.ID, item: item})
+			}
 		}
 	}
 
 	if slice, ok := remRaw.([]any); ok {
 		for _, it := range slice {
-			a.removes = append(a.removes, orSetRemoveRecord{opID: op.ID, item: fmt.Sprint(it)})
+			if item := normalizeItem(fmt.Sprint(it)); item != "" {
+				a.removes = append(a.removes, orSetRemoveRecord{opID: op.ID, item: item})
+			}
 		}
 	} else if slice, ok := remRaw.([]string); ok {
 		for _, it := range slice {
-			a.removes = append(a.removes, orSetRemoveRecord{opID: op.ID, item: it})
+			if item := normalizeItem(it); item != "" {
+				a.removes = append(a.removes, orSetRemoveRecord{opID: op.ID, item: item})
+			}
 		}
 	}
 	return nil
@@ -372,7 +388,7 @@ func newKeyedLWWAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 	}, nil
 }
 
-func (a *keyedLWWAccumulator) Apply(_ codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
+func (a *keyedLWWAccumulator) Apply(op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	val, ok := body[a.field]
 	if !ok {
 		return nil
@@ -381,7 +397,11 @@ func (a *keyedLWWAccumulator) Apply(_ codec.Op, body map[string]any, _ map[strin
 	key := make([]string, 0, len(a.keyCols))
 	for _, kf := range a.keyCols {
 		if val, ok := body[kf]; ok && val != nil {
-			key = append(key, fmt.Sprint(val))
+			vStr := fmt.Sprint(val)
+			if kf == "subject" && op.OpType == "approval" {
+				vStr = strings.ToLower(strings.TrimSpace(vStr))
+			}
+			key = append(key, vStr)
 		} else {
 			key = append(key, "")
 		}

@@ -138,10 +138,8 @@
           "description": "Resolution status: true = resolved, false = unresolved."
         },
         "actor": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 256,
-          "description": "Optional writer or user identity recording the resolution."
+          "$ref": "https://writ.dev/spec/identifiers.schema.json#/$defs/person-id",
+          "description": "Optional person identifier (email address) recording the resolution."
         }
       },
       "required": ["resolved"],

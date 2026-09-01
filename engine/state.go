@@ -80,3 +80,9 @@ func ParseReference(ref string) (string, string, error) {
 func ResolveReference(ref string, localRepoID string, registry []RepoEntry) (ResolvedReference, error) {
 	return state.ResolveReference(ref, localRepoID, registry)
 }
+
+// NormalizePerson normalizes a person identifier string per spec/identifiers.md
+// (trimmed leading/trailing whitespace, lowercase).
+func NormalizePerson(s string) string {
+	return state.NormalizePerson(s)
+}

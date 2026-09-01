@@ -281,8 +281,7 @@
           ]
         },
         "subject": {
-          "type": "string",
-          "minLength": 1
+          "$ref": "https://writ.dev/spec/identifiers.schema.json#/$defs/person-id"
         },
         "message": {
           "type": "string"
@@ -343,16 +342,14 @@
         "add": {
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1
+            "$ref": "https://writ.dev/spec/identifiers.schema.json#/$defs/person-id"
           },
           "minItems": 1
         },
         "remove": {
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1
+            "$ref": "https://writ.dev/spec/identifiers.schema.json#/$defs/person-id"
           },
           "minItems": 1
         }

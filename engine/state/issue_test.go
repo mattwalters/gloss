@@ -625,3 +625,58 @@ func TestFoldIssueAgreement(t *testing.T) {
 		t.Errorf("link mismatch: %+v", issueState.Links[0])
 	}
 }
+
+func TestFoldIssuePersonNormalization(t *testing.T) {
+	now := time.Unix(100, 0).UTC()
+
+	// 1. Assign with whitespace and mixed case: "  Alice@Example.COM  ", "Bob@Example.Com"
+	// 2. Remove with lowercase: "alice@example.com", add " Charlie@Example.COM "
+	ops := []codec.Op{
+		{
+			ID: "op1",
+			Envelope: codec.Envelope{
+				ObjectID:   "i-norm",
+				ObjectType: "issue",
+				OpType:     "create",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"title":"Normalization Issue"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now},
+		},
+		{
+			ID:      "op2",
+			Parents: []string{"op1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "i-norm",
+				ObjectType: "issue",
+				OpType:     "assign",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"add":["  Alice@Example.COM  ", "Bob@Example.Com"]}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(time.Minute)},
+		},
+		{
+			ID:      "op3",
+			Parents: []string{"op2"},
+			Envelope: codec.Envelope{
+				ObjectID:   "i-norm",
+				ObjectType: "issue",
+				OpType:     "assign",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"remove":["alice@example.com"],"add":[" Charlie@Example.COM "]}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(2 * time.Minute)},
+		},
+	}
+
+	state, err := s.FoldIssue(ops)
+	if err != nil {
+		t.Fatalf("FoldIssue failed: %v", err)
+	}
+
+	// Assignees: alice removed, bob and charlie present (lowercase, sorted)
+	wantAssignees := []string{"bob@example.com", "charlie@example.com"}
+	if !reflect.DeepEqual(state.Assignees, wantAssignees) {
+		t.Errorf("Assignees = %v, want %v", state.Assignees, wantAssignees)
+	}
+}

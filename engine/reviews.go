@@ -301,12 +301,27 @@ func (r *Reviews) Assign(ctx context.Context, id string, add, remove []string) e
 		return fmt.Errorf("writ: get frontier: %w", err)
 	}
 
-	body := make(map[string]any)
-	if len(add) > 0 {
-		body["add"] = add
+	var normAdd, normRemove []string
+	for _, a := range add {
+		if norm := state.NormalizePerson(a); norm != "" {
+			normAdd = append(normAdd, norm)
+		}
 	}
-	if len(remove) > 0 {
-		body["remove"] = remove
+	for _, rem := range remove {
+		if norm := state.NormalizePerson(rem); norm != "" {
+			normRemove = append(normRemove, norm)
+		}
+	}
+	if len(normAdd) == 0 && len(normRemove) == 0 {
+		return fmt.Errorf("writ: add or remove must be non-empty")
+	}
+
+	body := make(map[string]any)
+	if len(normAdd) > 0 {
+		body["add"] = normAdd
+	}
+	if len(normRemove) > 0 {
+		body["remove"] = normRemove
 	}
 
 	bodyBytes, err := json.Marshal(body)
@@ -569,7 +584,7 @@ func (r *Reviews) Approve(ctx context.Context, id string, a Approval) error {
 		"verdict":  a.Verdict,
 	}
 	if a.Subject != "" {
-		body["subject"] = a.Subject
+		body["subject"] = state.NormalizePerson(a.Subject)
 	}
 	if a.Message != "" {
 		body["message"] = a.Message

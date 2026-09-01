@@ -2,9 +2,16 @@ package state
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/writtendev/writ/engine/resolve"
 )
+
+// NormalizePerson normalizes a person identifier string per spec/identifiers.md
+// (trimmed leading/trailing whitespace, lowercase).
+func NormalizePerson(s string) string {
+	return strings.ToLower(strings.TrimSpace(s))
+}
 
 // Anchor is a content-based comment position object (v1).
 // Fold carries anchors verbatim as data per spec/fold.md §6.

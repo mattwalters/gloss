@@ -85,20 +85,28 @@ func FoldIssue(ops []codec.Op) (Issue, error) {
 			hasKnownOp = true
 			if addRaw, ok := body["add"].([]any); ok {
 				for _, it := range addRaw {
-					assignAdds = append(assignAdds, orSetRecord{opID: op.ID, item: fmt.Sprint(it)})
+					if item := NormalizePerson(fmt.Sprint(it)); item != "" {
+						assignAdds = append(assignAdds, orSetRecord{opID: op.ID, item: item})
+					}
 				}
 			} else if addRaw, ok := body["add"].([]string); ok {
 				for _, it := range addRaw {
-					assignAdds = append(assignAdds, orSetRecord{opID: op.ID, item: it})
+					if item := NormalizePerson(it); item != "" {
+						assignAdds = append(assignAdds, orSetRecord{opID: op.ID, item: item})
+					}
 				}
 			}
 			if remRaw, ok := body["remove"].([]any); ok {
 				for _, it := range remRaw {
-					assignRemoves = append(assignRemoves, orSetRecord{opID: op.ID, item: fmt.Sprint(it)})
+					if item := NormalizePerson(fmt.Sprint(it)); item != "" {
+						assignRemoves = append(assignRemoves, orSetRecord{opID: op.ID, item: item})
+					}
 				}
 			} else if remRaw, ok := body["remove"].([]string); ok {
 				for _, it := range remRaw {
-					assignRemoves = append(assignRemoves, orSetRecord{opID: op.ID, item: it})
+					if item := NormalizePerson(it); item != "" {
+						assignRemoves = append(assignRemoves, orSetRecord{opID: op.ID, item: item})
+					}
 				}
 			}
 

@@ -189,7 +189,7 @@ A `resolve` op records or updates the resolution state of a comment thread.
   "op_version": 1,
   "body": {
     "resolved": true,
-    "actor": "alice"
+    "actor": "alice@example.com"
   }
 }
 ```
@@ -199,8 +199,9 @@ A `resolve` op records or updates the resolution state of a comment thread.
 - `resolved` (boolean, required) — resolution status of the thread:
   - `true`: marks the thread as resolved.
   - `false`: marks the thread as unresolved (reopened).
-- `actor` (string, optional) — writer or user identity on whose behalf the
-  resolution is recorded (`minLength: 1`, `maxLength: 256`).
+- `actor` (person identifier per [`spec/identifiers.md`](identifiers.md), optional) —
+  person identifier (email address) on whose behalf the resolution is recorded.
+  Normalized (lowercase, trimmed whitespace) per [`spec/identifiers.md`](identifiers.md).
 
 #### Target & Threading Invariants
 

@@ -55,7 +55,10 @@ into fields of the `review` object rather than standalone collaborative objects.
 - **`assign` and `label` are add-wins OR-sets (`set-observed-remove`):**
   Concurrent assignment or labelling on one device and removal on another is
   reconciled via `set-observed-remove` (WRIT-12, `spec/fold.md`). Additions win
-  over concurrent removals. Assignee and label values are opaque non-empty strings.
+  over concurrent removals. Assignee values are person identifiers
+  ([`spec/identifiers.md`](identifiers.md) §Person identifiers), normalized
+  (lowercase, trimmed whitespace) prior to set evaluation; labels are opaque
+  non-empty strings.
 - **Link directionality: single-sided with derived inverse:**
   Links are declared single-sided on the object being authored (e.g. a review
   links to an issue with `relation: "fixes"`). This design avoids multi-repo
@@ -115,8 +118,8 @@ The review family defines nine operation types for `op_version: 1`:
 | `revision` | `{"base": oid, "head": oid}` | Code revision push (base and head commits). |
 | `update` | `{"title"?: string, "description"?: string}` | Metadata edits (title, description). |
 | `set-status` | `{"status": enum, "merge_commit"?: oid, "reason"?: string}` | Status transitions (`draft`, `open`, `closed`, `merged`). |
-| `assign` | `{"add"?: [string], "remove"?: [string]}` | Add or remove review assignees (requested reviewers). |
-| `approval` | `{"revision": oid, "verdict": enum, "subject"?: string, "message"?: string}` | Review vote (`approve`, `request-changes`, `none`). |
+| `assign` | `{"add"?: [person-id], "remove"?: [person-id]}` | Add or remove review assignees (requested reviewers). |
+| `approval` | `{"revision": oid, "verdict": enum, "subject"?: person-id, "message"?: string}` | Review vote (`approve`, `request-changes`, `none`). |
 | `ci-status` | `{"revision": oid, "name": string, "state": enum, "url"?: string, "description"?: string, "started_at"?: timestamp, "completed_at"?: timestamp, "external_id"?: string}` | CI check result on a revision head. |
 | `label` | `{"add"?: [string], "remove"?: [string]}` | Add or remove review labels. |
 | `link` | `{"target": reference, "target_type"?: string, "relation": "fixes"\|"relates"\|"none"}` | Associate or retract cross-references (e.g. closes issue). |
@@ -256,17 +259,21 @@ Adds or removes assignees (requested reviewers) for the review.
   "op_type": "assign",
   "op_version": 1,
   "body": {
-    "add": ["alice", "bob"],
-    "remove": ["charlie"]
+    "add": ["alice@example.com", "bob@example.com"],
+    "remove": ["charlie@example.com"]
   }
 }
 ```
 
-- `add` (array of non-empty strings, optional): Assignee / requested reviewer identifiers to add.
-- `remove` (array of non-empty strings, optional): Assignee / requested reviewer identifiers to remove.
+- `add` (array of person identifiers per [`spec/identifiers.md`](identifiers.md), optional): Person identifiers (assignees / requested reviewers) to add.
+- `remove` (array of person identifiers per [`spec/identifiers.md`](identifiers.md), optional): Person identifiers (assignees / requested reviewers) to remove.
 
 At least one of `add` or `remove` MUST be present and contain at least one item.
 An empty `{}` body or empty arrays (`"add": []`) are invalid.
+
+Assignees are normalized (leading/trailing whitespace trimmed, lowercase) per
+[`spec/identifiers.md`](identifiers.md) before set membership and deduplication are
+evaluated. Byte-exact equality after normalisation determines element identity.
 
 ### 6. `approval`
 
@@ -282,7 +289,7 @@ specific revision head.
   "body": {
     "revision": "89abcdef0123456789abcdef0123456789abcdef",
     "verdict": "approve",
-    "subject": "alice",
+    "subject": "alice@example.com",
     "message": "Looks great, approved!"
   }
 }
@@ -294,7 +301,10 @@ specific revision head.
   - `"approve"`: Approves the revision.
   - `"request-changes"`: Requests changes before merging.
   - `"none"`: Retracts or dismisses any existing verdict for the `(subject, revision)` pair.
-- `subject` (string, optional): Writer or user identity whose vote is recorded.
+- `subject` (person identifier per [`spec/identifiers.md`](identifiers.md), optional):
+  Person identifier (writer or user email identity) whose vote is recorded.
+  Normalized (trimmed, lowercase) per [`spec/identifiers.md`](identifiers.md)
+  prior to key evaluation.
 - `message` (string, optional): Text summary or review message explaining the
   verdict.
 
@@ -426,9 +436,9 @@ treated as unknown data, preserved in the DAG, and ignored during fold.
 | `set-status` | `status` | `lww` | Last writer wins |
 | `set-status` | `merge_commit` | `lww` | Last writer wins |
 | `set-status` | `reason` | `lww` | Last writer wins |
-| `assign` | `add` | `set-observed-remove` | Add-wins OR-set over assignee strings |
-| `assign` | `remove` | `set-observed-remove` | Add-wins OR-set over assignee strings |
-| `approval` | `revision` | `keyed-lww` | Scoped by key `[subject, revision]` |
+| `assign` | `add` | `set-observed-remove` | Add-wins OR-set over normalized person identifiers (`spec/identifiers.md`) |
+| `assign` | `remove` | `set-observed-remove` | Add-wins OR-set over normalized person identifiers (`spec/identifiers.md`) |
+| `approval` | `revision` | `keyed-lww` | Scoped by key `[subject, revision]` (subject normalized per `spec/identifiers.md`) |
 | `approval` | `verdict` | `keyed-lww` | Scoped by key `[subject, revision]`; `"none"` retracts verdict |
 | `approval` | `subject` | `keyed-lww` | Scoped by key `[subject, revision]` |
 | `approval` | `message` | `keyed-lww` | Scoped by key `[subject, revision]` |

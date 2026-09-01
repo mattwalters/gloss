@@ -46,6 +46,19 @@ var commentSchemaOnce = sync.OnceValue(func() compiledSchema {
 		return compiledSchema{err: fmt.Errorf("adding anchor schema resource: %w", err)}
 	}
 
+	// Register identifiers schema dependency.
+	identRaw, err := spec.FS.ReadFile("schemas/identifiers.schema.json")
+	if err != nil {
+		return compiledSchema{err: fmt.Errorf("reading identifiers schema: %w", err)}
+	}
+	identDoc, err := jsonschema.UnmarshalJSON(bytes.NewReader(identRaw))
+	if err != nil {
+		return compiledSchema{err: fmt.Errorf("unmarshaling identifiers schema: %w", err)}
+	}
+	if err := c.AddResource(identifiersSchemaID, identDoc); err != nil {
+		return compiledSchema{err: fmt.Errorf("adding identifiers schema resource: %w", err)}
+	}
+
 	// Register and compile comment schema.
 	raw, err := spec.FS.ReadFile("schemas/comment.schema.json")
 	if err != nil {
