@@ -13,9 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/storer"
+	"github.com/go-git/go-git/v5/storage"
 	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/dag"
@@ -39,6 +40,8 @@ func (c *mutableClock) set(t time.Time) {
 func (c *mutableClock) get() time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	// Steps may omit At. Without a default, ops would be stamped with the zero
+	// time and `git commit` would reject GIT_AUTHOR_DATE outright.
 	if c.now.IsZero() {
 		return time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	}
@@ -48,7 +51,7 @@ func (c *mutableClock) get() time.Time {
 type deviceRuntime struct {
 	device            Device
 	dir               string
-	repo              *git.Repository
+	storer            storage.Storer
 	syncClient        *writsync.Client
 	store             *dag.Store
 	clock             *mutableClock
@@ -125,15 +128,10 @@ func Run(t TestReporter, s Scenario) {
 			t.Fatalf("dag.Open %s failed: %v", dev.Name, err)
 		}
 
-		repo, err := git.PlainOpen(devDir)
-		if err != nil {
-			t.Fatalf("git.PlainOpen %s failed: %v", dev.Name, err)
-		}
-
 		rt := &deviceRuntime{
 			device:            dev,
 			dir:               devDir,
-			repo:              repo,
+			storer:            store.Storer(),
 			syncClient:        syncClient,
 			store:             store,
 			clock:             clock,
@@ -533,14 +531,14 @@ func buildSnapshot(t TestReporter, rt *deviceRuntime, checks []AnchorCheck) (Sna
 		if branch == "" {
 			branch = "main"
 		}
-		branchRef, err := rt.repo.Reference(plumbing.ReferenceName("refs/remotes/origin/"+branch), true)
+		branchRef, err := storer.ResolveReference(rt.storer, plumbing.ReferenceName("refs/remotes/origin/"+branch))
 		if err != nil {
-			branchRef, err = rt.repo.Reference(plumbing.ReferenceName("refs/heads/"+branch), true)
+			branchRef, err = storer.ResolveReference(rt.storer, plumbing.ReferenceName("refs/heads/"+branch))
 		}
 		if err != nil {
 			return Snapshot{}, fmt.Errorf("resolve branch %s: %w", branch, err)
 		}
-		files, err := materializeTree(rt.repo, branchRef.Hash().String())
+		files, err := materializeTree(rt.storer, branchRef.Hash().String())
 		if err != nil {
 			return Snapshot{}, fmt.Errorf("materialize tree for %s: %w", branchRef.Hash().String(), err)
 		}
@@ -562,8 +560,11 @@ func buildSnapshot(t TestReporter, rt *deviceRuntime, checks []AnchorCheck) (Sna
 	return snapshot, nil
 }
 
-func materializeTree(repo *git.Repository, commitHash string) (map[string][]byte, error) {
-	commit, err := repo.CommitObject(plumbing.NewHash(commitHash))
+func materializeTree(s storage.Storer, commitHash string) (map[string][]byte, error) {
+	if s == nil {
+		return nil, fmt.Errorf("nil storer")
+	}
+	commit, err := object.GetCommit(s, plumbing.NewHash(commitHash))
 	if err != nil {
 		return nil, fmt.Errorf("lookup commit %s: %w", commitHash, err)
 	}

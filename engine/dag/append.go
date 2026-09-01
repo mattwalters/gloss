@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/storage"
 	"github.com/writtendev/writ/engine/codec"
 )
@@ -37,7 +38,7 @@ func (s *Store) Append(ctx context.Context, env codec.Envelope, causalParents []
 		if pHash.IsZero() {
 			return nil, fmt.Errorf("%w: invalid hash %q", ErrInvalidParent, p)
 		}
-		commitObj, err := s.repo.CommitObject(pHash)
+		commitObj, err := object.GetCommit(s.storer, pHash)
 		if err != nil {
 			return nil, fmt.Errorf("%w: commit %s: %v", ErrInvalidParent, p, err)
 		}
@@ -58,7 +59,7 @@ func (s *Store) Append(ctx context.Context, env codec.Envelope, causalParents []
 
 	// 3. CAS loop
 	for attempt := 0; attempt < maxCASRetries; attempt++ {
-		oldRef, err := s.repo.Storer.Reference(refName)
+		oldRef, err := s.storer.Reference(refName)
 		if err != nil && !errors.Is(err, plumbing.ErrReferenceNotFound) {
 			return nil, fmt.Errorf("dag: lookup ref %s: %w", refName, err)
 		}
@@ -84,13 +85,13 @@ func (s *Store) Append(ctx context.Context, env codec.Envelope, causalParents []
 			return nil, fmt.Errorf("dag: build commit: %w", err)
 		}
 
-		commitHash, err := codec.WriteCommit(ctx, s.repo.Storer, commit, s.signer)
+		commitHash, err := codec.WriteCommit(ctx, s.storer, commit, s.signer)
 		if err != nil {
 			return nil, fmt.Errorf("dag: write commit: %w", err)
 		}
 
 		newRef := plumbing.NewHashReference(refName, commitHash)
-		err = s.repo.Storer.CheckAndSetReference(newRef, oldRef)
+		err = s.storer.CheckAndSetReference(newRef, oldRef)
 		if err == nil {
 			return &codec.Op{
 				Envelope:  env,

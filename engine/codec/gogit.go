@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
@@ -15,7 +14,7 @@ import (
 
 // FromGitCommit converts a go-git object.Commit into a pure, repository-independent Commit
 // value by reading its tree entries and op.json blob data.
-func FromGitCommit(repo *git.Repository, commit *object.Commit) (Commit, error) {
+func FromGitCommit(s storage.Storer, commit *object.Commit) (Commit, error) {
 	if commit == nil {
 		return Commit{}, errors.New("codec: nil git commit")
 	}
@@ -45,8 +44,8 @@ func FromGitCommit(repo *git.Repository, commit *object.Commit) (Commit, error) 
 				}
 			}
 		}
-		if entry.Mode == filemode.Dir && repo != nil {
-			subTree, err := repo.TreeObject(entry.Hash)
+		if entry.Mode == filemode.Dir && s != nil {
+			subTree, err := object.GetTree(s, entry.Hash)
 			if err == nil {
 				for _, subEntry := range subTree.Entries {
 					subTe := TreeEntry{

@@ -603,3 +603,37 @@ func TestRoot_Dispatch(t *testing.T) {
 		}
 	})
 }
+
+func TestInit_WorktreeConfigAndExtensions(t *testing.T) {
+	t.Run("worktreeConfig_format0", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		addRemote(t, env.repoDir, "origin", "https://example.com/repo.git")
+
+		// Set extensions.worktreeConfig and repositoryformatversion 0
+		setGitConfig(t, env.repoDir, "core.repositoryformatversion", "0")
+		setGitConfig(t, env.repoDir, "extensions.worktreeConfig", "true")
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("writ init failed on repo with extensions.worktreeConfig: exit code %d; stderr: %s", code, stderr.String())
+		}
+	})
+
+	t.Run("sparse_checkout", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		addRemote(t, env.repoDir, "origin", "https://example.com/repo.git")
+
+		cmd := exec.Command("git", "sparse-checkout", "init")
+		cmd.Dir = env.repoDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git sparse-checkout init failed: %v (%s)", err, string(out))
+		}
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("writ init failed on sparse-checkout repo: exit code %d; stderr: %s", code, stderr.String())
+		}
+	})
+}

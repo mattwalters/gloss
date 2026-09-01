@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/storage"
 	"github.com/writtendev/writ/engine/dag"
 	"github.com/writtendev/writ/engine/identity"
 )
@@ -26,8 +27,8 @@ type Status struct {
 
 // ComputeStatus computes the reachability set-difference between the local writer's chain tips
 // and the remote's tracking frontier, detecting diverged chains and computing per-type breakdowns.
-func ComputeStatus(repo *git.Repository, writerID identity.WriterID, remote string) (Status, error) {
-	if repo == nil {
+func ComputeStatus(s storage.Storer, writerID identity.WriterID, remote string) (Status, error) {
+	if s == nil {
 		return Status{Remote: remote}, nil
 	}
 	if remote == "" {
@@ -37,7 +38,7 @@ func ComputeStatus(repo *git.Repository, writerID identity.WriterID, remote stri
 		return Status{Remote: remote, Unsynced: 0}, nil
 	}
 
-	chains, err := dag.Chains(repo.Storer)
+	chains, err := dag.Chains(s)
 	if err != nil {
 		return Status{}, fmt.Errorf("sync: read chains: %w", err)
 	}
@@ -75,7 +76,7 @@ func ComputeStatus(repo *git.Repository, writerID identity.WriterID, remote stri
 		curr := queue[0]
 		queue = queue[1:]
 
-		commit, err := repo.CommitObject(curr)
+		commit, err := object.GetCommit(s, curr)
 		if err != nil {
 			continue
 		}
@@ -92,7 +93,7 @@ func ComputeStatus(repo *git.Repository, writerID identity.WriterID, remote stri
 	for objType, localTip := range localChains {
 		remoteTip, hasRemote := remoteSelfChains[objType]
 		if hasRemote && remoteTip != localTip {
-			if !isAncestor(repo, remoteTip, localTip) {
+			if !isAncestor(s, remoteTip, localTip) {
 				diverged = true
 			}
 		}
@@ -115,7 +116,7 @@ func ComputeStatus(repo *git.Repository, writerID identity.WriterID, remote stri
 		curr := localQueue[0]
 		localQueue = localQueue[1:]
 
-		commit, err := repo.CommitObject(curr)
+		commit, err := object.GetCommit(s, curr)
 		if err != nil {
 			continue
 		}
@@ -152,7 +153,7 @@ func ComputeStatus(repo *git.Repository, writerID identity.WriterID, remote stri
 			curr := typeQueue[0]
 			typeQueue = typeQueue[1:]
 
-			commit, err := repo.CommitObject(curr)
+			commit, err := object.GetCommit(s, curr)
 			if err != nil {
 				continue
 			}
@@ -181,8 +182,8 @@ func ComputeStatus(repo *git.Repository, writerID identity.WriterID, remote stri
 
 // CountChainUpdates counts unique commits introduced by a set of chain updates,
 // using stopTips as the boundary to avoid counting causal parents that already existed.
-func CountChainUpdates(repo *git.Repository, updates []ChainUpdate, stopTips []plumbing.Hash) int {
-	if repo == nil || len(updates) == 0 {
+func CountChainUpdates(s storage.Storer, updates []ChainUpdate, stopTips []plumbing.Hash) int {
+	if s == nil || len(updates) == 0 {
 		return 0
 	}
 
@@ -206,7 +207,7 @@ func CountChainUpdates(repo *git.Repository, updates []ChainUpdate, stopTips []p
 		curr := stopQueue[0]
 		stopQueue = stopQueue[1:]
 
-		commit, err := repo.CommitObject(curr)
+		commit, err := object.GetCommit(s, curr)
 		if err != nil {
 			continue
 		}
@@ -234,7 +235,7 @@ func CountChainUpdates(repo *git.Repository, updates []ChainUpdate, stopTips []p
 		curr := queue[0]
 		queue = queue[1:]
 
-		commit, err := repo.CommitObject(curr)
+		commit, err := object.GetCommit(s, curr)
 		if err != nil {
 			continue
 		}
@@ -252,8 +253,8 @@ func CountChainUpdates(repo *git.Repository, updates []ChainUpdate, stopTips []p
 
 // CountCommitsBetween counts the number of commits reachable from newHash stopping at oldHash and optional stopTips.
 // It uses reachability traversal rather than first-parent or author heuristics.
-func CountCommitsBetween(repo *git.Repository, oldHash, newHash plumbing.Hash, stopTips ...plumbing.Hash) int {
-	if repo == nil || newHash == plumbing.ZeroHash || oldHash == newHash {
+func CountCommitsBetween(s storage.Storer, oldHash, newHash plumbing.Hash, stopTips ...plumbing.Hash) int {
+	if s == nil || newHash == plumbing.ZeroHash || oldHash == newHash {
 		return 0
 	}
 
@@ -275,7 +276,7 @@ func CountCommitsBetween(repo *git.Repository, oldHash, newHash plumbing.Hash, s
 		curr := stopQueue[0]
 		stopQueue = stopQueue[1:]
 
-		commit, err := repo.CommitObject(curr)
+		commit, err := object.GetCommit(s, curr)
 		if err != nil {
 			continue
 		}
@@ -301,7 +302,7 @@ func CountCommitsBetween(repo *git.Repository, oldHash, newHash plumbing.Hash, s
 		curr := queue[0]
 		queue = queue[1:]
 
-		commit, err := repo.CommitObject(curr)
+		commit, err := object.GetCommit(s, curr)
 		if err != nil {
 			continue
 		}
@@ -318,8 +319,8 @@ func CountCommitsBetween(repo *git.Repository, oldHash, newHash plumbing.Hash, s
 }
 
 // isAncestor reports whether ancestor is reachable from descendant in the commit graph.
-func isAncestor(repo *git.Repository, ancestor, descendant plumbing.Hash) bool {
-	if repo == nil || ancestor == plumbing.ZeroHash || descendant == plumbing.ZeroHash {
+func isAncestor(s storage.Storer, ancestor, descendant plumbing.Hash) bool {
+	if s == nil || ancestor == plumbing.ZeroHash || descendant == plumbing.ZeroHash {
 		return false
 	}
 	if ancestor == descendant {
@@ -338,7 +339,7 @@ func isAncestor(repo *git.Repository, ancestor, descendant plumbing.Hash) bool {
 			return true
 		}
 
-		commit, err := repo.CommitObject(curr)
+		commit, err := object.GetCommit(s, curr)
 		if err != nil {
 			continue
 		}

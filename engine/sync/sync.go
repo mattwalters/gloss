@@ -16,7 +16,9 @@ import (
 	"sync"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/storage"
 	"github.com/writtendev/writ/engine/identity"
+	"github.com/writtendev/writ/internal/gitdir"
 )
 
 // Option configures a Client instance.
@@ -42,7 +44,7 @@ func WithEnv(env []string) Option {
 // for Writ operations using system git.
 type Client struct {
 	repoDir  string
-	repo     *git.Repository
+	storer   storage.Storer
 	identity identity.Identity
 	gitBin   string
 	env      []string
@@ -51,13 +53,25 @@ type Client struct {
 
 // Open opens a git repository at repoDir and returns an initialized Client.
 func Open(repoDir string, ident identity.Identity, opts ...Option) (*Client, error) {
-	repo, err := git.PlainOpen(repoDir)
+	info, err := gitdir.Resolve(repoDir)
 	if err != nil {
 		return nil, fmt.Errorf("sync: open repo %s: %w", repoDir, err)
 	}
+	storer, err := gitdir.OpenStorage(info)
+	if err != nil {
+		return nil, fmt.Errorf("sync: open repo %s: %w", repoDir, err)
+	}
+	return OpenStorage(storer, repoDir, ident, opts...)
+}
+
+// OpenStorage initializes a Client with a storage.Storer.
+func OpenStorage(s storage.Storer, repoDir string, ident identity.Identity, opts ...Option) (*Client, error) {
+	if s == nil {
+		return nil, fmt.Errorf("sync: nil storer")
+	}
 	c := &Client{
 		repoDir:  repoDir,
-		repo:     repo,
+		storer:   s,
 		identity: ident,
 		gitBin:   "git",
 	}
@@ -72,16 +86,7 @@ func OpenRepo(repo *git.Repository, repoDir string, ident identity.Identity, opt
 	if repo == nil {
 		return nil, fmt.Errorf("sync: nil repo")
 	}
-	c := &Client{
-		repoDir:  repoDir,
-		repo:     repo,
-		identity: ident,
-		gitBin:   "git",
-	}
-	for _, opt := range opts {
-		opt(c)
-	}
-	return c, nil
+	return OpenStorage(repo.Storer, repoDir, ident, opts...)
 }
 
 // RepoDir returns the repository root directory.
@@ -89,9 +94,9 @@ func (c *Client) RepoDir() string {
 	return c.repoDir
 }
 
-// Repo returns the underlying go-git repository instance.
-func (c *Client) Repo() *git.Repository {
-	return c.repo
+// Storer returns the underlying storage.Storer.
+func (c *Client) Storer() storage.Storer {
+	return c.storer
 }
 
 // Identity returns the configured writer identity.

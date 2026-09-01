@@ -16,7 +16,7 @@ func TestStatus_ReachabilityComputation(t *testing.T) {
 		dir, repo := initTestRepo(t)
 		_ = dir
 		ident := testIdentity(aliceID, "Alice", "alice@example.com")
-		status, err := sync.ComputeStatus(repo, ident.WriterID, "origin")
+		status, err := sync.ComputeStatus(repo.Storer, ident.WriterID, "origin")
 		if err != nil {
 			t.Fatalf("ComputeStatus failed: %v", err)
 		}
@@ -39,7 +39,7 @@ func TestStatus_ReachabilityComputation(t *testing.T) {
 		appendTestOp(t, store, "review", "rev-1", "create", map[string]any{"title": "Rev 1"})
 		appendTestOp(t, store, "review", "rev-1", "comment", map[string]any{"text": "Comment 1"})
 
-		status, err := sync.ComputeStatus(repo, ident.WriterID, "origin")
+		status, err := sync.ComputeStatus(repo.Storer, ident.WriterID, "origin")
 		if err != nil {
 			t.Fatalf("ComputeStatus failed: %v", err)
 		}
@@ -69,7 +69,7 @@ func TestStatus_ReachabilityComputation(t *testing.T) {
 			t.Fatalf("SetReference failed: %v", err)
 		}
 
-		status, err := sync.ComputeStatus(repo, ident.WriterID, "origin")
+		status, err := sync.ComputeStatus(repo.Storer, ident.WriterID, "origin")
 		if err != nil {
 			t.Fatalf("ComputeStatus failed: %v", err)
 		}
@@ -108,7 +108,7 @@ func TestStatus_ReachabilityComputation(t *testing.T) {
 		appendTestOp(t, aliceStore, "review", "rev-1", "approve", map[string]any{"verdict": "approve"})
 
 		// Status for Alice must report only Alice's 1 unsynced op, not Bob's op
-		status, err := sync.ComputeStatus(repo, aliceIdent.WriterID, "origin")
+		status, err := sync.ComputeStatus(repo.Storer, aliceIdent.WriterID, "origin")
 		if err != nil {
 			t.Fatalf("ComputeStatus failed: %v", err)
 		}
@@ -132,7 +132,7 @@ func TestStatus_ReachabilityComputation(t *testing.T) {
 		_ = repo.Storer.SetReference(plumbing.NewReferenceFromStrings(originRef.String(), op1))
 
 		// Remote "upstream" has nothing pushed
-		statusOrigin, err := sync.ComputeStatus(repo, ident.WriterID, "origin")
+		statusOrigin, err := sync.ComputeStatus(repo.Storer, ident.WriterID, "origin")
 		if err != nil {
 			t.Fatalf("ComputeStatus origin failed: %v", err)
 		}
@@ -140,7 +140,7 @@ func TestStatus_ReachabilityComputation(t *testing.T) {
 			t.Errorf("origin Unsynced = %d, want 0", statusOrigin.Unsynced)
 		}
 
-		statusUpstream, err := sync.ComputeStatus(repo, ident.WriterID, "upstream")
+		statusUpstream, err := sync.ComputeStatus(repo.Storer, ident.WriterID, "upstream")
 		if err != nil {
 			t.Fatalf("ComputeStatus upstream failed: %v", err)
 		}
@@ -168,7 +168,7 @@ func TestStatus_ReachabilityComputation(t *testing.T) {
 		store2 := mustOpenStore(t, dir, ident)
 		appendTestOp(t, store2, "review", "rev-new", "create", map[string]any{"title": "New Rev"})
 
-		status, err := sync.ComputeStatus(repo, ident.WriterID, "origin")
+		status, err := sync.ComputeStatus(repo.Storer, ident.WriterID, "origin")
 		if err != nil {
 			t.Fatalf("ComputeStatus failed: %v", err)
 		}
@@ -194,7 +194,7 @@ func TestStatus_ReachabilityComputation(t *testing.T) {
 		appendTestOp(t, store1, "review", "rev-1", "create", map[string]any{"title": "Device 1 Rev"})
 		appendTestOp(t, store2, "review", "rev-2", "create", map[string]any{"title": "Device 2 Rev"})
 
-		status1, err := sync.ComputeStatus(repo, ident1.WriterID, "origin")
+		status1, err := sync.ComputeStatus(repo.Storer, ident1.WriterID, "origin")
 		if err != nil {
 			t.Fatalf("ComputeStatus device 1 failed: %v", err)
 		}
@@ -202,7 +202,7 @@ func TestStatus_ReachabilityComputation(t *testing.T) {
 			t.Errorf("Device 1 Unsynced = %d, want 1", status1.Unsynced)
 		}
 
-		status2, err := sync.ComputeStatus(repo, ident2.WriterID, "origin")
+		status2, err := sync.ComputeStatus(repo.Storer, ident2.WriterID, "origin")
 		if err != nil {
 			t.Fatalf("ComputeStatus device 2 failed: %v", err)
 		}

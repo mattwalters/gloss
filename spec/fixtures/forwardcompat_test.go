@@ -99,7 +99,7 @@ func runForwardCompatFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error
 					return nil, fmt.Errorf("lookup commit %s: %w", cState.SHA, err)
 				}
 
-				pureCommit, err := codec.FromGitCommit(fix.Repo, commit)
+				pureCommit, err := codec.FromGitCommit(fix.Repo.Storer, commit)
 				if err != nil {
 					return nil, fmt.Errorf("from git commit %s: %w", cState.SHA, err)
 				}

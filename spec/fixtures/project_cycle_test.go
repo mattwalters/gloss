@@ -124,7 +124,7 @@ func runProjectFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 					if err != nil {
 						return nil, fmt.Errorf("lookup commit %s: %w", cState.SHA, err)
 					}
-					pureCommit, err := codec.FromGitCommit(fix.Repo, commitObj)
+					pureCommit, err := codec.FromGitCommit(fix.Repo.Storer, commitObj)
 					if err != nil {
 						return nil, fmt.Errorf("from git commit %s: %w", cState.SHA, err)
 					}
@@ -252,7 +252,7 @@ func runCycleFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 					if err != nil {
 						return nil, fmt.Errorf("lookup commit %s: %w", cState.SHA, err)
 					}
-					pureCommit, err := codec.FromGitCommit(fix.Repo, commitObj)
+					pureCommit, err := codec.FromGitCommit(fix.Repo.Storer, commitObj)
 					if err != nil {
 						return nil, fmt.Errorf("from git commit %s: %w", cState.SHA, err)
 					}

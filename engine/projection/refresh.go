@@ -7,8 +7,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/storer"
+	"github.com/go-git/go-git/v5/storage"
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/dag"
 )
@@ -77,7 +79,7 @@ func (d *DB) Refresh(store *dag.Store, opts ...Option) (Stats, error) {
 		opt(cfg)
 	}
 
-	targetTips, err := resolveTargetTips(store.Repo(), cfg.targetRefs)
+	targetTips, err := resolveTargetTips(store.Storer(), cfg.targetRefs)
 	if err != nil {
 		return Stats{}, fmt.Errorf("projection: resolve target tips: %w", err)
 	}
@@ -89,7 +91,7 @@ func (d *DB) Refresh(store *dag.Store, opts ...Option) (Stats, error) {
 	}
 
 	// 2. Discover current chains
-	currentChains, err := dag.Chains(store.Repo().Storer)
+	currentChains, err := dag.Chains(store.Storer())
 	if err != nil {
 		return Stats{}, fmt.Errorf("projection: discover chains: %w", err)
 	}
@@ -169,7 +171,7 @@ func (d *DB) Refresh(store *dag.Store, opts ...Option) (Stats, error) {
 	}
 
 	// Materialize / re-resolve anchors against current code_tips
-	anchorsResolved, err := materializeAnchors(tx, store.Repo())
+	anchorsResolved, err := materializeAnchors(tx, store.Storer())
 	if err != nil {
 		return Stats{}, fmt.Errorf("projection: materialize anchors: %w", err)
 	}
@@ -235,7 +237,7 @@ func (d *DB) Rebuild(store *dag.Store, opts ...Option) (Stats, error) {
 		opt(cfg)
 	}
 
-	targetTips, err := resolveTargetTips(store.Repo(), cfg.targetRefs)
+	targetTips, err := resolveTargetTips(store.Storer(), cfg.targetRefs)
 	if err != nil {
 		return Stats{}, fmt.Errorf("projection: resolve target tips: %w", err)
 	}
@@ -302,7 +304,7 @@ func (d *DB) rebuildWithConfig(store *dag.Store, cfg *refreshConfig, targetTips 
 	}
 
 	// Materialize anchors
-	anchorsResolved, err := materializeAnchors(tx, store.Repo())
+	anchorsResolved, err := materializeAnchors(tx, store.Storer())
 	if err != nil {
 		return Stats{}, fmt.Errorf("projection: materialize anchors: %w", err)
 	}
@@ -455,40 +457,86 @@ func parseTimeWithZone(sec int64, tz string) time.Time {
 	return time.Unix(sec, 0).UTC()
 }
 
-func resolveTargetTips(repo *git.Repository, explicitRefs []string) (map[string]string, error) {
+func peelToCommit(s storage.Storer, h plumbing.Hash) plumbing.Hash {
+	if s == nil || h.IsZero() {
+		return h
+	}
+	curr := h
+	for {
+		tag, err := object.GetTag(s, curr)
+		if err != nil || tag == nil {
+			break
+		}
+		if tag.TargetType == plumbing.CommitObject {
+			return tag.Target
+		}
+		if tag.TargetType == plumbing.TagObject {
+			curr = tag.Target
+			continue
+		}
+		break
+	}
+	return curr
+}
+
+func resolveTargetTips(s storage.Storer, explicitRefs []string) (map[string]string, error) {
 	targetTips := make(map[string]string)
-	if repo == nil {
+	if s == nil {
 		return targetTips, nil
 	}
 
 	if len(explicitRefs) == 0 {
 		// Default to HEAD
-		headRef, err := repo.Head()
+		headRef, err := storer.ResolveReference(s, plumbing.HEAD)
 		if err == nil && headRef != nil {
-			targetTips[headRef.Name().String()] = headRef.Hash().String()
+			targetTips[headRef.Name().String()] = peelToCommit(s, headRef.Hash()).String()
 		}
 		return targetTips, nil
 	}
 
 	for _, refName := range explicitRefs {
 		if refName == "HEAD" {
-			headRef, err := repo.Head()
+			headRef, err := storer.ResolveReference(s, plumbing.HEAD)
 			if err == nil && headRef != nil {
-				targetTips["HEAD"] = headRef.Hash().String()
+				targetTips["HEAD"] = peelToCommit(s, headRef.Hash()).String()
 			}
 			continue
 		}
 
-		ref, err := repo.Reference(plumbing.ReferenceName(refName), true)
-		if err == nil && ref != nil {
-			targetTips[refName] = ref.Hash().String()
+		// Try explicit reference and standard git revision prefix candidates,
+		// in the precedence order gitrevisions defines (tags before heads).
+		candidates := []plumbing.ReferenceName{
+			plumbing.ReferenceName(refName),
+			plumbing.ReferenceName("refs/" + refName),
+			plumbing.ReferenceName("refs/tags/" + refName),
+			plumbing.ReferenceName("refs/heads/" + refName),
+			plumbing.ReferenceName("refs/remotes/" + refName),
+			plumbing.ReferenceName("refs/remotes/" + refName + "/HEAD"),
+		}
+		resolved := false
+		for _, cand := range candidates {
+			ref, err := storer.ResolveReference(s, cand)
+			if err == nil && ref != nil {
+				targetTips[refName] = peelToCommit(s, ref.Hash()).String()
+				resolved = true
+				break
+			}
+		}
+		if resolved {
 			continue
 		}
 
-		// Try resolving as revision if ReferenceName lookup fails
-		hash, err := repo.ResolveRevision(plumbing.Revision(refName))
-		if err == nil && hash != nil {
-			targetTips[refName] = hash.String()
+		// Try looking up by commit hash if ReferenceName lookup fails
+		h := plumbing.NewHash(refName)
+		if !h.IsZero() {
+			if _, err := s.EncodedObject(plumbing.CommitObject, h); err == nil {
+				targetTips[refName] = h.String()
+			} else {
+				peeled := peelToCommit(s, h)
+				if peeled != h && !peeled.IsZero() {
+					targetTips[refName] = peeled.String()
+				}
+			}
 		}
 	}
 

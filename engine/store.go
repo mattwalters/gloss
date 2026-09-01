@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/storage"
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/dag"
 	"github.com/writtendev/writ/engine/identity"
@@ -49,7 +49,7 @@ type Store struct {
 	Workspace *Workspace
 
 	gitInfo     GitDirInfo
-	repo        *git.Repository
+	storer      storage.Storer
 	dagStore    *dag.Store
 	projection  *projection.DB
 	syncClient  *writsync.Client

@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/storage"
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/dag"
 	"github.com/writtendev/writ/engine/resolve"
@@ -413,7 +413,7 @@ type commentToResolve struct {
 }
 
 // materializeAnchors resolves comment anchors against current target commits in code_tips.
-func materializeAnchors(tx *sql.Tx, repo *git.Repository) (int, error) {
+func materializeAnchors(tx *sql.Tx, s storage.Storer) (int, error) {
 	// 1. Prune resolutions whose target_commit is no longer in code_tips
 	if _, err := tx.Exec("DELETE FROM anchor_resolutions WHERE target_commit NOT IN (SELECT tip FROM code_tips)"); err != nil {
 		return 0, fmt.Errorf("projection: prune stale anchor resolutions: %w", err)
@@ -492,7 +492,7 @@ func materializeAnchors(tx *sql.Tx, repo *git.Repository) (int, error) {
 
 			targetTree, ok := treeCache[targetCommit]
 			if !ok {
-				treeFiles, err := materializeCommitTree(repo, targetCommit)
+				treeFiles, err := materializeCommitTree(s, targetCommit)
 				if err != nil {
 					return resolvedCount, fmt.Errorf("projection: materialize tree %s: %w", targetCommit, err)
 				}
@@ -548,11 +548,11 @@ func materializeAnchors(tx *sql.Tx, repo *git.Repository) (int, error) {
 	return resolvedCount, nil
 }
 
-func materializeCommitTree(repo *git.Repository, commitHash string) (map[string][]byte, error) {
-	if repo == nil {
-		return nil, fmt.Errorf("nil repository")
+func materializeCommitTree(s storage.Storer, commitHash string) (map[string][]byte, error) {
+	if s == nil {
+		return nil, fmt.Errorf("nil storer")
 	}
-	commit, err := repo.CommitObject(plumbing.NewHash(commitHash))
+	commit, err := object.GetCommit(s, plumbing.NewHash(commitHash))
 	if err != nil {
 		return nil, fmt.Errorf("lookup commit %s: %w", commitHash, err)
 	}

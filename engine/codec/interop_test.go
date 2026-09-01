@@ -217,7 +217,7 @@ func TestInterop_SystemGitToEngine(t *testing.T) {
 		t.Fatalf("CommitObject: %v", err)
 	}
 
-	c, err := codec.FromGitCommit(repo, gitCommit)
+	c, err := codec.FromGitCommit(repo.Storer, gitCommit)
 	if err != nil {
 		t.Fatalf("FromGitCommit: %v", err)
 	}
