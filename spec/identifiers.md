@@ -278,6 +278,10 @@ collaborative objects and workspace metadata.
 Precedent: Gerrit's `All-Projects` and `All-Users` repositories, which store
 site-wide configuration and metadata as ordinary git commits.
 
+Being the workspace repository is a **role**, not a kind of repository. Any
+member repository MAY play it, and the common cases involve no additional
+repository at all (WRIT-113).
+
 ### Roles of the workspace repository
 
 1. **Host for workspace-scoped objects:** Objects that are not bound to a
@@ -289,6 +293,46 @@ site-wide configuration and metadata as ordinary git commits.
 3. **Ordinary code repository:** A workspace repository is itself an ordinary
    git repository and MAY also contain code, branches, and code reviews.
 
+### The self-workspace default
+
+A repository MAY be its own workspace repository. This is the expected
+configuration for a single-repository project or a monorepo: the repository
+hosts its own registry (with `is_workspace: true` on its own entry, per
+[`spec/repo-ops.md`](repo-ops.md)) alongside its code and reviews, and the
+workspace involves no second repository.
+
+A team working across several repositories designates one of them as the
+workspace repository, or MAY create a dedicated repository for the role if it
+prefers the separation. All three configurations — self, designated member,
+dedicated — are equivalent under this specification; nothing in the format
+distinguishes them.
+
+### Workspace re-homing
+
+The workspace repository is a *location*, not part of any object's identity.
+Object IDs are random (`§Object identifiers`), operations are self-contained
+signed commits, and no op payload or envelope field records which repository
+hosts it. A workspace therefore moves to a new home by pushing its writ refs
+(`refs/writ/*`) to the new repository and updating each member repository's
+`writ.workspace` configuration. References — bare or fully-qualified — remain
+valid unchanged, because they name `repo-id`s and `object-id`s, never
+locations.
+
+### Team scope
+
+One workspace corresponds to one team (decided, WRIT-113). Workspace-scoped
+configuration objects — workflow states, labels, settings — are
+workspace-global; this specification defines no `team` object type and no team
+scoping field in v1. Organizations with multiple teams run multiple
+workspaces.
+
+If team scoping is introduced later, it MUST arrive additively: a `team`
+object type plus an optional scoping field on affected objects, such that
+existing scopeless objects fold as belonging to a default team and older
+clients degrade to ignoring the unknown field per
+[`spec/forward-compatibility.md`](forward-compatibility.md) — never a breaking
+change to existing payloads.
+
 ### Repository association
 
 A repository belongs to at most one workspace.
@@ -296,6 +340,16 @@ A repository belongs to at most one workspace.
 A code repository associates with its workspace repository via local git
 configuration (`writ.workspace`, set to a remote URL or path) and by having its
 `repo-id` recorded in the workspace repository's registry.
+
+### Read-side aggregation
+
+Workspace homing governs where operations are *written*. On the read side,
+clients SHOULD treat the workspace's member repositories additively: fetch
+`refs/writ/*` from each registered repository and fold each repository's
+objects into one workspace-wide projection, so cross-repository views ("all
+reviews across the team's repos") require no additional convention. Aggregation
+is a projection/client concern; the fold itself remains per-repository, pure,
+and unchanged.
 
 ## Repository registry
 
