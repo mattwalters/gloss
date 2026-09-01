@@ -17,7 +17,7 @@ LDFLAGS = -X $(PKG)/internal/version.Version=$(VERSION)
 # `make -s hugo-version` in .github/workflows/docs.yml.
 HUGO_VERSION := 0.165.0
 
-.PHONY: build test install api api-check docs docs-check snapshot release hugo-version site site-serve
+.PHONY: build test install api api-check cli-docs cli-docs-check snapshot release hugo-version docs docs-serve
 
 build:
 	go build ./...
@@ -44,10 +44,14 @@ api-check:
 		exit 1; \
 	fi
 
-docs:
+# The CLI reference is generated from the command table in cmd/writ, not
+# hand-written, so a flag cannot exist in code and be missing from the docs.
+# This produces docs/cli.md; `make docs` below renders it (and the rest of
+# docs/) into the site. Two stages, one direction: generate, then render.
+cli-docs: ## Regenerate docs/cli.md from the command table
 	go test ./cmd/writ -run TestDocsGolden -update-docs
 
-docs-check:
+cli-docs-check: ## Fail if docs/cli.md is stale (the CI gate)
 	go test ./cmd/writ -run TestDocsGolden
 
 # --------------------------------------------------------------------------
@@ -130,8 +134,8 @@ release: ## Tag main and push it, which starts the release build (VERSION=vX.Y.Z
 hugo-version: ## Print the pinned Hugo version (CI reads this)
 	@printf '%s\n' '$(HUGO_VERSION)'
 
-site: ## Build the docs site locally
+docs: ## Build the docs site locally (needs hugo)
 	hugo --source docs --destination "$(CURDIR)/public"
 
-site-serve: ## Serve the docs site locally with live reload
+docs-serve: ## Serve the docs site locally with live reload
 	hugo server --source docs

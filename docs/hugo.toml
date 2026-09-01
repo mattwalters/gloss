@@ -32,11 +32,13 @@ disableKinds = ["taxonomy", "term", "rss"]
   versionroot = "."
   repo = "https://github.com/writtendev/writ"
 
-# Spec files carry no front matter, so provide defaults via cascade.
+# The mounted quickstart is read on GitHub too, so it stays plain markdown
+# rather than growing front matter for this site's benefit.
 [[cascade]]
-  title = "Specification"
+  title = "Quickstart"
+  weight = 10
   [cascade.target]
-    path = "/spec/_index*"
+    path = "/docs/quickstart*"
 
 [module]
   [[module.mounts]]
@@ -50,6 +52,10 @@ disableKinds = ["taxonomy", "term", "rss"]
   [[module.mounts]]
     source = "cli.md"
     target = "content/cli.md"
+  # Same for the hand-written quickstart, mounted rather than copied.
+  [[module.mounts]]
+    source = "quickstart.md"
+    target = "content/docs/quickstart.md"
   [[module.mounts]]
     source = "static"
     target = "static"

@@ -1,5 +1,6 @@
 ---
 title: "writ review"
+weight: 30
 ---
 
 Manage code reviews: open, comment, approve, check status, and list.

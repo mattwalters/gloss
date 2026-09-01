@@ -42,10 +42,10 @@ func TestDocsGolden(t *testing.T) {
 
 	existing, err := os.ReadFile(docsPath)
 	if err != nil {
-		t.Fatalf("reading %s: %v (run 'make docs' to generate)", docsPath, err)
+		t.Fatalf("reading %s: %v (run 'make cli-docs' to generate)", docsPath, err)
 	}
 
 	if !bytes.Equal(existing, buf.Bytes()) {
-		t.Fatalf("docs/cli.md does not match generated docs from command table.\nRun 'make docs' or 'go generate ./cmd/writ' to regenerate.")
+		t.Fatalf("docs/cli.md does not match generated docs from command table.\nRun 'make cli-docs' or 'go generate ./cmd/writ' to regenerate.")
 	}
 }
