@@ -9,7 +9,8 @@ CheckExternal: false
 CheckInternalHashReferences: true
 IgnoreDirectoryMissingTrailingSlash: true
 # The unversioned root build's nav bar points at /latest/docs/ etc. which
-# only exist on the live site after a tag deploy. These are navigation
-# links in baseof.html, not spec cross-references — ignore them here.
+# only exist on the live site after a tag deploy. Casts are rendered on
+# tag push only and staged directly at deploy. Ignore them during PR link checks.
 IgnoreURLs:
   - "latest/"
+  - "casts/"

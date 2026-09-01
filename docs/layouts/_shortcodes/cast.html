@@ -1,0 +1,39 @@
+{{- $webm := .Get "webm" -}}
+{{- $mp4 := .Get "mp4" -}}
+{{- $title := .Get "title" -}}
+{{- $poster := .Get "poster" -}}
+{{- $width := .Get "width" | default "1200" -}}
+{{- $height := .Get "height" | default "640" -}}
+{{- $autoplay := .Get "autoplay" -}}
+{{- if and (not $webm) (not $mp4) -}}
+  {{- errorf "cast: %s names neither a webm nor an mp4 — there is nothing to play" .Position -}}
+{{- end -}}
+{{- if not $title -}}
+  {{- errorf "cast: %s has no title saying what the cast shows" .Position -}}
+{{- end -}}
+<figure class="cast">
+  {{/* WebM first: where both play, it is the smaller file. A browser takes
+       the first source it supports and ignores the rest. */}}
+  <video controls{{ if $autoplay }} autoplay{{ end }} muted loop playsinline preload="metadata" width="{{ $width }}" height="{{ $height }}"{{ with $poster }} poster="{{ . | relURL }}"{{ end }} aria-label="{{ $title }}">
+    {{- with $webm }}
+    <source src="{{ . | relURL }}" type="video/webm">
+    {{- end }}
+    {{- with $mp4 }}
+    <source src="{{ . | relURL }}" type="video/mp4">
+    {{- end }}
+  </video>
+  {{- if $autoplay }}
+  <script>
+    // Autoplay is a courtesy and prefers-reduced-motion withdraws it: that
+    // reader gets the poster and the controls, not a screen already moving.
+    (function () {
+      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) { return; }
+      var video = document.currentScript.parentElement.querySelector("video");
+      if (video) {
+        video.removeAttribute("autoplay");
+        video.pause();
+      }
+    })();
+  </script>
+  {{- end }}
+</figure>

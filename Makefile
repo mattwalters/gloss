@@ -17,7 +17,7 @@ LDFLAGS = -X $(PKG)/internal/version.Version=$(VERSION)
 # `make -s hugo-version` in .github/workflows/docs.yml.
 HUGO_VERSION := 0.165.0
 
-.PHONY: build test install api api-check cli-docs cli-docs-check snapshot release hugo-version docs docs-serve
+.PHONY: build test install api api-check cli-docs cli-docs-check snapshot release hugo-version docs docs-serve casts render-tape
 
 build:
 	go build ./...
@@ -131,6 +131,14 @@ release: ## Tag main and push it, which starts the release build (VERSION=vX.Y.Z
 # Docs site
 # --------------------------------------------------------------------------
 
+CASTS_DIR := docs/static/casts
+POSTERS_DIR := docs/static/posters
+CAST_MAX_BYTES := 1310720
+POSTER_MAX_BYTES := 327680
+DEMO_BIN := .demo/bin
+DEMO_RENDER_DIR := .demo/out
+TAPES_DIR := docs/tapes
+
 hugo-version: ## Print the pinned Hugo version (CI reads this)
 	@printf '%s\n' '$(HUGO_VERSION)'
 
@@ -139,3 +147,40 @@ docs: ## Build the docs site locally (needs hugo)
 
 docs-serve: ## Serve the docs site locally with live reload
 	hugo server --source docs
+
+render-tape:
+	@test -n "$(TAPE)" || { echo 'render-tape: TAPE is required'; exit 1; }
+	@command -v vhs >/dev/null || { \
+	  echo 'render-tape: vhs is not installed — see https://github.com/charmbracelet/vhs'; \
+	  exit 1; }
+	@mkdir -p $(DEMO_BIN)
+	go build -o $(DEMO_BIN)/writ ./cmd/writ
+	@rm -rf $(DEMO_RENDER_DIR)
+	@mkdir -p $(DEMO_RENDER_DIR)
+	PATH="$(CURDIR)/$(DEMO_BIN):$$PATH" vhs $(TAPES_DIR)/$(TAPE).tape
+
+casts: ## Render every tape under docs/tapes/ into docs/static/casts/ (needs vhs)
+	@rm -rf $(CASTS_DIR) $(POSTERS_DIR)
+	@mkdir -p $(CASTS_DIR) $(POSTERS_DIR)
+	@for f in $(TAPES_DIR)/*.tape; do \
+	  name=$$(basename "$$f" .tape); \
+	  test "$$name" = "house" && continue; \
+	  $(MAKE) render-tape TAPE="$$name" || exit 1; \
+	  if [ -e $(DEMO_RENDER_DIR)/$$name.png ]; then \
+	    size=$$(wc -c < $(DEMO_RENDER_DIR)/$$name.png | tr -d ' '); \
+	    test "$$size" -le $(POSTER_MAX_BYTES) || { \
+	      printf 'casts: %s.png came back %s bytes, over the %s cap\n' \
+	        "$$name" "$$size" '$(POSTER_MAX_BYTES)'; exit 1; }; \
+	    mv $(DEMO_RENDER_DIR)/$$name.png $(POSTERS_DIR)/$$name.png; \
+	  fi; \
+	  for ext in mp4 webm gif; do \
+	    out=$(DEMO_RENDER_DIR)/$$name.$$ext; \
+	    test -e "$$out" || continue; \
+	    size=$$(wc -c < "$$out" | tr -d ' '); \
+	    test "$$size" -le $(CAST_MAX_BYTES) || { \
+	      printf 'casts: %s.%s came back %s bytes, over the %s cap\n' \
+	        "$$name" "$$ext" "$$size" '$(CAST_MAX_BYTES)'; exit 1; }; \
+	    cp "$$out" $(CASTS_DIR)/$$name.$$ext; \
+	  done; \
+	  printf 'rendered %s\n' "$$name"; \
+	done

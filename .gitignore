@@ -34,6 +34,9 @@ go.work.sum
 # lerp's run records, workspaces and logs
 .lerp/
 
+# VHS demo/cast scratch directory
+.demo/
+
 # Local build output of the spike bench tool
 spike/gogit/gogit
 
@@ -47,6 +50,9 @@ dist/
 # Hugo site build output
 public/
 docs/.hugo_build.lock
+
+# Video casts generated on tag push (posters under docs/static/posters are committed)
+docs/static/casts/
 
 # htmltest scratch (its default cache dir, written by a local link check)
 tmp/
