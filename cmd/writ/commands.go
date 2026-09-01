@@ -41,6 +41,7 @@ var rootCommand = &command{
 		issueCmd,
 		reviewCmd,
 		syncCmd,
+		versionCmd,
 		completionCmd,
 		helpCmd,
 	},
@@ -542,6 +543,16 @@ var syncCmd = &command{
 		"writ sync origin",
 		"writ sync --status",
 		"writ sync --json",
+	},
+}
+
+var versionCmd = &command{
+	Name:      "version",
+	Short:     "Print the writ version",
+	UsageLine: "Usage: writ version",
+	Long:      "Print the version of the writ binary.",
+	Examples: []string{
+		"writ version",
 	},
 }
 

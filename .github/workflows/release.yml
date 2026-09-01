@@ -1,0 +1,43 @@
+# A tag push is the only thing that cuts a release. `make release VERSION=v0.1.0`
+# pushes the tag, and this is what the tag sets off.
+name: release
+
+on:
+  push:
+    tags:
+      # Three literal dots. `v*` would also match scratch tags like `v2-spike`,
+      # and goreleaser's semver parser is lenient enough to *publish* on one.
+      # Requiring two dots means this fires on exactly the tags `make release`
+      # can produce, which is what makes that target's guard chain worth
+      # anything.
+      - "v[0-9]*.[0-9]*.[0-9]*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # Slice this version's section out of CHANGELOG.md for the release body.
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          awk -v tag="${GITHUB_REF_NAME#v}" '
+            $0 ~ "^## \\[" tag "\\]" {p=1; next}
+            p && /^## \[/ {exit}
+            p {print}
+          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          test -s "$RUNNER_TEMP/release-notes.md" || {
+            echo "release: CHANGELOG.md has no section for ${GITHUB_REF_NAME}"; exit 1; }
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean --release-notes=${{ runner.temp }}/release-notes.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

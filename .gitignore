@@ -40,3 +40,6 @@ spike/gogit/gogit
 # generated fixture repos (spec/fixtures/README.md) — built on demand,
 # never committed; the description + golden manifest are the artifacts
 spec/fixtures/out/
+
+# goreleaser snapshot/release output
+dist/

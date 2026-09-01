@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/writtendev/writ/internal/version"
 )
 
 func main() {
@@ -59,6 +61,16 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return runReview(ctx, defaultDir, args[1:], stdout, stderr)
 	case "sync":
 		return runSync(ctx, defaultDir, args[1:], stdout, stderr)
+	case "version":
+		if len(args) > 1 {
+			switch args[1] {
+			case "-h", "-help", "--help":
+				renderUsage(stdout, []string{"version"}, versionCmd)
+				return 0
+			}
+		}
+		fmt.Fprintf(stdout, "writ %s\n", version.Version)
+		return 0
 	default:
 		fmt.Fprintf(stderr, "writ: unknown command %q\n\n", args[0])
 		renderUsage(stderr, nil, rootCommand)

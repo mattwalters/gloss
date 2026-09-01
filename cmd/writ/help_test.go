@@ -27,7 +27,7 @@ func TestHelp_Command(t *testing.T) {
 	})
 
 	t.Run("command_help", func(t *testing.T) {
-		for _, cmd := range []string{"init", "issue", "review", "sync", "completion", "help"} {
+		for _, cmd := range []string{"init", "issue", "review", "sync", "version", "completion", "help"} {
 			var stdout, stderr bytes.Buffer
 			code := run(context.Background(), []string{"help", cmd}, &stdout, &stderr)
 			if code != 0 {
@@ -107,6 +107,8 @@ func TestHelp_FlagsRouting(t *testing.T) {
 		{"sync", "--help"},
 		{"completion", "-h"},
 		{"completion", "--help"},
+		{"version", "-h"},
+		{"version", "--help"},
 		{"issue", "-h"},
 		{"issue", "--help"},
 		{"issue", "create", "-h"},

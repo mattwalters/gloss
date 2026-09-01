@@ -16,6 +16,7 @@
 - [`writ review status`](#writ-review-status)
 - [`writ review list`](#writ-review-list)
 - [`writ sync`](#writ-sync)
+- [`writ version`](#writ-version)
 - [`writ completion`](#writ-completion)
 - [`writ help`](#writ-help)
 
@@ -390,6 +391,26 @@ writ sync
 writ sync origin
 writ sync --status
 writ sync --json
+```
+
+### `writ version`
+
+Print the writ version
+
+#### Synopsis
+
+```
+Usage: writ version
+```
+
+#### Description
+
+Print the version of the writ binary.
+
+#### Examples
+
+```bash
+writ version
 ```
 
 ### `writ completion`
