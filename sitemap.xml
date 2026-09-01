@@ -2,6 +2,16 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
+    <loc>/docs/quickstart/</loc>
+  </url><url>
+    <loc>/docs/init/</loc>
+  </url><url>
+    <loc>/docs/review/</loc>
+  </url><url>
+    <loc>/docs/issue/</loc>
+  </url><url>
+    <loc>/docs/sync/</loc>
+  </url><url>
     <loc>/spec/anchors/</loc>
   </url><url>
     <loc>/spec/canonicalization/</loc>
@@ -34,18 +44,10 @@
   </url><url>
     <loc>/cli/</loc>
   </url><url>
-    <loc>/documentation/</loc>
+    <loc>/docs/</loc>
   </url><url>
-    <loc>/specification/</loc>
+    <loc>/spec/</loc>
   </url><url>
     <loc>/</loc>
-  </url><url>
-    <loc>/docs/init/</loc>
-  </url><url>
-    <loc>/docs/issue/</loc>
-  </url><url>
-    <loc>/docs/review/</loc>
-  </url><url>
-    <loc>/docs/sync/</loc>
   </url>
 </urlset>
