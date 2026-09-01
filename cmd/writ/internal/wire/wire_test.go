@@ -161,3 +161,59 @@ func TestWire_SyncConverters(t *testing.T) {
 		t.Errorf("resFail.Failure mismatch: %+v", resFail.Failure)
 	}
 }
+
+func TestWire_CommentMapping(t *testing.T) {
+	now := time.Now().UTC()
+	resolvedBool := true
+	c := writ.CommentResult{
+		ObjectID:  "c-100",
+		Author:    projection.Author{Name: "Alice", Email: "alice@example.com"},
+		CreatedAt: now,
+		UpdatedAt: now,
+		Comment: state.Comment{
+			Subject: state.CommentSubject{
+				ObjectType: "review",
+				ObjectID:   "r-200",
+			},
+			Text:     "Needs clarification",
+			Resolved: &resolvedBool,
+			Actor:    "alice",
+		},
+		Resolved: []projection.ResolvedPosition{
+			{
+				Side:      "new",
+				Outcome:   "matched",
+				Path:      "main.go",
+				StartLine: 10,
+				EndLine:   12,
+			},
+		},
+	}
+
+	wireComment := wire.FromCommentResult(c)
+	if !wireComment.Resolved {
+		t.Errorf("expected wireComment.Resolved == true")
+	}
+	if wireComment.ResolvedBy != "alice" {
+		t.Errorf("expected wireComment.ResolvedBy == 'alice', got %q", wireComment.ResolvedBy)
+	}
+	if len(wireComment.Positions) != 1 || wireComment.Positions[0].Path != "main.go" {
+		t.Errorf("unexpected positions: %+v", wireComment.Positions)
+	}
+
+	b, err := json.Marshal(wireComment)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+
+	jsonStr := string(b)
+	if !strings.Contains(jsonStr, `"resolved":true`) {
+		t.Errorf("expected JSON to contain '\"resolved\":true', got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"resolved_by":"alice"`) {
+		t.Errorf("expected JSON to contain '\"resolved_by\":\"alice\"', got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"positions":[`) {
+		t.Errorf("expected JSON to contain '\"positions\":[', got: %s", jsonStr)
+	}
+}

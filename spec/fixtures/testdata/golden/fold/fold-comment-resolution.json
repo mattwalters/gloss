@@ -1,0 +1,89 @@
+{
+  "objects": [
+    {
+      "object_id": "c-race-root",
+      "object_type": "comment",
+      "total_order": [
+        {
+          "commit": "4bcc2b7778e546e91f8d83776a6f004497aae102",
+          "label": "alice-race-root-create",
+          "t_star": 1767225900
+        },
+        {
+          "commit": "49288c80b90a74f2d64c69a0780d79125a30dc60",
+          "label": "alice-race-root-resolve",
+          "t_star": 1767225960
+        },
+        {
+          "commit": "8f5375a48d5d9dea784e417d12632e6fe7be3d70",
+          "label": "bob-race-root-unresolve",
+          "t_star": 1767225990
+        }
+      ],
+      "state": {
+        "actor": "alice",
+        "resolved": false,
+        "subject": {
+          "object_id": "r-7f3a",
+          "object_type": "review"
+        },
+        "text": "Root comment with concurrent resolve race"
+      }
+    },
+    {
+      "object_id": "c-res-root",
+      "object_type": "comment",
+      "total_order": [
+        {
+          "commit": "47bf0fb9563217c66cf276fbb7a99e308de26217",
+          "label": "alice-res-root-create",
+          "t_star": 1767225600
+        },
+        {
+          "commit": "977fda3cc151f4aba1ec2935c5e6c65e5b6f67f2",
+          "label": "alice-res-root-resolve",
+          "t_star": 1767225660
+        }
+      ],
+      "state": {
+        "actor": "alice",
+        "resolved": true,
+        "subject": {
+          "object_id": "r-7f3a",
+          "object_type": "review"
+        },
+        "text": "Root comment to be resolved"
+      }
+    },
+    {
+      "object_id": "c-unres-root",
+      "object_type": "comment",
+      "total_order": [
+        {
+          "commit": "afc3a005f393ea3ad68e9c53ccbf733a7ec16445",
+          "label": "alice-unres-root-create",
+          "t_star": 1767225720
+        },
+        {
+          "commit": "de9881778fee2dec239d6ab90d0a9c674021c75a",
+          "label": "alice-unres-root-resolve",
+          "t_star": 1767225780
+        },
+        {
+          "commit": "801505b7438af0ba017a6528569e560b28209be6",
+          "label": "alice-unres-root-unresolve",
+          "t_star": 1767225840
+        }
+      ],
+      "state": {
+        "actor": "alice",
+        "resolved": false,
+        "subject": {
+          "object_id": "r-7f3a",
+          "object_type": "review"
+        },
+        "text": "Root comment to be resolved then reopened"
+      }
+    }
+  ]
+}

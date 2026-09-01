@@ -558,6 +558,21 @@ func TestReview_ErrorSurfaces(t *testing.T) {
 		}
 	})
 
+	t.Run("conflicting_resolve_flags", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setupSigningKey(t, env.repoDir)
+		_ = run(context.Background(), []string{"init", "-C", env.repoDir}, &bytes.Buffer{}, &bytes.Buffer{})
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{"review", "comment", "-C", env.repoDir, "12345678", "-resolve", "-unresolve"}, &stdout, &stderr)
+		if code != 2 {
+			t.Fatalf("expected exit code 2 for conflicting flags, got %d", code)
+		}
+		if !strings.Contains(stderr.String(), "cannot specify both -resolve and -unresolve") {
+			t.Errorf("stderr missing conflicting flags message: %s", stderr.String())
+		}
+	})
+
 	t.Run("missing_open_title", func(t *testing.T) {
 		env := setupTestCLIEnv(t)
 		setupSigningKey(t, env.repoDir)
@@ -596,5 +611,124 @@ func TestReview_HelpAndUsage(t *testing.T) {
 		if !strings.Contains(stderr.String(), "Usage: writ review "+subcmd) && !strings.Contains(stdout.String(), "Usage: writ review "+subcmd) {
 			t.Errorf("review %s -h missing usage in output", subcmd)
 		}
+	}
+}
+
+func TestReviewComment_ResolveWorkflow(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+	commitFile(t, env.repoDir, "file.txt", "v1", "initial")
+
+	var stdout, stderr bytes.Buffer
+
+	// 1. Init repo
+	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("init failed: %s", stderr.String())
+	}
+
+	// 2. Open review
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "open", "-C", env.repoDir,
+		"-title", "Fix validation bug",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review open failed: %s", stderr.String())
+	}
+
+	reviewID := strings.Split(strings.TrimSpace(stdout.String()), " ")[0]
+
+	// 3. Post root comment
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "comment", "-C", env.repoDir, reviewID,
+		"-m", "Please rename this variable",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review comment failed: %s", stderr.String())
+	}
+	commentID := strings.TrimSpace(stdout.String())
+
+	// 4. Resolve comment thread without reply
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "comment", "-C", env.repoDir, reviewID,
+		"-reply-to", commentID,
+		"-resolve",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review comment -resolve failed: %s", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "resolved") {
+		t.Errorf("expected stdout to mention resolved: %s", stdout.String())
+	}
+
+	// 5. Query store and verify resolved
+	store, err := writ.Open(env.repoDir)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer store.Close()
+
+	comments, err := store.Query.Comments(writ.CommentFilter{SubjectID: reviewID})
+	if err != nil {
+		t.Fatalf("query comments: %v", err)
+	}
+	if len(comments) != 1 {
+		t.Fatalf("expected 1 comment, got %d", len(comments))
+	}
+	if !comments[0].Comment.IsResolved() {
+		t.Errorf("expected comment to be resolved")
+	}
+
+	// 6. Post reply with -resolve
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "comment", "-C", env.repoDir, reviewID,
+		"-reply-to", commentID,
+		"-m", "Done and verified",
+		"-resolve",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review comment reply with -resolve failed: %s", stderr.String())
+	}
+
+	// 7. Unresolve comment thread
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "comment", "-C", env.repoDir, reviewID,
+		"-reply-to", commentID,
+		"-unresolve",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review comment -unresolve failed: %s", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "unresolved") {
+		t.Errorf("expected stdout to mention unresolved: %s", stdout.String())
+	}
+
+	// 8. Re-query store and verify unresolved
+	comments, err = store.Query.Comments(writ.CommentFilter{SubjectID: reviewID})
+	if err != nil {
+		t.Fatalf("query comments: %v", err)
+	}
+	var rootComment *writ.CommentResult
+	for i := range comments {
+		if comments[i].ObjectID == commentID {
+			rootComment = &comments[i]
+			break
+		}
+	}
+	if rootComment == nil {
+		t.Fatalf("root comment not found")
+	}
+	if rootComment.Comment.IsResolved() {
+		t.Errorf("expected root comment to be unresolved")
 	}
 }

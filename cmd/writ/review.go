@@ -195,17 +195,21 @@ func runReviewOpen(ctx context.Context, defaultDir string, args []string, stdout
 }
 
 type reviewCommentOpts struct {
-	dir     string
-	message string
-	replyTo string
+	dir       string
+	message   string
+	replyTo   string
+	resolve   bool
+	unresolve bool
 }
 
 func newReviewCommentFlagSet(defaultDir string) (*flag.FlagSet, *reviewCommentOpts) {
 	fs := flag.NewFlagSet("review comment", flag.ContinueOnError)
 	opts := &reviewCommentOpts{}
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.StringVar(&opts.message, "m", "", "Comment message text `<text>` (required)")
+	fs.StringVar(&opts.message, "m", "", "Comment message text `<text>`")
 	fs.StringVar(&opts.replyTo, "reply-to", "", "Comment ID `<comment-id>` to reply to")
+	fs.BoolVar(&opts.resolve, "resolve", false, "Mark comment thread as resolved")
+	fs.BoolVar(&opts.unresolve, "unresolve", false, "Mark comment thread as unresolved")
 	fs.Usage = func() {
 		renderUsage(fs.Output(), []string{"review", "comment"}, reviewCommentCmd)
 	}
@@ -235,8 +239,14 @@ func runReviewComment(ctx context.Context, defaultDir string, args []string, std
 		return 2
 	}
 
-	if opts.message == "" {
-		fmt.Fprintln(stderr, "writ review comment: -m is required")
+	if opts.resolve && opts.unresolve {
+		fmt.Fprintln(stderr, "writ review comment: cannot specify both -resolve and -unresolve")
+		fs.Usage()
+		return 2
+	}
+
+	if opts.message == "" && !opts.resolve && !opts.unresolve {
+		fmt.Fprintln(stderr, "writ review comment: -m is required (or specify -resolve / -unresolve)")
 		fs.Usage()
 		return 2
 	}
@@ -253,12 +263,39 @@ func runReviewComment(ctx context.Context, defaultDir string, args []string, std
 	defer store.Close()
 
 	reviewID, err := resolveReviewID(ctx, store, posArgs[0])
+	var directCommentID string
+	if err != nil {
+		// Check if posArgs[0] is a comment ID prefix
+		comments, cErr := store.Query.Comments(writ.CommentFilter{IncludeDeleted: true})
+		if cErr == nil {
+			var matches []writ.CommentResult
+			for _, c := range comments {
+				if strings.HasPrefix(c.ObjectID, posArgs[0]) {
+					matches = append(matches, c)
+				}
+			}
+			if len(matches) == 1 {
+				reviewID = matches[0].Comment.Subject.ObjectID
+				directCommentID = matches[0].ObjectID
+				err = nil
+			} else if len(matches) > 1 {
+				return renderErr(stderr, fmt.Errorf("ambiguous ID prefix %q matches multiple comments", posArgs[0]))
+			}
+		}
+	}
 	if err != nil {
 		return renderErr(stderr, err)
 	}
 
+	targetCommentLookup := opts.replyTo
+	if targetCommentLookup == "" && directCommentID != "" {
+		targetCommentLookup = directCommentID
+	}
+
 	var replyToID string
-	if opts.replyTo != "" {
+	var threadRootID string
+
+	if targetCommentLookup != "" {
 		comments, err := store.Query.Comments(writ.CommentFilter{
 			SubjectType:    "review",
 			SubjectID:      reviewID,
@@ -267,27 +304,83 @@ func runReviewComment(ctx context.Context, defaultDir string, args []string, std
 		if err != nil {
 			return renderErr(stderr, err)
 		}
-		var matches []string
+		var matches []writ.CommentResult
 		for _, c := range comments {
-			if strings.HasPrefix(c.ObjectID, opts.replyTo) {
-				matches = append(matches, c.ObjectID)
+			if strings.HasPrefix(c.ObjectID, targetCommentLookup) {
+				matches = append(matches, c)
 			}
 		}
+		var matchedComment writ.CommentResult
 		if len(matches) == 1 {
-			replyToID = matches[0]
+			matchedComment = matches[0]
+			replyToID = matches[0].ObjectID
 		} else if len(matches) > 1 {
-			return renderErr(stderr, fmt.Errorf("ambiguous comment ID prefix %q matches %d comments (%s)", opts.replyTo, len(matches), strings.Join(matches, ", ")))
+			var matchIDs []string
+			for _, m := range matches {
+				matchIDs = append(matchIDs, m.ObjectID)
+			}
+			return renderErr(stderr, fmt.Errorf("ambiguous comment ID prefix %q matches %d comments (%s)", targetCommentLookup, len(matches), strings.Join(matchIDs, ", ")))
 		} else {
-			replyToID = opts.replyTo
+			replyToID = targetCommentLookup
+		}
+
+		if matchedComment.ObjectID != "" {
+			parentMap := make(map[string]string, len(comments))
+			for _, c := range comments {
+				if c.Comment.InReplyTo != "" {
+					parentMap[c.ObjectID] = c.Comment.InReplyTo
+				}
+			}
+			curr := matchedComment.ObjectID
+			for parentMap[curr] != "" {
+				curr = parentMap[curr]
+			}
+			threadRootID = curr
+		} else {
+			threadRootID = replyToID
 		}
 	}
 
-	commentID, err := store.Reviews.Comment(ctx, reviewID, writ.NewComment{
-		Text:      opts.message,
-		InReplyTo: replyToID,
-	})
-	if err != nil {
-		return renderErr(stderr, err)
+	var commentID string
+	if opts.message != "" {
+		cid, err := store.Reviews.Comment(ctx, reviewID, writ.NewComment{
+			Text:      opts.message,
+			InReplyTo: replyToID,
+		})
+		if err != nil {
+			return renderErr(stderr, err)
+		}
+		commentID = cid
+	}
+
+	if opts.resolve || opts.unresolve {
+		resolveTarget := threadRootID
+		if resolveTarget == "" {
+			if commentID != "" {
+				resolveTarget = commentID
+			} else {
+				return renderErr(stderr, fmt.Errorf("writ review comment: comment or thread ID is required to resolve"))
+			}
+		}
+
+		if opts.resolve {
+			if err := store.Comments.Resolve(ctx, resolveTarget, writ.CommentResolve{Resolved: true}); err != nil {
+				return renderErr(stderr, err)
+			}
+		} else {
+			if err := store.Comments.Resolve(ctx, resolveTarget, writ.CommentResolve{Resolved: false}); err != nil {
+				return renderErr(stderr, err)
+			}
+		}
+
+		if commentID == "" {
+			action := "resolved"
+			if opts.unresolve {
+				action = "unresolved"
+			}
+			fmt.Fprintf(stdout, "%s (%s)\n", resolveTarget, action)
+			return 0
+		}
 	}
 
 	fmt.Fprintln(stdout, commentID)

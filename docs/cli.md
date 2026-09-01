@@ -236,29 +236,33 @@ writ review open -title "WIP: feature" -draft
 
 ### `writ review comment`
 
-Add a comment to a review
+Add a comment to a review or resolve a thread
 
 #### Synopsis
 
 ```console
-Usage: writ review comment [-C <dir>] <id> -m <text> [-reply-to <comment-id>]
+Usage: writ review comment [-C <dir>] <id> [-m <text>] [-reply-to <comment-id>] [-resolve] [-unresolve]
 ```
 
 #### Description
 
-Add a comment to a review.
+Add a comment to a review or resolve/unresolve a comment thread.
 
 #### Flags
 
 - `-C <dir>`: Run as if writ was started in <dir>
-- `-m <text>`: Comment message text <text> (required)
+- `-m <text>`: Comment message text <text>
 - `-reply-to <comment-id>`: Comment ID <comment-id> to reply to
+- `-resolve`: Mark comment thread as resolved
+- `-unresolve`: Mark comment thread as unresolved
 
 #### Examples
 
 ```bash
 writ review comment 01J8ABC -m "Looks good to me"
 writ review comment 01J8ABC -m "Addressed feedback" -reply-to 01J8DEF
+writ review comment 01J8ABC -reply-to 01J8DEF -resolve
+writ review comment 01J8ABC -reply-to 01J8DEF -m "Fixed in latest push" -resolve
 ```
 
 ### `writ review approve`

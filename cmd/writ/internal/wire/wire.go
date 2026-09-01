@@ -190,7 +190,9 @@ type Comment struct {
 	InReplyTo  string             `json:"in_reply_to,omitempty"`
 	Anchor     *Anchor            `json:"anchor,omitempty"`
 	Deleted    bool               `json:"deleted"`
-	Resolved   []ResolvedPosition `json:"resolved,omitempty"`
+	Resolved   bool               `json:"resolved"`
+	ResolvedBy string             `json:"resolved_by,omitempty"`
+	Positions  []ResolvedPosition `json:"positions,omitempty"`
 	UnknownOps []UnknownOp        `json:"unknown_ops"`
 }
 
@@ -513,11 +515,11 @@ func FromCommentResult(c writ.CommentResult) Comment {
 	if c.Comment.Anchor != nil {
 		anchor = fromResolveAnchor(*c.Comment.Anchor)
 	}
-	var resolved []ResolvedPosition
+	var positions []ResolvedPosition
 	if len(c.Resolved) > 0 {
-		resolved = make([]ResolvedPosition, len(c.Resolved))
+		positions = make([]ResolvedPosition, len(c.Resolved))
 		for i, r := range c.Resolved {
-			resolved[i] = ResolvedPosition{
+			positions[i] = ResolvedPosition{
 				Side:      r.Side,
 				Outcome:   r.Outcome,
 				Match:     r.Match,
@@ -541,7 +543,9 @@ func FromCommentResult(c writ.CommentResult) Comment {
 		InReplyTo:  c.Comment.InReplyTo,
 		Anchor:     anchor,
 		Deleted:    c.Comment.Deleted,
-		Resolved:   resolved,
+		Resolved:   c.Comment.IsResolved(),
+		ResolvedBy: c.Comment.Actor,
+		Positions:  positions,
 		UnknownOps: unknownOps,
 	}
 }
@@ -576,6 +580,8 @@ func FromCommentThread(t state.CommentThread) CommentThread {
 			InReplyTo:  t.Comment.InReplyTo,
 			Anchor:     anchor,
 			Deleted:    t.Comment.Deleted,
+			Resolved:   t.Comment.IsResolved(),
+			ResolvedBy: t.Comment.Actor,
 			UnknownOps: unknownOps,
 		},
 		Replies:    replies,

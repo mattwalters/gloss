@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://writ.dev/spec/comment.schema.json",
   "title": "Writ comment operation (v1)",
-  "description": "Op payload schema for the comment collaborative object type (op_version 1). An instance of this schema represents the op.json payload for a comment object op (create, edit, or delete). Unknown top-level and body fields are permitted: readers preserve and ignore fields they do not understand. See spec/comments.md for full field semantics and spec/op-envelope.md for the containing envelope.",
+  "description": "Op payload schema for the comment collaborative object type (op_version 1). An instance of this schema represents the op.json payload for a comment object op (create, edit, delete, or resolve). Unknown top-level and body fields are permitted: readers preserve and ignore fields they do not understand. See spec/comments.md for full field semantics and spec/op-envelope.md for the containing envelope.",
   "type": "object",
   "allOf": [
     {
@@ -12,7 +12,7 @@
       "properties": {
         "object_type": { "const": "comment" },
         "op_version": { "const": 1 },
-        "op_type": { "enum": ["create", "edit", "delete"] }
+        "op_type": { "enum": ["create", "edit", "delete", "resolve"] }
       },
       "required": ["object_type", "op_version", "op_type"]
     },
@@ -43,6 +43,16 @@
       "then": {
         "properties": {
           "body": { "$ref": "#/$defs/delete_body" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "op_type": { "const": "resolve" } }
+      },
+      "then": {
+        "properties": {
+          "body": { "$ref": "#/$defs/resolve_body" }
         }
       }
     }
@@ -119,6 +129,23 @@
       "type": "object",
       "maxProperties": 0,
       "description": "Delete body carries no content and is empty ({}) in v1."
+    },
+    "resolve_body": {
+      "type": "object",
+      "properties": {
+        "resolved": {
+          "type": "boolean",
+          "description": "Resolution status: true = resolved, false = unresolved."
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Optional writer or user identity recording the resolution."
+        }
+      },
+      "required": ["resolved"],
+      "additionalProperties": true
     }
   }
 }

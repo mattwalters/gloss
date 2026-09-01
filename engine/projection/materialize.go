@@ -124,9 +124,18 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 			deletedInt = 1
 		}
 
+		var resolvedVal any
+		if comment.Resolved != nil {
+			if *comment.Resolved {
+				resolvedVal = 1
+			} else {
+				resolvedVal = 0
+			}
+		}
+
 		_, err = tx.Exec(
-			"INSERT INTO comments (object_id, subject_type, subject_id, text, in_reply_to, anchor, deleted) VALUES (?, ?, ?, ?, ?, ?, ?)",
-			objectID, comment.Subject.ObjectType, comment.Subject.ObjectID, comment.Text, comment.InReplyTo, anchorStr, deletedInt,
+			"INSERT INTO comments (object_id, subject_type, subject_id, text, in_reply_to, anchor, deleted, resolved, resolved_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			objectID, comment.Subject.ObjectType, comment.Subject.ObjectID, comment.Text, comment.InReplyTo, anchorStr, deletedInt, resolvedVal, comment.Actor,
 		)
 		if err != nil {
 			return fmt.Errorf("projection: insert comment %s: %w", objectID, err)

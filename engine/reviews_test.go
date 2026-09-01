@@ -375,5 +375,8 @@ func TestReviewsValidationAndNotFound(t *testing.T) {
 	if err := s.Comments.Delete(ctx, missingID); !errors.Is(err, writ.ErrNotFound) {
 		t.Errorf("expected ErrNotFound for Delete on missing comment, got %v", err)
 	}
+	if err := s.Comments.Resolve(ctx, missingID, writ.CommentResolve{Resolved: true}); !errors.Is(err, writ.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for Resolve on missing comment, got %v", err)
+	}
 }
 

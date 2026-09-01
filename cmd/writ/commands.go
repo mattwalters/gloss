@@ -219,17 +219,21 @@ var reviewOpenCmd = &command{
 
 var reviewCommentCmd = &command{
 	Name:      "comment",
-	Short:     "Add a comment to a review",
-	UsageLine: "Usage: writ review comment [-C <dir>] <id> -m <text> [-reply-to <comment-id>]",
-	Long:      "Add a comment to a review.",
+	Short:     "Add a comment to a review or resolve a thread",
+	UsageLine: "Usage: writ review comment [-C <dir>] <id> [-m <text>] [-reply-to <comment-id>] [-resolve] [-unresolve]",
+	Long:      "Add a comment to a review or resolve/unresolve a comment thread.",
 	Flags: []flagSpec{
 		{Name: "C"},
 		{Name: "m"},
 		{Name: "reply-to"},
+		{Name: "resolve"},
+		{Name: "unresolve"},
 	},
 	Examples: []string{
 		`writ review comment 01J8ABC -m "Looks good to me"`,
 		`writ review comment 01J8ABC -m "Addressed feedback" -reply-to 01J8DEF`,
+		`writ review comment 01J8ABC -reply-to 01J8DEF -resolve`,
+		`writ review comment 01J8ABC -reply-to 01J8DEF -m "Fixed in latest push" -resolve`,
 	},
 }
 

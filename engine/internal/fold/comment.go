@@ -15,6 +15,8 @@ var CommentRules = []Rule{
 	{OpType: "create", OpVersion: 1, Field: "anchor", Strategy: "create-once"},
 	{OpType: "edit", OpVersion: 1, Field: "text", Strategy: "lww"},
 	{OpType: "delete", OpVersion: 1, Field: "deleted", Strategy: "tombstone"},
+	{OpType: "resolve", OpVersion: 1, Field: "resolved", Strategy: "lww"},
+	{OpType: "resolve", OpVersion: 1, Field: "actor", Strategy: "lww"},
 }
 
 // CommentFold represents the folded state of a comment collaborative object before
@@ -29,6 +31,8 @@ type CommentFold struct {
 	InReplyTo  string
 	AnchorRaw  []byte
 	Deleted    bool
+	Resolved   *bool
+	Actor      string
 }
 
 // CommentNode represents a node in the comment reply forest.
@@ -66,6 +70,12 @@ func FoldComment(ops []codec.Op) (CommentFold, error) {
 	}
 	if d, ok := res.State["deleted"].(bool); ok {
 		cf.Deleted = d
+	}
+	if r, ok := res.State["resolved"].(bool); ok {
+		cf.Resolved = &r
+	}
+	if a, ok := res.State["actor"].(string); ok {
+		cf.Actor = a
 	}
 	if raw, ok := res.State["subject"].(json.RawMessage); ok && len(raw) > 0 && string(raw) != "null" {
 		cf.SubjectRaw = append([]byte(nil), raw...)

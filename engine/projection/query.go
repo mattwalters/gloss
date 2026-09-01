@@ -52,7 +52,11 @@ type ResolvedPosition struct {
 }
 
 // CommentResult represents a comment object along with its authorship, timestamps,
-// and anchor resolutions.
+// and anchor position resolutions.
+//
+// Note: The Resolved field represents anchor position resolution (where an anchor
+// lands in a git tree), NOT comment thread resolution. Thread resolution is recorded
+// on the folded Comment state (Comment.Resolved, Comment.ResolvedBy).
 type CommentResult struct {
 	ObjectID  string             `json:"object_id"`
 	Author    Author             `json:"author"`
@@ -492,7 +496,7 @@ func (d *DB) Comments(f CommentFilter) ([]CommentResult, error) {
 	var sb strings.Builder
 	var args []any
 
-	sb.WriteString("SELECT c.object_id, c.subject_type, c.subject_id, c.text, c.in_reply_to, c.anchor, c.deleted, ")
+	sb.WriteString("SELECT c.object_id, c.subject_type, c.subject_id, c.text, c.in_reply_to, c.anchor, c.deleted, c.resolved, c.resolved_by, ")
 	sb.WriteString("o.author_name, o.author_email, o.created_at, o.updated_at ")
 	sb.WriteString("FROM comments c JOIN objects o ON o.object_id = c.object_id WHERE 1=1")
 
@@ -503,6 +507,14 @@ func (d *DB) Comments(f CommentFilter) ([]CommentResult, error) {
 	if f.SubjectID != "" {
 		sb.WriteString(" AND c.subject_id = ?")
 		args = append(args, f.SubjectID)
+	}
+
+	if f.Resolved != nil {
+		if *f.Resolved {
+			sb.WriteString(" AND c.resolved = 1")
+		} else {
+			sb.WriteString(" AND (c.resolved = 0 OR c.resolved IS NULL)")
+		}
 	}
 
 	if len(f.Author) > 0 {
@@ -553,6 +565,8 @@ func (d *DB) Comments(f CommentFilter) ([]CommentResult, error) {
 		inReplyTo   string
 		anchor      string
 		deleted     int
+		resolved    sql.NullInt64
+		resolvedBy  string
 		authorName  string
 		authorEmail string
 		createdAt   int64
@@ -565,7 +579,7 @@ func (d *DB) Comments(f CommentFilter) ([]CommentResult, error) {
 	for rows.Next() {
 		var rc rawComment
 		if err := rows.Scan(
-			&rc.objectID, &rc.subjectType, &rc.subjectID, &rc.text, &rc.inReplyTo, &rc.anchor, &rc.deleted,
+			&rc.objectID, &rc.subjectType, &rc.subjectID, &rc.text, &rc.inReplyTo, &rc.anchor, &rc.deleted, &rc.resolved, &rc.resolvedBy,
 			&rc.authorName, &rc.authorEmail, &rc.createdAt, &rc.updatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("projection: scan comment: %w", err)
@@ -666,6 +680,12 @@ func (d *DB) Comments(f CommentFilter) ([]CommentResult, error) {
 			}
 		}
 
+		var resolvedPtr *bool
+		if rc.resolved.Valid {
+			val := rc.resolved.Int64 == 1
+			resolvedPtr = &val
+		}
+
 		comment := state.Comment{
 			Subject: state.CommentSubject{
 				ObjectType: rc.subjectType,
@@ -675,6 +695,8 @@ func (d *DB) Comments(f CommentFilter) ([]CommentResult, error) {
 			InReplyTo:  rc.inReplyTo,
 			Anchor:     anchor,
 			Deleted:    rc.deleted == 1,
+			Resolved:   resolvedPtr,
+			Actor:      rc.resolvedBy,
 			UnknownOps: unknownMap[rc.objectID],
 		}
 

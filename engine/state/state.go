@@ -82,7 +82,14 @@ type Comment struct {
 	InReplyTo  string         `json:"in_reply_to,omitempty"`
 	Anchor     *Anchor        `json:"anchor,omitempty"`
 	Deleted    bool           `json:"deleted,omitempty"`
+	Resolved   *bool          `json:"resolved,omitempty"`
+	Actor      string         `json:"actor,omitempty"`
 	UnknownOps []UnknownOp    `json:"unknown_ops,omitempty"`
+}
+
+// IsResolved reports whether the comment has been resolved.
+func (c Comment) IsResolved() bool {
+	return c.Resolved != nil && *c.Resolved
 }
 
 // CommentSubject identifies the collaborative object a comment is attached to.

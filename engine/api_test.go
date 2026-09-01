@@ -35,6 +35,7 @@ func TestAPIShapeNoGitInternalsLeak(t *testing.T) {
 		writ.IssueEdit{},
 		writ.IssueState{},
 		writ.NewComment{},
+		writ.CommentResolve{},
 		writ.ReviewFilter{},
 		writ.IssueFilter{},
 		writ.CommentFilter{},
