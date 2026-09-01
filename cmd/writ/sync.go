@@ -15,42 +15,27 @@ import (
 	"github.com/writtendev/writ/engine/sync"
 )
 
-func runSync(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+type syncOpts struct {
+	dir        string
+	statusMode bool
+	jsonMode   bool
+}
+
+func newSyncFlagSet(defaultDir string) (*flag.FlagSet, *syncOpts) {
 	fs := flag.NewFlagSet("sync", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-
-	var dir string
-	var statusMode bool
-	var jsonMode bool
-
-	fs.StringVar(&dir, "C", defaultDir, "Run as if writ was started in <dir>")
-	fs.BoolVar(&statusMode, "status", false, "Report unpushed ops count without network transport")
-	fs.BoolVar(&jsonMode, "json", false, "Output result as JSON")
-
+	opts := &syncOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in <dir>")
+	fs.BoolVar(&opts.statusMode, "status", false, "Report unpushed ops count without network transport")
+	fs.BoolVar(&opts.jsonMode, "json", false, "Output result as JSON")
 	fs.Usage = func() {
-		fmt.Fprint(stderr, `Usage: writ sync [-C <dir>] [--status] [--json] [remote...]
-
-Synchronize collaborative SDLC operations with one or more git remotes.
-
-Fetch remote operations, push local operations, and refresh the local projection cache.
-With no remote specified, defaults to 'origin' or the sole configured remote.
-
-Flags:
-  -C <dir>    Run as if writ was started in <dir>
-      --status Report unpushed ops count without network transport
-      --json   Output result as JSON
-
-Exit codes:
-  0  Success
-  1  Transport or unclassified git failure
-  2  Usage error (bad flag, no resolvable default remote)
-  3  Unknown or unconfigured remote
-  4  Rejected non-fast-forward update
-  5  Not a git repository / store cannot be opened
-  6  Authentication or credentials failure
-  7  Network or remote unreachable
-`)
+		renderUsage(fs.Output(), []string{"sync"}, syncCmd)
 	}
+	return fs, opts
+}
+
+func runSync(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+	fs, opts := newSyncFlagSet(defaultDir)
+	fs.SetOutput(stderr)
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -59,7 +44,7 @@ Exit codes:
 		return 2
 	}
 
-	targetDir := dir
+	targetDir := opts.dir
 	if targetDir == "" {
 		targetDir = "."
 	}
@@ -107,21 +92,21 @@ Exit codes:
 	var syncResults []wire.SyncResult
 
 	for _, remote := range remotes {
-		if statusMode {
+		if opts.statusMode {
 			status, err := store.SyncStatus(ctx, remote)
 			if err != nil {
 				code := exitCodeFor(err)
 				if firstExitCode == 0 {
 					firstExitCode = code
 				}
-				if jsonMode {
+				if opts.jsonMode {
 					syncStatuses = append(syncStatuses, wire.FromSyncStatusFailure(remote, err, status.Unsynced))
 				} else {
 					printSyncError(stderr, remote, err)
 				}
 				continue
 			}
-			if jsonMode {
+			if opts.jsonMode {
 				syncStatuses = append(syncStatuses, wire.FromSyncStatus(status))
 			} else {
 				fmt.Fprintln(stdout, formatSyncStatus(remote, status))
@@ -133,14 +118,14 @@ Exit codes:
 				if firstExitCode == 0 {
 					firstExitCode = code
 				}
-				if jsonMode {
+				if opts.jsonMode {
 					syncResults = append(syncResults, wire.FromSyncResultFailure(remote, res, err))
 				} else {
 					printSyncError(stderr, remote, err)
 				}
 				continue
 			}
-			if jsonMode {
+			if opts.jsonMode {
 				syncResults = append(syncResults, wire.FromSyncResult(remote, res))
 			} else {
 				fmt.Fprintln(stdout, formatSyncResult(remote, res))
@@ -148,8 +133,8 @@ Exit codes:
 		}
 	}
 
-	if jsonMode {
-		if statusMode {
+	if opts.jsonMode {
+		if opts.statusMode {
 			if syncStatuses == nil {
 				syncStatuses = []wire.SyncStatus{}
 			}

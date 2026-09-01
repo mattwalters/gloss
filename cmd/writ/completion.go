@@ -1,0 +1,692 @@
+package main
+
+import (
+	"fmt"
+	"io"
+	"strings"
+)
+
+func runCompletion(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprintln(stderr, "writ completion: shell required (bash, zsh, fish)")
+		renderUsage(stderr, []string{"completion"}, completionCmd)
+		return 2
+	}
+
+	switch args[0] {
+	case "-h", "-help", "--help":
+		renderUsage(stdout, []string{"completion"}, completionCmd)
+		return 0
+	case "bash":
+		emitBashCompletion(stdout)
+		return 0
+	case "zsh":
+		emitZshCompletion(stdout)
+		return 0
+	case "fish":
+		emitFishCompletion(stdout)
+		return 0
+	default:
+		fmt.Fprintf(stderr, "writ completion: unsupported shell %q (supported: bash, zsh, fish)\n", args[0])
+		return 2
+	}
+}
+
+func escapeFishDesc(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "'", "\\'")
+	return s
+}
+
+
+func flagEnumChoices(flagName string, cmdPath []string) string {
+	p := strings.Join(cmdPath, " ")
+	switch flagName {
+	case "state":
+		return "open closed"
+	case "status":
+		if p == "review list" {
+			return "draft open closed merged"
+		}
+		return ""
+	case "verdict":
+		return "approve request-changes none"
+	case "relation":
+		return "fixes relates none"
+	case "sort":
+		return "created_at_asc created_at_desc updated_at_asc updated_at_desc title_asc title_desc"
+	default:
+		return ""
+	}
+}
+
+func emitBashCompletion(w io.Writer) {
+	fmt.Fprintln(w, `# bash completion for writ                          -*- shell-script -*-
+
+_writ() {
+    local cur prev words cword
+    _init_completion -n : 2>/dev/null || {
+        cur="${COMP_WORDS[COMP_CWORD]}"
+        prev="${COMP_WORDS[COMP_CWORD-1]}"
+        words=("${COMP_WORDS[@]}")
+        cword=$COMP_CWORD
+    }
+
+    local cmd=""
+    local subcmd=""
+    local cmd_idx=0
+    local subcmd_idx=0
+    local i=1
+
+    while [ $i -lt $cword ]; do
+        local word="${words[i]}"
+        case "$word" in
+            -C)
+                i=$((i + 2))
+                continue
+                ;;
+            -*)
+                i=$((i + 1))
+                continue
+                ;;
+            *)
+                if [ -z "$cmd" ]; then
+                    cmd="$word"
+                    cmd_idx=$i
+                elif [ -z "$subcmd" ]; then
+                    subcmd="$word"
+                    subcmd_idx=$i
+                fi
+                i=$((i + 1))
+                ;;
+        esac
+    done
+
+    # Top-level completion
+    if [ -z "$cmd" ]; then
+        if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "-C -h -help --help" -- "$cur"))
+            return 0
+        fi
+        COMPREPLY=($(compgen -W "init issue review sync completion help" -- "$cur"))
+        return 0
+    fi
+
+    # Flag value completion based on prev
+    case "$prev" in
+        -C)
+            COMPREPLY=($(compgen -d -- "$cur"))
+            return 0
+            ;;
+    esac
+
+    # Command-specific completion
+    case "$cmd" in
+        init)
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "-C -h -help --help" -- "$cur"))
+                return 0
+            fi
+            ;;
+        sync)
+            if [[ "$cur" == -* ]]; then
+                COMPREPLY=($(compgen -W "-C -status --status -json --json -h -help --help" -- "$cur"))
+                return 0
+            fi
+            ;;
+        completion)
+            if [ -z "$subcmd" ]; then
+                COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
+                return 0
+            fi
+            ;;
+        help)
+            if [ -z "$subcmd" ]; then
+                COMPREPLY=($(compgen -W "init issue review sync completion help" -- "$cur"))
+                return 0
+            fi
+            case "$subcmd" in
+                issue)
+                    COMPREPLY=($(compgen -W "create status assign list link" -- "$cur"))
+                    return 0
+                    ;;
+                review)
+                    COMPREPLY=($(compgen -W "open comment approve status list" -- "$cur"))
+                    return 0
+                    ;;
+            esac
+            ;;
+        issue)
+            if [ -z "$subcmd" ]; then
+                if [[ "$cur" == -* ]]; then
+                    COMPREPLY=($(compgen -W "-C -h -help --help" -- "$cur"))
+                    return 0
+                fi
+                COMPREPLY=($(compgen -W "create status assign list link" -- "$cur"))
+                return 0
+            fi
+            case "$subcmd" in
+                create)
+                    case "$prev" in
+                        -state|--state)
+                            COMPREPLY=($(compgen -W "open closed" -- "$cur"))
+                            return 0
+                            ;;
+                    esac
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "-C -title -description -state -fixes -relates -h -help --help" -- "$cur"))
+                        return 0
+                    fi
+                    ;;
+                status)
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "-C -reason -json --json -h -help --help" -- "$cur"))
+                        return 0
+                    fi
+                    # Check positional count after subcommand
+                    local pos_count=0
+                    local j=$((subcmd_idx + 1))
+                    while [ $j -lt $cword ]; do
+                        case "${words[j]}" in
+                            -C|-reason|--reason) j=$((j + 2)) ;;
+                            -*) j=$((j + 1)) ;;
+                            *) pos_count=$((pos_count + 1)); j=$((j + 1)) ;;
+                        esac
+                    done
+                    if [ $pos_count -eq 1 ]; then
+                        COMPREPLY=($(compgen -W "open closed" -- "$cur"))
+                        return 0
+                    fi
+                    ;;
+                assign)
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "-C -add -remove -h -help --help" -- "$cur"))
+                        return 0
+                    fi
+                    ;;
+                list)
+                    case "$prev" in
+                        -state|--state)
+                            COMPREPLY=($(compgen -W "open closed" -- "$cur"))
+                            return 0
+                            ;;
+                        -sort|--sort)
+                            COMPREPLY=($(compgen -W "created_at_asc created_at_desc updated_at_asc updated_at_desc title_asc title_desc" -- "$cur"))
+                            return 0
+                            ;;
+                    esac
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "-C -state -assignee -label -author -text -limit -sort -json --json -h -help --help" -- "$cur"))
+                        return 0
+                    fi
+                    ;;
+                link)
+                    case "$prev" in
+                        -relation|--relation)
+                            COMPREPLY=($(compgen -W "fixes relates none" -- "$cur"))
+                            return 0
+                            ;;
+                    esac
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "-C -target -relation -target-type -h -help --help" -- "$cur"))
+                        return 0
+                    fi
+                    ;;
+            esac
+            ;;
+        review)
+            if [ -z "$subcmd" ]; then
+                if [[ "$cur" == -* ]]; then
+                    COMPREPLY=($(compgen -W "-C -h -help --help" -- "$cur"))
+                    return 0
+                fi
+                COMPREPLY=($(compgen -W "open comment approve status list" -- "$cur"))
+                return 0
+            fi
+            case "$subcmd" in
+                open)
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "-C -title -description -base -head -draft -h -help --help" -- "$cur"))
+                        return 0
+                    fi
+                    ;;
+                comment)
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "-C -m -reply-to -h -help --help" -- "$cur"))
+                        return 0
+                    fi
+                    ;;
+                approve)
+                    case "$prev" in
+                        -verdict|--verdict)
+                            COMPREPLY=($(compgen -W "approve request-changes none" -- "$cur"))
+                            return 0
+                            ;;
+                    esac
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "-C -verdict -revision -m -subject -h -help --help" -- "$cur"))
+                        return 0
+                    fi
+                    ;;
+                status)
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "-C -reason -merge-commit -json --json -h -help --help" -- "$cur"))
+                        return 0
+                    fi
+                    # Check positional count after subcommand
+                    local pos_count=0
+                    local j=$((subcmd_idx + 1))
+                    while [ $j -lt $cword ]; do
+                        case "${words[j]}" in
+                            -C|-reason|--reason|-merge-commit|--merge-commit) j=$((j + 2)) ;;
+                            -*) j=$((j + 1)) ;;
+                            *) pos_count=$((pos_count + 1)); j=$((j + 1)) ;;
+                        esac
+                    done
+                    if [ $pos_count -eq 1 ]; then
+                        COMPREPLY=($(compgen -W "draft open closed merged" -- "$cur"))
+                        return 0
+                    fi
+                    ;;
+                list)
+                    case "$prev" in
+                        -status|--status)
+                            COMPREPLY=($(compgen -W "draft open closed merged" -- "$cur"))
+                            return 0
+                            ;;
+                        -sort|--sort)
+                            COMPREPLY=($(compgen -W "created_at_asc created_at_desc updated_at_asc updated_at_desc title_asc title_desc" -- "$cur"))
+                            return 0
+                            ;;
+                    esac
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "-C -status -author -text -limit -sort -json --json -h -help --help" -- "$cur"))
+                        return 0
+                    fi
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+complete -F _writ writ`)
+}
+
+func emitZshCompletion(w io.Writer) {
+	fmt.Fprintln(w, `#compdef writ
+
+_writ() {
+    local -a commands
+    local curcontext="$curcontext" state line
+    typeset -A opt_args
+
+    _arguments -C \
+        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+        '(-h -help --help)'{-h,-help,--help}'[Show help information]' \
+        '1: :->command' \
+        '*:: :->args'
+
+    case $state in
+        command)
+            commands=(
+                'init:Initialize writ configuration'
+                'issue:Manage issues'
+                'review:Manage code reviews'
+                'sync:Synchronize collaborative SDLC operations'
+                'completion:Generate shell completion scripts'
+                'help:Show help for writ commands'
+            )
+            _describe -t commands 'writ command' commands
+            ;;
+        args)
+            case $line[1] in
+                init)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]' \
+                        '*:remote:_git_remotes'
+                    ;;
+                sync)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '--status[Report unpushed ops count without network transport]' \
+                        '-status[Report unpushed ops count without network transport]' \
+                        '--json[Output result as JSON]' \
+                        '-json[Output result as JSON]' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]' \
+                        '*:remote:_git_remotes'
+                    ;;
+                completion)
+                    _arguments -s -S \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]' \
+                        '1:shell:(bash zsh fish)'
+                    ;;
+                help)
+                    _arguments -s -S \
+                        '1:command:(init issue review sync completion help)' \
+                        '2:subcommand:->help_subcommand'
+                    case $line[1] in
+                        issue) _values 'issue subcommand' create status assign list link ;;
+                        review) _values 'review subcommand' open comment approve status list ;;
+                    esac
+                    ;;
+                issue)
+                    _writ_issue
+                    ;;
+                review)
+                    _writ_review
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_writ_issue() {
+    local curcontext="$curcontext" state line
+    typeset -A opt_args
+
+    _arguments -C \
+        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+        '(-h -help --help)'{-h,-help,--help}'[Show help]' \
+        '1: :->subcommand' \
+        '*:: :->args'
+
+    case $state in
+        subcommand)
+            local -a subcommands
+            subcommands=(
+                'create:Create a new issue'
+                'status:View or update issue status'
+                'assign:Add or remove issue assignees'
+                'list:List issues'
+                'link:Manage issue cross-reference links'
+            )
+            _describe -t subcommands 'issue subcommand' subcommands
+            ;;
+        args)
+            case $line[1] in
+                create)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '-title[Issue title]:title:' \
+                        '-description[Issue description]:description:' \
+                        '-state[Initial issue state]:state:(open closed)' \
+                        '*-fixes[Add fixes cross-reference link]:ref:' \
+                        '*-relates[Add relates cross-reference link]:ref:' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]'
+                    ;;
+                status)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '-reason[Reason for status change]:reason:' \
+                        '(--json -json)'{--json,-json}'[Output result as JSON]' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]' \
+                        '1:issue ID:' \
+                        '2:state:(open closed)'
+                    ;;
+                assign)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '*-add[Add assignee email or ID]:assignee:' \
+                        '*-remove[Remove assignee email or ID]:assignee:' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]' \
+                        '1:issue ID:'
+                    ;;
+                list)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '*-state[Filter by issue state]:state:(open closed)' \
+                        '*-assignee[Filter by assignee]:assignee:' \
+                        '*-label[Filter by label]:label:' \
+                        '*-author[Filter by author]:author:' \
+                        '-text[Filter by text query]:text:' \
+                        '-limit[Maximum issues to return]:limit:' \
+                        '-sort[Sort order]:sort:(created_at_asc created_at_desc updated_at_asc updated_at_desc title_asc title_desc)' \
+                        '(--json -json)'{--json,-json}'[Output result as JSON]' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]'
+                    ;;
+                link)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '-target[Target reference]:ref:' \
+                        '-relation[Link relation]:relation:(fixes relates none)' \
+                        '-target-type[Target object type]:type:' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]' \
+                        '1:issue ID:'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_writ_review() {
+    local curcontext="$curcontext" state line
+    typeset -A opt_args
+
+    _arguments -C \
+        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+        '(-h -help --help)'{-h,-help,--help}'[Show help]' \
+        '1: :->subcommand' \
+        '*:: :->args'
+
+    case $state in
+        subcommand)
+            local -a subcommands
+            subcommands=(
+                'open:Create a new code review'
+                'comment:Add a comment to a review'
+                'approve:Record a review verdict'
+                'status:View or update review status'
+                'list:List code reviews'
+            )
+            _describe -t subcommands 'review subcommand' subcommands
+            ;;
+        args)
+            case $line[1] in
+                open)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '-title[Review title]:title:' \
+                        '-description[Review description]:description:' \
+                        '-base[Base revision commit or ref]:ref:_git_revisions' \
+                        '-head[Head revision commit or ref]:ref:_git_revisions' \
+                        '-draft[Create review in draft state]' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]'
+                    ;;
+                comment)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '-m[Comment message text]:message:' \
+                        '-reply-to[Comment ID to reply to]:comment ID:' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]' \
+                        '1:review ID:'
+                    ;;
+                approve)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '-verdict[Review verdict]:verdict:(approve request-changes none)' \
+                        '-revision[Revision commit ref or SHA]:revision:_git_revisions' \
+                        '-m[Review verdict message]:message:' \
+                        '-subject[Subject identity]:subject:' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]' \
+                        '1:review ID:'
+                    ;;
+                status)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '-reason[Reason for status change]:reason:' \
+                        '-merge-commit[Merge commit ref or SHA]:commit:_git_revisions' \
+                        '(--json -json)'{--json,-json}'[Output result as JSON]' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]' \
+                        '1:review ID:' \
+                        '2:status:(draft open closed merged)'
+                    ;;
+                list)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '*-status[Filter by review status]:status:(draft open closed merged)' \
+                        '*-author[Filter by author]:author:' \
+                        '-text[Filter by text query]:text:' \
+                        '-limit[Maximum reviews to return]:limit:' \
+                        '-sort[Sort order]:sort:(created_at_asc created_at_desc updated_at_asc updated_at_desc title_asc title_desc)' \
+                        '(--json -json)'{--json,-json}'[Output result as JSON]' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_writ "$@"`)
+}
+
+func emitFishCompletion(w io.Writer) {
+	fmt.Fprintln(w, `# fish completion for writ
+
+function __fish_writ_args
+    set -l raw (commandline -opc)
+    set -l args
+    set -l skip 0
+    for arg in $raw
+        if test $skip -gt 0
+            set skip (math $skip - 1)
+            continue
+        end
+        if test "$arg" = "-C"
+            set skip 1
+            continue
+        end
+        set -a args "$arg"
+    end
+    for arg in $args
+        echo $arg
+    end
+end
+
+function __fish_writ_needs_command
+    set -l cmd (__fish_writ_args)
+    if test (count $cmd) -eq 1
+        return 0
+    end
+    return 1
+end
+
+function __fish_writ_needs_subcommand
+    set -l cmd (__fish_writ_args)
+    set -l n (count $argv)
+    if test (count $cmd) -ne (math $n + 1)
+        return 1
+    end
+    for i in (seq 1 $n)
+        set -l pos (math $i + 1)
+        if test "$cmd[$pos]" != "$argv[$i]"
+            return 1
+        end
+    end
+    return 0
+end
+
+function __fish_writ_using_command
+    set -l cmd (__fish_writ_args)
+    set -l n (count $argv)
+    if test (count $cmd) -le $n
+        return 1
+    end
+    for i in (seq 1 $n)
+        set -l pos (math $i + 1)
+        if test "$cmd[$pos]" != "$argv[$i]"
+            return 1
+        end
+    end
+    return 0
+end
+
+# Disable file completions by default
+complete -c writ -f
+
+# Global options
+complete -c writ -s C -d 'Run as if writ was started in <dir>' -r -a '(__fish_complete_directories)'
+complete -c writ -l help -s h -d 'Show help information'
+
+# Top-level commands`)
+
+	for _, sub := range rootCommand.Subs {
+		fmt.Fprintf(w, "complete -c writ -n '__fish_writ_needs_command' -f -a '%s' -d '%s'\n",
+			sub.Name, escapeFishDesc(sub.Short))
+	}
+
+	fmt.Fprintln(w, `
+# Subcommands for issue`)
+	for _, sub := range issueCmd.Subs {
+		fmt.Fprintf(w, "complete -c writ -n '__fish_writ_needs_subcommand issue' -f -a '%s' -d '%s'\n",
+			sub.Name, escapeFishDesc(sub.Short))
+	}
+
+	fmt.Fprintln(w, `
+# Subcommands for review`)
+	for _, sub := range reviewCmd.Subs {
+		fmt.Fprintf(w, "complete -c writ -n '__fish_writ_needs_subcommand review' -f -a '%s' -d '%s'\n",
+			sub.Name, escapeFishDesc(sub.Short))
+	}
+
+	fmt.Fprintln(w, `
+# Subcommands for completion
+complete -c writ -n '__fish_writ_using_command completion' -f -a 'bash zsh fish'
+
+# Subcommands for help
+complete -c writ -n '__fish_writ_needs_subcommand help' -f -a 'init issue review sync completion help'
+complete -c writ -n '__fish_writ_needs_subcommand help issue' -f -a 'create status assign list link'
+complete -c writ -n '__fish_writ_needs_subcommand help review' -f -a 'open comment approve status list'
+
+# Flags for commands`)
+
+	var walkFlags func(path []string, cmd *command)
+	walkFlags = func(path []string, cmd *command) {
+		if len(cmd.Subs) > 0 {
+			for _, sub := range cmd.Subs {
+				walkFlags(append(path, sub.Name), sub)
+			}
+			return
+		}
+
+		cond := fmt.Sprintf("__fish_writ_using_command %s", strings.Join(path, " "))
+		for _, f := range cmd.Flags {
+			optFlag := "-l " + f.Name
+			if len(f.Name) == 1 {
+				optFlag = "-s " + f.Name
+			}
+			desc := escapeFishDesc(f.Usage)
+			enumChoices := strings.Join(f.Values, " ")
+			if enumChoices == "" {
+				enumChoices = flagEnumChoices(f.Name, path)
+			}
+
+			if enumChoices != "" {
+				fmt.Fprintf(w, "complete -c writ -n '%s' %s -d '%s' -r -f -a '%s'\n",
+					cond, optFlag, desc, enumChoices)
+			} else if f.Name == "C" {
+				fmt.Fprintf(w, "complete -c writ -n '%s' %s -d '%s' -r -a '(__fish_complete_directories)'\n",
+					cond, optFlag, desc)
+			} else if f.Name == "draft" || f.Name == "json" || f.Name == "status" && cmd.Name == "sync" {
+				fmt.Fprintf(w, "complete -c writ -n '%s' %s -d '%s'\n",
+					cond, optFlag, desc)
+			} else {
+				fmt.Fprintf(w, "complete -c writ -n '%s' %s -d '%s' -r\n",
+					cond, optFlag, desc)
+			}
+		}
+
+		// Positional enums
+		if cmd.Name == "status" && len(path) == 2 {
+			if path[0] == "issue" {
+				fmt.Fprintf(w, "complete -c writ -n '%s' -f -a 'open closed'\n", cond)
+			} else if path[0] == "review" {
+				fmt.Fprintf(w, "complete -c writ -n '%s' -f -a 'draft open closed merged'\n", cond)
+			}
+		}
+	}
+
+	for _, sub := range rootCommand.Subs {
+		walkFlags([]string{sub.Name}, sub)
+	}
+}

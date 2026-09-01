@@ -17,23 +17,23 @@ import (
 	"github.com/writtendev/writ/engine/sync"
 )
 
-func runInit(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+type initOpts struct {
+	dir string
+}
+
+func newInitFlagSet(defaultDir string) (*flag.FlagSet, *initOpts) {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-
-	var dir string
-	fs.StringVar(&dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-
+	opts := &initOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
 	fs.Usage = func() {
-		fmt.Fprint(stderr, `Usage: writ init [-C <dir>] [remote...]
-
-Initialize writ repository configuration by resolving or minting a writer ID,
-verifying SSH signing key configuration, and adding fetch refspecs for git remotes.
-
-Flags:
-  -C <dir>    Run as if writ was started in <dir>
-`)
+		renderUsage(fs.Output(), []string{"init"}, initCmd)
 	}
+	return fs, opts
+}
+
+func runInit(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+	fs, opts := newInitFlagSet(defaultDir)
+	fs.SetOutput(stderr)
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -42,7 +42,7 @@ Flags:
 		return 2
 	}
 
-	targetDir := dir
+	targetDir := opts.dir
 	if targetDir == "" {
 		targetDir = "."
 	}
