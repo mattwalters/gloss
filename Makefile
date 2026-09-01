@@ -13,7 +13,11 @@ endif
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS = -X $(PKG)/internal/version.Version=$(VERSION)
 
-.PHONY: build test install api api-check docs docs-check snapshot release
+# The one place Hugo's version is pinned. CI reads it back out via
+# `make -s hugo-version` in .github/workflows/docs.yml.
+HUGO_VERSION := 0.165.0
+
+.PHONY: build test install api api-check docs docs-check snapshot release hugo-version site site-serve
 
 build:
 	go build ./...
@@ -118,3 +122,16 @@ release: ## Tag main and push it, which starts the release build (VERSION=vX.Y.Z
 	git push origin 'refs/tags/$(VERSION)'
 	@printf 'pushed %s — the release build takes it from here:\n' '$(VERSION)'
 	@printf '  https://github.com/writtendev/writ/actions/workflows/release.yml\n'
+
+# --------------------------------------------------------------------------
+# Docs site
+# --------------------------------------------------------------------------
+
+hugo-version: ## Print the pinned Hugo version (CI reads this)
+	@printf '%s\n' '$(HUGO_VERSION)'
+
+site: ## Build the docs site locally
+	hugo --source docs --destination "$(CURDIR)/public"
+
+site-serve: ## Serve the docs site locally with live reload
+	hugo server --source docs

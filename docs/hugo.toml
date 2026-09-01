@@ -1,0 +1,55 @@
+baseURL = "/"
+locale = "en-us"
+title = "Writ"
+relativeURLs = true
+disableKinds = ["taxonomy", "term", "rss"]
+
+# Emit clean /path/ URLs, not /path.html
+[permalinks]
+  [permalinks.page]
+    '/' = '/:slug/'
+  [permalinks.section]
+    '/' = '/:slug/'
+
+[markup]
+  [markup.highlight]
+    style = "github"
+    lineNos = false
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+  [markup.tableOfContents]
+    startLevel = 2
+    endLevel = 3
+
+[params]
+  description = "Open SDLC layer in git"
+  # CI sets HUGO_PARAMS_VERSION to the tag, "latest", or "" for root.
+  version = "dev"
+  # The git ref this build's content comes from.
+  ref = "main"
+  # Where versions.json sits relative to this build.
+  versionroot = "."
+  repo = "https://github.com/writtendev/writ"
+
+# Spec files carry no front matter, so provide defaults via cascade.
+[[cascade]]
+  title = "Specification"
+  [cascade.target]
+    path = "/spec/_index*"
+
+[module]
+  [[module.mounts]]
+    source = "content"
+    target = "content"
+  [[module.mounts]]
+    source = "../spec"
+    target = "content/spec"
+    files = "**.md"
+  # Mount the generated CLI reference as a page; one source of truth.
+  [[module.mounts]]
+    source = "cli.md"
+    target = "content/cli.md"
+  [[module.mounts]]
+    source = "static"
+    target = "static"

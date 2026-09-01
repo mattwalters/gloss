@@ -8,6 +8,12 @@ import (
 )
 
 func renderDocs(w io.Writer) error {
+	// Hugo front matter, so this file can be mounted directly as a site page.
+	fmt.Fprintln(w, "---")
+	fmt.Fprintln(w, `title: "CLI Reference"`)
+	fmt.Fprintln(w, `slug: "cli"`)
+	fmt.Fprintln(w, "---")
+	fmt.Fprintln(w)
 	fmt.Fprintln(w, "# CLI Reference")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "`writ` is an open SDLC layer that stores code review and issues inside git.")

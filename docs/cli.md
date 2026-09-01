@@ -1,3 +1,8 @@
+---
+title: "CLI Reference"
+slug: "cli"
+---
+
 # CLI Reference
 
 `writ` is an open SDLC layer that stores code review and issues inside git.

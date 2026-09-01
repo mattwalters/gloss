@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ if .IsHome }}{{ .Site.Title }}{{ else }}{{ .Title }} — {{ .Site.Title }}{{ end }}</title>
+  <meta name="description" content="{{ with .Description }}{{ . }}{{ else }}{{ .Site.Params.description }}{{ end }}">
+  <link rel="stylesheet" href="{{ "style.css" | relURL }}">
+</head>
+<body>
+  {{ $unversionedRoot := eq site.Params.version "" }}
+  {{ $isDocsPage := not .IsHome }}
+  <header class="site-header">
+    <nav>
+      <a href="{{ "/" | relURL }}" class="site-title">writ</a>
+      <span class="nav-links">
+        <a href="{{ if $unversionedRoot }}{{ "/latest/docs/" | relURL }}{{ else }}{{ "docs/" | relURL }}{{ end }}">Docs</a>
+        <a href="{{ if $unversionedRoot }}{{ "/latest/spec/" | relURL }}{{ else }}{{ "spec/" | relURL }}{{ end }}">Spec</a>
+        <a href="{{ if $unversionedRoot }}{{ "/latest/cli/" | relURL }}{{ else }}{{ "cli/" | relURL }}{{ end }}">CLI Reference</a>
+        <a href="https://github.com/writtendev/writ">GitHub</a>
+      </span>
+      {{ if $isDocsPage }}
+      <span class="version">
+        <span class="version-label">{{ if eq site.Params.version "latest" }}{{ site.Params.ref }}{{ else }}{{ site.Params.version }}{{ end }}</span>
+        <select id="version-picker" hidden aria-label="Documentation version"></select>
+      </span>
+      {{ else }}
+      <a class="version-latest" id="version-latest"{{ if eq site.Params.version "" }} hidden{{ end }}>{{ if and (ne site.Params.version "") (ne site.Params.version "dev") }}{{ site.Params.ref }}{{ end }}</a>
+      {{ end }}
+    </nav>
+  </header>
+
+  <main>
+    {{ block "main" . }}{{ end }}
+  </main>
+
+  <footer class="site-footer">
+    <p>Writ is open source under the <a href="https://github.com/writtendev/writ/blob/main/LICENSE">Apache-2.0 license</a>.</p>
+  </footer>
+
+  {{ if $isDocsPage }}
+  <script>
+    // Version picker: fetch versions.json and populate the dropdown.
+    (function () {
+      var here = new URL(".", document.querySelector('link[rel="stylesheet"]').href);
+      var root = new URL({{ site.Params.versionroot }} + "/", here);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v === "latest" && versions.length
+              ? versions[0] + " · latest" : v;
+            option.selected = v === {{ site.Params.version }};
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/docs/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+  {{ else }}
+  <script>
+    // Splash page: show latest version link.
+    (function () {
+      var here = new URL(".", document.querySelector('link[rel="stylesheet"]').href);
+      var root = new URL({{ site.Params.versionroot }} + "/", here);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          if (!versions.length) { return; }
+          var latest = document.getElementById("version-latest");
+          latest.textContent = versions[0];
+          latest.href = new URL("latest/docs/", root);
+          latest.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+  {{ end }}
+</body>
+</html>
