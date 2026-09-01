@@ -79,5 +79,10 @@
     "rejects": "canonicalization",
     "category": "not-canonical",
     "reason": "keys are not sorted canonically"
+  },
+  {
+    "file": "assign-bare-person.json",
+    "rejects": "schema",
+    "reason": "assign add items must carry a scheme; a bare, colonless identifier is not a person identifier"
   }
 ]

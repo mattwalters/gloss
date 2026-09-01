@@ -124,12 +124,12 @@ func TestReview_RoundTrip_SingleRepo(t *testing.T) {
 		t.Fatalf("review approve failed with %d; stderr: %s", code, stderr.String())
 	}
 
-	// 5. writ review assign <id> -add alice@example.com
+	// 5. writ review assign <id> -add email:alice@example.com
 	stdout.Reset()
 	stderr.Reset()
 	code = run(context.Background(), []string{
 		"review", "assign", "-C", env.repoDir,
-		reviewID, "-add", "alice@example.com",
+		reviewID, "-add", "email:alice@example.com",
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("review assign failed with %d; stderr: %s", code, stderr.String())
@@ -144,16 +144,16 @@ func TestReview_RoundTrip_SingleRepo(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("review status after assign failed with %d; stderr: %s", code, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "Assignees:   alice@example.com") {
-		t.Errorf("status output missing 'Assignees:   alice@example.com': %s", stdout.String())
+	if !strings.Contains(stdout.String(), "Assignees:   email:alice@example.com") {
+		t.Errorf("status output missing 'Assignees:   email:alice@example.com': %s", stdout.String())
 	}
 
-	// 6. writ review assign -remove alice@example.com -add bob@example.com
+	// 6. writ review assign -remove email:alice@example.com -add user:bob
 	stdout.Reset()
 	stderr.Reset()
 	code = run(context.Background(), []string{
 		"review", "assign", "-C", env.repoDir,
-		reviewID, "-remove", "alice@example.com", "-add", "bob@example.com",
+		reviewID, "-remove", "email:alice@example.com", "-add", "user:bob",
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("review reassign failed with %d; stderr: %s", code, stderr.String())
@@ -164,7 +164,7 @@ func TestReview_RoundTrip_SingleRepo(t *testing.T) {
 	stderr.Reset()
 	code = run(context.Background(), []string{
 		"review", "list", "-C", env.repoDir,
-		"-assignee", "bob@example.com",
+		"-assignee", "user:bob",
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("review list -assignee failed with %d; stderr: %s", code, stderr.String())
@@ -186,8 +186,8 @@ func TestReview_RoundTrip_SingleRepo(t *testing.T) {
 	if !strings.Contains(statusOut, "Status:      open") {
 		t.Errorf("status output missing 'Status:      open': %s", statusOut)
 	}
-	if !strings.Contains(statusOut, "Assignees:   bob@example.com") {
-		t.Errorf("status output missing 'Assignees:   bob@example.com': %s", statusOut)
+	if !strings.Contains(statusOut, "Assignees:   user:bob") {
+		t.Errorf("status output missing 'Assignees:   user:bob': %s", statusOut)
 	}
 	if !strings.Contains(statusOut, "Revisions:   1") {
 		t.Errorf("status output missing 'Revisions:   1': %s", statusOut)
@@ -481,8 +481,8 @@ func TestReview_TwoWriters_BareRemote(t *testing.T) {
 	for _, app := range resB.Review.Approvals {
 		subjects[app.Subject] = true
 	}
-	if !subjects["alice@example.com"] || !subjects["bob@example.com"] {
-		t.Errorf("approvals subjects = %v, want alice@example.com and bob@example.com", subjects)
+	if !subjects["email:alice@example.com"] || !subjects["email:bob@example.com"] {
+		t.Errorf("approvals subjects = %v, want email:alice@example.com and email:bob@example.com", subjects)
 	}
 }
 
@@ -1172,7 +1172,7 @@ func TestReviewApprove_Subject(t *testing.T) {
 		stdout.Reset()
 		stderr.Reset()
 		if code := run(context.Background(), []string{
-			"review", "approve", "-C", env.repoDir, reviewID, "-subject", "  Bob@Example.com ",
+			"review", "approve", "-C", env.repoDir, reviewID, "-subject", "  User:Bob ",
 		}, &stdout, &stderr); code != 0 {
 			t.Fatalf("review approve with explicit subject failed with %d; stderr: %s", code, stderr.String())
 		}
@@ -1185,26 +1185,21 @@ func TestReviewApprove_Subject(t *testing.T) {
 		for _, s := range subjects {
 			got[s] = true
 		}
-		if !got["alice@example.com"] {
-			t.Errorf("approval subjects = %q, missing alice@example.com (whitespace -subject must fall back to the writer email)", subjects)
+		if !got["email:alice@example.com"] {
+			t.Errorf("approval subjects = %q, missing email:alice@example.com (whitespace -subject must fall back to the writer person ID)", subjects)
 		}
-		if !got["bob@example.com"] {
-			t.Errorf("approval subjects = %q, missing bob@example.com (an explicit -subject must reach the op, normalized)", subjects)
+		if !got["user:bob"] {
+			t.Errorf("approval subjects = %q, missing user:bob (an explicit -subject must reach the op, normalized)", subjects)
 		}
 	})
 
-	// With no -subject at all and a whitespace-only user.email, the writer ID is
-	// the last link in the chain. A raw != "" guard on writer.Email would skip
-	// it and record the same anonymous approval.
-	t.Run("whitespace_writer_email", func(t *testing.T) {
+	// writ.personId overrides the derivation, which is how a workspace that
+	// identifies people by handle rather than by address configures itself —
+	// and how anyone keeps their address out of a public, unretractable log.
+	t.Run("person_id_override", func(t *testing.T) {
 		env := setupTestCLIEnv(t)
-		const writerID = "cccccccccccccccc"
-		setGitConfig(t, env.repoDir, "writ.writerId", writerID)
+		setGitConfig(t, env.repoDir, "writ.personId", "  User:Alice  ")
 		setupSigningKey(t, env.repoDir)
-		// Set the whitespace email after setupSigningKey: its getGitConfigAll
-		// probe trims and drops empty lines, so a whitespace user.email set
-		// before it would be overwritten with alice@example.com.
-		setGitConfig(t, env.repoDir, "user.email", "   ")
 
 		reviewID := openReviewWithRevision(t, env.repoDir)
 
@@ -1216,8 +1211,40 @@ func TestReviewApprove_Subject(t *testing.T) {
 		}
 
 		subjects := reviewApprovalSubjects(t, env.repoDir, reviewID)
-		if len(subjects) != 1 || subjects[0] != writerID {
-			t.Errorf("approval subjects = %q, want [%q] (whitespace user.email must fall back to the writer ID)", subjects, writerID)
+		if len(subjects) != 1 || subjects[0] != "user:alice" {
+			t.Errorf("approval subjects = %q, want [\"user:alice\"] (writ.personId overrides the email derivation, normalized)", subjects)
+		}
+	})
+
+	// With no -subject and nothing to derive a person identifier from, the
+	// chain ends. It used to end at the writer ID, which is not a person
+	// identifier at all: it has no scheme, so writing one would record a bare
+	// identifier that no conforming reader can interpret. Refusing and saying
+	// what to configure is the only honest option left.
+	t.Run("no_derivable_person_id", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setGitConfig(t, env.repoDir, "writ.writerId", "cccccccccccccccc")
+		setupSigningKey(t, env.repoDir)
+		// Set the whitespace email after setupSigningKey: its getGitConfigAll
+		// probe trims and drops empty lines, so a whitespace user.email set
+		// before it would be overwritten with alice@example.com.
+		setGitConfig(t, env.repoDir, "user.email", "   ")
+
+		reviewID := openReviewWithRevision(t, env.repoDir)
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{
+			"review", "approve", "-C", env.repoDir, reviewID,
+		}, &stdout, &stderr)
+		if code == 0 {
+			t.Fatalf("review approve should have failed with no derivable person identifier; stdout: %s", stdout.String())
+		}
+		if !strings.Contains(stderr.String(), "writ.personId") {
+			t.Errorf("error should name writ.personId, got %q", stderr.String())
+		}
+
+		if subjects := reviewApprovalSubjects(t, env.repoDir, reviewID); len(subjects) != 0 {
+			t.Errorf("approval subjects = %q, want none: the refused write must leave nothing behind", subjects)
 		}
 	})
 }

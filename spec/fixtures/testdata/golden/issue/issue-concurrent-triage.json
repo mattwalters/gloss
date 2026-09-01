@@ -7,8 +7,8 @@
         "description": "Testing concurrent triage operations",
         "state": "open",
         "assignees": [
-          "alice",
-          "charlie"
+          "user:alice",
+          "user:charlie"
         ],
         "labels": [
           "bug",

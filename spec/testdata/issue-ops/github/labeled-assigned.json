@@ -26,8 +26,8 @@
     {
       "body": {
         "add": [
-          "alice",
-          "bob"
+          "user:alice",
+          "user:bob"
         ]
       },
       "object_id": "0123456789abcdef0123456789abcdef",

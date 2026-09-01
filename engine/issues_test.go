@@ -46,10 +46,10 @@ func TestIssuesLifecycleAndFoldAgreement(t *testing.T) {
 	}
 
 	// 3. Assignees
-	if err := s.Issues.Assign(ctx, issueID, []string{"alice", "bob"}, nil); err != nil {
+	if err := s.Issues.Assign(ctx, issueID, []string{"user:alice", "user:bob"}, nil); err != nil {
 		t.Fatalf("Issues.Assign add failed: %v", err)
 	}
-	if err := s.Issues.Assign(ctx, issueID, []string{"charlie"}, []string{"alice"}); err != nil {
+	if err := s.Issues.Assign(ctx, issueID, []string{"user:charlie"}, []string{"user:alice"}); err != nil {
 		t.Fatalf("Issues.Assign remove failed: %v", err)
 	}
 
@@ -101,7 +101,7 @@ func TestIssuesLifecycleAndFoldAgreement(t *testing.T) {
 	if res.Issue.State != "closed" || res.Issue.Reason != "completed" {
 		t.Errorf("got State %q Reason %q", res.Issue.State, res.Issue.Reason)
 	}
-	if !reflect.DeepEqual(res.Issue.Assignees, []string{"bob", "charlie"}) {
+	if !reflect.DeepEqual(res.Issue.Assignees, []string{"user:bob", "user:charlie"}) {
 		t.Errorf("unexpected assignees: %+v", res.Issue.Assignees)
 	}
 	if !reflect.DeepEqual(res.Issue.Labels, []string{"bug", "parser"}) {
@@ -231,7 +231,7 @@ func TestIssuesValidationAndNotFound(t *testing.T) {
 	if err := s.Issues.SetState(ctx, missingID, writ.IssueState{State: "closed"}); !errors.Is(err, writ.ErrNotFound) {
 		t.Errorf("expected ErrNotFound for SetState on missing issue, got %v", err)
 	}
-	if err := s.Issues.Assign(ctx, missingID, []string{"alice"}, nil); !errors.Is(err, writ.ErrNotFound) {
+	if err := s.Issues.Assign(ctx, missingID, []string{"user:alice"}, nil); !errors.Is(err, writ.ErrNotFound) {
 		t.Errorf("expected ErrNotFound for Assign on missing issue, got %v", err)
 	}
 	if err := s.Issues.Label(ctx, missingID, []string{"bug"}, nil); !errors.Is(err, writ.ErrNotFound) {

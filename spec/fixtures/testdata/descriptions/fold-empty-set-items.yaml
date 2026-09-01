@@ -56,7 +56,7 @@ refs:
               op_type: assign
               op_version: 1
               body:
-                add: ["   ", "Alice@Example.test"]
+                add: ["   ", "email:Alice@Example.test"]
             expect: accept
 
           - id: alice-unlabel-with-empty

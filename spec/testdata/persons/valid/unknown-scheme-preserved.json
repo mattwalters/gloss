@@ -1,0 +1,10 @@
+{
+  "identifier": "keybase:alice",
+  "scheme": "keybase",
+  "value": "alice",
+  "normalized": "keybase:alice",
+  "distinct_from": [
+    "user:alice",
+    "email:alice@example.com"
+  ]
+}

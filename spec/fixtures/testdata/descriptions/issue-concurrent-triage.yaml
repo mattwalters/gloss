@@ -31,7 +31,7 @@ refs:
               op_type: assign
               op_version: 1
               body:
-                add: ["alice", "bob"]
+                add: ["user:alice", "email:bob@example.com"]
             expect: accept
 
           - id: alice-label-1
@@ -57,7 +57,7 @@ refs:
               op_type: assign
               op_version: 1
               body:
-                remove: ["bob"]
+                remove: ["email:bob@example.com"]
             expect: accept
 
           - id: alice-causal-label-remove
@@ -83,7 +83,7 @@ refs:
               op_type: assign
               op_version: 1
               body:
-                remove: ["charlie"]
+                remove: ["user:charlie"]
             expect: accept
 
           - id: alice-concurrent-remove-label
@@ -112,7 +112,7 @@ refs:
               op_type: assign
               op_version: 1
               body:
-                add: ["charlie"]
+                add: ["user:charlie"]
             expect: accept
 
           - id: bob-concurrent-add-label

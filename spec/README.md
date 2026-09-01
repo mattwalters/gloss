@@ -22,7 +22,7 @@ disagree, the fixtures win and the prose gets fixed.
 | `forward-compatibility.md` | Normative | Unknown-op handling, forward compatibility, version-bump semantics, and round-trip preservation rules |
 | `anchors.md` | Normative | Content-based comment anchors (v1): the dual-sided anchor object, context capture, re-anchoring and orphaning |
 | `fold.md` | Normative | Fold semantics: the input model, causality-monotone effective time `t*`, the deterministic total order, concurrency rules, the closed per-field merge strategy catalogue, tombstones, and state serialization |
-| `identifiers.md` | Normative | Workspace-global IDs, repo designators, cross-repo references, workspace repo, and reference resolution |
+| `identifiers.md` | Normative | Workspace-global IDs, repo designators, cross-repo references, workspace repo, reference resolution, and person identifiers |
 | `review-ops.md` | Normative | The review family operation vocabulary (v1): review creation, revisions, status transitions, assignments, approvals, and CI statuses |
 | `comments.md` | Normative | Comment op vocabulary (v1): object model, create/edit/delete ops, threading, anchor reference, GitHub shapes |
 | `issue-ops.md` | Normative | The issue family operation vocabulary (v1): issue creation, metadata updates, state transitions, assignments, labels, and cross-references |
@@ -84,7 +84,7 @@ spec/
 ├── forward-compatibility.md — normative: unknown-op and forward-compatibility rules
 ├── anchors.md              — normative: content-based comment anchors (v1)
 ├── fold.md                 — normative: fold semantics, total order, and merge strategy catalogue
-├── identifiers.md          — normative: workspace-global IDs, references & workspace repo
+├── identifiers.md          — normative: workspace-global IDs, references, workspace repo & person identifiers
 ├── review-ops.md           — normative: review family operation vocabulary (v1)
 ├── comments.md             — normative: comment op vocabulary (v1)
 ├── issue-ops.md            — normative: issue family operation vocabulary (v1)
@@ -120,6 +120,9 @@ spec/
 │   ├── references/
 │   │   ├── valid/          — references & resolution vectors that must validate
 │   │   └── invalid/        — invalid references & index.json of expected rejections
+│   ├── persons/
+│   │   ├── valid/          — person identifiers with their split, normalization and equality
+│   │   └── invalid/        — person identifiers the grammar or bounds reject (+ index.json)
 │   ├── review-ops/
 │   │   ├── valid/          — review op instances that must validate
 │   │   ├── invalid/        — review op instances that must be rejected (+ index.json)

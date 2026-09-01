@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"unicode/utf8"
 
+	"github.com/writtendev/writ/engine/internal/person"
 	"github.com/writtendev/writ/engine/resolve"
 	"github.com/writtendev/writ/engine/state"
 )
@@ -85,35 +86,63 @@ func ResolveReference(ref string, localRepoID string, registry []RepoEntry) (Res
 }
 
 // NormalizePerson normalizes a person identifier string per spec/identifiers.md
-// (trimmed leading/trailing whitespace, lowercase).
+// (scheme lowercased; value trimmed and case-folded).
 func NormalizePerson(s string) string {
 	return state.NormalizePerson(s)
 }
 
-// maxPersonIDLen is the person identifier length bound from spec/identifiers.md,
-// mirroring maxLength in the person-id definition of
-// spec/schemas/identifiers.schema.json.
-const maxPersonIDLen = 320
-
-// normalizePersonBounded normalizes a person identifier and enforces the length
-// bound the person-id schema declares, so that a writer cannot append an op the
-// schema would reject. Ops are signed, immutable and append-only, so an
-// unbounded identifier is permanent unreclaimable weight; the only place to
-// stop it is before the write.
+// normalizePersonBounded normalizes a person identifier and enforces the
+// grammar and the bounds the person-id schema declares, so that a writer
+// cannot append an op the schema would reject. Ops are signed, immutable and
+// append-only, so a malformed or unbounded identifier is permanent
+// unreclaimable weight; the only place to stop it is before the write.
 //
-// The bound counts code points, matching JSON Schema maxLength, so the engine
-// accepts exactly what spec/schemas/identifiers.schema.json accepts.
+// The value bound counts code points, matching JSON Schema maxLength, and is
+// applied to the normalized value, so the engine accepts exactly what
+// spec/schemas/identifiers.schema.json accepts.
 //
-// Over-length input is an error, never a truncation: two distinct identifiers
-// truncated to the same bytes would collapse into one person for assignment,
-// approval keying and set membership.
+// A violation is an error, never a truncation and never a repair: two distinct
+// identifiers truncated to the same string would collapse into one person for
+// assignment, approval keying and set membership, and a bare identifier
+// silently given a scheme would guess at which person is meant.
 //
 // An identifier that normalizes to the empty string is returned as such, not
-// rejected — callers omit the key, which is the schema's minLength: 1 guard.
+// rejected — callers omit the key, which is the schema's minLength guard.
 func normalizePersonBounded(what, s string) (string, error) {
 	norm := state.NormalizePerson(s)
-	if n := utf8.RuneCountInString(norm); n > maxPersonIDLen {
-		return "", fmt.Errorf("writ: %s is %d characters, over the %d-character person identifier limit", what, n, maxPersonIDLen)
+	if norm == "" {
+		return "", nil
 	}
-	return norm, nil
+	scheme, value, _ := person.Split(norm)
+	switch p := person.Check(norm); p {
+	case person.Valid:
+		return norm, nil
+	case person.MissingScheme:
+		return "", fmt.Errorf("writ: %s %s carries no scheme: a person identifier is scheme:value, for example %q or %q",
+			what, quoteBounded(norm), "email:alice@example.com", "user:alice")
+	case person.SchemeCharset:
+		return "", fmt.Errorf("writ: %s has scheme %s, which must match [a-z][a-z0-9+.-]*", what, quoteBounded(scheme))
+	case person.SchemeTooLong:
+		return "", fmt.Errorf("writ: %s has a %d-character scheme, over the %d-character person identifier scheme limit",
+			what, utf8.RuneCountInString(scheme), person.MaxSchemeLen)
+	case person.EmptyValue:
+		return "", fmt.Errorf("writ: %s has scheme %q and an empty value", what, scheme)
+	case person.ValueTooLong:
+		return "", fmt.Errorf("writ: %s value is %d characters, over the %d-character person identifier limit",
+			what, utf8.RuneCountInString(value), person.MaxValueLen)
+	default:
+		return "", fmt.Errorf("writ: %s is not a conforming person identifier: %s", what, p)
+	}
+}
+
+// quoteBounded quotes s for an error message without reproducing an identifier
+// that may be up to 353 characters long. It is display trimming and nothing
+// else: no caller ever sees the shortened string as a value.
+func quoteBounded(s string) string {
+	const max = 64
+	if utf8.RuneCountInString(s) <= max {
+		return fmt.Sprintf("%q", s)
+	}
+	r := []rune(s)
+	return fmt.Sprintf("%q...", string(r[:max]))
 }

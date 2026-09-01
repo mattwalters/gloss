@@ -1,0 +1,112 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/0123456789abcdef/review",
+      "commit": "a0788e2cd6352d8c1c5e8b20483982f03af74a0d"
+    },
+    {
+      "name": "refs/writ/fedcba9876543210/review",
+      "commit": "cd7ecc7a05e8b61eb5e7785099672d34ba87db26"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/0123456789abcdef/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "9aecae7a2e34d7bf0e1c1f4c51f1bd916677c6dd",
+          "tree": "e2d7c3608a7aeef9cf79de4c7780b61e9582b5db",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-03-01T00:00:00Z",
+          "message": "writ: create review/r-person-schemes\n",
+          "signed": true
+        },
+        {
+          "sha": "cb64206fea404a527a7b760df2ce32222514fd99",
+          "tree": "ac01bcefcf591e3739606466a3b1d5fef18021a8",
+          "parents": [
+            "9aecae7a2e34d7bf0e1c1f4c51f1bd916677c6dd"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-03-01T00:01:00Z",
+          "message": "writ: revision review/r-person-schemes\n",
+          "signed": true
+        },
+        {
+          "sha": "3876d42a2c932db7a66c559e2e13e3acd05439d7",
+          "tree": "85ef696352ec901840dce7a7cbfbaf35cb04b4e6",
+          "parents": [
+            "cb64206fea404a527a7b760df2ce32222514fd99"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-03-01T00:02:00Z",
+          "message": "writ: assign review/r-person-schemes\n",
+          "signed": true
+        },
+        {
+          "sha": "5f5b0aa6d2150cf4836d08406ddfef1774dd361b",
+          "tree": "d3037aeda255699f79f1cd65023b97f28b3ca0c0",
+          "parents": [
+            "3876d42a2c932db7a66c559e2e13e3acd05439d7"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-03-01T00:02:30Z",
+          "message": "writ: assign review/r-person-schemes\n",
+          "signed": true
+        },
+        {
+          "sha": "a9fd733e841bad287aa91e96c5d8e06358f694d7",
+          "tree": "aca969f80fa6a4d548b1ea8df9ed3bcde3d3d580",
+          "parents": [
+            "5f5b0aa6d2150cf4836d08406ddfef1774dd361b"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-03-01T00:03:00Z",
+          "message": "writ: assign review/r-person-schemes\n",
+          "signed": true
+        },
+        {
+          "sha": "a0788e2cd6352d8c1c5e8b20483982f03af74a0d",
+          "tree": "67f3964acb71aaa44f07b454a23f6604a35afc80",
+          "parents": [
+            "a9fd733e841bad287aa91e96c5d8e06358f694d7"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-03-01T00:04:00Z",
+          "message": "writ: approval review/r-person-schemes\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/fedcba9876543210/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "13f6b4f1a66eb2abc6bf346a0f3e258d98675adc",
+          "tree": "8bec20793ce9f64ef8b7bf06e0d12542bca8fd62",
+          "parents": [
+            "a9fd733e841bad287aa91e96c5d8e06358f694d7"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-03-01T00:05:00Z",
+          "message": "writ: approval review/r-person-schemes\n",
+          "signed": true
+        },
+        {
+          "sha": "cd7ecc7a05e8b61eb5e7785099672d34ba87db26",
+          "tree": "5a20f3a94e01782859033447da1d7629b94b1b44",
+          "parents": [
+            "13f6b4f1a66eb2abc6bf346a0f3e258d98675adc"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-03-01T00:06:00Z",
+          "message": "writ: approval review/r-person-schemes\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

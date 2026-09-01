@@ -15,17 +15,17 @@
           "t_star": 1767225660
         },
         {
-          "commit": "132b8279bcd7c1abc7bcf112452c57e6ca3ba649",
+          "commit": "7b95ddb27cca52d70d544e7a30205fdd0d20a2a4",
           "label": "alice-carol-normalized",
           "t_star": 1767225720
         },
         {
-          "commit": "acffa1f73f0eaf4cac781f71f07326a8f3a8ea25",
+          "commit": "08c3949c34705af90f818c5dd43a3c4e867da879",
           "label": "bob-dave-denormalized",
           "t_star": 1767225780
         },
         {
-          "commit": "dc65afd07abc529e9b04b90c941907bd0c142391",
+          "commit": "4a7022ced2c4a3da5ccb67245106d78a850f7459",
           "label": "alice-carol-denormalized",
           "t_star": 1767225840
         }
@@ -40,14 +40,14 @@
         "message": [
           {
             "key": [
-              "carol@example.com",
+              "email:carol@example.com",
               "0000000000000000000000000000000000000002"
             ],
             "value": "Same Carol, denormalized subject, later write wins"
           },
           {
             "key": [
-              "dave@example.com",
+              "email:dave@example.com",
               "0000000000000000000000000000000000000002"
             ],
             "value": "Dave's only write is denormalized"
@@ -56,14 +56,14 @@
         "revision": [
           {
             "key": [
-              "carol@example.com",
+              "email:carol@example.com",
               "0000000000000000000000000000000000000002"
             ],
             "value": "0000000000000000000000000000000000000002"
           },
           {
             "key": [
-              "dave@example.com",
+              "email:dave@example.com",
               "0000000000000000000000000000000000000002"
             ],
             "value": "0000000000000000000000000000000000000002"
@@ -72,31 +72,31 @@
         "subject": [
           {
             "key": [
-              "carol@example.com",
+              "email:carol@example.com",
               "0000000000000000000000000000000000000002"
             ],
-            "value": "carol@example.com"
+            "value": "email:carol@example.com"
           },
           {
             "key": [
-              "dave@example.com",
+              "email:dave@example.com",
               "0000000000000000000000000000000000000002"
             ],
-            "value": "dave@example.com"
+            "value": "email:dave@example.com"
           }
         ],
         "title": "Denormalized Approval Subject Test",
         "verdict": [
           {
             "key": [
-              "carol@example.com",
+              "email:carol@example.com",
               "0000000000000000000000000000000000000002"
             ],
             "value": "request-changes"
           },
           {
             "key": [
-              "dave@example.com",
+              "email:dave@example.com",
               "0000000000000000000000000000000000000002"
             ],
             "value": "approve"

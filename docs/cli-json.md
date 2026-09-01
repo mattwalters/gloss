@@ -108,7 +108,7 @@ Fetches detailed status and folded state for a single code review.
 | `author` | object | Creator identity: `{ "name": string, "email": string }`. |
 | `created_at` | string | Creation timestamp in RFC 3339 UTC. |
 | `updated_at` | string | Last modification timestamp in RFC 3339 UTC. |
-| `assignees` | array of strings | Assigned reviewer emails or user identities: `[ string ]`. |
+| `assignees` | array of strings | Assigned reviewers as scheme-prefixed person identifiers (`email:alice@example.com`, `user:alice`): `[ string ]`. |
 | `labels` | array of strings | Labels attached to the review, converged from concurrent add/remove operations. |
 | `links` | array of objects | Cross-reference links: `[ { "target": string, "target_type": string, "relation": string } ]`. `target` is either a bare object ID (same repo) or `<repo-id>#<object-id>` (cross-repo). |
 | `revisions` | array of objects | Pushed revisions: `[ { "base": string, "head": string } ]`. |
@@ -134,7 +134,7 @@ Fetches detailed status and folded state for a single code review.
     "created_at": "2026-01-01T00:00:00Z",
     "updated_at": "2026-01-01T00:05:00Z",
     "assignees": [
-      "bob@example.com"
+      "user:bob"
     ],
     "labels": [
       "area/engine"
@@ -154,7 +154,7 @@ Fetches detailed status and folded state for a single code review.
     ],
     "approvals": [
       {
-        "subject": "bob@example.com",
+        "subject": "user:bob",
         "revision": "1111111111111111111111111111111111111111",
         "verdict": "approve",
         "message": "Looks great!"
@@ -237,7 +237,7 @@ Fetches detailed status and folded state for a single issue.
 | `author` | object | Creator identity: `{ "name": string, "email": string }`. |
 | `created_at` | string | Creation timestamp in RFC 3339 UTC. |
 | `updated_at` | string | Last modification timestamp in RFC 3339 UTC. |
-| `assignees` | array of strings | Assignee names or emails, converged from concurrent add/remove operations. |
+| `assignees` | array of strings | Assignees as scheme-prefixed person identifiers (`email:alice@example.com`, `user:alice`), converged from concurrent add/remove operations. |
 | `labels` | array of strings | Labels attached to the issue, converged from concurrent add/remove operations. |
 | `links` | array of objects | Cross-reference links: `[ { "target": string, "target_type": string, "relation": string } ]`. `target` is either a bare object ID (same repo) or `<repo-id>#<object-id>` (cross-repo). |
 | `unknown_ops` | array of objects | Preserved forward-compatibility operations: `[ { "commit": string, "op_type": string, "op_version": integer } ]`. |
@@ -259,7 +259,7 @@ Fetches detailed status and folded state for a single issue.
     },
     "created_at": "2026-01-01T00:00:00Z",
     "updated_at": "2026-01-01T00:05:00Z",
-    "assignees": ["bob@example.com"],
+    "assignees": ["user:bob"],
     "labels": ["bug"],
     "links": [
       {
@@ -369,7 +369,7 @@ writ issue list --json | jq -r '.data[] | select(.state == "open") | "\(.object_
 
 ### Check if an issue is assigned to a user
 ```bash
-writ issue status <id> --json | jq -e --arg who "bob@example.com" '.data.assignees | index($who)' > /dev/null
+writ issue status <id> --json | jq -e --arg who "user:bob" '.data.assignees | index($who)' > /dev/null
 ```
 
 ### Check total unsynced operations before network sync

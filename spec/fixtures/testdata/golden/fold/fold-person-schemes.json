@@ -1,0 +1,159 @@
+{
+  "objects": [
+    {
+      "object_id": "r-person-schemes",
+      "object_type": "review",
+      "total_order": [
+        {
+          "commit": "9aecae7a2e34d7bf0e1c1f4c51f1bd916677c6dd",
+          "label": "alice-create",
+          "t_star": 1772323200
+        },
+        {
+          "commit": "cb64206fea404a527a7b760df2ce32222514fd99",
+          "label": "alice-revision",
+          "t_star": 1772323260
+        },
+        {
+          "commit": "3876d42a2c932db7a66c559e2e13e3acd05439d7",
+          "label": "alice-assign-cross-scheme",
+          "t_star": 1772323320
+        },
+        {
+          "commit": "5f5b0aa6d2150cf4836d08406ddfef1774dd361b",
+          "label": "alice-assign-padded-value",
+          "t_star": 1772323350
+        },
+        {
+          "commit": "a9fd733e841bad287aa91e96c5d8e06358f694d7",
+          "label": "alice-remove-user-scheme",
+          "t_star": 1772323380
+        },
+        {
+          "commit": "a0788e2cd6352d8c1c5e8b20483982f03af74a0d",
+          "label": "alice-approval-quoted-local-part",
+          "t_star": 1772323440
+        },
+        {
+          "commit": "13f6b4f1a66eb2abc6bf346a0f3e258d98675adc",
+          "label": "bob-approval-user-scheme",
+          "t_star": 1772323500
+        },
+        {
+          "commit": "cd7ecc7a05e8b61eb5e7785099672d34ba87db26",
+          "label": "bob-approval-email-scheme",
+          "t_star": 1772323560
+        }
+      ],
+      "state": {
+        "add": [
+          "email:alice@example.com",
+          "keybase:alice",
+          "user:alice",
+          "user:ci",
+          "user:dana"
+        ],
+        "base": [
+          "0000000000000000000000000000000000000001"
+        ],
+        "head": [
+          "0000000000000000000000000000000000000002"
+        ],
+        "message": [
+          {
+            "key": [
+              "email:\"a:b\"@example.com",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "Approval subject with a colon inside a quoted local part"
+          },
+          {
+            "key": [
+              "email:bob@example.com",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "Same human, other scheme, denormalized; a separate key"
+          },
+          {
+            "key": [
+              "user:bob",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "Bob under the user scheme"
+          }
+        ],
+        "remove": [],
+        "revision": [
+          {
+            "key": [
+              "email:\"a:b\"@example.com",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "0000000000000000000000000000000000000002"
+          },
+          {
+            "key": [
+              "email:bob@example.com",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "0000000000000000000000000000000000000002"
+          },
+          {
+            "key": [
+              "user:bob",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "0000000000000000000000000000000000000002"
+          }
+        ],
+        "subject": [
+          {
+            "key": [
+              "email:\"a:b\"@example.com",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "email:\"a:b\"@example.com"
+          },
+          {
+            "key": [
+              "email:bob@example.com",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "email:bob@example.com"
+          },
+          {
+            "key": [
+              "user:bob",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "user:bob"
+          }
+        ],
+        "title": "Person Identifier Schemes Test",
+        "verdict": [
+          {
+            "key": [
+              "email:\"a:b\"@example.com",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "approve"
+          },
+          {
+            "key": [
+              "email:bob@example.com",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "approve"
+          },
+          {
+            "key": [
+              "user:bob",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "request-changes"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -15,7 +15,7 @@
           "t_star": 1769904060
         },
         {
-          "commit": "c43a9ce6cd1ffecd5ea887d6b32ce4670347270d",
+          "commit": "305a46010f13ed2d9f777e909c44fe9bd083ae41",
           "label": "alice-assign-with-empty",
           "t_star": 1769904120
         },
@@ -25,7 +25,7 @@
           "t_star": 1769904150
         },
         {
-          "commit": "8bd025c54495f2a7318c270e7b68f396d5e2b3c5",
+          "commit": "d139292b2c8d146028a3da6e12d258fad0670294",
           "label": "alice-unlabel-with-empty",
           "t_star": 1769904180
         }
@@ -33,8 +33,8 @@
       "state": {
         "add": [
           "  ",
-          "alice@example.test",
           "area/fold",
+          "email:alice@example.test",
           "priority/high",
           "wip"
         ],
@@ -50,12 +50,12 @@
       "object_type": "review",
       "total_order": [
         {
-          "commit": "fefb2b23e9eaff8f3c98416b8f762e74781438c3",
+          "commit": "3fdb13be00209578f772e3175e108b43b0a6bbd6",
           "label": "alice-create-empty-only",
           "t_star": 1769904240
         },
         {
-          "commit": "852719067c6496273ecd5d971a3dbb24f99676b4",
+          "commit": "607c6392536d1ebea603dee861971ed30b256d48",
           "label": "alice-label-empty-only",
           "t_star": 1769904300
         }

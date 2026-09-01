@@ -637,3 +637,52 @@ func TestInit_WorktreeConfigAndExtensions(t *testing.T) {
 		}
 	})
 }
+
+// TestInit_PersonID covers the three states of the person identifier writ init
+// reports: derived from user.email, overridden by writ.personId, and not
+// derivable at all. The last one is a warning rather than a failure — init is
+// still worth completing — but it has to say which key to set, because there is
+// no fallback: a writer-id has no scheme and is not a person identifier.
+func TestInit_PersonID(t *testing.T) {
+	t.Run("derived from user.email", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setGitConfig(t, env.repoDir, "user.email", "Alice@Example.COM")
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+			t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
+		}
+		if want := "Person ID: email:alice@example.com (derived from user.email)"; !strings.Contains(stdout.String(), want) {
+			t.Errorf("init output missing %q:\n%s", want, stdout.String())
+		}
+	})
+
+	t.Run("writ.personId override", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setGitConfig(t, env.repoDir, "writ.personId", "  User:Alice  ")
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+			t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
+		}
+		if want := "Person ID: user:alice (from writ.personId)"; !strings.Contains(stdout.String(), want) {
+			t.Errorf("init output missing %q:\n%s", want, stdout.String())
+		}
+	})
+
+	t.Run("nothing to derive from", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setGitConfig(t, env.repoDir, "user.email", "   ")
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+			t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
+		}
+		if strings.Contains(stdout.String(), "Person ID:") {
+			t.Errorf("init reported a person ID it could not derive:\n%s", stdout.String())
+		}
+		if !strings.Contains(stderr.String(), "writ.personId") {
+			t.Errorf("init should say which key to set, got stderr:\n%s", stderr.String())
+		}
+	})
+}

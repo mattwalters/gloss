@@ -17,9 +17,10 @@
   "$defs": {
     "person-id": {
       "type": "string",
-      "minLength": 1,
-      "maxLength": 320,
-      "description": "Person identifier: normalized collaborative actor identity (email address, lowercase, trimmed whitespace) per spec/identifiers.md. Bounded at 320 code points as a storage cap, not an RFC 5321 conformance check; 320 is that RFC's octet ceiling (64-octet local part + @ + 255-octet domain), which coincides with code points for the ASCII addresses this format targets."
+      "minLength": 3,
+      "maxLength": 353,
+      "pattern": "^[a-z][a-z0-9+.-]{0,31}:[\\s\\S]{1,320}$",
+      "description": "Person identifier: scheme \":\" value, split on the FIRST colon (an email value may carry a colon in a quoted local part), per spec/identifiers.md. The scheme matches [a-z][a-z0-9+.-]* and is at most 32 characters; the value is 1 to 320 code points. There is no bare, colonless form and no implicit scheme. maxLength 353 is derived (32 + 1 + 320) and stated so a validator seeing only the flat string has a number. The bounds are a resource cap, not an RFC 5321 conformance check: Writ does not parse email addresses, and length is the only shape constraint applied to the value. Bounds are enforced by rejection, never truncation. The value bound applies to the normalized value, which producers MUST have written."
     },
     "object-id": {
       "type": "string",

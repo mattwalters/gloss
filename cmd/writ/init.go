@@ -118,7 +118,27 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 		fmt.Fprintf(stdout, "Repo ID: %s (already configured)\n", repoID)
 	}
 
-	// 3. Load identity to report author and key state
+	// 3. Report the person identifier this repo will write into op payloads.
+	// It is derived, not minted: writ.personId when set, else email:<user.email>.
+	// Reported separately from the identity load below because a repo with no
+	// signing key configured still has a person identifier, and because
+	// "which person am I?" is the question a new user asks first.
+	if gitCfg, cfgErr := identity.ReadGitConfig(ctx, repoRoot); cfgErr == nil {
+		personID, personErr := identity.DerivePersonID(gitCfg)
+		switch {
+		case personErr != nil:
+			fmt.Fprintf(stderr, "warning: no person identifier: %v\n", personErr)
+			fmt.Fprintf(stderr, "Configure one of:\n")
+			fmt.Fprintf(stderr, "  git config %s user:<handle>\n", identity.PersonIDKey)
+			fmt.Fprintf(stderr, "  git config user.email <address>\n")
+		case gitCfg["writ.personid"] != "":
+			fmt.Fprintf(stdout, "Person ID: %s (from %s)\n", personID, identity.PersonIDKey)
+		default:
+			fmt.Fprintf(stdout, "Person ID: %s (derived from user.email)\n", personID)
+		}
+	}
+
+	// 4. Load identity to report author and key state
 	ident, err := identity.Load(ctx, repoRoot)
 	if err != nil {
 		var cfgErr *identity.ConfigError
@@ -149,7 +169,7 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 		}
 	}
 
-	// 4. Configure fetch refspecs for remotes
+	// 5. Configure fetch refspecs for remotes
 	remotes := fs.Args()
 	if len(remotes) == 0 {
 		cmdRemote := exec.CommandContext(ctx, "git", "remote")
@@ -191,7 +211,7 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 		}
 	}
 
-	// 5. Register repository in workspace if writ.workspace is configured
+	// 6. Register repository in workspace if writ.workspace is configured
 	gitCfg, _ := identity.ReadGitConfig(ctx, repoRoot)
 	if rawWs, ok := gitCfg["writ.workspace"]; ok && strings.TrimSpace(rawWs) != "" {
 		wsPath := strings.TrimSpace(rawWs)

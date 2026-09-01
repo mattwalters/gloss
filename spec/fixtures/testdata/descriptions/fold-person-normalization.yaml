@@ -2,7 +2,7 @@ name: fold-person-normalization
 description: >
   Exercise person identifier normalization (email address, whitespace trimming,
   case folding, byte equality) on review assignees and review approvals across
-  multiple writers. Verifies that '  Alice@Example.COM  ' and 'alice@example.com'
+  multiple writers. Verifies that '  Email:Alice@Example.COM  ' and 'email:alice@example.com'
   denote the same collaborative identity for add-wins assignees and keyed-lww approvals.
 
 refs:
@@ -45,7 +45,7 @@ refs:
               op_type: assign
               op_version: 1
               body:
-                add: ["  Alice@Example.COM  ", "Bob@Example.Com"]
+                add: ["  Email:Alice@Example.COM  ", "EMAIL:Bob@Example.Com"]
             expect: accept
 
           - id: alice-reassign
@@ -58,8 +58,8 @@ refs:
               op_type: assign
               op_version: 1
               body:
-                remove: ["alice@example.com"]
-                add: [" Charlie@Example.COM "]
+                remove: ["email:alice@example.com"]
+                add: [" email:Charlie@Example.COM "]
             expect: accept
 
           - id: alice-approval-mixed
@@ -74,7 +74,7 @@ refs:
               body:
                 revision: "0000000000000000000000000000000000000002"
                 verdict: approve
-                subject: "  Carol@Example.COM  "
+                subject: "  Email:Carol@Example.COM  "
                 message: "Approved with whitespace subject"
             expect: accept
 
@@ -90,7 +90,7 @@ refs:
               body:
                 revision: "0000000000000000000000000000000000000002"
                 verdict: request-changes
-                subject: "carol@example.com"
+                subject: "email:carol@example.com"
                 message: "Updated verdict under normalized subject"
             expect: accept
 
@@ -107,6 +107,6 @@ refs:
               op_type: assign
               op_version: 1
               body:
-                remove: ["bob@example.com"]
-                add: ["  DAVID@EXAMPLE.COM  "]
+                remove: ["email:bob@example.com"]
+                add: ["  EMAIL:DAVID@EXAMPLE.COM  "]
             expect: accept

@@ -6,8 +6,27 @@ import (
 	"strings"
 )
 
+// splitPerson splits a person identifier into scheme and value on the FIRST
+// colon, per spec/identifiers.md. The first colon and not "a colon": an email
+// address may legally carry a colon inside a quoted local part, so
+// `email:"a:b"@example.com` is scheme `email` with value `"a:b"@example.com`.
+func splitPerson(s string) (scheme, value string, ok bool) {
+	i := strings.IndexByte(s, ':')
+	if i < 0 {
+		return "", s, false
+	}
+	return s[:i], s[i+1:], true
+}
+
 // normalizePerson normalizes a person identifier string per
-// spec/identifiers.md (trimmed leading/trailing whitespace, lowercase).
+// spec/identifiers.md: the scheme is lowercased, and the value is trimmed of
+// leading and trailing whitespace and case-folded. The exact case-folding
+// algorithm is not pinned here and may come to differ per scheme (WRIT-117).
+//
+// A string carrying no colon is not a conforming identifier; it is folded as
+// a flat string and preserved rather than rejected, because what a reader
+// does with a non-conforming identifier is a separate decision
+// (WRIT-124/126).
 //
 // The reference fold is deliberately standalone — it is what independent
 // implementations read — so it carries its own copy of the rule rather than
@@ -15,7 +34,12 @@ import (
 // reachable from here in any case. TestReffoldNormalizePersonMatchesEngine
 // binds the two together so they cannot drift.
 func normalizePerson(s string) string {
-	return strings.ToLower(strings.TrimSpace(s))
+	s = strings.TrimSpace(s)
+	scheme, value, ok := splitPerson(s)
+	if !ok {
+		return strings.ToLower(s)
+	}
+	return strings.ToLower(scheme) + ":" + strings.ToLower(strings.TrimSpace(value))
 }
 
 // EffectiveTimes computes the causality-monotone effective timestamp

@@ -11,6 +11,7 @@ import (
 
 	"github.com/writtendev/writ/cmd/writ/internal/wire"
 	"github.com/writtendev/writ/engine"
+	"github.com/writtendev/writ/engine/identity"
 	"github.com/writtendev/writ/engine/state"
 )
 
@@ -411,7 +412,7 @@ func newReviewApproveFlagSet(defaultDir string) (*flag.FlagSet, *reviewApproveOp
 	fs.StringVar(&opts.verdict, "verdict", "approve", "Verdict `approve|request-changes|none` (default: approve)")
 	fs.StringVar(&opts.revision, "revision", "", "Revision commit ref or SHA `<ref>` (defaults to latest head)")
 	fs.StringVar(&opts.message, "m", "", "Verdict message `<msg>`")
-	fs.StringVar(&opts.subject, "subject", "", "Subject identity `<s>` (defaults to writer email or writer ID)")
+	fs.StringVar(&opts.subject, "subject", "", "Subject person identifier `<s>`, scheme:value (defaults to writ.personId, else email:<user.email>)")
 	fs.Usage = func() {
 		renderUsage(fs.Output(), []string{"review", "approve"}, reviewApproveCmd)
 	}
@@ -480,10 +481,13 @@ func runReviewApprove(ctx context.Context, defaultDir string, args []string, std
 	// skip the writer fallback, and record a silently anonymous approval.
 	subject := state.NormalizePerson(opts.subject)
 	if subject == "" {
-		writer := store.Writer()
-		subject = state.NormalizePerson(writer.Email)
+		// The fallback is the writer's own person identifier — writ.personId,
+		// or email:<user.email>. There is no fallback past that: a writer-id
+		// carries no scheme, so substituting one would write a bare identifier,
+		// which is not a person identifier at all.
+		subject = store.Writer().PersonID
 		if subject == "" {
-			subject = writer.ID
+			return renderErr(stderr, fmt.Errorf("writ: no approval subject: pass -subject, or configure %s (for example %q) or user.email", identity.PersonIDKey, "user:alice"))
 		}
 	}
 

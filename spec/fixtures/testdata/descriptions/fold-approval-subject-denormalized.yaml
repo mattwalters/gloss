@@ -1,7 +1,7 @@
 name: fold-approval-subject-denormalized
 description: >
   Approval ops whose LWW-winning write carries a denormalized subject
-  ('  Carol@Example.COM  ', ' DAVE@Example.com '), as a pre-normalization or
+  ('  Email:Carol@Example.COM  ', ' EMAIL:DAVE@Example.com '), as a pre-normalization or
   foreign client would emit. Verifies that keyed-lww normalizes the stored
   person identifier and not merely the composite key, so the folded 'subject'
   entry reads back normalized and agrees with the typed review reducer.
@@ -48,7 +48,7 @@ refs:
               body:
                 revision: "0000000000000000000000000000000000000002"
                 verdict: approve
-                subject: "carol@example.com"
+                subject: "email:carol@example.com"
                 message: "Carol approves under a normalized subject"
             expect: accept
 
@@ -64,7 +64,7 @@ refs:
               body:
                 revision: "0000000000000000000000000000000000000002"
                 verdict: request-changes
-                subject: "  Carol@Example.COM  "
+                subject: "  Email:Carol@Example.COM  "
                 message: "Same Carol, denormalized subject, later write wins"
             expect: accept
 
@@ -83,6 +83,6 @@ refs:
               body:
                 revision: "0000000000000000000000000000000000000002"
                 verdict: approve
-                subject: " DAVE@Example.com "
+                subject: " EMAIL:DAVE@Example.com "
                 message: "Dave's only write is denormalized"
             expect: accept

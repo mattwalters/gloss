@@ -1,0 +1,9 @@
+{
+  "identifier": "user:ci",
+  "scheme": "user",
+  "value": "ci",
+  "normalized": "user:ci",
+  "distinct_from": [
+    "email:ci@example.com"
+  ]
+}

@@ -42,9 +42,15 @@ type SigningKey struct {
 // Identity represents the resolved writer identity and signing-key configuration
 // for the local repository.
 type Identity struct {
-	WriterID       WriterID
-	Author         Author
-	Key            SigningKey
+	WriterID WriterID
+	Author   Author
+	Key      SigningKey
+	// PersonID is the local writer's person identifier per
+	// spec/identifiers.md: writ.personId when set, otherwise
+	// email:<normalized user.email>. It is the collaborative actor this
+	// writer refers to itself as, and is unrelated to WriterID, which
+	// partitions the git refspace.
+	PersonID       string
 	AllowedSigners string // gpg.ssh.allowedSignersFile, "" when unset
 }
 
@@ -91,12 +97,21 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 		}
 	}
 
+	// 3b. Person identifier: writ.personId, else email:<normalized user.email>.
+	// A configuration that yields no conforming identifier is not fatal here:
+	// reading a repository does not need one, and failing Load would take the
+	// whole store down over a field only the write paths use. Those paths
+	// refuse the write instead, and writ init reports the derivation error
+	// where a user is looking for it.
+	personID, _ := DerivePersonID(cfg)
+
 	baseIdent := Identity{
 		WriterID: writerID,
 		Author: Author{
 			Name:  name,
 			Email: email,
 		},
+		PersonID: personID,
 	}
 
 	// 4. GPG Format: gpg.format (must be ssh)
@@ -151,6 +166,7 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 			Name:  name,
 			Email: email,
 		},
+		PersonID:       personID,
 		Key:            signingKey,
 		AllowedSigners: allowedSigners,
 	}, nil

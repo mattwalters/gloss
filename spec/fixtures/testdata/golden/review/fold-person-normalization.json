@@ -5,8 +5,8 @@
       "review": {
         "title": "Person Identifier Normalization Test",
         "assignees": [
-          "charlie@example.com",
-          "david@example.com"
+          "email:charlie@example.com",
+          "email:david@example.com"
         ],
         "revisions": [
           {
@@ -16,7 +16,7 @@
         ],
         "approvals": [
           {
-            "subject": "carol@example.com",
+            "subject": "email:carol@example.com",
             "revision": "0000000000000000000000000000000000000002",
             "verdict": "request-changes",
             "message": "Updated verdict under normalized subject"

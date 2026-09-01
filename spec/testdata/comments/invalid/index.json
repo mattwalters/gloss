@@ -11,6 +11,10 @@
     "kind": "schema",
     "reason": "anchor must conform to anchor schema (missing required fields)"
   },
+  "bare-resolved-by.json": {
+    "kind": "schema",
+    "reason": "resolve body resolved_by must carry a scheme; a bare, colonless identifier is not a person identifier"
+  },
   "empty-text-create.json": {
     "kind": "schema",
     "reason": "create body text must be non-empty"
@@ -77,7 +81,7 @@
   },
   "overlong-resolved-by.json": {
     "kind": "schema",
-    "reason": "resolve body resolved_by must be at most 320 characters (person-id bound)"
+    "reason": "resolve body resolved_by value must be at most 320 code points (person-id bound)"
   },
   "self-reply.json": {
     "kind": "invariant",
