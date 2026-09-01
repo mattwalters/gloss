@@ -246,7 +246,7 @@ func TestCommentsResolveWorkflow(t *testing.T) {
 	// 3. Resolve thread
 	if err := s.Comments.Resolve(ctx, commentID, writ.CommentResolve{
 		Resolved: true,
-		Actor:    "alice",
+		Actor:    "  Alice@Example.COM  ",
 	}); err != nil {
 		t.Fatalf("Resolve failed: %v", err)
 	}
@@ -262,8 +262,8 @@ func TestCommentsResolveWorkflow(t *testing.T) {
 	if !comments[0].Comment.IsResolved() {
 		t.Errorf("expected comment to be resolved")
 	}
-	if comments[0].Comment.Actor != "alice" {
-		t.Errorf("expected comment actor 'alice', got %q", comments[0].Comment.Actor)
+	if comments[0].Comment.Actor != "alice@example.com" {
+		t.Errorf("expected comment actor 'alice@example.com', got %q", comments[0].Comment.Actor)
 	}
 
 	// 4. Post reply after resolve - verify thread root remains resolved

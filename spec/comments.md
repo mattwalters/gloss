@@ -189,7 +189,7 @@ A `resolve` op records or updates the resolution state of a comment thread.
   "op_version": 1,
   "body": {
     "resolved": true,
-    "actor": "alice"
+    "actor": "alice@example.com"
   }
 }
 ```
