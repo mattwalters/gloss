@@ -81,9 +81,11 @@ func convertCommentFold(cf fold.CommentFold) (Comment, error) {
 		}
 	}
 
-	// Actor is already normalized by the fold layer; normalizing again here is a
-	// no-op kept for defence in depth, matching how the issue and review reducers
-	// re-normalize their assignee and approval-subject person identifiers.
+	// Actor is already normalized by the fold layer, so this is a no-op today. It
+	// is kept because every state reducer normalizes the person identifiers it
+	// surfaces (state/issue.go and state/review.go do their own, being independent
+	// typed reducers that never reach the strategy accumulators), and because it
+	// keeps the typed Comment conformant if the fold ever regresses.
 	c := Comment{
 		Text:       cf.Text,
 		InReplyTo:  cf.InReplyTo,
