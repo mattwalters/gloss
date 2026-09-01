@@ -134,8 +134,8 @@ Add or remove issue assignees.
 #### Flags
 
 - `-C <dir>`: Run as if writ was started in <dir>
-- `-add <a>`: Add assignee <a> email or ID (repeatable)
-- `-remove <a>`: Remove assignee <a> email or ID (repeatable)
+- `-add <a>`: Add assignee <a>, a scheme:value person identifier (repeatable)
+- `-remove <a>`: Remove assignee <a>, a scheme:value person identifier (repeatable)
 
 #### Examples
 
@@ -162,7 +162,7 @@ List issues.
 
 - `-C <dir>`: Run as if writ was started in <dir>
 - `-state <s>`: Filter by issue state <s> (repeatable)
-- `-assignee <a>`: Filter by assignee <a> name or email (repeatable)
+- `-assignee <a>`: Filter by assignee <a>, a scheme:value person identifier (repeatable)
 - `-label <l>`: Filter by label <l> (repeatable)
 - `-author <a>`: Filter by author <a> name or email (repeatable)
 - `-text <q>`: Filter by text <q> match in title or description
@@ -315,8 +315,8 @@ Add or remove review assignees (requested reviewers).
 #### Flags
 
 - `-C <dir>`: Run as if writ was started in <dir>
-- `-add <a>`: Add assignee <a> email or ID (repeatable)
-- `-remove <a>`: Remove assignee <a> email or ID (repeatable)
+- `-add <a>`: Add assignee <a>, a scheme:value person identifier (repeatable)
+- `-remove <a>`: Remove assignee <a>, a scheme:value person identifier (repeatable)
 
 #### Examples
 
@@ -431,7 +431,7 @@ List code reviews.
 
 - `-C <dir>`: Run as if writ was started in <dir>
 - `-status <s>`: Filter by review status <s> (repeatable)
-- `-assignee <a>`: Filter by assignee <a> name or email (repeatable)
+- `-assignee <a>`: Filter by assignee <a>, a scheme:value person identifier (repeatable)
 - `-label <l>`: Filter by label <l> (repeatable)
 - `-author <a>`: Filter by author <a> name or email (repeatable)
 - `-text <q>`: Filter by text <q> match in title or description

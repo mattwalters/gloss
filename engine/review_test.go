@@ -56,7 +56,7 @@ func TestFoldReviewApprovalsAndRetraction(t *testing.T) {
 			ObjectType: "review",
 			OpType:     "approval",
 			OpVersion:  1,
-			Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"approve","subject":"alice","message":"looks good"}`),
+			Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"approve","subject":"user:alice","message":"looks good"}`),
 		},
 		ID: "op1",
 		Author: codec.Identity{
@@ -71,7 +71,7 @@ func TestFoldReviewApprovalsAndRetraction(t *testing.T) {
 			ObjectType: "review",
 			OpType:     "approval",
 			OpVersion:  1,
-			Body:       json.RawMessage(`{"revision":"2222222222222222222222222222222222222222","verdict":"request-changes","subject":"bob","message":"need tests"}`),
+			Body:       json.RawMessage(`{"revision":"2222222222222222222222222222222222222222","verdict":"request-changes","subject":"user:bob","message":"need tests"}`),
 		},
 		ID: "op2",
 		Author: codec.Identity{
@@ -87,7 +87,7 @@ func TestFoldReviewApprovalsAndRetraction(t *testing.T) {
 			ObjectType: "review",
 			OpType:     "approval",
 			OpVersion:  1,
-			Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"none","subject":"alice","message":"retracted"}`),
+			Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"none","subject":"user:alice","message":"retracted"}`),
 		},
 		ID:      "op3",
 		Parents: []string{"op1"},
@@ -106,7 +106,7 @@ func TestFoldReviewApprovalsAndRetraction(t *testing.T) {
 		t.Fatalf("expected 1 active approval after retraction, got %d: %+v", len(state.Approvals), state.Approvals)
 	}
 
-	if state.Approvals[0].Subject != "bob" || state.Approvals[0].Revision != "2222222222222222222222222222222222222222" || state.Approvals[0].Verdict != "request-changes" {
+	if state.Approvals[0].Subject != "user:bob" || state.Approvals[0].Revision != "2222222222222222222222222222222222222222" || state.Approvals[0].Verdict != "request-changes" {
 		t.Errorf("approval mismatch: got %+v", state.Approvals[0])
 	}
 }
@@ -486,7 +486,7 @@ func TestFoldReviewAgreement(t *testing.T) {
 				ObjectType: "review",
 				OpType:     "approval",
 				OpVersion:  1,
-				Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"approve","subject":"bob","message":"LGTM"}`),
+				Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"approve","subject":"user:bob","message":"LGTM"}`),
 			},
 			Author: codec.Identity{Email: "bob@example.com", When: now.Add(4 * time.Minute)},
 		},
@@ -498,7 +498,7 @@ func TestFoldReviewAgreement(t *testing.T) {
 				ObjectType: "review",
 				OpType:     "approval",
 				OpVersion:  1,
-				Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"approve","subject":"alice"}`),
+				Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"approve","subject":"user:alice"}`),
 			},
 			Author: codec.Identity{Email: "alice@example.com", When: now.Add(4 * time.Minute)},
 		},
@@ -510,7 +510,7 @@ func TestFoldReviewAgreement(t *testing.T) {
 				ObjectType: "review",
 				OpType:     "approval",
 				OpVersion:  1,
-				Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"none","subject":"alice"}`),
+				Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"none","subject":"user:alice"}`),
 			},
 			Author: codec.Identity{Email: "alice@example.com", When: now.Add(5 * time.Minute)},
 		},
@@ -565,7 +565,7 @@ func TestFoldReviewAgreement(t *testing.T) {
 	if len(reviewState.Approvals) != 1 {
 		t.Fatalf("expected 1 active approval in FoldReview, got %d", len(reviewState.Approvals))
 	}
-	if reviewState.Approvals[0].Subject != "bob" || reviewState.Approvals[0].Verdict != "approve" {
+	if reviewState.Approvals[0].Subject != "user:bob" || reviewState.Approvals[0].Verdict != "approve" {
 		t.Errorf("unexpected active approval: %+v", reviewState.Approvals[0])
 	}
 

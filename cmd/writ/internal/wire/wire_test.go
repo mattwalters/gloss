@@ -88,7 +88,7 @@ func TestWire_FromReviewResult_FullMapping(t *testing.T) {
 				{Base: "base1", Head: "head1"},
 			},
 			Approvals: []state.Approval{
-				{Subject: "bob", Revision: "head1", Verdict: "approve", Message: "LGTM"},
+				{Subject: "user:bob", Revision: "head1", Verdict: "approve", Message: "LGTM"},
 			},
 			CIStatuses: []state.CIStatus{
 				{Revision: "head1", Name: "ci/lint", State: "success", URL: "https://ci.example.com"},
@@ -177,7 +177,7 @@ func TestWire_CommentMapping(t *testing.T) {
 			},
 			Text:       "Needs clarification",
 			Resolved:   &resolvedBool,
-			ResolvedBy: "alice",
+			ResolvedBy: "user:alice",
 		},
 		Resolved: []projection.ResolvedPosition{
 			{
@@ -194,8 +194,8 @@ func TestWire_CommentMapping(t *testing.T) {
 	if !wireComment.Resolved {
 		t.Errorf("expected wireComment.Resolved == true")
 	}
-	if wireComment.ResolvedBy != "alice" {
-		t.Errorf("expected wireComment.ResolvedBy == 'alice', got %q", wireComment.ResolvedBy)
+	if wireComment.ResolvedBy != "user:alice" {
+		t.Errorf("expected wireComment.ResolvedBy == 'user:alice', got %q", wireComment.ResolvedBy)
 	}
 	if len(wireComment.Positions) != 1 || wireComment.Positions[0].Path != "main.go" {
 		t.Errorf("unexpected positions: %+v", wireComment.Positions)
@@ -210,8 +210,8 @@ func TestWire_CommentMapping(t *testing.T) {
 	if !strings.Contains(jsonStr, `"resolved":true`) {
 		t.Errorf("expected JSON to contain '\"resolved\":true', got: %s", jsonStr)
 	}
-	if !strings.Contains(jsonStr, `"resolved_by":"alice"`) {
-		t.Errorf("expected JSON to contain '\"resolved_by\":\"alice\"', got: %s", jsonStr)
+	if !strings.Contains(jsonStr, `"resolved_by":"user:alice"`) {
+		t.Errorf("expected JSON to contain '\"resolved_by\":\"user:alice\"', got: %s", jsonStr)
 	}
 	if !strings.Contains(jsonStr, `"positions":[`) {
 		t.Errorf("expected JSON to contain '\"positions\":[', got: %s", jsonStr)
@@ -229,7 +229,7 @@ func TestWire_CommentThreadMapping(t *testing.T) {
 			},
 			Text:       "Root comment",
 			Resolved:   &resolvedBool,
-			ResolvedBy: "bob",
+			ResolvedBy: "user:bob",
 		},
 		Replies: []state.CommentThread{
 			{
@@ -253,8 +253,8 @@ func TestWire_CommentThreadMapping(t *testing.T) {
 	if !wireThread.Comment.Resolved {
 		t.Errorf("expected wireThread.Comment.Resolved == true")
 	}
-	if wireThread.Comment.ResolvedBy != "bob" {
-		t.Errorf("expected wireThread.Comment.ResolvedBy == 'bob', got %q", wireThread.Comment.ResolvedBy)
+	if wireThread.Comment.ResolvedBy != "user:bob" {
+		t.Errorf("expected wireThread.Comment.ResolvedBy == 'user:bob', got %q", wireThread.Comment.ResolvedBy)
 	}
 	if len(wireThread.Replies) != 1 {
 		t.Fatalf("expected 1 reply, got %d", len(wireThread.Replies))

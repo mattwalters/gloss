@@ -194,14 +194,14 @@ func TestFoldIssueOnlyUnknownOps(t *testing.T) {
 func TestFoldIssueAssigneesORSetCausalAndConcurrent(t *testing.T) {
 	now := time.Unix(100, 0).UTC()
 
-	// Root op: add alice and bob
+	// Root op: add user:alice and user:bob
 	op1 := codec.Op{
 		Envelope: codec.Envelope{
 			ObjectID:   "i-test",
 			ObjectType: "issue",
 			OpType:     "assign",
 			OpVersion:  1,
-			Body:       json.RawMessage(`{"add":["alice","bob"]}`),
+			Body:       json.RawMessage(`{"add":["user:alice","user:bob"]}`),
 		},
 		ID: "op1",
 		Author: codec.Identity{
@@ -210,14 +210,14 @@ func TestFoldIssueAssigneesORSetCausalAndConcurrent(t *testing.T) {
 		},
 	}
 
-	// Causal remove: remove bob (happens-after op1) -> bob is removed
+	// Causal remove: remove user:bob (happens-after op1) -> user:bob is removed
 	op2 := codec.Op{
 		Envelope: codec.Envelope{
 			ObjectID:   "i-test",
 			ObjectType: "issue",
 			OpType:     "assign",
 			OpVersion:  1,
-			Body:       json.RawMessage(`{"remove":["bob"]}`),
+			Body:       json.RawMessage(`{"remove":["user:bob"]}`),
 		},
 		ID:      "op2",
 		Parents: []string{"op1"},
@@ -227,15 +227,15 @@ func TestFoldIssueAssigneesORSetCausalAndConcurrent(t *testing.T) {
 		},
 	}
 
-	// Concurrent remove of charlie vs concurrent add of charlie:
-	// op3 (writer 1): removes charlie (with op2 as parent)
+	// Concurrent remove of user:charlie vs concurrent add of user:charlie:
+	// op3 (writer 1): removes user:charlie (with op2 as parent)
 	op3 := codec.Op{
 		Envelope: codec.Envelope{
 			ObjectID:   "i-test",
 			ObjectType: "issue",
 			OpType:     "assign",
 			OpVersion:  1,
-			Body:       json.RawMessage(`{"remove":["charlie"]}`),
+			Body:       json.RawMessage(`{"remove":["user:charlie"]}`),
 		},
 		ID:      "op3",
 		Parents: []string{"op2"},
@@ -245,14 +245,14 @@ func TestFoldIssueAssigneesORSetCausalAndConcurrent(t *testing.T) {
 		},
 	}
 
-	// op4 (writer 2): concurrently adds charlie (parent op2, concurrent with op3)
+	// op4 (writer 2): concurrently adds user:charlie (parent op2, concurrent with op3)
 	op4 := codec.Op{
 		Envelope: codec.Envelope{
 			ObjectID:   "i-test",
 			ObjectType: "issue",
 			OpType:     "assign",
 			OpVersion:  1,
-			Body:       json.RawMessage(`{"add":["charlie"]}`),
+			Body:       json.RawMessage(`{"add":["user:charlie"]}`),
 		},
 		ID:      "op4",
 		Parents: []string{"op2"},
@@ -267,8 +267,8 @@ func TestFoldIssueAssigneesORSetCausalAndConcurrent(t *testing.T) {
 		t.Fatalf("FoldIssue failed: %v", err)
 	}
 
-	// Present assignees should be alice and charlie (bob causally removed, charlie concurrent add wins)
-	expectedAssignees := []string{"alice", "charlie"}
+	// Present assignees should be user:alice and user:charlie (user:bob causally removed, user:charlie concurrent add wins)
+	expectedAssignees := []string{"user:alice", "user:charlie"}
 	if !reflect.DeepEqual(state.Assignees, expectedAssignees) {
 		t.Errorf("assignees mismatch: got %v, want %v", state.Assignees, expectedAssignees)
 	}

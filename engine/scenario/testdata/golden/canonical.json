@@ -7,7 +7,7 @@
         "description": "Initial draft of addition",
         "approvals": [
           {
-            "subject": "bob",
+            "subject": "user:bob",
             "revision": "rev1",
             "verdict": "approve",
             "message": "Looks solid"

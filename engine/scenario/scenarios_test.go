@@ -146,7 +146,7 @@ func TestCanonical(t *testing.T) {
 					OpType:     "approval",
 					OpVersion:  1,
 					Body: json.RawMessage(`{
-						"subject": "bob",
+						"subject": "user:bob",
 						"revision": "rev1",
 						"verdict": "approve",
 						"message": "Looks solid"
@@ -406,7 +406,7 @@ func TestSyncOrderPermutation(t *testing.T) {
 					OpType:     "approval",
 					OpVersion:  1,
 					Body: json.RawMessage(`{
-						"subject": "bob",
+						"subject": "user:bob",
 						"revision": "rev1",
 						"verdict": "approve",
 						"message": "Looks solid"
@@ -546,7 +546,7 @@ func TestNegativeControl_MissingFetchFails(t *testing.T) {
 					ObjectType: "review",
 					OpType:     "approval",
 					OpVersion:  1,
-					Body:       json.RawMessage(`{"subject":"bob","revision":"rev1","verdict":"approve"}`),
+					Body:       json.RawMessage(`{"subject":"user:bob","revision":"rev1","verdict":"approve"}`),
 				},
 			},
 			scenario.Push{Device: bobLaptop},

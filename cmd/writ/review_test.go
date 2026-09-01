@@ -1248,3 +1248,62 @@ func TestReviewApprove_Subject(t *testing.T) {
 		}
 	})
 }
+
+// TestReviewApprove_PersonIDDiagnosis pins the difference between the two ways
+// a person identifier can be unavailable. Discarding the derivation error
+// collapses them, and the user who set writ.personId to something invalid is
+// told to set writ.personId — sending them to look at a key already there.
+func TestReviewApprove_PersonIDDiagnosis(t *testing.T) {
+	t.Run("invalid writ.personId is reported as invalid", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setGitConfig(t, env.repoDir, "writ.personId", "alice")
+		setupSigningKey(t, env.repoDir)
+
+		reviewID := openReviewWithRevision(t, env.repoDir)
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{
+			"review", "approve", "-C", env.repoDir, reviewID,
+		}, &stdout, &stderr)
+		if code == 0 {
+			t.Fatalf("approve should refuse a bare writ.personId; stdout: %s", stdout.String())
+		}
+		got := stderr.String()
+		// The diagnosis must say the configured value is wrong, not that
+		// nothing is configured.
+		if !strings.Contains(got, "invalid") {
+			t.Errorf("error should report writ.personId as invalid, got %q", got)
+		}
+		if !strings.Contains(got, "alice") {
+			t.Errorf("error should quote the offending value, got %q", got)
+		}
+		if strings.Contains(got, "or user.email") {
+			t.Errorf("error told a user who configured writ.personId to configure it; got %q", got)
+		}
+	})
+
+	t.Run("nothing configured is reported as missing", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setupSigningKey(t, env.repoDir)
+		setGitConfig(t, env.repoDir, "user.email", "   ")
+
+		reviewID := openReviewWithRevision(t, env.repoDir)
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{
+			"review", "approve", "-C", env.repoDir, reviewID,
+		}, &stdout, &stderr)
+		if code == 0 {
+			t.Fatalf("approve should refuse with nothing to derive from; stdout: %s", stdout.String())
+		}
+		got := stderr.String()
+		if !strings.Contains(got, "writ.personId") {
+			t.Errorf("error should name writ.personId, got %q", got)
+		}
+		// The ErrMissing arm of ConfigError.Error must carry the wrapped
+		// guidance through rather than short-circuiting on the sentinel.
+		if !strings.Contains(got, "user:alice") {
+			t.Errorf("error should carry the wrapped example through, got %q", got)
+		}
+	})
+}
