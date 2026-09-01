@@ -3,6 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    
+    
+    (function () {
+      try {
+        var t = localStorage.getItem("writ-theme");
+        if (t === "light" || t === "dark") {
+          document.documentElement.dataset.theme = t;
+        }
+      } catch (e) {}
+    })();
+  </script>
   <title>Why Writ — Writ</title>
   <meta name="description" content="Half of every pull request lives in a platform database. Writ is a documented convention for putting it back in the repository, as signed append-only operations.">
   <link rel="icon" href="../favicon.svg" type="image/svg+xml">
@@ -27,6 +39,7 @@
         <select id="version-picker" hidden aria-label="Documentation version"></select>
       </span>
       
+      <button type="button" id="theme-picker" class="theme" aria-label="Theme">◐ system</button>
     </nav>
   </header>
 
@@ -370,6 +383,44 @@ scale, or an anchor that should have survived and didn&rsquo;t.</p>
     <p>Writ is open source under the <a href="https://github.com/writtendev/writ/blob/main/LICENSE">Apache-2.0 license</a>.</p>
   </footer>
 
+  <script>
+    
+    
+    
+    
+    (function () {
+      var modes = ["system", "light", "dark"];
+      var glyphs = { system: "◐", light: "○", dark: "●" };
+      var picker = document.getElementById("theme-picker");
+      if (!picker) return;
+      var current = "system";
+      try {
+        var stored = localStorage.getItem("writ-theme");
+        if (stored === "light" || stored === "dark") { current = stored; }
+      } catch (e) {}
+      function paint() {
+        picker.textContent = glyphs[current] + " " + current;
+        picker.setAttribute("aria-label", "Theme: " + current);
+        if (current === "system") {
+          delete document.documentElement.dataset.theme;
+        } else {
+          document.documentElement.dataset.theme = current;
+        }
+      }
+      paint();
+      picker.addEventListener("click", function () {
+        current = modes[(modes.indexOf(current) + 1) % modes.length];
+        try {
+          if (current === "system") {
+            localStorage.removeItem("writ-theme");
+          } else {
+            localStorage.setItem("writ-theme", current);
+          }
+        } catch (e) {}
+        paint();
+      });
+    })();
+  </script>
   
   <script>
     
