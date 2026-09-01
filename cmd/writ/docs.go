@@ -65,7 +65,7 @@ func renderDocs(w io.Writer) error {
 
 		fmt.Fprintln(w, "#### Synopsis")
 		fmt.Fprintln(w)
-		fmt.Fprintln(w, "```")
+		fmt.Fprintln(w, "```console")
 		fmt.Fprintln(w, item.cmd.UsageLine)
 		fmt.Fprintln(w, "```")
 		fmt.Fprintln(w)

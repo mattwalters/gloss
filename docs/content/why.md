@@ -33,7 +33,7 @@ commit under `refs/writ/*`. Current state is never stored authoritatively. It
 is derived, by deterministically folding an object's operations in causal
 order.
 
-```
+```console
 $ writ init                       # writes fetch refspecs into .git/config
 $ writ review open -title "Add rate limiting" -base main -head rate-limit
 $ writ review comment -m "this allocates in the hot path"

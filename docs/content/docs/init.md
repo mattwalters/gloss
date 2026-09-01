@@ -7,7 +7,7 @@ Initialize writ configuration in a git repository: resolve or mint a writer ID, 
 
 ## Synopsis
 
-```
+```console
 writ init [remote...]
 ```
 
