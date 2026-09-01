@@ -763,3 +763,95 @@ func TestFoldReviewLinksAndRetraction(t *testing.T) {
 	}
 }
 
+func TestFoldReviewPersonNormalization(t *testing.T) {
+	now := time.Unix(100, 0).UTC()
+
+	// 1. Assign with whitespace and mixed case: "  Alice@Example.COM  ", "Bob@Example.Com"
+	// 2. Remove with lowercase: "alice@example.com", add " Charlie@Example.COM "
+	// 3. Approval with whitespace and mixed case: "  Carol@Example.COM  ", verdict "approve"
+	// 4. Approval update with lowercase: "carol@example.com", verdict "request-changes"
+	ops := []codec.Op{
+		{
+			ID: "op1",
+			Envelope: codec.Envelope{
+				ObjectID:   "r-norm",
+				ObjectType: "review",
+				OpType:     "create",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"title":"Normalization Review"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now},
+		},
+		{
+			ID:      "op2",
+			Parents: []string{"op1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-norm",
+				ObjectType: "review",
+				OpType:     "assign",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"add":["  Alice@Example.COM  ", "Bob@Example.Com"]}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(time.Minute)},
+		},
+		{
+			ID:      "op3",
+			Parents: []string{"op2"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-norm",
+				ObjectType: "review",
+				OpType:     "assign",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"remove":["alice@example.com"],"add":[" Charlie@Example.COM "]}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(2 * time.Minute)},
+		},
+		{
+			ID:      "op4",
+			Parents: []string{"op3"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-norm",
+				ObjectType: "review",
+				OpType:     "approval",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"approve","subject":"  Carol@Example.COM  "}`),
+			},
+			Author: codec.Identity{Email: "carol@example.com", When: now.Add(3 * time.Minute)},
+		},
+		{
+			ID:      "op5",
+			Parents: []string{"op4"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-norm",
+				ObjectType: "review",
+				OpType:     "approval",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"1111111111111111111111111111111111111111","verdict":"request-changes","subject":"carol@example.com"}`),
+			},
+			Author: codec.Identity{Email: "carol@example.com", When: now.Add(4 * time.Minute)},
+		},
+	}
+
+	state, err := s.FoldReview(ops)
+	if err != nil {
+		t.Fatalf("FoldReview failed: %v", err)
+	}
+
+	// Assignees: alice removed, bob and charlie present (lowercase, sorted)
+	wantAssignees := []string{"bob@example.com", "charlie@example.com"}
+	if !reflect.DeepEqual(state.Assignees, wantAssignees) {
+		t.Errorf("Assignees = %v, want %v", state.Assignees, wantAssignees)
+	}
+
+	// Approvals: carol@example.com single entry with updated verdict
+	if len(state.Approvals) != 1 {
+		t.Fatalf("Approvals count = %d, want 1", len(state.Approvals))
+	}
+	if state.Approvals[0].Subject != "carol@example.com" {
+		t.Errorf("Approval Subject = %q, want %q", state.Approvals[0].Subject, "carol@example.com")
+	}
+	if state.Approvals[0].Verdict != "request-changes" {
+		t.Errorf("Approval Verdict = %q, want %q", state.Approvals[0].Verdict, "request-changes")
+	}
+}
+

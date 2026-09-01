@@ -251,3 +251,126 @@ func TestInvalidReferenceVectors(t *testing.T) {
 		})
 	}
 }
+
+func TestPersonIdentifierNormalization(t *testing.T) {
+	// Normalization rule: norm(s) = lowercase(trim_whitespace(s))
+	// Comparison rule: equal(A, B) <=> norm(A) == norm(B)
+	cases := []struct {
+		a     string
+		b     string
+		equal bool
+	}{
+		{"alice@example.com", "alice@example.com", true},
+		{"Alice@Example.COM", "alice@example.com", true},
+		{"  alice@example.com  ", "alice@example.com", true},
+		{"\t\n Alice@Example.COM \r\n", "alice@example.com", true},
+		{"alice@example.com", "bob@example.com", false},
+		{"alice@example.com", "alice@sub.example.com", false},
+		{"dev+1@example.com", "dev+1@example.com", true},
+		{"DEV+1@EXAMPLE.COM", "dev+1@example.com", true},
+	}
+
+	norm := func(s string) string {
+		return strings.ToLower(strings.TrimSpace(s))
+	}
+
+	for _, tc := range cases {
+		normA := norm(tc.a)
+		normB := norm(tc.b)
+		gotEqual := normA == normB
+		if gotEqual != tc.equal {
+			t.Errorf("equal(%q, %q) = %v, want %v (norm(%q)=%q, norm(%q)=%q)",
+				tc.a, tc.b, gotEqual, tc.equal, tc.a, normA, tc.b, normB)
+		}
+	}
+}
+
+func TestPersonIdentifierSchema(t *testing.T) {
+	sch := compileIdentifiersSchema(t)
+
+	// Test $defs/person-id via a test document referencing it
+	c := jsonschema.NewCompiler()
+	testDoc := map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"properties": map[string]any{
+			"person": map[string]any{
+				"$ref": "https://writ.dev/spec/identifiers.schema.json#/$defs/person-id",
+			},
+		},
+		"required": []any{"person"},
+	}
+
+	rawIdent, err := spec.FS.ReadFile("schemas/identifiers.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	identDoc, err := jsonschema.UnmarshalJSON(bytes.NewReader(rawIdent))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AddResource(identifiersSchemaID, identDoc); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AddResource("https://writ.dev/test/person-wrapper.schema.json", testDoc); err != nil {
+		t.Fatal(err)
+	}
+	compiled, err := c.Compile("https://writ.dev/test/person-wrapper.schema.json")
+	if err != nil {
+		t.Fatalf("compiling person wrapper schema: %v", err)
+	}
+
+	validCases := []string{
+		"alice@example.com",
+		"bob.builder+test@example.co.uk",
+		"ci-bot@internal.domain",
+		"  alice@example.com  ",
+	}
+	for _, v := range validCases {
+		inst := map[string]any{"person": v}
+		if err := compiled.Validate(inst); err != nil {
+			t.Errorf("expected person %q to be valid, got %v", v, err)
+		}
+	}
+
+	invalidCases := []any{
+		"",        // minLength: 1
+		12345,     // not a string
+		nil,       // null
+		[]any{},   // array
+	}
+	for _, inv := range invalidCases {
+		inst := map[string]any{"person": inv}
+		if err := compiled.Validate(inst); err == nil {
+			t.Errorf("expected person %v to be invalid, but schema accepted it", inv)
+		}
+	}
+
+	_ = sch
+}
+
+func TestWriterIDVsPersonID(t *testing.T) {
+	// Writer ID: 16 lowercase hex characters (device-scoped namespace under refs/writ/<writer-id>/)
+	// Person ID: collaborative actor identity (email address)
+	writerID := "0123456789abcdef"
+	personID := "alice@example.com"
+
+	isHex16 := func(s string) bool {
+		if len(s) != 16 {
+			return false
+		}
+		for _, c := range s {
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+				return false
+			}
+		}
+		return true
+	}
+
+	if !isHex16(writerID) {
+		t.Errorf("writerID %q should match 16-hex format", writerID)
+	}
+	if isHex16(personID) {
+		t.Errorf("personID %q should not match 16-hex format", personID)
+	}
+}

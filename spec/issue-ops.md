@@ -43,8 +43,10 @@ workspace.
 - **`assign` and `label` are add-wins OR-sets (`set-observed-remove`):**
   Concurrent assignment or labeling on one device and removal on another is
   reconciled via `set-observed-remove` (WRIT-12, `spec/fold.md`). Additions
-  win over concurrent removals. Assignee and label values are opaque non-empty
-  strings.
+  win over concurrent removals. Assignee values are person identifiers
+  ([`spec/identifiers.md`](identifiers.md) §Person identifiers), normalized
+  (lowercase, trimmed whitespace) prior to set evaluation; labels are opaque
+  non-empty strings.
 - **`link` mirrors `approval`:** A link records an association between the
   issue and another collaborative object (such as a code review or companion
   issue). It uses `keyed-lww` keyed by `target`. Emitting a `link` op with
@@ -96,7 +98,7 @@ The issue family defines six operation types for `op_version: 1`:
 | `create` | `{"title": string, "description"?: string}` | Issue creation and initial description. |
 | `update` | `{"title"?: string, "description"?: string}` | Metadata edits (title, description). |
 | `set-state` | `{"state": "open"\|"closed", "reason"?: string}` | State transitions and optional reason. |
-| `assign` | `{"add"?: [string], "remove"?: [string]}` | Add or remove assignees. |
+| `assign` | `{"add"?: [person-id], "remove"?: [person-id]}` | Add or remove assignees. |
 | `label` | `{"add"?: [string], "remove"?: [string]}` | Add or remove labels. |
 | `link` | `{"target": reference, "target_type"?: string, "relation": "fixes"\|"relates"\|"none"}` | Associate or retract cross-references. |
 
@@ -176,17 +178,21 @@ Adds or removes assignees for the issue.
   "op_type": "assign",
   "op_version": 1,
   "body": {
-    "add": ["alice", "bob"],
-    "remove": ["charlie"]
+    "add": ["alice@example.com", "bob@example.com"],
+    "remove": ["charlie@example.com"]
   }
 }
 ```
 
-- `add` (array of non-empty strings, optional): Assignee identifiers to add.
-- `remove` (array of non-empty strings, optional): Assignee identifiers to remove.
+- `add` (array of person identifiers per [`spec/identifiers.md`](identifiers.md), optional): Person identifiers (assignees) to add.
+- `remove` (array of person identifiers per [`spec/identifiers.md`](identifiers.md), optional): Person identifiers (assignees) to remove.
 
 At least one of `add` or `remove` MUST be present and contain at least one item.
 An empty `{}` body or empty arrays (`"add": []`) are invalid.
+
+Assignees are normalized (leading/trailing whitespace trimmed, lowercase) per
+[`spec/identifiers.md`](identifiers.md) before set membership and deduplication are
+evaluated. Byte-exact equality after normalisation determines element identity.
 
 ### 5. `label`
 
@@ -258,8 +264,8 @@ Folded issue state is `Issue{title, description, state, reason, assignees, label
 | `update` | `description` | `lww` | Last writer wins |
 | `set-state` | `state` | `lww` | Last writer wins; default is `"open"` |
 | `set-state` | `reason` | `lww` | Last writer wins |
-| `assign` | `add` | `set-observed-remove` | Add-wins OR-set over assignee strings |
-| `assign` | `remove` | `set-observed-remove` | Add-wins OR-set over assignee strings |
+| `assign` | `add` | `set-observed-remove` | Add-wins OR-set over normalized person identifiers (`spec/identifiers.md`) |
+| `assign` | `remove` | `set-observed-remove` | Add-wins OR-set over normalized person identifiers (`spec/identifiers.md`) |
 | `label` | `add` | `set-observed-remove` | Add-wins OR-set over label strings |
 | `label` | `remove` | `set-observed-remove` | Add-wins OR-set over label strings |
 | `link` | `target` | `keyed-lww` | Scoped by key `["target"]` |

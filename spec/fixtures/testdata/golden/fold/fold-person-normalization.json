@@ -1,0 +1,98 @@
+{
+  "objects": [
+    {
+      "object_id": "r-person-norm",
+      "object_type": "review",
+      "total_order": [
+        {
+          "commit": "69533c348ebbc7ea828858ba95e5e96d62a86197",
+          "label": "alice-create",
+          "t_star": 1767225600
+        },
+        {
+          "commit": "a8fcc0ae332a4654c7b1b8ca9e3fa187bd79089f",
+          "label": "alice-revision",
+          "t_star": 1767225660
+        },
+        {
+          "commit": "75ec1bacb07e37082bec25f3f390efb4539328fe",
+          "label": "alice-assign-mixed",
+          "t_star": 1767225720
+        },
+        {
+          "commit": "39fc1c360ae420bc38fcb3c1d6f50840a5f19e28",
+          "label": "bob-concurrent-assign",
+          "t_star": 1767225780
+        },
+        {
+          "commit": "9bc36b7f5de0078efe297eed8cabdf1724d0f17b",
+          "label": "alice-reassign",
+          "t_star": 1767225840
+        },
+        {
+          "commit": "9a34546432497c6ad1ffed4e3333102224eff4b7",
+          "label": "alice-approval-mixed",
+          "t_star": 1767225900
+        },
+        {
+          "commit": "3e24d2eac70cc4fc9df22296c8c22dc745bd7c52",
+          "label": "alice-approval-update",
+          "t_star": 1767225960
+        }
+      ],
+      "state": {
+        "add": [
+          "charlie@example.com",
+          "david@example.com"
+        ],
+        "base": [
+          "0000000000000000000000000000000000000001"
+        ],
+        "head": [
+          "0000000000000000000000000000000000000002"
+        ],
+        "message": [
+          {
+            "key": [
+              "carol@example.com",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "Updated verdict under normalized subject"
+          }
+        ],
+        "remove": [
+          "charlie@example.com",
+          "david@example.com"
+        ],
+        "revision": [
+          {
+            "key": [
+              "carol@example.com",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "0000000000000000000000000000000000000002"
+          }
+        ],
+        "subject": [
+          {
+            "key": [
+              "carol@example.com",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "carol@example.com"
+          }
+        ],
+        "title": "Person Identifier Normalization Test",
+        "verdict": [
+          {
+            "key": [
+              "carol@example.com",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "request-changes"
+          }
+        ]
+      }
+    }
+  ]
+}

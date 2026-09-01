@@ -3,6 +3,7 @@ package spec
 import (
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // EffectiveTimes computes the causality-monotone effective timestamp
@@ -370,22 +371,37 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 
 						if addRaw != nil || remRaw != nil {
 							hasOps = true
+							normalizeItem := func(it string) string {
+								if op.OpType == "assign" {
+									return strings.ToLower(strings.TrimSpace(it))
+								}
+								return it
+							}
+
 							if slice, ok := addRaw.([]any); ok {
 								for _, it := range slice {
-									adds = append(adds, addRecord{opID: op.ID, item: fmt.Sprint(it)})
+									if item := normalizeItem(fmt.Sprint(it)); item != "" {
+										adds = append(adds, addRecord{opID: op.ID, item: item})
+									}
 								}
 							} else if slice, ok := addRaw.([]string); ok {
 								for _, it := range slice {
-									adds = append(adds, addRecord{opID: op.ID, item: it})
+									if item := normalizeItem(it); item != "" {
+										adds = append(adds, addRecord{opID: op.ID, item: item})
+									}
 								}
 							}
 							if slice, ok := remRaw.([]any); ok {
 								for _, it := range slice {
-									removes = append(removes, removeRecord{opID: op.ID, item: fmt.Sprint(it)})
+									if item := normalizeItem(fmt.Sprint(it)); item != "" {
+										removes = append(removes, removeRecord{opID: op.ID, item: item})
+									}
 								}
 							} else if slice, ok := remRaw.([]string); ok {
 								for _, it := range slice {
-									removes = append(removes, removeRecord{opID: op.ID, item: it})
+									if item := normalizeItem(it); item != "" {
+										removes = append(removes, removeRecord{opID: op.ID, item: item})
+									}
 								}
 							}
 						}
@@ -524,7 +540,11 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 						key := make([]string, 0, len(rule.Key))
 						for _, kf := range rule.Key {
 							if val, ok := op.Body[kf]; ok && val != nil {
-								key = append(key, fmt.Sprint(val))
+								vStr := fmt.Sprint(val)
+								if kf == "subject" && op.OpType == "approval" {
+									vStr = strings.ToLower(strings.TrimSpace(vStr))
+								}
+								key = append(key, vStr)
 							} else {
 								key = append(key, "")
 							}
