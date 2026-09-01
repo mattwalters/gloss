@@ -96,3 +96,56 @@ func TestHelp_Command(t *testing.T) {
 		}
 	})
 }
+
+func TestHelp_FlagsRouting(t *testing.T) {
+	cmds := [][]string{
+		{"-h"},
+		{"--help"},
+		{"init", "-h"},
+		{"init", "--help"},
+		{"sync", "-h"},
+		{"sync", "--help"},
+		{"completion", "-h"},
+		{"completion", "--help"},
+		{"issue", "-h"},
+		{"issue", "--help"},
+		{"issue", "create", "-h"},
+		{"issue", "create", "--help"},
+		{"issue", "status", "-h"},
+		{"issue", "status", "--help"},
+		{"issue", "assign", "-h"},
+		{"issue", "assign", "--help"},
+		{"issue", "list", "-h"},
+		{"issue", "list", "--help"},
+		{"issue", "link", "-h"},
+		{"issue", "link", "--help"},
+		{"review", "-h"},
+		{"review", "--help"},
+		{"review", "open", "-h"},
+		{"review", "open", "--help"},
+		{"review", "comment", "-h"},
+		{"review", "comment", "--help"},
+		{"review", "approve", "-h"},
+		{"review", "approve", "--help"},
+		{"review", "status", "-h"},
+		{"review", "status", "--help"},
+		{"review", "list", "-h"},
+		{"review", "list", "--help"},
+	}
+
+	for _, args := range cmds {
+		name := strings.Join(args, "_")
+		t.Run(name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := run(context.Background(), args, &stdout, &stderr)
+			if code != 0 {
+				t.Fatalf("run %v exited with %d; stderr: %s", args, code, stderr.String())
+			}
+			combined := stdout.String() + stderr.String()
+			if !strings.Contains(combined, "Usage: writ") {
+				t.Errorf("run %v missing 'Usage: writ': stdout=%q stderr=%q", args, stdout.String(), stderr.String())
+			}
+		})
+	}
+}
+

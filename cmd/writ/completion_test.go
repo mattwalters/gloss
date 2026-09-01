@@ -99,6 +99,16 @@ func TestCompletion_Fish(t *testing.T) {
 		}
 	}
 
+	// Verify Finding 1: help subcommand completion is not self-cancelling
+	if strings.Contains(script, "__fish_seen_subcommand_from help; and not __fish_seen_subcommand_from init issue review sync completion help") {
+		t.Errorf("fish completion has self-cancelling condition for help")
+	}
+
+	// Verify Finding 5: single char options use -s
+	if strings.Contains(script, "-l C ") || strings.Contains(script, "-l m ") {
+		t.Errorf("fish completion uses -l for single-letter options (-C or -m)")
+	}
+
 	if _, err := exec.LookPath("fish"); err == nil {
 		cmd := exec.Command("fish", "--no-execute")
 		cmd.Stdin = strings.NewReader(script)
@@ -117,6 +127,17 @@ func TestCompletion_CLI(t *testing.T) {
 		}
 		if !strings.Contains(stderr.String(), "shell required") {
 			t.Errorf("stderr missing 'shell required': %s", stderr.String())
+		}
+	})
+
+	t.Run("help_flag", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{"completion", "-h"}, &stdout, &stderr)
+		if code != 0 {
+			t.Errorf("completion -h code = %d, want 0; stderr: %s", code, stderr.String())
+		}
+		if !strings.Contains(stdout.String(), "Usage: writ completion") {
+			t.Errorf("stdout missing usage: %s", stdout.String())
 		}
 	})
 
