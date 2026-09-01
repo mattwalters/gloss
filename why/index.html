@@ -54,12 +54,12 @@ of small, signed, immutable <strong>operations</strong>, each stored as an ordin
 commit under <code>refs/writ/*</code>. Current state is never stored authoritatively. It
 is derived, by deterministically folding an object&rsquo;s operations in causal
 order.</p>
-<pre tabindex="0"><code>$ writ init                       # writes fetch refspecs into .git/config
-$ writ review open -title &#34;Add rate limiting&#34; -base main -head rate-limit
-$ writ review comment -m &#34;this allocates in the hot path&#34;
-$ writ review approve
-$ writ sync                       # git push, to your own ref namespace
-</code></pre><p>That is the whole deployment story. No server, no database, no webhook, no
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> writ init                       <span class="c1"># writes fetch refspecs into .git/config</span>
+</span></span><span class="line"><span class="cl"><span class="gp">$</span> writ review open -title <span class="s2">&#34;Add rate limiting&#34;</span> -base main -head rate-limit
+</span></span><span class="line"><span class="cl"><span class="gp">$</span> writ review comment -m <span class="s2">&#34;this allocates in the hot path&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="gp">$</span> writ review approve
+</span></span><span class="line"><span class="cl"><span class="gp">$</span> writ sync                       <span class="c1"># git push, to your own ref namespace</span>
+</span></span></code></pre></div><p>That is the whole deployment story. No server, no database, no webhook, no
 account. <code>writ init</code> adds one line to <code>.git/config</code>
 (<code>remote.origin.fetch = refs/writ/*:refs/remotes/origin/writ/*</code>) and from then
 on an ordinary <code>git fetch</code> carries review history along with the code.</p>

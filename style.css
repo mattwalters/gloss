@@ -110,19 +110,34 @@ article code {
   padding: 0.15em 0.35em;
   border-radius: 3px;
   font-size: 0.9em;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
 article pre {
   background: var(--code-bg);
+  border: 1px solid var(--border);
   padding: 1rem;
   border-radius: 6px;
   overflow-x: auto;
   margin-bottom: 1rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9em;
+  line-height: 1.5;
 }
 
 article pre code {
   background: none;
   padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+}
+
+.highlight {
+  margin-bottom: 1rem;
+}
+
+.highlight pre {
+  margin-bottom: 0;
 }
 
 /* Syntax highlighting (Chroma - Light / GitHub) */
@@ -140,6 +155,8 @@ article pre code {
 .chroma .gd { color: #82071e; background-color: #ffebe9; }
 .chroma .gi { color: #116329; background-color: #dafbe1; }
 .chroma .hl { background-color: #dedede; }
+.chroma .gp { color: #6e7781; }
+.chroma .go { color: var(--fg); }
 
 /* Syntax highlighting (Chroma - Dark / GitHub Dark) */
 @media (prefers-color-scheme: dark) {
@@ -158,6 +175,8 @@ article pre code {
   .chroma .gi { color: #56d364; background-color: #0f5323; }
   .chroma .hl { background-color: #6e7681; }
   .chroma .w { color: #6e7681; }
+  .chroma .gp { color: #8b949e; }
+  .chroma .go { color: var(--fg); }
 }
 
 article table {
