@@ -1083,3 +1083,69 @@ func TestReview_LabelAndLink(t *testing.T) {
 		t.Errorf("status still contains Links after retraction: %s", stdout.String())
 	}
 }
+
+// TestReviewApprove_WhitespaceSubjectFallsBackToWriter pins the writer-email
+// fallback against a whitespace-only -subject. The engine normalizes the
+// subject on the way into the op, so a raw != "" guard here would skip the
+// fallback and record an approval attributed to nobody.
+func TestReviewApprove_WhitespaceSubjectFallsBackToWriter(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+
+	var stdout, stderr bytes.Buffer
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+		t.Fatalf("writ init failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	commitFile(t, env.repoDir, "README.md", "# Hello", "initial commit")
+
+	stdout.Reset()
+	stderr.Reset()
+	code := run(context.Background(), []string{
+		"review", "open", "-C", env.repoDir, "-title", "Whitespace subject",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review open failed with %d; stderr: %s", code, stderr.String())
+	}
+	matches := regexp.MustCompile(`^([0-9a-f]{32}) `).FindStringSubmatch(strings.TrimSpace(stdout.String()))
+	if len(matches) < 2 {
+		t.Fatalf("unexpected review open output: %q", stdout.String())
+	}
+	reviewID := matches[1]
+
+	revHead := commitFile(t, env.repoDir, "feature.go", "package main", "feature commit")
+	store, err := writ.Open(env.repoDir)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	if err := store.Reviews.PushRevision(context.Background(), reviewID, revHead, revHead); err != nil {
+		t.Fatalf("push revision: %v", err)
+	}
+	_ = store.Close()
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "approve", "-C", env.repoDir, reviewID, "-subject", "   ",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review approve failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	store, err = writ.Open(env.repoDir)
+	if err != nil {
+		t.Fatalf("reopen store: %v", err)
+	}
+	defer store.Close()
+
+	res, err := store.Query.Review(reviewID)
+	if err != nil {
+		t.Fatalf("query review: %v", err)
+	}
+	if len(res.Review.Approvals) != 1 {
+		t.Fatalf("expected 1 approval, got %d: %+v", len(res.Review.Approvals), res.Review.Approvals)
+	}
+	if got := res.Review.Approvals[0].Subject; got != "alice@example.com" {
+		t.Errorf("approval subject = %q, want %q (whitespace -subject must fall back to the writer email)", got, "alice@example.com")
+	}
+}

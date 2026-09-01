@@ -475,10 +475,13 @@ func runReviewApprove(ctx context.Context, defaultDir string, args []string, std
 		return renderErr(stderr, err)
 	}
 
-	subject := opts.subject
+	// Normalize before the guards: the engine normalizes the subject on the way
+	// into the op, so a whitespace-only -subject would pass a raw != "" check,
+	// skip the writer fallback, and record a silently anonymous approval.
+	subject := state.NormalizePerson(opts.subject)
 	if subject == "" {
 		writer := store.Writer()
-		subject = writer.Email
+		subject = state.NormalizePerson(writer.Email)
 		if subject == "" {
 			subject = writer.ID
 		}
