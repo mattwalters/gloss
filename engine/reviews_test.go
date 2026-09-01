@@ -577,4 +577,75 @@ func TestReviewsLink(t *testing.T) {
 	}
 }
 
+func TestReviewsApproveSubjectNormalization(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+	headHash := runGitCmd(t, repoDir, "rev-parse", "HEAD")[:40]
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+	reviewID, err := s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Approval Subject Review",
+		Base:  headHash,
+		Head:  headHash,
+	})
+	if err != nil {
+		t.Fatalf("Create review failed: %v", err)
+	}
+
+	// A whitespace-only subject normalizes away entirely: the approval must be
+	// anonymous rather than carry a schema-invalid empty subject.
+	if err := s.Reviews.Approve(ctx, reviewID, writ.Approval{
+		Subject: "   ",
+		Verdict: "approve",
+	}); err != nil {
+		t.Fatalf("Approve with whitespace-only subject failed: %v", err)
+	}
+
+	// A padded subject is normalized before it is written.
+	if err := s.Reviews.Approve(ctx, reviewID, writ.Approval{
+		Subject: "  Alice  ",
+		Verdict: "request-changes",
+	}); err != nil {
+		t.Fatalf("Approve with padded subject failed: %v", err)
+	}
+
+	ident, _ := identity.ParseWriterID("0123456789abcdef")
+	dagStore, err := dag.Open(repoDir, identity.Identity{WriterID: ident})
+	if err != nil {
+		t.Fatalf("dag.Open failed: %v", err)
+	}
+	enumRes, err := dagStore.Enumerate()
+	if err != nil {
+		t.Fatalf("dagStore.Enumerate failed: %v", err)
+	}
+
+	var omitted, named int
+	for _, op := range enumRes.Ops[reviewID] {
+		if op.OpType != "approval" {
+			continue
+		}
+		var body map[string]any
+		if err := json.Unmarshal(op.Body, &body); err != nil {
+			t.Fatalf("unmarshal approval body: %v", err)
+		}
+		subject, ok := body["subject"]
+		switch {
+		case !ok:
+			omitted++
+		case subject == "alice":
+			named++
+		default:
+			t.Errorf("unexpected approval subject %v in body %+v", subject, body)
+		}
+	}
+	if omitted != 1 || named != 1 {
+		t.Errorf("got %d approvals without subject and %d for alice, want 1 and 1", omitted, named)
+	}
+}
+
 
