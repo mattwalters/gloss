@@ -1,5 +1,6 @@
 ---
 title: "writ sync"
+weight: 50
 ---
 
 Synchronize operations with git remotes: fetch remote operations, push local operations, and refresh the local projection cache.

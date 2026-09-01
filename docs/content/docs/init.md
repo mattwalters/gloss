@@ -1,5 +1,6 @@
 ---
 title: "writ init"
+weight: 20
 ---
 
 Initialize writ configuration in a git repository: resolve or mint a writer ID, verify SSH signing key configuration, and add fetch refspecs for git remotes.

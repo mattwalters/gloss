@@ -1,5 +1,6 @@
 ---
 title: "writ issue"
+weight: 40
 ---
 
 Manage issues: create, list, check status, assign, and link.
