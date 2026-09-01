@@ -1,4 +1,4 @@
-# Review Operations — review, revision, assign, approval, ci-status (v1)
+# Review Operations — review, revision, assign, approval, ci-status, label, link (v1)
 
 Status: **normative**. Schema: [`schemas/review-ops.schema.json`](schemas/review-ops.schema.json).
 Vectors: [`testdata/review-ops/`](testdata/review-ops/).
@@ -7,8 +7,8 @@ Field rules: [`testdata/review-ops/field-rules.json`](testdata/review-ops/field-
 This document defines the operation vocabulary, payload schemas, and fold
 semantics for code reviews in Writ (`object_type: "review"`). It covers
 review creation, revision pushes, status transitions, assignments (requested
-reviewers), approvals and review votes, and CI status attachments
-(ARCHITECTURE.md §Object types).
+reviewers), approvals and review votes, CI status attachments, labels,
+and cross-reference links (ARCHITECTURE.md §Object types).
 
 The key words MUST, MUST NOT, SHOULD, and MAY are to be interpreted as
 described in RFC 2119.
@@ -16,9 +16,9 @@ described in RFC 2119.
 ## Scope & Object Model
 
 A code review is represented in Writ as a single collaborative object with
-`object_type: "review"`. Approvals, change requests, assignments, and CI status
-reports are operations that fold directly into fields of the `review` object
-rather than standalone collaborative objects.
+`object_type: "review"`. Approvals, change requests, assignments, CI status
+reports, labels, and cross-reference links are operations that fold directly
+into fields of the `review` object rather than standalone collaborative objects.
 
 ### Decisions behind the vocabulary
 
@@ -33,16 +33,17 @@ rather than standalone collaborative objects.
   just to materialize a single review.
   Comments justify separate object status (WRIT-9) because they carry rich
   text bodies, multi-turn threading, position edits, and are the primary volume
-  driver in code reviews. A vote, assignment, or CI check status does not: an
-  approval is a small vote record scoped to `(subject, revision)`, an assignment
-  is an add-wins set mutation, and a CI status is a status record scoped to
-  `(revision, name)`.
+  driver in code reviews. A vote, assignment, CI check status, label set mutation,
+  or cross-reference link does not: an approval is a small vote record scoped to
+  `(subject, revision)`, an assignment is an add-wins set mutation, a CI status
+  is a status record scoped to `(revision, name)`, labels are an add-wins OR-set,
+  and a link is a keyed last-writer-wins relation scoped to `target`.
   Therefore, `review` is the single collaborative object type defined in this
-  specification. Assignments, approvals, and CI statuses are operations on the
-  review object that fold into the materialized `Review` state (`Review{title,
-  description, status, merge_commit, reason, assignees, revisions, approvals,
-  ci_statuses}`), matching the reducer signature established in ARCHITECTURE.md
-  §The six machines.
+  specification. Assignments, approvals, CI statuses, labels, and links are
+  operations on the review object that fold into the materialized `Review` state
+  (`Review{title, description, status, merge_commit, reason, assignees, labels,
+  links, revisions, approvals, ci_statuses}`), matching the reducer signature
+  established in ARCHITECTURE.md §The six machines.
 - **Requested reviewer vs. Assignee:**
   GitHub maintains separate lists for `assignees` (who owns the PR) and
   `requested_reviewers` (who was asked to review); Gerrit has `reviewers` and
@@ -51,11 +52,20 @@ rather than standalone collaborative objects.
   expected to act, mirrors the `issue` object model symmetrically (`object_type:
   "issue"`), and allows clients, bridges, and UI components to share routing
   and assignment logic across object types.
-- **`assign` is an add-wins OR-set (`set-observed-remove`):**
-  Concurrent assignment on one device and removal on another is reconciled
-  via `set-observed-remove` (WRIT-12, `spec/fold.md`). Additions win over
-  concurrent removals. Assignee values are opaque non-empty strings (e.g.
-  usernames or email addresses).
+- **`assign` and `label` are add-wins OR-sets (`set-observed-remove`):**
+  Concurrent assignment or labelling on one device and removal on another is
+  reconciled via `set-observed-remove` (WRIT-12, `spec/fold.md`). Additions win
+  over concurrent removals. Assignee and label values are opaque non-empty strings.
+- **Link directionality: single-sided with derived inverse:**
+  Links are declared single-sided on the object being authored (e.g. a review
+  links to an issue with `relation: "fixes"`). This design avoids multi-repo
+  atomic writes and eliminates inconsistencies where two objects could disagree.
+  The projection cache builds indices (such as `review_links` and `issue_links`)
+  to answer reverse queries (e.g. finding which reviews close an issue, or which
+  issues a review fixes) without requiring writers to write to both refs.
+  A review can express "closes &lt;issue&gt;" cross-repo using workspace-global
+  references (`<repo-id>#<issue-id>`). If both objects declare links to each other,
+  each side folds independently via `keyed-lww` on its own object without conflict.
 - **Interaction with `approval`:**
   Approving a review does **not** automatically clear the assignment or request.
   The assignment is a historical fact about who was asked to review, while an
@@ -97,7 +107,7 @@ uniform length, matching the repository's single object format.
 
 ## Operation Vocabulary
 
-The review family defines seven operation types for `op_version: 1`:
+The review family defines nine operation types for `op_version: 1`:
 
 | `op_type` | Body Schema | Description |
 | --- | --- | --- |
@@ -108,6 +118,8 @@ The review family defines seven operation types for `op_version: 1`:
 | `assign` | `{"add"?: [string], "remove"?: [string]}` | Add or remove review assignees (requested reviewers). |
 | `approval` | `{"revision": oid, "verdict": enum, "subject"?: string, "message"?: string}` | Review vote (`approve`, `request-changes`, `none`). |
 | `ci-status` | `{"revision": oid, "name": string, "state": enum, "url"?: string, "description"?: string, "started_at"?: timestamp, "completed_at"?: timestamp, "external_id"?: string}` | CI check result on a revision head. |
+| `label` | `{"add"?: [string], "remove"?: [string]}` | Add or remove review labels. |
+| `link` | `{"target": reference, "target_type"?: string, "relation": "fixes"\|"relates"\|"none"}` | Associate or retract cross-references (e.g. closes issue). |
 
 ### 1. `create`
 
@@ -339,13 +351,66 @@ head.
 - `external_id` (string, optional): Identifier from the external CI provider
   (e.g. GitHub check run ID).
 
+### 8. `label`
+
+Adds or removes labels on the review.
+
+```jsonc
+{
+  "object_id": "r-7f3a",
+  "object_type": "review",
+  "op_type": "label",
+  "op_version": 1,
+  "body": {
+    "add": ["area/engine", "needs-docs"],
+    "remove": ["wip"]
+  }
+}
+```
+
+- `add` (array of non-empty strings, optional): Labels to attach to the review.
+- `remove` (array of non-empty strings, optional): Labels to remove from the review.
+
+At least one of `add` or `remove` MUST be present and contain at least one item.
+An empty `{}` body or empty arrays (`"add": []`) are invalid.
+
+### 9. `link`
+
+Associates or retracts cross-references between the review and other
+collaborative objects (e.g. closing an issue, cross-repo references).
+
+```jsonc
+{
+  "object_id": "r-7f3a",
+  "object_type": "review",
+  "op_type": "link",
+  "op_version": 1,
+  "body": {
+    "target": "0123456789abcdef0123456789abcdef",
+    "target_type": "issue",
+    "relation": "fixes"
+  }
+}
+```
+
+- `target` (reference string, required): Target reference identifier. Can be
+  a bare local object ID (e.g. `0123456789abcdef0123456789abcdef`) or a
+  qualified cross-repository reference (`<repo-id>#<object-id>`), conforming to
+  `spec/identifiers.md`.
+- `target_type` (string, optional): Target object type (`"issue"`, `"review"`,
+  `"project"`, `"cycle"`, etc.).
+- `relation` (string, required): One of:
+  - `"fixes"`: This review fixes or closes the target issue (the standard "Closes &lt;issue&gt;" reference).
+  - `"relates"`: The review is related to the target object.
+  - `"none"`: Retracts any existing link to `target`.
+
 ## Fold Implications & Merge Strategies
 
 Every body property defined in this vocabulary is mapped to one merge strategy
 from WRIT-12's closed catalogue. A machine-readable copy of these rules is
 published in `spec/testdata/review-ops/field-rules.json`.
 
-Folded review state is `Review{title, description, status, merge_commit, reason, assignees, revisions, approvals, ci_statuses}`.
+Folded review state is `Review{title, description, status, merge_commit, reason, assignees, labels, links, revisions, approvals, ci_statuses}`.
 
 Per WRIT-12, **any field without a declared strategy is not merged**; it is
 treated as unknown data, preserved in the DAG, and ignored during fold.
@@ -375,6 +440,11 @@ treated as unknown data, preserved in the DAG, and ignored during fold.
 | `ci-status` | `started_at` | `keyed-lww` | Scoped by key `[revision, name]` |
 | `ci-status` | `completed_at` | `keyed-lww` | Scoped by key `[revision, name]` |
 | `ci-status` | `external_id` | `keyed-lww` | Scoped by key `[revision, name]` |
+| `label` | `add` | `set-observed-remove` | Add-wins OR-set over label strings |
+| `label` | `remove` | `set-observed-remove` | Add-wins OR-set over label strings |
+| `link` | `target` | `keyed-lww` | Scoped by key `[target]` |
+| `link` | `target_type` | `keyed-lww` | Scoped by key `[target]` |
+| `link` | `relation` | `keyed-lww` | Scoped by key `[target]`; `"none"` retracts link |
 
 ### Deletion and Retraction Semantics
 
@@ -387,6 +457,9 @@ treated as unknown data, preserved in the DAG, and ignored during fold.
   the operation itself remains intact in the DAG.
 - **CI status updates:** A CI status is superseded by emitting a new
   `ci-status` op with the same `(revision, name)` key.
+- **Link retraction:** A cross-reference link is retracted by emitting a `link`
+  op with `relation: "none"` for the specified `target`.
+- **Label removal:** A label is removed by emitting a `label` op with `"remove": [label]`.
 
 ## Forward Compatibility & Unknown Fields
 
@@ -407,7 +480,7 @@ representable in Writ.
 
 The conversion vectors under [`testdata/review-ops/github/`](testdata/review-ops/github/)
 demonstrate this mapping for opened PRs, force-pushes (`synchronize`), reviews,
-dismissals, check runs, commit statuses, requested reviewers, and merges.
+dismissals, check runs, commit statuses, requested reviewers, labels, linked/closing issues, and merges.
 
 ### 1. Pull Request Payload Mapping
 
@@ -423,7 +496,9 @@ dismissals, check runs, commit statuses, requested reviewers, and merges.
 | `number`, `id`, `node_id` | External metadata / workspace-global ID mapping (WRIT-16) |
 | `comments`, `review_comments` | Separate `comment` objects (WRIT-9) referencing `object_id` |
 | `assignees`, `requested_reviewers` (added / removed) | `assign.add` / `assign.remove` (`set-observed-remove`) |
-| `labels`, `milestone` | Workspace metadata / issue links (WRIT-10, WRIT-11) |
+| `labels` (added / removed) | `label.add` / `label.remove` (`set-observed-remove`) |
+| Closing issue references (e.g. "Closes #123") / Linked issues | `link` op (`target: <repo-id>#<issue-id>`, `relation: "fixes"`, `target_type: "issue"`) |
+| `milestone` | Workspace metadata / cycle or project link (WRIT-11) |
 | `mergeable`, `rebaseable` | Derived state computed from git trees by client/projection |
 
 ### 2. Pull Request Review Payload Mapping

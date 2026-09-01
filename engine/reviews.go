@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/writtendev/writ/engine/codec"
+	"github.com/writtendev/writ/engine/state"
 )
 
 // Reviews provides operations on code review collaborative objects.
@@ -323,6 +324,121 @@ func (r *Reviews) Assign(ctx context.Context, id string, add, remove []string) e
 
 	if _, err := r.store.dagStore.Append(ctx, env, frontier); err != nil {
 		return fmt.Errorf("writ: assign review: %w", err)
+	}
+
+	_ = r.store.maybeAutoRefresh(ctx)
+	return nil
+}
+
+// Label adds and/or removes labels on a review.
+func (r *Reviews) Label(ctx context.Context, id string, add, remove []string) error {
+	if r == nil || r.store == nil {
+		return fmt.Errorf("writ: store is nil")
+	}
+	if err := r.store.ensureWritable(); err != nil {
+		return err
+	}
+	if id == "" {
+		return fmt.Errorf("writ: review id cannot be empty")
+	}
+	if len(add) == 0 && len(remove) == 0 {
+		return fmt.Errorf("writ: add or remove must be non-empty")
+	}
+
+	if err := r.store.maybeAutoRefresh(ctx); err != nil {
+		return fmt.Errorf("writ: auto refresh: %w", err)
+	}
+
+	if _, err := r.store.projection.Review(id); err != nil {
+		return err
+	}
+
+	frontier, err := r.store.projection.Frontier(id)
+	if err != nil {
+		return fmt.Errorf("writ: get frontier: %w", err)
+	}
+
+	body := make(map[string]any)
+	if len(add) > 0 {
+		body["add"] = add
+	}
+	if len(remove) > 0 {
+		body["remove"] = remove
+	}
+
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("writ: marshal label body: %w", err)
+	}
+
+	env := codec.Envelope{
+		ObjectID:   id,
+		ObjectType: "review",
+		OpType:     "label",
+		OpVersion:  1,
+		Body:       bodyBytes,
+	}
+
+	if _, err := r.store.dagStore.Append(ctx, env, frontier); err != nil {
+		return fmt.Errorf("writ: label review: %w", err)
+	}
+
+	_ = r.store.maybeAutoRefresh(ctx)
+	return nil
+}
+
+// Link creates or modifies a cross-reference link on a review.
+func (r *Reviews) Link(ctx context.Context, id string, l Link) error {
+	if r == nil || r.store == nil {
+		return fmt.Errorf("writ: store is nil")
+	}
+	if err := r.store.ensureWritable(); err != nil {
+		return err
+	}
+	if id == "" || l.Target == "" || l.Relation == "" {
+		return fmt.Errorf("writ: review id, target, and relation must be non-empty")
+	}
+
+	if _, _, err := state.ParseReference(l.Target); err != nil {
+		return fmt.Errorf("writ: invalid link target: %w", err)
+	}
+
+	if err := r.store.maybeAutoRefresh(ctx); err != nil {
+		return fmt.Errorf("writ: auto refresh: %w", err)
+	}
+
+	if _, err := r.store.projection.Review(id); err != nil {
+		return err
+	}
+
+	frontier, err := r.store.projection.Frontier(id)
+	if err != nil {
+		return fmt.Errorf("writ: get frontier: %w", err)
+	}
+
+	body := map[string]any{
+		"target":   l.Target,
+		"relation": l.Relation,
+	}
+	if l.TargetType != "" {
+		body["target_type"] = l.TargetType
+	}
+
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("writ: marshal link body: %w", err)
+	}
+
+	env := codec.Envelope{
+		ObjectID:   id,
+		ObjectType: "review",
+		OpType:     "link",
+		OpVersion:  1,
+		Body:       bodyBytes,
+	}
+
+	if _, err := r.store.dagStore.Append(ctx, env, frontier); err != nil {
+		return fmt.Errorf("writ: link review: %w", err)
 	}
 
 	_ = r.store.maybeAutoRefresh(ctx)

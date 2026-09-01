@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://writ.dev/spec/review-ops.schema.json",
   "title": "Writ review operations (v1)",
-  "description": "JSON Schema for operations on collaborative objects of type 'review'. Extends the op envelope schema (spec/schemas/op-envelope.schema.json) with body definitions for create, revision, update, set-status, approval, ci-status, and assign. Unknown additional properties are permitted on envelope and body per the forward compatibility rule.",
+  "description": "JSON Schema for operations on collaborative objects of type 'review'. Extends the op envelope schema (spec/schemas/op-envelope.schema.json) with body definitions for create, revision, update, set-status, approval, ci-status, assign, label, and link. Unknown additional properties are permitted on envelope and body per the forward compatibility rule.",
   "type": "object",
   "allOf": [
     {
@@ -141,6 +141,38 @@
           "properties": {
             "body": {
               "$ref": "#/$defs/assign_body"
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "op_type": {
+              "const": "label"
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/label_body"
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "op_type": {
+              "const": "link"
+            }
+          }
+        },
+        "then": {
+          "properties": {
+            "body": {
+              "$ref": "#/$defs/link_body"
             }
           }
         }
@@ -336,6 +368,63 @@
             "remove"
           ]
         }
+      ]
+    },
+    "label_body": {
+      "type": "object",
+      "properties": {
+        "add": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "remove": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "add"
+          ]
+        },
+        {
+          "required": [
+            "remove"
+          ]
+        }
+      ]
+    },
+    "link_body": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "$ref": "https://writ.dev/spec/identifiers.schema.json#/$defs/reference"
+        },
+        "target_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relation": {
+          "type": "string",
+          "enum": [
+            "fixes",
+            "relates",
+            "none"
+          ]
+        }
+      },
+      "required": [
+        "target",
+        "relation"
       ]
     }
   }

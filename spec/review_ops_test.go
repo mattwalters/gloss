@@ -18,7 +18,7 @@ const (
 	reviewOpsSchemaID = "https://writ.dev/spec/review-ops.schema.json"
 )
 
-// compileReviewOpsSchemas compiles both the envelope and review-ops schemas.
+// compileReviewOpsSchemas compiles both the envelope, identifiers, and review-ops schemas.
 // Compilation also validates the documents against the draft 2020-12 meta-schema.
 func compileReviewOpsSchemas(t *testing.T) (*jsonschema.Schema, *jsonschema.Schema) {
 	t.Helper()
@@ -29,6 +29,15 @@ func compileReviewOpsSchemas(t *testing.T) (*jsonschema.Schema, *jsonschema.Sche
 	envDoc, err := jsonschema.UnmarshalJSON(bytes.NewReader(envRaw))
 	if err != nil {
 		t.Fatalf("decoding envelope schema: %v", err)
+	}
+
+	identRaw, err := spec.FS.ReadFile("schemas/identifiers.schema.json")
+	if err != nil {
+		t.Fatalf("reading identifiers schema: %v", err)
+	}
+	identDoc, err := jsonschema.UnmarshalJSON(bytes.NewReader(identRaw))
+	if err != nil {
+		t.Fatalf("decoding identifiers schema: %v", err)
 	}
 
 	revRaw, err := spec.FS.ReadFile("schemas/review-ops.schema.json")
@@ -43,6 +52,9 @@ func compileReviewOpsSchemas(t *testing.T) (*jsonschema.Schema, *jsonschema.Sche
 	c := jsonschema.NewCompiler()
 	if err := c.AddResource(envelopeSchemaID, envDoc); err != nil {
 		t.Fatalf("adding envelope schema resource: %v", err)
+	}
+	if err := c.AddResource(identifiersSchemaID, identDoc); err != nil {
+		t.Fatalf("adding identifiers schema resource: %v", err)
 	}
 	if err := c.AddResource(reviewOpsSchemaID, revDoc); err != nil {
 		t.Fatalf("adding review-ops schema resource: %v", err)
@@ -291,6 +303,8 @@ func TestFieldRules(t *testing.T) {
 		"approval_body":   "approval",
 		"ci_status_body":  "ci-status",
 		"assign_body":     "assign",
+		"label_body":      "label",
+		"link_body":       "link",
 	}
 
 	for defName, opType := range bodyDefs {

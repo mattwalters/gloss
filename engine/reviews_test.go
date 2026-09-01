@@ -381,6 +381,12 @@ func TestReviewsValidationAndNotFound(t *testing.T) {
 	if err := s.Reviews.Assign(ctx, missingID, []string{"alice"}, nil); !errors.Is(err, writ.ErrNotFound) {
 		t.Errorf("expected ErrNotFound for Assign on missing review, got %v", err)
 	}
+	if err := s.Reviews.Label(ctx, missingID, []string{"bug"}, nil); !errors.Is(err, writ.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for Label on missing review, got %v", err)
+	}
+	if err := s.Reviews.Link(ctx, missingID, writ.Link{Target: "iss-1", Relation: "fixes"}); !errors.Is(err, writ.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for Link on missing review, got %v", err)
+	}
 }
 
 func TestReviewsAssign(t *testing.T) {
@@ -446,6 +452,128 @@ func TestReviewsAssign(t *testing.T) {
 	}
 	if len(bobReviews) != 0 {
 		t.Fatalf("expected 0 reviews for removed assignee bob, got %v", bobReviews)
+	}
+}
+
+func TestReviewsLabel(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+
+	// 1. Create review
+	reviewID, err := s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Label Test Review",
+	})
+	if err != nil {
+		t.Fatalf("Create review failed: %v", err)
+	}
+
+	// 2. Add labels
+	if err := s.Reviews.Label(ctx, reviewID, []string{"area/engine", "wip"}, nil); err != nil {
+		t.Fatalf("Label failed: %v", err)
+	}
+
+	res, err := s.Query.Review(reviewID)
+	if err != nil {
+		t.Fatalf("Query.Review failed: %v", err)
+	}
+	if !reflect.DeepEqual(res.Review.Labels, []string{"area/engine", "wip"}) {
+		t.Fatalf("expected labels [area/engine, wip], got %v", res.Review.Labels)
+	}
+
+	// 3. Remove wip, add needs-docs
+	if err := s.Reviews.Label(ctx, reviewID, []string{"needs-docs"}, []string{"wip"}); err != nil {
+		t.Fatalf("Label update failed: %v", err)
+	}
+
+	res, err = s.Query.Review(reviewID)
+	if err != nil {
+		t.Fatalf("Query.Review failed: %v", err)
+	}
+	if !reflect.DeepEqual(res.Review.Labels, []string{"area/engine", "needs-docs"}) {
+		t.Fatalf("expected labels [area/engine, needs-docs], got %v", res.Review.Labels)
+	}
+
+	// 4. Query reviews with Label filter
+	matched, err := s.Query.Reviews(writ.ReviewFilter{
+		Label: []string{"area/engine"},
+	})
+	if err != nil {
+		t.Fatalf("Query.Reviews with label filter failed: %v", err)
+	}
+	if len(matched) != 1 || matched[0].ObjectID != reviewID {
+		t.Fatalf("expected reviewID in matched reviews, got %v", matched)
+	}
+
+	unmatched, err := s.Query.Reviews(writ.ReviewFilter{
+		Label: []string{"wip"},
+	})
+	if err != nil {
+		t.Fatalf("Query.Reviews with wip filter failed: %v", err)
+	}
+	if len(unmatched) != 0 {
+		t.Fatalf("expected 0 reviews for removed label wip, got %v", unmatched)
+	}
+}
+
+func TestReviewsLink(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+
+	// 1. Create review
+	reviewID, err := s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Link Test Review",
+	})
+	if err != nil {
+		t.Fatalf("Create review failed: %v", err)
+	}
+
+	// 2. Link to issue (fixes)
+	targetID := "0123456789abcdef0123456789abcdef"
+	if err := s.Reviews.Link(ctx, reviewID, writ.Link{
+		Target:     targetID,
+		TargetType: "issue",
+		Relation:   "fixes",
+	}); err != nil {
+		t.Fatalf("Link failed: %v", err)
+	}
+
+	res, err := s.Query.Review(reviewID)
+	if err != nil {
+		t.Fatalf("Query.Review failed: %v", err)
+	}
+	if len(res.Review.Links) != 1 {
+		t.Fatalf("expected 1 link, got %d", len(res.Review.Links))
+	}
+	if res.Review.Links[0].Target != targetID || res.Review.Links[0].Relation != "fixes" {
+		t.Fatalf("unexpected link: %+v", res.Review.Links[0])
+	}
+
+	// 3. Retract link
+	if err := s.Reviews.Link(ctx, reviewID, writ.Link{
+		Target:   targetID,
+		Relation: "none",
+	}); err != nil {
+		t.Fatalf("Link retract failed: %v", err)
+	}
+
+	res, err = s.Query.Review(reviewID)
+	if err != nil {
+		t.Fatalf("Query.Review failed: %v", err)
+	}
+	if len(res.Review.Links) != 0 {
+		t.Fatalf("expected 0 links after retraction, got %v", res.Review.Links)
 	}
 }
 

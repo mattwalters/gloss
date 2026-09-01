@@ -150,7 +150,7 @@ _writ() {
                     return 0
                     ;;
                 review)
-                    COMPREPLY=($(compgen -W "open comment approve assign status list" -- "$cur"))
+                    COMPREPLY=($(compgen -W "open comment approve assign label link status list" -- "$cur"))
                     return 0
                     ;;
             esac
@@ -239,7 +239,7 @@ _writ() {
                     COMPREPLY=($(compgen -W "-C -h -help --help" -- "$cur"))
                     return 0
                 fi
-                COMPREPLY=($(compgen -W "open comment approve assign status list" -- "$cur"))
+                COMPREPLY=($(compgen -W "open comment approve assign label link status list" -- "$cur"))
                 return 0
             fi
             case "$subcmd" in
@@ -270,6 +270,24 @@ _writ() {
                 assign)
                     if [[ "$cur" == -* ]]; then
                         COMPREPLY=($(compgen -W "-C -add -remove -h -help --help" -- "$cur"))
+                        return 0
+                    fi
+                    ;;
+                label)
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "-C -add -remove -h -help --help" -- "$cur"))
+                        return 0
+                    fi
+                    ;;
+                link)
+                    case "$prev" in
+                        -relation|--relation)
+                            COMPREPLY=($(compgen -W "fixes relates none" -- "$cur"))
+                            return 0
+                            ;;
+                    esac
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "-C -target -relation -target-type -h -help --help" -- "$cur"))
                         return 0
                     fi
                     ;;
@@ -305,7 +323,7 @@ _writ() {
                             ;;
                     esac
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "-C -status -assignee -author -text -limit -sort -json --json -h -help --help" -- "$cur"))
+                        COMPREPLY=($(compgen -W "-C -status -assignee -label -author -text -limit -sort -json --json -h -help --help" -- "$cur"))
                         return 0
                     fi
                     ;;
@@ -373,7 +391,7 @@ _writ() {
                         '2:subcommand:->help_subcommand'
                     case $line[1] in
                         issue) _values 'issue subcommand' create status assign list link ;;
-                        review) _values 'review subcommand' open comment approve assign status list ;;
+                        review) _values 'review subcommand' open comment approve assign label link status list ;;
                     esac
                     ;;
                 issue)
@@ -483,6 +501,8 @@ _writ_review() {
                 'comment:Add a comment to a review'
                 'approve:Record a review verdict'
                 'assign:Add or remove review assignees'
+                'label:Add or remove review labels'
+                'link:Manage review cross-reference links'
                 'status:View or update review status'
                 'list:List code reviews'
             )
@@ -528,6 +548,23 @@ _writ_review() {
                         '(-h -help --help)'{-h,-help,--help}'[Show help]' \
                         '1:review ID:'
                     ;;
+                label)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '*-add[Add label]:label:' \
+                        '*-remove[Remove label]:label:' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]' \
+                        '1:review ID:'
+                    ;;
+                link)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '-target[Target reference]:ref:' \
+                        '-relation[Link relation]:relation:(fixes relates none)' \
+                        '-target-type[Target object type]:type:' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]' \
+                        '1:review ID:'
+                    ;;
                 status)
                     _arguments -s -S \
                         '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
@@ -543,6 +580,7 @@ _writ_review() {
                         '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
                         '*-status[Filter by review status]:status:(draft open closed merged)' \
                         '*-assignee[Filter by assignee]:assignee:' \
+                        '*-label[Filter by label]:label:' \
                         '*-author[Filter by author]:author:' \
                         '-text[Filter by text query]:text:' \
                         '-limit[Maximum reviews to return]:limit:' \
@@ -654,7 +692,7 @@ complete -c writ -n '__fish_writ_using_command completion' -f -a 'bash zsh fish'
 # Subcommands for help
 complete -c writ -n '__fish_writ_needs_subcommand help' -f -a 'init issue review sync version completion help'
 complete -c writ -n '__fish_writ_needs_subcommand help issue' -f -a 'create status assign list link'
-complete -c writ -n '__fish_writ_needs_subcommand help review' -f -a 'open comment approve assign status list'
+complete -c writ -n '__fish_writ_needs_subcommand help review' -f -a 'open comment approve assign label link status list'
 
 # Flags for commands`)
 

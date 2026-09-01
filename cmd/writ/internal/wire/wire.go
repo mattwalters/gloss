@@ -82,22 +82,31 @@ type ReviewSummary struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// ReviewLink represents a cross-reference link attached to a review.
+type ReviewLink struct {
+	Target     string `json:"target"`
+	TargetType string `json:"target_type,omitempty"`
+	Relation   string `json:"relation"`
+}
+
 // Review is the full detail view of a code review collaborative object.
 type Review struct {
-	ObjectID    string      `json:"object_id"`
-	Title       string      `json:"title"`
-	Description string      `json:"description,omitempty"`
-	Status      string      `json:"status"`
-	MergeCommit string      `json:"merge_commit,omitempty"`
-	Reason      string      `json:"reason,omitempty"`
-	Author      Author      `json:"author"`
-	CreatedAt   time.Time   `json:"created_at"`
-	UpdatedAt   time.Time   `json:"updated_at"`
-	Assignees   []string    `json:"assignees"`
-	Revisions   []Revision  `json:"revisions"`
-	Approvals   []Approval  `json:"approvals"`
-	CIStatuses  []CIStatus  `json:"ci_statuses"`
-	UnknownOps  []UnknownOp `json:"unknown_ops"`
+	ObjectID    string       `json:"object_id"`
+	Title       string       `json:"title"`
+	Description string       `json:"description,omitempty"`
+	Status      string       `json:"status"`
+	MergeCommit string       `json:"merge_commit,omitempty"`
+	Reason      string       `json:"reason,omitempty"`
+	Author      Author       `json:"author"`
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+	Assignees   []string     `json:"assignees"`
+	Labels      []string     `json:"labels"`
+	Links       []ReviewLink `json:"links"`
+	Revisions   []Revision   `json:"revisions"`
+	Approvals   []Approval   `json:"approvals"`
+	CIStatuses  []CIStatus   `json:"ci_statuses"`
+	UnknownOps  []UnknownOp  `json:"unknown_ops"`
 }
 
 // IssueSummary is a single row in the issue list output.
@@ -299,6 +308,18 @@ func FromReviewResult(r writ.ReviewResult) Review {
 	if assignees == nil {
 		assignees = []string{}
 	}
+	labels := r.Review.Labels
+	if labels == nil {
+		labels = []string{}
+	}
+	links := make([]ReviewLink, len(r.Review.Links))
+	for i, l := range r.Review.Links {
+		links[i] = ReviewLink{
+			Target:     l.Target,
+			TargetType: l.TargetType,
+			Relation:   l.Relation,
+		}
+	}
 
 	return Review{
 		ObjectID:    r.ObjectID,
@@ -311,6 +332,8 @@ func FromReviewResult(r writ.ReviewResult) Review {
 		CreatedAt:   r.CreatedAt.UTC(),
 		UpdatedAt:   r.UpdatedAt.UTC(),
 		Assignees:   assignees,
+		Labels:      labels,
+		Links:       links,
 		Revisions:   revisions,
 		Approvals:   approvals,
 		CIStatuses:  ciStatuses,

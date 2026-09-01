@@ -39,12 +39,17 @@ func setupSeededDB(t *testing.T) *projection.DB {
 		"rev-1", 0, "base-1", "head-1")
 	execSQL(t, rawDB, "INSERT INTO review_assignees (review_object_id, assignee) VALUES (?, ?)", "rev-1", "alice")
 	execSQL(t, rawDB, "INSERT INTO review_assignees (review_object_id, assignee) VALUES (?, ?)", "rev-1", "bob")
+	execSQL(t, rawDB, "INSERT INTO review_labels (review_object_id, label) VALUES (?, ?)", "rev-1", "area/engine")
+	execSQL(t, rawDB, "INSERT INTO review_labels (review_object_id, label) VALUES (?, ?)", "rev-1", "needs-docs")
+	execSQL(t, rawDB, "INSERT INTO review_links (review_object_id, target, target_type, relation) VALUES (?, ?, ?, ?)",
+		"rev-1", "iss-1", "issue", "fixes")
 	execSQL(t, rawDB, "INSERT INTO approvals (review_object_id, subject, revision, verdict, message) VALUES (?, ?, ?, ?, ?)",
 		"rev-1", "bob@example.com", "head-1", "approved", "LGTM")
 
 	execSQL(t, rawDB, "INSERT INTO reviews (object_id, title, description, status, merge_commit, reason) VALUES (?, ?, ?, ?, ?, ?)",
 		"rev-2", "Add feature foo_bar", "Implements foo_bar integration", "merged", "merge-sha-2", "")
 	execSQL(t, rawDB, "INSERT INTO review_assignees (review_object_id, assignee) VALUES (?, ?)", "rev-2", "bob")
+	execSQL(t, rawDB, "INSERT INTO review_labels (review_object_id, label) VALUES (?, ?)", "rev-2", "area/engine")
 	execSQL(t, rawDB, "INSERT INTO reviews (object_id, title, description, status, merge_commit, reason) VALUES (?, ?, ?, ?, ?, ?)",
 		"rev-3", "Refactor storage layer", "Clean up legacy drivers", "closed", "", "abandoned")
 
@@ -173,6 +178,16 @@ func TestReviewsFilter(t *testing.T) {
 		{
 			name:    "filter by assignee matching multiple reviews",
 			filter:  projection.ReviewFilter{Assignee: []string{"bob"}},
+			wantIDs: []string{"rev-1", "rev-2"},
+		},
+		{
+			name:    "filter by single label",
+			filter:  projection.ReviewFilter{Label: []string{"needs-docs"}},
+			wantIDs: []string{"rev-1"},
+		},
+		{
+			name:    "filter by label matching multiple reviews",
+			filter:  projection.ReviewFilter{Label: []string{"area/engine"}},
 			wantIDs: []string{"rev-1", "rev-2"},
 		},
 		{
@@ -457,5 +472,28 @@ func TestReposQuery(t *testing.T) {
 	_, errMissing := db.Repo("nonexistent")
 	if errMissing == nil {
 		t.Fatalf("expected ErrNotFound for missing repo, got nil")
+	}
+}
+
+func TestReviewLabelsAndLinksDetails(t *testing.T) {
+	db := setupSeededDB(t)
+	defer db.Close()
+
+	res, err := db.Review("rev-1")
+	if err != nil {
+		t.Fatalf("Review(rev-1) failed: %v", err)
+	}
+
+	wantLabels := []string{"area/engine", "needs-docs"}
+	if !reflect.DeepEqual(res.Review.Labels, wantLabels) {
+		t.Errorf("labels mismatch: got %v, want %v", res.Review.Labels, wantLabels)
+	}
+
+	if len(res.Review.Links) != 1 {
+		t.Fatalf("expected 1 link, got %d", len(res.Review.Links))
+	}
+	link := res.Review.Links[0]
+	if link.Target != "iss-1" || link.TargetType != "issue" || link.Relation != "fixes" {
+		t.Errorf("link mismatch: got %+v", link)
 	}
 }

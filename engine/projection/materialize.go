@@ -84,6 +84,26 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 			}
 		}
 
+		for _, label := range review.Labels {
+			_, err = tx.Exec(
+				"INSERT INTO review_labels (review_object_id, label) VALUES (?, ?)",
+				objectID, label,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert review label %s (%s): %w", objectID, label, err)
+			}
+		}
+
+		for _, link := range review.Links {
+			_, err = tx.Exec(
+				"INSERT INTO review_links (review_object_id, target, target_type, relation) VALUES (?, ?, ?, ?)",
+				objectID, link.Target, link.TargetType, link.Relation,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert review link %s (%s): %w", objectID, link.Target, err)
+			}
+		}
+
 		for _, app := range review.Approvals {
 			_, err = tx.Exec(
 				"INSERT INTO approvals (review_object_id, subject, revision, verdict, message) VALUES (?, ?, ?, ?, ?)",
@@ -362,6 +382,8 @@ func deleteObjectState(tx *sql.Tx, objectID string) error {
 		"DELETE FROM reviews WHERE object_id = ?",
 		"DELETE FROM review_revisions WHERE review_object_id = ?",
 		"DELETE FROM review_assignees WHERE review_object_id = ?",
+		"DELETE FROM review_labels WHERE review_object_id = ?",
+		"DELETE FROM review_links WHERE review_object_id = ?",
 		"DELETE FROM approvals WHERE review_object_id = ?",
 		"DELETE FROM ci_statuses WHERE review_object_id = ?",
 		"DELETE FROM comments WHERE object_id = ?",

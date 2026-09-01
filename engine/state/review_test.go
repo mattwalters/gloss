@@ -648,3 +648,118 @@ func TestFoldReviewAssign(t *testing.T) {
 	}
 }
 
+func TestFoldReviewLabelsORSetCausalAndConcurrent(t *testing.T) {
+	now := time.Unix(100, 0).UTC()
+
+	op1 := codec.Op{
+		Envelope: codec.Envelope{
+			ObjectID:   "r-test",
+			ObjectType: "review",
+			OpType:     "label",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"add":["area/engine","priority/high"]}`),
+		},
+		ID: "op1",
+		Author: codec.Identity{
+			Email: "alice@example.com",
+			When:  now,
+		},
+	}
+
+	op2 := codec.Op{
+		Envelope: codec.Envelope{
+			ObjectID:   "r-test",
+			ObjectType: "review",
+			OpType:     "label",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"remove":["priority/high"]}`),
+		},
+		ID:      "op2",
+		Parents: []string{"op1"},
+		Author: codec.Identity{
+			Email: "alice@example.com",
+			When:  now.Add(time.Minute),
+		},
+	}
+
+	state, err := s.FoldReview([]codec.Op{op1, op2})
+	if err != nil {
+		t.Fatalf("FoldReview failed: %v", err)
+	}
+
+	expectedLabels := []string{"area/engine"}
+	if !reflect.DeepEqual(state.Labels, expectedLabels) {
+		t.Errorf("labels mismatch: got %v, want %v", state.Labels, expectedLabels)
+	}
+}
+
+func TestFoldReviewLinksAndRetraction(t *testing.T) {
+	now := time.Unix(100, 0).UTC()
+
+	link1 := codec.Op{
+		Envelope: codec.Envelope{
+			ObjectID:   "r-test",
+			ObjectType: "review",
+			OpType:     "link",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"target":"0123456789abcdef0123456789abcdef","target_type":"issue","relation":"fixes"}`),
+		},
+		ID: "l1",
+		Author: codec.Identity{
+			Email: "alice@example.com",
+			When:  now,
+		},
+	}
+
+	link2 := codec.Op{
+		Envelope: codec.Envelope{
+			ObjectID:   "r-test",
+			ObjectType: "review",
+			OpType:     "link",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"target":"fedcba9876543210fedcba9876543210","target_type":"issue","relation":"relates"}`),
+		},
+		ID:      "l2",
+		Parents: []string{"l1"},
+		Author: codec.Identity{
+			Email: "alice@example.com",
+			When:  now.Add(time.Minute),
+		},
+	}
+
+	// Retract link1
+	retract1 := codec.Op{
+		Envelope: codec.Envelope{
+			ObjectID:   "r-test",
+			ObjectType: "review",
+			OpType:     "link",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"target":"0123456789abcdef0123456789abcdef","relation":"none"}`),
+		},
+		ID:      "r1",
+		Parents: []string{"l2"},
+		Author: codec.Identity{
+			Email: "alice@example.com",
+			When:  now.Add(2 * time.Minute),
+		},
+	}
+
+	state, err := s.FoldReview([]codec.Op{link1, link2, retract1})
+	if err != nil {
+		t.Fatalf("FoldReview failed: %v", err)
+	}
+
+	if len(state.Links) != 1 {
+		t.Fatalf("expected 1 active link after retraction, got %d", len(state.Links))
+	}
+
+	expectedLink := s.Link{
+		Target:     "fedcba9876543210fedcba9876543210",
+		TargetType: "issue",
+		Relation:   "relates",
+	}
+	if state.Links[0] != expectedLink {
+		t.Errorf("link mismatch: got %+v, want %+v", state.Links[0], expectedLink)
+	}
+}
+

@@ -104,5 +104,40 @@
     "file": "assign-empty-add-array.json",
     "rejects": "schema",
     "reason": "add array must contain at least 1 item"
+  },
+  {
+    "file": "label-empty-body.json",
+    "rejects": "schema",
+    "reason": "label body must provide at least add or remove"
+  },
+  {
+    "file": "label-empty-remove-array.json",
+    "rejects": "schema",
+    "reason": "remove array in label body must contain at least 1 item"
+  },
+  {
+    "file": "link-missing-target.json",
+    "rejects": "schema",
+    "reason": "link op body is missing required target"
+  },
+  {
+    "file": "link-missing-relation.json",
+    "rejects": "schema",
+    "reason": "link op body is missing required relation"
+  },
+  {
+    "file": "link-unknown-relation.json",
+    "rejects": "schema",
+    "reason": "relation 'blocks' is not a permitted relation enum value"
+  },
+  {
+    "file": "link-malformed-ref-two-hashes.json",
+    "rejects": "schema",
+    "reason": "reference must contain at most one hash separator"
+  },
+  {
+    "file": "link-malformed-ref-whitespace.json",
+    "rejects": "schema",
+    "reason": "reference must not contain whitespace"
   }
 ]

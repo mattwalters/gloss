@@ -666,10 +666,70 @@ func TestReview_ErrorSurfaces(t *testing.T) {
 			t.Errorf("stderr missing '-add or -remove is required': %s", stderr.String())
 		}
 	})
+
+	t.Run("missing_label_flags", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setupSigningKey(t, env.repoDir)
+		_ = run(context.Background(), []string{"init", "-C", env.repoDir}, &bytes.Buffer{}, &bytes.Buffer{})
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{"review", "label", "-C", env.repoDir, "12345678"}, &stdout, &stderr)
+		if code != 2 {
+			t.Fatalf("expected exit code 2 for label with no flags, got %d", code)
+		}
+		if !strings.Contains(stderr.String(), "at least one -add or -remove is required") {
+			t.Errorf("stderr missing '-add or -remove is required': %s", stderr.String())
+		}
+	})
+
+	t.Run("missing_link_target", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setupSigningKey(t, env.repoDir)
+		_ = run(context.Background(), []string{"init", "-C", env.repoDir}, &bytes.Buffer{}, &bytes.Buffer{})
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{"review", "link", "-C", env.repoDir, "12345678", "-relation", "fixes"}, &stdout, &stderr)
+		if code != 2 {
+			t.Fatalf("expected exit code 2 for link without target, got %d", code)
+		}
+		if !strings.Contains(stderr.String(), "-target is required") {
+			t.Errorf("stderr missing '-target is required': %s", stderr.String())
+		}
+	})
+
+	t.Run("missing_link_relation", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setupSigningKey(t, env.repoDir)
+		_ = run(context.Background(), []string{"init", "-C", env.repoDir}, &bytes.Buffer{}, &bytes.Buffer{})
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{"review", "link", "-C", env.repoDir, "12345678", "-target", "target1"}, &stdout, &stderr)
+		if code != 2 {
+			t.Fatalf("expected exit code 2 for link without relation, got %d", code)
+		}
+		if !strings.Contains(stderr.String(), "-relation is required") {
+			t.Errorf("stderr missing '-relation is required': %s", stderr.String())
+		}
+	})
+
+	t.Run("bad_link_relation", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setupSigningKey(t, env.repoDir)
+		_ = run(context.Background(), []string{"init", "-C", env.repoDir}, &bytes.Buffer{}, &bytes.Buffer{})
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{"review", "link", "-C", env.repoDir, "12345678", "-target", "target1", "-relation", "bogus"}, &stdout, &stderr)
+		if code != 2 {
+			t.Fatalf("expected exit code 2 for bad relation enum, got %d", code)
+		}
+		if !strings.Contains(stderr.String(), "invalid relation") {
+			t.Errorf("stderr missing invalid relation message: %s", stderr.String())
+		}
+	})
 }
 
 func TestReview_HelpAndUsage(t *testing.T) {
-	for _, subcmd := range []string{"open", "comment", "approve", "assign", "status", "list"} {
+	for _, subcmd := range []string{"open", "comment", "approve", "assign", "label", "link", "status", "list"} {
 		var stdout, stderr bytes.Buffer
 		code := run(context.Background(), []string{"review", subcmd, "-h"}, &stdout, &stderr)
 		if code != 0 {
@@ -851,5 +911,175 @@ func TestReviewComment_ResolveWorkflow(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "comment or thread ID is required to resolve") {
 		t.Errorf("unexpected error message: %s", stderr.String())
+	}
+}
+
+func TestReview_LabelAndLink(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("writ init failed: %s", stderr.String())
+	}
+
+	commitFile(t, env.repoDir, "README.md", "# Hello", "initial commit")
+
+	// 1. Open review
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "open", "-C", env.repoDir,
+		"-title", "Review for label and link test",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review open failed: %s", stderr.String())
+	}
+	reviewID := strings.Split(strings.TrimSpace(stdout.String()), " ")[0]
+	shortID := reviewID[:8]
+
+	// 2. Add labels: area/engine and wip
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "label", "-C", env.repoDir, reviewID,
+		"-add", "area/engine", "-add", "wip",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review label add failed: %s", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "updated labels") {
+		t.Errorf("expected stdout to mention updated labels: %s", stdout.String())
+	}
+
+	// 3. Status shows labels
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "status", "-C", env.repoDir, reviewID,
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review status failed: %s", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Labels:      area/engine, wip") {
+		t.Errorf("status missing labels: %s", stdout.String())
+	}
+
+	// 4. Update labels: remove wip, add needs-docs
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "label", "-C", env.repoDir, reviewID,
+		"-remove", "wip", "-add", "needs-docs",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review label update failed: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "status", "-C", env.repoDir, reviewID,
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review status failed: %s", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Labels:      area/engine, needs-docs") {
+		t.Errorf("status missing updated labels: %s", stdout.String())
+	}
+
+	// 5. Filter reviews by label
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "list", "-C", env.repoDir, "-label", "area/engine",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review list -label failed: %s", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), shortID) {
+		t.Errorf("review list -label missing review %s: %s", shortID, stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "list", "-C", env.repoDir, "-label", "wip",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review list -label wip failed: %s", stderr.String())
+	}
+	if strings.Contains(stdout.String(), shortID) {
+		t.Errorf("review list -label wip unexpectedly contained review %s: %s", shortID, stdout.String())
+	}
+
+	// 6. Link review to issue (fixes)
+	targetID := "0123456789abcdef0123456789abcdef"
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "link", "-C", env.repoDir, reviewID,
+		"-target", targetID, "-relation", "fixes", "-target-type", "issue",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review link failed: %s", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "link fixes -> "+targetID) {
+		t.Errorf("unexpected review link output: %s", stdout.String())
+	}
+
+	// 7. Status shows links
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "status", "-C", env.repoDir, reviewID,
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review status failed: %s", stderr.String())
+	}
+	statusOut := stdout.String()
+	if !strings.Contains(statusOut, "Links:") || !strings.Contains(statusOut, "fixes "+targetID) {
+		t.Errorf("status missing Links section: %s", statusOut)
+	}
+
+	// 8. JSON output check for status
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "status", "-C", env.repoDir, reviewID, "--json",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review status --json failed: %s", stderr.String())
+	}
+	jsonOut := stdout.String()
+	if !strings.Contains(jsonOut, `"labels":["area/engine","needs-docs"]`) {
+		t.Errorf("json status missing labels: %s", jsonOut)
+	}
+	if !strings.Contains(jsonOut, `"links":[{"target":"`+targetID+`","target_type":"issue","relation":"fixes"}]`) {
+		t.Errorf("json status missing links: %s", jsonOut)
+	}
+
+	// 9. Retract link
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "link", "-C", env.repoDir, reviewID,
+		"-target", targetID, "-relation", "none",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review link retract failed: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "status", "-C", env.repoDir, reviewID,
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review status failed: %s", stderr.String())
+	}
+	if strings.Contains(stdout.String(), "Links:") {
+		t.Errorf("status still contains Links after retraction: %s", stdout.String())
 	}
 }
