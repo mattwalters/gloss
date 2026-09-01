@@ -731,4 +731,58 @@ func TestReviewComment_ResolveWorkflow(t *testing.T) {
 	if rootComment.Comment.IsResolved() {
 		t.Errorf("expected root comment to be unresolved")
 	}
+
+	// 9. Resolve directly using comment ID as argument
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "comment", "-C", env.repoDir, commentID,
+		"-resolve",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review comment <commentID> -resolve failed: %s", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "resolved") {
+		t.Errorf("expected stdout to mention resolved: %s", stdout.String())
+	}
+
+	// 10. Reply directly using comment ID as argument with -resolve
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "comment", "-C", env.repoDir, commentID,
+		"-m", "Direct reply with resolve",
+		"-resolve",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review comment <commentID> -m ... -resolve failed: %s", stderr.String())
+	}
+
+	// 11. Unresolve directly using comment ID as argument
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "comment", "-C", env.repoDir, commentID,
+		"-unresolve",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review comment <commentID> -unresolve failed: %s", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "unresolved") {
+		t.Errorf("expected stdout to mention unresolved: %s", stdout.String())
+	}
+
+	// 12. Error when resolving review ID without comment target or message
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "comment", "-C", env.repoDir, reviewID,
+		"-resolve",
+	}, &stdout, &stderr)
+	if code == 0 {
+		t.Fatalf("expected error when resolving review ID without comment target, got code %d", code)
+	}
+	if !strings.Contains(stderr.String(), "comment or thread ID is required to resolve") {
+		t.Errorf("unexpected error message: %s", stderr.String())
+	}
 }

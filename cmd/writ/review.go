@@ -332,7 +332,9 @@ func runReviewComment(ctx context.Context, defaultDir string, args []string, std
 				}
 			}
 			curr := matchedComment.ObjectID
-			for parentMap[curr] != "" {
+			visited := make(map[string]bool, len(comments))
+			for parentMap[curr] != "" && !visited[curr] {
+				visited[curr] = true
 				curr = parentMap[curr]
 			}
 			threadRootID = curr

@@ -217,3 +217,53 @@ func TestWire_CommentMapping(t *testing.T) {
 		t.Errorf("expected JSON to contain '\"positions\":[', got: %s", jsonStr)
 	}
 }
+
+func TestWire_CommentThreadMapping(t *testing.T) {
+	resolvedBool := true
+	thread := state.CommentThread{
+		ObjectID: "c-root",
+		Comment: state.Comment{
+			Subject: state.CommentSubject{
+				ObjectType: "review",
+				ObjectID:   "r-1",
+			},
+			Text:     "Root comment",
+			Resolved: &resolvedBool,
+			Actor:    "bob",
+		},
+		Replies: []state.CommentThread{
+			{
+				ObjectID: "c-reply",
+				Comment: state.Comment{
+					Subject: state.CommentSubject{
+						ObjectType: "review",
+						ObjectID:   "r-1",
+					},
+					InReplyTo: "c-root",
+					Text:      "Reply comment",
+				},
+			},
+		},
+	}
+
+	wireThread := wire.FromCommentThread(thread)
+	if wireThread.ObjectID != "c-root" {
+		t.Errorf("expected root ID 'c-root', got %q", wireThread.ObjectID)
+	}
+	if !wireThread.Comment.Resolved {
+		t.Errorf("expected wireThread.Comment.Resolved == true")
+	}
+	if wireThread.Comment.ResolvedBy != "bob" {
+		t.Errorf("expected wireThread.Comment.ResolvedBy == 'bob', got %q", wireThread.Comment.ResolvedBy)
+	}
+	if len(wireThread.Replies) != 1 {
+		t.Fatalf("expected 1 reply, got %d", len(wireThread.Replies))
+	}
+	if wireThread.Replies[0].ObjectID != "c-reply" {
+		t.Errorf("expected reply ID 'c-reply', got %q", wireThread.Replies[0].ObjectID)
+	}
+	if wireThread.Replies[0].Comment.Resolved {
+		t.Errorf("expected reply to be unresolved")
+	}
+}
+
