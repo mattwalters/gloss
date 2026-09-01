@@ -77,7 +77,11 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 	// 2. Discover existing chains for collision avoidance
 	var taken func(identity.WriterID) bool
 	if gitInfo, err := gitdir.Resolve(repoRoot); err == nil {
-		storer := gitdir.OpenStorage(gitInfo)
+		storer, err := gitdir.OpenStorage(gitInfo)
+		if err != nil {
+			fmt.Fprintf(stderr, "writ init: %v\n", err)
+			return 1
+		}
 		if chains, err := dag.Chains(storer); err == nil {
 			existing := make(map[identity.WriterID]struct{}, len(chains))
 			for _, chain := range chains {

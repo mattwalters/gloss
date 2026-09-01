@@ -57,7 +57,10 @@ func Open(repoDir string, ident identity.Identity, opts ...Option) (*Client, err
 	if err != nil {
 		return nil, fmt.Errorf("sync: open repo %s: %w", repoDir, err)
 	}
-	storer := gitdir.OpenStorage(info)
+	storer, err := gitdir.OpenStorage(info)
+	if err != nil {
+		return nil, fmt.Errorf("sync: open repo %s: %w", repoDir, err)
+	}
 	return OpenStorage(storer, repoDir, ident, opts...)
 }
 

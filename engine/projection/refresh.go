@@ -503,12 +503,13 @@ func resolveTargetTips(s storage.Storer, explicitRefs []string) (map[string]stri
 			continue
 		}
 
-		// Try explicit reference and standard git revision prefix candidates
+		// Try explicit reference and standard git revision prefix candidates,
+		// in the precedence order gitrevisions defines (tags before heads).
 		candidates := []plumbing.ReferenceName{
 			plumbing.ReferenceName(refName),
 			plumbing.ReferenceName("refs/" + refName),
-			plumbing.ReferenceName("refs/heads/" + refName),
 			plumbing.ReferenceName("refs/tags/" + refName),
+			plumbing.ReferenceName("refs/heads/" + refName),
 			plumbing.ReferenceName("refs/remotes/" + refName),
 			plumbing.ReferenceName("refs/remotes/" + refName + "/HEAD"),
 		}
@@ -541,4 +542,3 @@ func resolveTargetTips(s storage.Storer, explicitRefs []string) (map[string]stri
 
 	return targetTips, nil
 }
-

@@ -56,7 +56,10 @@ func Open(repoDir string, ident identity.Identity, opts ...Option) (*Store, erro
 	if err != nil {
 		return nil, fmt.Errorf("dag: open repo %s: %w", repoDir, err)
 	}
-	storer := gitdir.OpenStorage(info)
+	storer, err := gitdir.OpenStorage(info)
+	if err != nil {
+		return nil, fmt.Errorf("dag: open repo %s: %w", repoDir, err)
+	}
 	s := &Store{
 		repoDir:  repoDir,
 		storer:   storer,

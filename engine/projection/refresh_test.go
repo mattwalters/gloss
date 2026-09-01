@@ -433,4 +433,34 @@ func TestRefresh_WithTargetRefsResolution(t *testing.T) {
 	}
 }
 
+// gitrevisions resolves a bare name against refs/tags before refs/heads.
+func TestRefresh_TargetRefTagBeatsBranch(t *testing.T) {
+	ctx := context.Background()
+	repo, store := createTestStore(t, "0123456789abcdef")
 
+	branchCommit := plumbing.NewHash("1111111111111111111111111111111111111111")
+	tagCommit := plumbing.NewHash("2222222222222222222222222222222222222222")
+	_ = repo.Storer.SetReference(plumbing.NewHashReference("refs/heads/release", branchCommit))
+	_ = repo.Storer.SetReference(plumbing.NewHashReference("refs/tags/release", tagCommit))
+
+	db, err := projection.Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open projection failed: %v", err)
+	}
+	defer db.Close()
+
+	env := makeReviewEnv("rev-precedence", "create", 1, map[string]any{"title": "Precedence"})
+	_, _ = store.Append(ctx, env, nil)
+
+	if _, err := db.Refresh(store, projection.WithTargetRefs("release")); err != nil {
+		t.Fatalf("Refresh failed: %v", err)
+	}
+
+	var tip string
+	if err := db.DB().QueryRow("SELECT tip FROM code_tips WHERE ref_name = ?", "release").Scan(&tip); err != nil {
+		t.Fatalf("query code_tips: %v", err)
+	}
+	if tip != tagCommit.String() {
+		t.Errorf("code_tips[release] = %s, want tag %s", tip, tagCommit.String())
+	}
+}

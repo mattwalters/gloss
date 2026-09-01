@@ -34,12 +34,17 @@ type mutableClock struct {
 func (c *mutableClock) set(t time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.now = t
+	c.now = t.UTC()
 }
 
 func (c *mutableClock) get() time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	// Steps may omit At. Without a default, ops would be stamped with the zero
+	// time and `git commit` would reject GIT_AUTHOR_DATE outright.
+	if c.now.IsZero() {
+		return time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	}
 	return c.now
 }
 

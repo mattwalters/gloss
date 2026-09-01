@@ -1,9 +1,11 @@
 package gitdir_test
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/go-git/go-git/v5/plumbing"
@@ -24,6 +26,14 @@ func runGit(t *testing.T, dir string, args ...string) string {
 	if err != nil {
 		t.Fatalf("git %v failed: %v\nOutput: %s", args, err, string(out))
 	}
+	return string(out)
+}
+
+func runGitAllowFail(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, _ := cmd.CombinedOutput()
 	return string(out)
 }
 
@@ -79,7 +89,10 @@ func TestResolve_StandardRepo(t *testing.T) {
 	}
 
 	// Test OpenStorage
-	storer := gitdir.OpenStorage(info)
+	storer, err := gitdir.OpenStorage(info)
+	if err != nil {
+		t.Fatalf("OpenStorage failed: %v", err)
+	}
 	if storer == nil {
 		t.Fatal("OpenStorage returned nil storer")
 	}
@@ -121,7 +134,10 @@ func TestResolve_LinkedWorktree(t *testing.T) {
 	}
 
 	// Test OpenStorage on worktree
-	storer := gitdir.OpenStorage(info)
+	storer, err := gitdir.OpenStorage(info)
+	if err != nil {
+		t.Fatalf("OpenStorage failed: %v", err)
+	}
 	if storer == nil {
 		t.Fatal("OpenStorage returned nil")
 	}
@@ -172,5 +188,59 @@ func TestResolve_NonGitDir(t *testing.T) {
 	_, err := gitdir.Resolve(nonGitDir)
 	if err == nil {
 		t.Fatalf("expected error for non-git directory, got nil")
+	}
+}
+
+func TestOpenStorage_RejectsUnsupportedRefStorage(t *testing.T) {
+	dir := evalPath(t, t.TempDir())
+	out := runGitAllowFail(t, dir, "init", "--ref-format=reftable", "-b", "main")
+	if strings.Contains(out, "unknown ref storage format") || strings.Contains(out, "usage:") {
+		t.Skipf("git does not support --ref-format=reftable: %s", out)
+	}
+
+	info, err := gitdir.Resolve(dir)
+	if err != nil {
+		t.Fatalf("Resolve failed: %v", err)
+	}
+	// A reftable repository keeps no refs under .git/refs, so the filesystem
+	// storer would report an empty repository and write ops into loose refs
+	// that system git never sees.
+	if _, err := gitdir.OpenStorage(info); !errors.Is(err, gitdir.ErrUnsupportedRepository) {
+		t.Fatalf("OpenStorage error = %v, want ErrUnsupportedRepository", err)
+	}
+}
+
+func TestOpenStorage_RejectsUnsupportedObjectFormat(t *testing.T) {
+	dir := evalPath(t, t.TempDir())
+	runGit(t, dir, "init", "-b", "main")
+	runGit(t, dir, "config", "core.repositoryformatversion", "1")
+	runGit(t, dir, "config", "extensions.objectFormat", "sha256")
+
+	info, err := gitdir.Resolve(dir)
+	if err != nil {
+		t.Fatalf("Resolve failed: %v", err)
+	}
+	if _, err := gitdir.OpenStorage(info); !errors.Is(err, gitdir.ErrUnsupportedRepository) {
+		t.Fatalf("OpenStorage error = %v, want ErrUnsupportedRepository", err)
+	}
+}
+
+// WRIT-93: worktreeConfig and friends are layout-neutral and must keep working,
+// even though go-git's porcelain loader rejects them.
+func TestOpenStorage_AllowsLayoutNeutralExtensions(t *testing.T) {
+	for _, ext := range []string{"worktreeConfig", "partialClone", "preciousObjects"} {
+		t.Run(ext, func(t *testing.T) {
+			dir := evalPath(t, t.TempDir())
+			runGit(t, dir, "init", "-b", "main")
+			runGit(t, dir, "config", "extensions."+ext, "true")
+
+			info, err := gitdir.Resolve(dir)
+			if err != nil {
+				t.Fatalf("Resolve failed: %v", err)
+			}
+			if _, err := gitdir.OpenStorage(info); err != nil {
+				t.Fatalf("OpenStorage with extensions.%s: %v", ext, err)
+			}
+		})
 	}
 }

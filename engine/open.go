@@ -94,11 +94,14 @@ func Open(path string, opts ...Option) (*Store, error) {
 		repoDir = gitInfo.GitDir
 	}
 
-	storer := gitdir.OpenStorage(gitdir.Info{
+	storer, err := gitdir.OpenStorage(gitdir.Info{
 		WorkTree:  gitInfo.WorkTree,
 		GitDir:    gitInfo.GitDir,
 		CommonDir: gitInfo.CommonDir,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("writ: open git repo %s: %w", repoDir, err)
+	}
 
 	// Read writer identity (non-fatal if unconfigured)
 	ident, identErr := identity.Load(context.Background(), repoDir)
