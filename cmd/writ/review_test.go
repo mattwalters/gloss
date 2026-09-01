@@ -1083,3 +1083,141 @@ func TestReview_LabelAndLink(t *testing.T) {
 		t.Errorf("status still contains Links after retraction: %s", stdout.String())
 	}
 }
+
+// openReviewWithRevision initializes writ in dir, opens a review and pushes one
+// revision, so that an approval has a head to attach to. Returns the review ID.
+func openReviewWithRevision(t *testing.T, dir string) string {
+	t.Helper()
+
+	var stdout, stderr bytes.Buffer
+	if code := run(context.Background(), []string{"init", "-C", dir}, &stdout, &stderr); code != 0 {
+		t.Fatalf("writ init failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	commitFile(t, dir, "README.md", "# Hello", "initial commit")
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := run(context.Background(), []string{
+		"review", "open", "-C", dir, "-title", "Approval subject",
+	}, &stdout, &stderr); code != 0 {
+		t.Fatalf("review open failed with %d; stderr: %s", code, stderr.String())
+	}
+	matches := regexp.MustCompile(`^([0-9a-f]{32}) `).FindStringSubmatch(strings.TrimSpace(stdout.String()))
+	if len(matches) < 2 {
+		t.Fatalf("unexpected review open output: %q", stdout.String())
+	}
+	reviewID := matches[1]
+
+	revHead := commitFile(t, dir, "feature.go", "package main", "feature commit")
+	store, err := writ.Open(dir)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	if err := store.Reviews.PushRevision(context.Background(), reviewID, revHead, revHead); err != nil {
+		t.Fatalf("push revision: %v", err)
+	}
+	_ = store.Close()
+
+	return reviewID
+}
+
+// reviewApprovalSubjects returns the subject of every approval recorded on a
+// review, in fold order.
+func reviewApprovalSubjects(t *testing.T, dir, reviewID string) []string {
+	t.Helper()
+
+	store, err := writ.Open(dir)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer store.Close()
+
+	res, err := store.Query.Review(reviewID)
+	if err != nil {
+		t.Fatalf("query review: %v", err)
+	}
+	subjects := make([]string, 0, len(res.Review.Approvals))
+	for _, app := range res.Review.Approvals {
+		subjects = append(subjects, app.Subject)
+	}
+	return subjects
+}
+
+// TestReviewApprove_Subject covers both halves of the approval subject fallback
+// chain. Approvals are keyed on {subject, revision}, so a subject that
+// normalizes away does not merely lose attribution: every anonymous approval on
+// a revision collapses into one entry, last verdict winning, and two reviewers
+// silently overwrite each other.
+func TestReviewApprove_Subject(t *testing.T) {
+	// An explicit -subject is used as given, and a whitespace-only one falls
+	// back to the writer email. The engine normalizes the subject on the way
+	// into the op, so a raw != "" guard on the flag would skip the fallback and
+	// record an approval attributed to nobody.
+	t.Run("flag", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setupSigningKey(t, env.repoDir)
+
+		reviewID := openReviewWithRevision(t, env.repoDir)
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{
+			"review", "approve", "-C", env.repoDir, reviewID, "-subject", "   ",
+		}, &stdout, &stderr); code != 0 {
+			t.Fatalf("review approve with whitespace subject failed with %d; stderr: %s", code, stderr.String())
+		}
+
+		// A real -subject must reach the op rather than being overridden by the
+		// writer email, and is normalized on the way in.
+		stdout.Reset()
+		stderr.Reset()
+		if code := run(context.Background(), []string{
+			"review", "approve", "-C", env.repoDir, reviewID, "-subject", "  Bob@Example.com ",
+		}, &stdout, &stderr); code != 0 {
+			t.Fatalf("review approve with explicit subject failed with %d; stderr: %s", code, stderr.String())
+		}
+
+		subjects := reviewApprovalSubjects(t, env.repoDir, reviewID)
+		if len(subjects) != 2 {
+			t.Fatalf("approval subjects = %q, want 2 distinct subjects", subjects)
+		}
+		got := map[string]bool{}
+		for _, s := range subjects {
+			got[s] = true
+		}
+		if !got["alice@example.com"] {
+			t.Errorf("approval subjects = %q, missing alice@example.com (whitespace -subject must fall back to the writer email)", subjects)
+		}
+		if !got["bob@example.com"] {
+			t.Errorf("approval subjects = %q, missing bob@example.com (an explicit -subject must reach the op, normalized)", subjects)
+		}
+	})
+
+	// With no -subject at all and a whitespace-only user.email, the writer ID is
+	// the last link in the chain. A raw != "" guard on writer.Email would skip
+	// it and record the same anonymous approval.
+	t.Run("whitespace_writer_email", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		const writerID = "cccccccccccccccc"
+		setGitConfig(t, env.repoDir, "writ.writerId", writerID)
+		setupSigningKey(t, env.repoDir)
+		// Set the whitespace email after setupSigningKey: its getGitConfigAll
+		// probe trims and drops empty lines, so a whitespace user.email set
+		// before it would be overwritten with alice@example.com.
+		setGitConfig(t, env.repoDir, "user.email", "   ")
+
+		reviewID := openReviewWithRevision(t, env.repoDir)
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{
+			"review", "approve", "-C", env.repoDir, reviewID,
+		}, &stdout, &stderr); code != 0 {
+			t.Fatalf("review approve failed with %d; stderr: %s", code, stderr.String())
+		}
+
+		subjects := reviewApprovalSubjects(t, env.repoDir, reviewID)
+		if len(subjects) != 1 || subjects[0] != writerID {
+			t.Errorf("approval subjects = %q, want [%q] (whitespace user.email must fall back to the writer ID)", subjects, writerID)
+		}
+	})
+}
