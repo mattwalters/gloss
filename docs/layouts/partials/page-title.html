@@ -1,0 +1,29 @@
+{{- /*
+  page-title.html — the display title for a page, however it got its content.
+
+  Pages authored for this site carry front matter and just use .Title. The
+  spec is different: /spec is mounted rather than copied, and those files
+  deliberately carry no front matter so they stay clean when read on GitHub.
+  Hugo does not synthesise a title from a filename, so .Title is empty for
+  every one of them — which rendered the spec index as a list of blank
+  bullets and gave every spec page a "<title> — Writ" browser tab.
+
+  The spec authors already wrote real titles as each file's first H1, so
+  that is what this reads. Filename humanising is the last resort only: it
+  would discard the subtitles ("Anchors — content-based comment positions"),
+  which are the useful half when scanning a spec index.
+
+  Deliberately not solved by adding front matter to spec/ (two sources of
+  truth for one heading) or by a hand-maintained menu (a new spec page would
+  silently render untitled again).
+*/ -}}
+{{- if .Title -}}
+  {{- .Title -}}
+{{- else -}}
+  {{- $h1 := findRESubmatch `(?m)^#[ \t]+(.+?)[ \t]*$` .RawContent 1 -}}
+  {{- if $h1 -}}
+    {{- index (index $h1 0) 1 -}}
+  {{- else -}}
+    {{- with .File }}{{ .ContentBaseName | humanize }}{{ end -}}
+  {{- end -}}
+{{- end -}}

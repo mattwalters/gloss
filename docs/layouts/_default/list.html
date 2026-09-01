@@ -5,7 +5,7 @@
   {{ if .Pages }}
   <ul>
     {{ range .Pages }}
-    <li><a href="{{ .RelPermalink }}">{{ .Title }}</a>{{ with .Description }} — {{ . }}{{ end }}</li>
+    <li><a href="{{ .RelPermalink }}">{{ partial "page-title.html" . }}</a>{{ with .Description }} — {{ . }}{{ end }}</li>
     {{ end }}
   </ul>
   {{ end }}
