@@ -1,0 +1,15 @@
+# htmltest configuration — internal link checking for the built docs site.
+# External links are skipped: they are repo URLs controlled by params.ref,
+# and checking them would make CI flaky on network issues or tag lag.
+#
+# DirectoryPath is set here for local convenience (make docs && htmltest),
+# overridden on the CI command line for the frozen build.
+DirectoryPath: "public"
+CheckExternal: false
+CheckInternalHashReferences: true
+IgnoreDirectoryMissingTrailingSlash: true
+# The unversioned root build's nav bar points at /latest/docs/ etc. which
+# only exist on the live site after a tag deploy. These are navigation
+# links in baseof.html, not spec cross-references — ignore them here.
+IgnoreURLs:
+  - "latest/"
