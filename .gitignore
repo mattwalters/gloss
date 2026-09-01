@@ -51,8 +51,9 @@ dist/
 public/
 docs/.hugo_build.lock
 
-# Video casts generated on tag push (posters under docs/static/posters are committed)
+# Video casts and poster screenshots generated on tag push
 docs/static/casts/
+docs/static/posters/
 
 # htmltest scratch (its default cache dir, written by a local link check)
 tmp/

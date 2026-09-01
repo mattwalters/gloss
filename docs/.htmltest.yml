@@ -9,8 +9,9 @@ CheckExternal: false
 CheckInternalHashReferences: true
 IgnoreDirectoryMissingTrailingSlash: true
 # The unversioned root build's nav bar points at /latest/docs/ etc. which
-# only exist on the live site after a tag deploy. Casts are rendered on
+# only exist on the live site after a tag deploy. Casts and posters are rendered on
 # tag push only and staged directly at deploy. Ignore them during PR link checks.
 IgnoreURLs:
   - "latest/"
   - "casts/"
+  - "posters/"
