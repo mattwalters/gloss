@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/go-git/go-git/v5/storage"
 	"github.com/writtendev/writ/engine/codec"
@@ -456,6 +457,28 @@ func parseTimeWithZone(sec int64, tz string) time.Time {
 	return time.Unix(sec, 0).UTC()
 }
 
+func peelToCommit(s storage.Storer, h plumbing.Hash) plumbing.Hash {
+	if s == nil || h.IsZero() {
+		return h
+	}
+	curr := h
+	for {
+		tag, err := object.GetTag(s, curr)
+		if err != nil || tag == nil {
+			break
+		}
+		if tag.TargetType == plumbing.CommitObject {
+			return tag.Target
+		}
+		if tag.TargetType == plumbing.TagObject {
+			curr = tag.Target
+			continue
+		}
+		break
+	}
+	return curr
+}
+
 func resolveTargetTips(s storage.Storer, explicitRefs []string) (map[string]string, error) {
 	targetTips := make(map[string]string)
 	if s == nil {
@@ -466,7 +489,7 @@ func resolveTargetTips(s storage.Storer, explicitRefs []string) (map[string]stri
 		// Default to HEAD
 		headRef, err := storer.ResolveReference(s, plumbing.HEAD)
 		if err == nil && headRef != nil {
-			targetTips[headRef.Name().String()] = headRef.Hash().String()
+			targetTips[headRef.Name().String()] = peelToCommit(s, headRef.Hash()).String()
 		}
 		return targetTips, nil
 	}
@@ -475,7 +498,7 @@ func resolveTargetTips(s storage.Storer, explicitRefs []string) (map[string]stri
 		if refName == "HEAD" {
 			headRef, err := storer.ResolveReference(s, plumbing.HEAD)
 			if err == nil && headRef != nil {
-				targetTips["HEAD"] = headRef.Hash().String()
+				targetTips["HEAD"] = peelToCommit(s, headRef.Hash()).String()
 			}
 			continue
 		}
@@ -493,7 +516,7 @@ func resolveTargetTips(s storage.Storer, explicitRefs []string) (map[string]stri
 		for _, cand := range candidates {
 			ref, err := storer.ResolveReference(s, cand)
 			if err == nil && ref != nil {
-				targetTips[refName] = ref.Hash().String()
+				targetTips[refName] = peelToCommit(s, ref.Hash()).String()
 				resolved = true
 				break
 			}
@@ -507,9 +530,15 @@ func resolveTargetTips(s storage.Storer, explicitRefs []string) (map[string]stri
 		if !h.IsZero() {
 			if _, err := s.EncodedObject(plumbing.CommitObject, h); err == nil {
 				targetTips[refName] = h.String()
+			} else {
+				peeled := peelToCommit(s, h)
+				if peeled != h && !peeled.IsZero() {
+					targetTips[refName] = peeled.String()
+				}
 			}
 		}
 	}
 
 	return targetTips, nil
 }
+

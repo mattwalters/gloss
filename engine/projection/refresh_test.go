@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/storage/memory"
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/dag"
@@ -366,6 +367,28 @@ func TestRefresh_WithTargetRefsResolution(t *testing.T) {
 	_ = repo.Storer.SetReference(plumbing.NewHashReference(plumbing.ReferenceName("refs/remotes/origin/feat"), testCommitHash))
 	_ = repo.Storer.SetReference(plumbing.NewHashReference(plumbing.ReferenceName("refs/tags/v1.0"), testCommitHash))
 
+	// Create an annotated tag pointing to testCommitHash
+	tagObj := &object.Tag{
+		Name: "v2.0",
+		Tagger: object.Signature{
+			Name:  "Test Tagger",
+			Email: "tagger@example.com",
+			When:  time.Now().UTC(),
+		},
+		Message:    "Release 2.0",
+		TargetType: plumbing.CommitObject,
+		Target:     testCommitHash,
+	}
+	tagEncoded := repo.Storer.NewEncodedObject()
+	if err := tagObj.Encode(tagEncoded); err != nil {
+		t.Fatal(err)
+	}
+	tagHash, err := repo.Storer.SetEncodedObject(tagEncoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = repo.Storer.SetReference(plumbing.NewHashReference(plumbing.ReferenceName("refs/tags/v2.0"), tagHash))
+
 	db, err := projection.Open(":memory:")
 	if err != nil {
 		t.Fatalf("Open projection failed: %v", err)
@@ -375,8 +398,8 @@ func TestRefresh_WithTargetRefsResolution(t *testing.T) {
 	env := makeReviewEnv("rev-target", "create", 1, map[string]any{"title": "Target Ref Test"})
 	_, _ = store.Append(ctx, env, nil)
 
-	// Refresh with short branch name "main", remote branch "origin/feat", and tag "v1.0"
-	_, err = db.Refresh(store, projection.WithTargetRefs("main", "origin/feat", "v1.0"))
+	// Refresh with short branch name "main", remote branch "origin/feat", lightweight tag "v1.0", and annotated tag "v2.0"
+	_, err = db.Refresh(store, projection.WithTargetRefs("main", "origin/feat", "v1.0", "v2.0"))
 	if err != nil {
 		t.Fatalf("Refresh with target refs failed: %v", err)
 	}
@@ -405,5 +428,9 @@ func TestRefresh_WithTargetRefsResolution(t *testing.T) {
 	if tips["v1.0"] != testCommitHash.String() {
 		t.Errorf("code_tips[v1.0] = %s, want %s", tips["v1.0"], testCommitHash.String())
 	}
+	if tips["v2.0"] != testCommitHash.String() {
+		t.Errorf("code_tips[v2.0] = %s, want %s (annotated tag should peel to commit)", tips["v2.0"], testCommitHash.String())
+	}
 }
+
 

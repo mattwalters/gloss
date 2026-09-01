@@ -2,6 +2,7 @@ package writ_test
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/writtendev/writ/engine"
@@ -193,3 +194,44 @@ func TestOpenSparseCheckoutRepository(t *testing.T) {
 		t.Fatalf("unexpected issues query result: %+v", issues)
 	}
 }
+
+func TestOpenLinkedWorktreeWithExtensions(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+
+	// Configure extensions on main repo
+	runGitCmd(t, repoDir, "config", "core.repositoryformatversion", "0")
+	runGitCmd(t, repoDir, "config", "extensions.worktreeConfig", "true")
+
+	// Create linked worktree
+	wtDir := filepath.Join(t.TempDir(), "wt-ext")
+	runGitCmd(t, repoDir, "worktree", "add", wtDir, "-b", "wt-ext-branch")
+
+	// Create annotated tag in main repo
+	runGitCmd(t, repoDir, "tag", "-a", "v1.0.0", "-m", "Release 1.0.0")
+
+	ctx := context.Background()
+	s, err := writ.Open(wtDir, writ.WithSigner(dummySigner()), writ.WithTargetRefs("v1.0.0"))
+	if err != nil {
+		t.Fatalf("writ.Open failed on linked worktree with extensions: %v", err)
+	}
+	defer s.Close()
+
+	issueID, err := s.Issues.Create(ctx, writ.NewIssue{
+		Title: "Linked worktree with extensions issue",
+	})
+	if err != nil {
+		t.Fatalf("Issues.Create failed: %v", err)
+	}
+	if issueID == "" {
+		t.Fatal("expected non-empty issue ID")
+	}
+
+	issues, err := s.Query.Issues(writ.IssueFilter{})
+	if err != nil {
+		t.Fatalf("Query.Issues failed: %v", err)
+	}
+	if len(issues) != 1 || issues[0].ObjectID != issueID {
+		t.Fatalf("unexpected issues query result: %+v", issues)
+	}
+}
+
