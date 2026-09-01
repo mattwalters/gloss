@@ -164,30 +164,43 @@ func newSetObservedRemoveAccumulator(rule Rule, reach ReachOracle) (Accumulator,
 }
 
 func (a *setObservedRemoveAccumulator) Apply(op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
-	raw, ok := body[a.field]
-	if !ok || raw == nil {
-		return nil
+	var addRaw, remRaw any
+	if bodyMap, ok := body[a.field].(map[string]any); ok {
+		addRaw = bodyMap["add"]
+		remRaw = bodyMap["remove"]
+	} else {
+		if raw, ok := body[a.field]; ok && raw != nil {
+			if a.field == "add" {
+				addRaw = raw
+				remRaw = body["remove"]
+			} else if a.field == "remove" {
+				remRaw = raw
+				addRaw = body["add"]
+			}
+		}
 	}
-	bodyMap, ok := raw.(map[string]any)
-	if !ok {
+
+	if addRaw == nil && remRaw == nil {
 		return nil
 	}
 	a.hasOps = true
-	if addRaw, ok := bodyMap["add"].([]any); ok {
-		for _, it := range addRaw {
+
+	if slice, ok := addRaw.([]any); ok {
+		for _, it := range slice {
 			a.adds = append(a.adds, orSetAddRecord{opID: op.ID, item: fmt.Sprint(it)})
 		}
-	} else if addRaw, ok := bodyMap["add"].([]string); ok {
-		for _, it := range addRaw {
+	} else if slice, ok := addRaw.([]string); ok {
+		for _, it := range slice {
 			a.adds = append(a.adds, orSetAddRecord{opID: op.ID, item: it})
 		}
 	}
-	if remRaw, ok := bodyMap["remove"].([]any); ok {
-		for _, it := range remRaw {
+
+	if slice, ok := remRaw.([]any); ok {
+		for _, it := range slice {
 			a.removes = append(a.removes, orSetRemoveRecord{opID: op.ID, item: fmt.Sprint(it)})
 		}
-	} else if remRaw, ok := bodyMap["remove"].([]string); ok {
-		for _, it := range remRaw {
+	} else if slice, ok := remRaw.([]string); ok {
+		for _, it := range slice {
 			a.removes = append(a.removes, orSetRemoveRecord{opID: op.ID, item: it})
 		}
 	}

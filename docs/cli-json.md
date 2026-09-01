@@ -108,6 +108,7 @@ Fetches detailed status and folded state for a single code review.
 | `author` | object | Creator identity: `{ "name": string, "email": string }`. |
 | `created_at` | string | Creation timestamp in RFC 3339 UTC. |
 | `updated_at` | string | Last modification timestamp in RFC 3339 UTC. |
+| `assignees` | array of strings | Assigned reviewer emails or user identities: `[ string ]`. |
 | `revisions` | array of objects | Pushed revisions: `[ { "base": string, "head": string } ]`. |
 | `approvals` | array of objects | Recorded review verdicts: `[ { "subject": string, "revision": string, "verdict": string, "message": string } ]`. |
 | `ci_statuses` | array of objects | Automated CI checks: `[ { "revision": string, "name": string, "state": string, "url": string, "description": string, "started_at": string, "completed_at": string, "external_id": string } ]`. |
@@ -130,6 +131,9 @@ Fetches detailed status and folded state for a single code review.
     },
     "created_at": "2026-01-01T00:00:00Z",
     "updated_at": "2026-01-01T00:05:00Z",
+    "assignees": [
+      "bob@example.com"
+    ],
     "revisions": [
       {
         "base": "0123456789abcdef0123456789abcdef01234567",

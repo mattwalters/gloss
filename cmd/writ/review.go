@@ -81,6 +81,8 @@ func runReview(ctx context.Context, defaultDir string, args []string, stdout, st
 		return runReviewComment(ctx, targetDir, args[1:], stdout, stderr)
 	case "approve":
 		return runReviewApprove(ctx, targetDir, args[1:], stdout, stderr)
+	case "assign":
+		return runReviewAssign(ctx, targetDir, args[1:], stdout, stderr)
 	case "status":
 		return runReviewStatus(ctx, targetDir, args[1:], stdout, stderr)
 	case "list":
@@ -490,6 +492,77 @@ func runReviewApprove(ctx context.Context, defaultDir string, args []string, std
 	return 0
 }
 
+type reviewAssignOpts struct {
+	dir    string
+	add    stringSliceFlag
+	remove stringSliceFlag
+}
+
+func newReviewAssignFlagSet(defaultDir string) (*flag.FlagSet, *reviewAssignOpts) {
+	fs := flag.NewFlagSet("review assign", flag.ContinueOnError)
+	opts := &reviewAssignOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
+	fs.Var(&opts.add, "add", "Add assignee `<a>` email or ID (repeatable)")
+	fs.Var(&opts.remove, "remove", "Remove assignee `<a>` email or ID (repeatable)")
+	fs.Usage = func() {
+		renderUsage(fs.Output(), []string{"review", "assign"}, reviewAssignCmd)
+	}
+	return fs, opts
+}
+
+func runReviewAssign(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+	fs, opts := newReviewAssignFlagSet(defaultDir)
+	fs.SetOutput(stderr)
+
+	posArgs, err := parseArgs(fs, args)
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+
+	if len(posArgs) == 0 || posArgs[0] == "" {
+		fmt.Fprintln(stderr, "writ review assign: review ID is required")
+		fs.Usage()
+		return 2
+	}
+	if len(posArgs) > 1 {
+		fmt.Fprintf(stderr, "writ review assign: unexpected arguments: %s\n", strings.Join(posArgs[1:], " "))
+		fs.Usage()
+		return 2
+	}
+
+	if len(opts.add) == 0 && len(opts.remove) == 0 {
+		fmt.Fprintln(stderr, "writ review assign: at least one -add or -remove is required")
+		fs.Usage()
+		return 2
+	}
+
+	targetDir := opts.dir
+	if targetDir == "" {
+		targetDir = "."
+	}
+
+	store, err := openStore(targetDir)
+	if err != nil {
+		return renderErr(stderr, err)
+	}
+	defer store.Close()
+
+	reviewID, err := resolveReviewID(ctx, store, posArgs[0])
+	if err != nil {
+		return renderErr(stderr, err)
+	}
+
+	if err := store.Reviews.Assign(ctx, reviewID, opts.add, opts.remove); err != nil {
+		return renderErr(stderr, err)
+	}
+
+	fmt.Fprintf(stdout, "%s: updated assignees\n", reviewID)
+	return 0
+}
+
 type reviewStatusOpts struct {
 	dir         string
 	reason      string
@@ -615,10 +688,18 @@ func runReviewStatus(ctx context.Context, defaultDir string, args []string, stdo
 			author = "-"
 		}
 
+		var assignees string
+		if len(res.Review.Assignees) > 0 {
+			assignees = strings.Join(res.Review.Assignees, ", ")
+		} else {
+			assignees = "-"
+		}
+
 		fmt.Fprintf(stdout, "Review:      %s\n", res.ObjectID)
 		fmt.Fprintf(stdout, "Title:       %s\n", res.Review.Title)
 		fmt.Fprintf(stdout, "Status:      %s\n", status)
 		fmt.Fprintf(stdout, "Author:      %s\n", author)
+		fmt.Fprintf(stdout, "Assignees:   %s\n", assignees)
 		fmt.Fprintf(stdout, "Revisions:   %d\n", len(res.Review.Revisions))
 		fmt.Fprintf(stdout, "Approvals:   %d\n", len(res.Review.Approvals))
 		fmt.Fprintf(stdout, "CI Checks:   %d\n", len(res.Review.CIStatuses))
@@ -666,6 +747,7 @@ func runReviewStatus(ctx context.Context, defaultDir string, args []string, stdo
 type reviewListOpts struct {
 	dir       string
 	statuses  stringSliceFlag
+	assignees stringSliceFlag
 	authors   stringSliceFlag
 	text      string
 	limit     int
@@ -678,6 +760,7 @@ func newReviewListFlagSet(defaultDir string) (*flag.FlagSet, *reviewListOpts) {
 	opts := &reviewListOpts{}
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
 	fs.Var(&opts.statuses, "status", "Filter by review status `<s>` (repeatable)")
+	fs.Var(&opts.assignees, "assignee", "Filter by assignee `<a>` name or email (repeatable)")
 	fs.Var(&opts.authors, "author", "Filter by author `<a>` name or email (repeatable)")
 	fs.StringVar(&opts.text, "text", "", "Filter by text `<q>` match in title or description")
 	fs.IntVar(&opts.limit, "limit", 0, "Maximum number `N` of reviews to return")
@@ -736,11 +819,12 @@ func runReviewList(ctx context.Context, defaultDir string, args []string, stdout
 	defer store.Close()
 
 	reviews, err := store.Query.Reviews(writ.ReviewFilter{
-		Status:  opts.statuses,
-		Author:  opts.authors,
-		Text:    opts.text,
-		Limit:   opts.limit,
-		OrderBy: orderBy,
+		Status:   opts.statuses,
+		Assignee: opts.assignees,
+		Author:   opts.authors,
+		Text:     opts.text,
+		Limit:    opts.limit,
+		OrderBy:  orderBy,
 	})
 	if err != nil {
 		return renderErr(stderr, err)

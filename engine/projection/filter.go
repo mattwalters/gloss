@@ -20,6 +20,7 @@ const (
 type ReviewFilter struct {
 	Status         []string
 	Author         []string
+	Assignee       []string
 	Text           string
 	IncludeDeleted bool
 	OrderBy        OrderBy

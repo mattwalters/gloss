@@ -124,7 +124,56 @@ func TestReview_RoundTrip_SingleRepo(t *testing.T) {
 		t.Fatalf("review approve failed with %d; stderr: %s", code, stderr.String())
 	}
 
-	// 5. writ review status (read mode)
+	// 5. writ review assign <id> -add alice@example.com
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "assign", "-C", env.repoDir,
+		reviewID, "-add", "alice@example.com",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review assign failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	// Verify status shows assignee
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "status", "-C", env.repoDir, reviewID,
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review status after assign failed with %d; stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Assignees:   alice@example.com") {
+		t.Errorf("status output missing 'Assignees:   alice@example.com': %s", stdout.String())
+	}
+
+	// 6. writ review assign -remove alice@example.com -add bob@example.com
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "assign", "-C", env.repoDir,
+		reviewID, "-remove", "alice@example.com", "-add", "bob@example.com",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review reassign failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	// 7. Verify review list with -assignee
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "list", "-C", env.repoDir,
+		"-assignee", "bob@example.com",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review list -assignee failed with %d; stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), shortID) {
+		t.Errorf("review list -assignee missing %s: %s", shortID, stdout.String())
+	}
+
+	// 8. writ review status (read mode)
 	stdout.Reset()
 	stderr.Reset()
 	code = run(context.Background(), []string{
@@ -137,6 +186,9 @@ func TestReview_RoundTrip_SingleRepo(t *testing.T) {
 	if !strings.Contains(statusOut, "Status:      open") {
 		t.Errorf("status output missing 'Status:      open': %s", statusOut)
 	}
+	if !strings.Contains(statusOut, "Assignees:   bob@example.com") {
+		t.Errorf("status output missing 'Assignees:   bob@example.com': %s", statusOut)
+	}
 	if !strings.Contains(statusOut, "Revisions:   1") {
 		t.Errorf("status output missing 'Revisions:   1': %s", statusOut)
 	}
@@ -144,7 +196,7 @@ func TestReview_RoundTrip_SingleRepo(t *testing.T) {
 		t.Errorf("status output missing 'Approvals:   1': %s", statusOut)
 	}
 
-	// 6. writ review status <id> merged -merge-commit HEAD
+	// 9. writ review status <id> merged -merge-commit HEAD
 	stdout.Reset()
 	stderr.Reset()
 	code = run(context.Background(), []string{
@@ -599,10 +651,25 @@ func TestReview_ErrorSurfaces(t *testing.T) {
 			t.Fatalf("expected exit code 2 for -base without -head, got %d", code)
 		}
 	})
+
+	t.Run("missing_assign_flags", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setupSigningKey(t, env.repoDir)
+		_ = run(context.Background(), []string{"init", "-C", env.repoDir}, &bytes.Buffer{}, &bytes.Buffer{})
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{"review", "assign", "-C", env.repoDir, "12345678"}, &stdout, &stderr)
+		if code != 2 {
+			t.Fatalf("expected exit code 2 for assign with no flags, got %d", code)
+		}
+		if !strings.Contains(stderr.String(), "at least one -add or -remove is required") {
+			t.Errorf("stderr missing '-add or -remove is required': %s", stderr.String())
+		}
+	})
 }
 
 func TestReview_HelpAndUsage(t *testing.T) {
-	for _, subcmd := range []string{"open", "comment", "approve", "status", "list"} {
+	for _, subcmd := range []string{"open", "comment", "approve", "assign", "status", "list"} {
 		var stdout, stderr bytes.Buffer
 		code := run(context.Background(), []string{"review", subcmd, "-h"}, &stdout, &stderr)
 		if code != 0 {

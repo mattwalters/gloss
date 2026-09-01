@@ -150,7 +150,7 @@ _writ() {
                     return 0
                     ;;
                 review)
-                    COMPREPLY=($(compgen -W "open comment approve status list" -- "$cur"))
+                    COMPREPLY=($(compgen -W "open comment approve assign status list" -- "$cur"))
                     return 0
                     ;;
             esac
@@ -239,7 +239,7 @@ _writ() {
                     COMPREPLY=($(compgen -W "-C -h -help --help" -- "$cur"))
                     return 0
                 fi
-                COMPREPLY=($(compgen -W "open comment approve status list" -- "$cur"))
+                COMPREPLY=($(compgen -W "open comment approve assign status list" -- "$cur"))
                 return 0
             fi
             case "$subcmd" in
@@ -264,6 +264,12 @@ _writ() {
                     esac
                     if [[ "$cur" == -* ]]; then
                         COMPREPLY=($(compgen -W "-C -verdict -revision -m -subject -h -help --help" -- "$cur"))
+                        return 0
+                    fi
+                    ;;
+                assign)
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "-C -add -remove -h -help --help" -- "$cur"))
                         return 0
                     fi
                     ;;
@@ -299,7 +305,7 @@ _writ() {
                             ;;
                     esac
                     if [[ "$cur" == -* ]]; then
-                        COMPREPLY=($(compgen -W "-C -status -author -text -limit -sort -json --json -h -help --help" -- "$cur"))
+                        COMPREPLY=($(compgen -W "-C -status -assignee -author -text -limit -sort -json --json -h -help --help" -- "$cur"))
                         return 0
                     fi
                     ;;
@@ -367,7 +373,7 @@ _writ() {
                         '2:subcommand:->help_subcommand'
                     case $line[1] in
                         issue) _values 'issue subcommand' create status assign list link ;;
-                        review) _values 'review subcommand' open comment approve status list ;;
+                        review) _values 'review subcommand' open comment approve assign status list ;;
                     esac
                     ;;
                 issue)
@@ -476,6 +482,7 @@ _writ_review() {
                 'open:Create a new code review'
                 'comment:Add a comment to a review'
                 'approve:Record a review verdict'
+                'assign:Add or remove review assignees'
                 'status:View or update review status'
                 'list:List code reviews'
             )
@@ -513,6 +520,14 @@ _writ_review() {
                         '(-h -help --help)'{-h,-help,--help}'[Show help]' \
                         '1:review ID:'
                     ;;
+                assign)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '*-add[Add assignee email or ID]:assignee:' \
+                        '*-remove[Remove assignee email or ID]:assignee:' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]' \
+                        '1:review ID:'
+                    ;;
                 status)
                     _arguments -s -S \
                         '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
@@ -527,6 +542,7 @@ _writ_review() {
                     _arguments -s -S \
                         '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
                         '*-status[Filter by review status]:status:(draft open closed merged)' \
+                        '*-assignee[Filter by assignee]:assignee:' \
                         '*-author[Filter by author]:author:' \
                         '-text[Filter by text query]:text:' \
                         '-limit[Maximum reviews to return]:limit:' \
@@ -638,7 +654,7 @@ complete -c writ -n '__fish_writ_using_command completion' -f -a 'bash zsh fish'
 # Subcommands for help
 complete -c writ -n '__fish_writ_needs_subcommand help' -f -a 'init issue review sync version completion help'
 complete -c writ -n '__fish_writ_needs_subcommand help issue' -f -a 'create status assign list link'
-complete -c writ -n '__fish_writ_needs_subcommand help review' -f -a 'open comment approve status list'
+complete -c writ -n '__fish_writ_needs_subcommand help review' -f -a 'open comment approve assign status list'
 
 # Flags for commands`)
 

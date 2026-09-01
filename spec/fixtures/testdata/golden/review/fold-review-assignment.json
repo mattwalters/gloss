@@ -1,0 +1,15 @@
+{
+  "objects": [
+    {
+      "object_id": "r-assign",
+      "review": {
+        "title": "Review Assignment Test",
+        "assignees": [
+          "alice",
+          "charlie",
+          "david"
+        ]
+      }
+    }
+  ]
+}

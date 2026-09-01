@@ -1,0 +1,68 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/0123456789abcdef/review",
+      "commit": "306fde0f90660e23730167a81657f8e157cdbedb"
+    },
+    {
+      "name": "refs/writ/fedcba9876543210/review",
+      "commit": "f0ea3efba18569aaa0ba38e5e70bb992cae9808f"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/0123456789abcdef/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "bb0431b16cc476ef7ad95bcdf0e2291c11f8b736",
+          "tree": "a5e80bb5082c9482c76e08d15c3bb09685159fd3",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create review/r-assign\n",
+          "signed": true
+        },
+        {
+          "sha": "612866f32a988f2080b04b9da1a6abfdc0ef9828",
+          "tree": "b3eb957ce423a66705917422b891d3d277d966dd",
+          "parents": [
+            "bb0431b16cc476ef7ad95bcdf0e2291c11f8b736"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: assign review/r-assign\n",
+          "signed": true
+        },
+        {
+          "sha": "306fde0f90660e23730167a81657f8e157cdbedb",
+          "tree": "174427b03f3555bfc52652ea5c6d170dcf6bff4a",
+          "parents": [
+            "612866f32a988f2080b04b9da1a6abfdc0ef9828"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:03:00Z",
+          "message": "writ: assign review/r-assign\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/fedcba9876543210/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "f0ea3efba18569aaa0ba38e5e70bb992cae9808f",
+          "tree": "1756063365a51ee800e733be12ec11ad906226a8",
+          "parents": [
+            "bb0431b16cc476ef7ad95bcdf0e2291c11f8b736"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: assign review/r-assign\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}
