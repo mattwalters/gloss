@@ -233,12 +233,20 @@ func (i *Issues) Assign(ctx context.Context, id string, add, remove []string) er
 
 	var normAdd, normRemove []string
 	for _, a := range add {
-		if norm := state.NormalizePerson(a); norm != "" {
+		norm, err := normalizePersonBounded("assignee", a)
+		if err != nil {
+			return err
+		}
+		if norm != "" {
 			normAdd = append(normAdd, norm)
 		}
 	}
 	for _, rem := range remove {
-		if norm := state.NormalizePerson(rem); norm != "" {
+		norm, err := normalizePersonBounded("assignee", rem)
+		if err != nil {
+			return err
+		}
+		if norm != "" {
 			normRemove = append(normRemove, norm)
 		}
 	}

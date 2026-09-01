@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/go-git/go-git/v5"
@@ -648,4 +649,75 @@ func TestReviewsApproveSubjectNormalization(t *testing.T) {
 	}
 }
 
+// TestReviewsPersonIDLengthBound checks that the person-id length bound
+// (spec/schemas/identifiers.schema.json, maxLength: 320) is enforced on every
+// review write path that accepts a person identifier, not just on comment
+// resolution. Over-length input is refused rather than truncated.
+func TestReviewsPersonIDLengthBound(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+	headHash := runGitCmd(t, repoDir, "rev-parse", "HEAD")[:40]
 
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+
+	reviewID, err := s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Person ID Bound Review",
+		Base:  headHash,
+		Head:  headHash,
+	})
+	if err != nil {
+		t.Fatalf("Create review failed: %v", err)
+	}
+
+	atLimit := personIDAtLimit(t)
+	overLimit := personIDOverLimit(t)
+
+	// Assign: at the bound is accepted, one over is refused.
+	if err := s.Reviews.Assign(ctx, reviewID, []string{atLimit}, nil); err != nil {
+		t.Fatalf("Assign with a 320-character assignee failed: %v", err)
+	}
+	err = s.Reviews.Assign(ctx, reviewID, []string{overLimit}, nil)
+	if err == nil {
+		t.Fatal("expected Assign to reject a 321-character assignee, got nil error")
+	}
+	if !strings.Contains(err.Error(), "320") {
+		t.Errorf("expected an error naming the 320-character limit, got %q", err)
+	}
+
+	// An over-length identifier on the remove side is refused too.
+	if err := s.Reviews.Assign(ctx, reviewID, nil, []string{overLimit}); err == nil {
+		t.Error("expected Assign to reject a 321-character removal, got nil error")
+	}
+
+	// Approval subject: same bound, same refusal.
+	if err := s.Reviews.Approve(ctx, reviewID, writ.Approval{
+		Verdict: "approve",
+		Subject: atLimit,
+	}); err != nil {
+		t.Fatalf("Approve with a 320-character subject failed: %v", err)
+	}
+	err = s.Reviews.Approve(ctx, reviewID, writ.Approval{
+		Verdict: "approve",
+		Subject: overLimit,
+	})
+	if err == nil {
+		t.Fatal("expected Approve to reject a 321-character subject, got nil error")
+	}
+	if !strings.Contains(err.Error(), "subject") || !strings.Contains(err.Error(), "320") {
+		t.Errorf("expected an error naming the subject and the 320-character limit, got %q", err)
+	}
+
+	// The accepted assignee round-tripped unchanged — no truncation.
+	res, err := s.Query.Review(reviewID)
+	if err != nil {
+		t.Fatalf("Query.Review failed: %v", err)
+	}
+	if !reflect.DeepEqual(res.Review.Assignees, []string{atLimit}) {
+		t.Errorf("expected the 320-character assignee to round-trip unchanged, got %v", res.Review.Assignees)
+	}
+}

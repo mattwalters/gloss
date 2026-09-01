@@ -292,7 +292,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 				for _, r := range frs {
 					if opMatchesRule(op, r) {
 						if val, present := op.Body[fieldName]; present && val != nil {
-							if s, ok := val.(string); ok && fieldName == "actor" && op.OpType == "resolve" {
+							if s, ok := val.(string); ok && fieldName == "resolved_by" && op.OpType == "resolve" {
 								val = normalizePerson(s)
 							}
 							state[fieldName] = val

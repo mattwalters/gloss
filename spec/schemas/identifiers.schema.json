@@ -18,7 +18,8 @@
     "person-id": {
       "type": "string",
       "minLength": 1,
-      "description": "Person identifier: normalized collaborative actor identity (email address, lowercase, trimmed whitespace) per spec/identifiers.md."
+      "maxLength": 320,
+      "description": "Person identifier: normalized collaborative actor identity (email address, lowercase, trimmed whitespace) per spec/identifiers.md. Bounded at 320 code points as a storage cap, not an RFC 5321 conformance check; 320 is that RFC's octet ceiling (64-octet local part + @ + 255-octet domain), which coincides with code points for the ASCII addresses this format targets."
     },
     "object-id": {
       "type": "string",

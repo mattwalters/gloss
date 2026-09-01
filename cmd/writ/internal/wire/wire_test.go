@@ -175,9 +175,9 @@ func TestWire_CommentMapping(t *testing.T) {
 				ObjectType: "review",
 				ObjectID:   "r-200",
 			},
-			Text:     "Needs clarification",
-			Resolved: &resolvedBool,
-			Actor:    "alice",
+			Text:       "Needs clarification",
+			Resolved:   &resolvedBool,
+			ResolvedBy: "alice",
 		},
 		Resolved: []projection.ResolvedPosition{
 			{
@@ -227,9 +227,9 @@ func TestWire_CommentThreadMapping(t *testing.T) {
 				ObjectType: "review",
 				ObjectID:   "r-1",
 			},
-			Text:     "Root comment",
-			Resolved: &resolvedBool,
-			Actor:    "bob",
+			Text:       "Root comment",
+			Resolved:   &resolvedBool,
+			ResolvedBy: "bob",
 		},
 		Replies: []state.CommentThread{
 			{

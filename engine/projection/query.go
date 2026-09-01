@@ -765,7 +765,7 @@ func (d *DB) Comments(f CommentFilter) ([]CommentResult, error) {
 			Anchor:     anchor,
 			Deleted:    rc.deleted == 1,
 			Resolved:   resolvedPtr,
-			Actor:      rc.resolvedBy,
+			ResolvedBy: rc.resolvedBy,
 			UnknownOps: unknownMap[rc.objectID],
 		}
 

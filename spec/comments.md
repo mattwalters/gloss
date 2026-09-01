@@ -72,7 +72,7 @@ The comment vocabulary defines four operations:
 | `create`  | Brings the comment into existence | `subject`, `text`, optional `in_reply_to`, optional `anchor` |
 | `edit`    | Replacement markdown text | `text` |
 | `delete`  | Tombstone withdrawing the comment | `{}` |
-| `resolve` | Sets thread resolution state (resolve/unresolve) | `resolved`, optional `actor` |
+| `resolve` | Sets thread resolution state (resolve/unresolve) | `resolved`, optional `resolved_by` |
 
 ### 1. `create`
 
@@ -189,7 +189,7 @@ A `resolve` op records or updates the resolution state of a comment thread.
   "op_version": 1,
   "body": {
     "resolved": true,
-    "actor": "alice@example.com"
+    "resolved_by": "alice@example.com"
   }
 }
 ```
@@ -199,9 +199,11 @@ A `resolve` op records or updates the resolution state of a comment thread.
 - `resolved` (boolean, required) — resolution status of the thread:
   - `true`: marks the thread as resolved.
   - `false`: marks the thread as unresolved (reopened).
-- `actor` (person identifier per [`spec/identifiers.md`](identifiers.md), optional) —
+- `resolved_by` (person identifier per [`spec/identifiers.md`](identifiers.md), optional) —
   person identifier (email address) on whose behalf the resolution is recorded.
-  Normalized (lowercase, trimmed whitespace) per [`spec/identifiers.md`](identifiers.md).
+  Normalized (lowercase, trimmed whitespace) and bounded (`minLength: 1`,
+  `maxLength: 320`) per [`spec/identifiers.md`](identifiers.md).
+  `resolved_by` is optional even when `resolved` is `true`.
 
 #### Target & Threading Invariants
 
@@ -257,7 +259,7 @@ treated as unknown data, preserved in the DAG, and ignored during fold.
 | `edit` | `text` | `lww` | Last writer wins in total order |
 | `delete` | `deleted` | `tombstone` | Entity-level tombstone; deletion wins over concurrent edits |
 | `resolve` | `resolved` | `lww` | Last writer wins in total order |
-| `resolve` | `actor` | `lww` | Last writer wins in total order |
+| `resolve` | `resolved_by` | `lww` | Last writer wins in total order |
 
 ### Edit, Deletion, and Resolution Semantics
 
@@ -284,11 +286,13 @@ treated as unknown data, preserved in the DAG, and ignored during fold.
 
 #### Resolution Semantics
 
-- A `resolve` op updates `resolved` (and optional `actor`) via `lww`.
+- A `resolve` op updates `resolved` (and optional `resolved_by`) via `lww`.
 - If concurrent `resolve` and unresolve ops are authored across branches,
   deterministic LWW total order tiebreaks decide the winning resolution state.
 - In folded state, a comment object records `resolved: true/false` and
   `resolved_by: string`. If `resolved` is `false`, the comment thread is open.
+- The op body field and the folded state field carry the same name,
+  `resolved_by`: there is no rename across the fold layer.
 
 ### Representability vs. Authorization
 

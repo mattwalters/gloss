@@ -105,8 +105,8 @@ func (c *Comments) Delete(ctx context.Context, id string) error {
 
 // CommentResolve specifies parameters for resolving or unresolving a comment thread.
 type CommentResolve struct {
-	Resolved bool   `json:"resolved"`
-	Actor    string `json:"actor,omitempty"`
+	Resolved   bool   `json:"resolved"`
+	ResolvedBy string `json:"resolved_by,omitempty"`
 }
 
 // Resolve updates the resolution status of a comment (or thread root).
@@ -137,8 +137,12 @@ func (c *Comments) Resolve(ctx context.Context, id string, res CommentResolve) e
 	body := map[string]any{
 		"resolved": res.Resolved,
 	}
-	if actor := NormalizePerson(res.Actor); actor != "" {
-		body["actor"] = actor
+	resolvedBy, err := normalizePersonBounded("resolved_by", res.ResolvedBy)
+	if err != nil {
+		return err
+	}
+	if resolvedBy != "" {
+		body["resolved_by"] = resolvedBy
 	}
 
 	bodyBytes, err := json.Marshal(body)

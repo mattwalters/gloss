@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/go-git/go-git/v5"
@@ -244,3 +245,46 @@ func TestIssuesValidationAndNotFound(t *testing.T) {
 	}
 }
 
+// TestIssuesAssignPersonIDLengthBound checks that the person-id length bound
+// (spec/schemas/identifiers.schema.json, maxLength: 320) is enforced on issue
+// assignment too. Over-length input is refused rather than truncated.
+func TestIssuesAssignPersonIDLengthBound(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+
+	issueID, err := s.Issues.Create(ctx, writ.NewIssue{Title: "Person ID Bound Issue"})
+	if err != nil {
+		t.Fatalf("Issues.Create failed: %v", err)
+	}
+
+	atLimit := personIDAtLimit(t)
+	overLimit := personIDOverLimit(t)
+
+	if err := s.Issues.Assign(ctx, issueID, []string{atLimit}, nil); err != nil {
+		t.Fatalf("Assign with a 320-character assignee failed: %v", err)
+	}
+	err = s.Issues.Assign(ctx, issueID, []string{overLimit}, nil)
+	if err == nil {
+		t.Fatal("expected Assign to reject a 321-character assignee, got nil error")
+	}
+	if !strings.Contains(err.Error(), "320") {
+		t.Errorf("expected an error naming the 320-character limit, got %q", err)
+	}
+	if err := s.Issues.Assign(ctx, issueID, nil, []string{overLimit}); err == nil {
+		t.Error("expected Assign to reject a 321-character removal, got nil error")
+	}
+
+	res, err := s.Query.Issue(issueID)
+	if err != nil {
+		t.Fatalf("Query.Issue failed: %v", err)
+	}
+	if !reflect.DeepEqual(res.Issue.Assignees, []string{atLimit}) {
+		t.Errorf("expected the 320-character assignee to round-trip unchanged, got %v", res.Issue.Assignees)
+	}
+}

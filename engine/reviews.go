@@ -303,12 +303,20 @@ func (r *Reviews) Assign(ctx context.Context, id string, add, remove []string) e
 
 	var normAdd, normRemove []string
 	for _, a := range add {
-		if norm := state.NormalizePerson(a); norm != "" {
+		norm, err := normalizePersonBounded("assignee", a)
+		if err != nil {
+			return err
+		}
+		if norm != "" {
 			normAdd = append(normAdd, norm)
 		}
 	}
 	for _, rem := range remove {
-		if norm := state.NormalizePerson(rem); norm != "" {
+		norm, err := normalizePersonBounded("assignee", rem)
+		if err != nil {
+			return err
+		}
+		if norm != "" {
 			normRemove = append(normRemove, norm)
 		}
 	}
@@ -583,7 +591,11 @@ func (r *Reviews) Approve(ctx context.Context, id string, a Approval) error {
 		"revision": a.Revision,
 		"verdict":  a.Verdict,
 	}
-	if subject := state.NormalizePerson(a.Subject); subject != "" {
+	subject, err := normalizePersonBounded("approval subject", a.Subject)
+	if err != nil {
+		return err
+	}
+	if subject != "" {
 		body["subject"] = subject
 	}
 	if a.Message != "" {

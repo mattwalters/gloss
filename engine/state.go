@@ -1,6 +1,9 @@
 package writ
 
 import (
+	"fmt"
+	"unicode/utf8"
+
 	"github.com/writtendev/writ/engine/resolve"
 	"github.com/writtendev/writ/engine/state"
 )
@@ -85,4 +88,32 @@ func ResolveReference(ref string, localRepoID string, registry []RepoEntry) (Res
 // (trimmed leading/trailing whitespace, lowercase).
 func NormalizePerson(s string) string {
 	return state.NormalizePerson(s)
+}
+
+// maxPersonIDLen is the person identifier length bound from spec/identifiers.md,
+// mirroring maxLength in the person-id definition of
+// spec/schemas/identifiers.schema.json.
+const maxPersonIDLen = 320
+
+// normalizePersonBounded normalizes a person identifier and enforces the length
+// bound the person-id schema declares, so that a writer cannot append an op the
+// schema would reject. Ops are signed, immutable and append-only, so an
+// unbounded identifier is permanent unreclaimable weight; the only place to
+// stop it is before the write.
+//
+// The bound counts code points, matching JSON Schema maxLength, so the engine
+// accepts exactly what spec/schemas/identifiers.schema.json accepts.
+//
+// Over-length input is an error, never a truncation: two distinct identifiers
+// truncated to the same bytes would collapse into one person for assignment,
+// approval keying and set membership.
+//
+// An identifier that normalizes to the empty string is returned as such, not
+// rejected — callers omit the key, which is the schema's minLength: 1 guard.
+func normalizePersonBounded(what, s string) (string, error) {
+	norm := state.NormalizePerson(s)
+	if n := utf8.RuneCountInString(norm); n > maxPersonIDLen {
+		return "", fmt.Errorf("writ: %s is %d characters, over the %d-character person identifier limit", what, n, maxPersonIDLen)
+	}
+	return norm, nil
 }

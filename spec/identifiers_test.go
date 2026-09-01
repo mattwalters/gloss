@@ -325,11 +325,22 @@ func TestPersonIdentifierSchema(t *testing.T) {
 		t.Fatalf("compiling person wrapper schema: %v", err)
 	}
 
+	// The RFC 5321 ceiling exactly: 64-octet local part, "@", 255-octet domain.
+	atLimit := strings.Repeat("a", 64) + "@" + strings.Repeat("b", 251) + ".com"
+	if len(atLimit) != 320 {
+		t.Fatalf("test setup: atLimit is %d characters, want 320", len(atLimit))
+	}
+	overLimit := strings.Repeat("a", 64) + "@" + strings.Repeat("b", 252) + ".com"
+	if len(overLimit) != 321 {
+		t.Fatalf("test setup: overLimit is %d characters, want 321", len(overLimit))
+	}
+
 	validCases := []string{
 		"alice@example.com",
 		"bob.builder+test@example.co.uk",
 		"ci-bot@internal.domain",
 		"  alice@example.com  ",
+		atLimit,
 	}
 	for _, v := range validCases {
 		inst := map[string]any{"person": v}
@@ -340,6 +351,7 @@ func TestPersonIdentifierSchema(t *testing.T) {
 
 	invalidCases := []any{
 		"",        // minLength: 1
+		overLimit, // maxLength: 320
 		12345,     // not a string
 		nil,       // null
 		[]any{},   // array
