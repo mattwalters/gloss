@@ -21,6 +21,7 @@ type ReviewFilter struct {
 	Status         []string
 	Author         []string
 	Assignee       []string
+	Label          []string
 	Text           string
 	IncludeDeleted bool
 	OrderBy        OrderBy

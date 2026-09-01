@@ -11,6 +11,7 @@ import (
 
 	"github.com/writtendev/writ/cmd/writ/internal/wire"
 	"github.com/writtendev/writ/engine"
+	"github.com/writtendev/writ/engine/state"
 )
 
 type stringSliceFlag []string
@@ -83,6 +84,10 @@ func runReview(ctx context.Context, defaultDir string, args []string, stdout, st
 		return runReviewApprove(ctx, targetDir, args[1:], stdout, stderr)
 	case "assign":
 		return runReviewAssign(ctx, targetDir, args[1:], stdout, stderr)
+	case "label":
+		return runReviewLabel(ctx, targetDir, args[1:], stdout, stderr)
+	case "link":
+		return runReviewLink(ctx, targetDir, args[1:], stdout, stderr)
 	case "status":
 		return runReviewStatus(ctx, targetDir, args[1:], stdout, stderr)
 	case "list":
@@ -563,6 +568,169 @@ func runReviewAssign(ctx context.Context, defaultDir string, args []string, stdo
 	return 0
 }
 
+type reviewLabelOpts struct {
+	dir    string
+	add    stringSliceFlag
+	remove stringSliceFlag
+}
+
+func newReviewLabelFlagSet(defaultDir string) (*flag.FlagSet, *reviewLabelOpts) {
+	fs := flag.NewFlagSet("review label", flag.ContinueOnError)
+	opts := &reviewLabelOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
+	fs.Var(&opts.add, "add", "Add label `<l>` (repeatable)")
+	fs.Var(&opts.remove, "remove", "Remove label `<l>` (repeatable)")
+	fs.Usage = func() {
+		renderUsage(fs.Output(), []string{"review", "label"}, reviewLabelCmd)
+	}
+	return fs, opts
+}
+
+func runReviewLabel(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+	fs, opts := newReviewLabelFlagSet(defaultDir)
+	fs.SetOutput(stderr)
+
+	posArgs, err := parseArgs(fs, args)
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+
+	if len(posArgs) == 0 || posArgs[0] == "" {
+		fmt.Fprintln(stderr, "writ review label: review ID is required")
+		fs.Usage()
+		return 2
+	}
+	if len(posArgs) > 1 {
+		fmt.Fprintf(stderr, "writ review label: unexpected arguments: %s\n", strings.Join(posArgs[1:], " "))
+		fs.Usage()
+		return 2
+	}
+
+	if len(opts.add) == 0 && len(opts.remove) == 0 {
+		fmt.Fprintln(stderr, "writ review label: at least one -add or -remove is required")
+		fs.Usage()
+		return 2
+	}
+
+	targetDir := opts.dir
+	if targetDir == "" {
+		targetDir = "."
+	}
+
+	store, err := openStore(targetDir)
+	if err != nil {
+		return renderErr(stderr, err)
+	}
+	defer store.Close()
+
+	reviewID, err := resolveReviewID(ctx, store, posArgs[0])
+	if err != nil {
+		return renderErr(stderr, err)
+	}
+
+	if err := store.Reviews.Label(ctx, reviewID, opts.add, opts.remove); err != nil {
+		return renderErr(stderr, err)
+	}
+
+	fmt.Fprintf(stdout, "%s: updated labels\n", reviewID)
+	return 0
+}
+
+type reviewLinkOpts struct {
+	dir        string
+	target     string
+	relation   string
+	targetType string
+}
+
+func newReviewLinkFlagSet(defaultDir string) (*flag.FlagSet, *reviewLinkOpts) {
+	fs := flag.NewFlagSet("review link", flag.ContinueOnError)
+	opts := &reviewLinkOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
+	fs.StringVar(&opts.target, "target", "", "Target reference `<ref>` (required, e.g. <repo-id>#<object-id> or <object-id>)")
+	fs.StringVar(&opts.relation, "relation", "", "Link relation `<rel>`: fixes, relates, or none (required)")
+	fs.StringVar(&opts.targetType, "target-type", "", "Target object type `<t>`")
+	fs.Usage = func() {
+		renderUsage(fs.Output(), []string{"review", "link"}, reviewLinkCmd)
+	}
+	return fs, opts
+}
+
+func runReviewLink(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+	fs, opts := newReviewLinkFlagSet(defaultDir)
+	fs.SetOutput(stderr)
+
+	posArgs, err := parseArgs(fs, args)
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+
+	if len(posArgs) == 0 || posArgs[0] == "" {
+		fmt.Fprintln(stderr, "writ review link: review ID is required")
+		fs.Usage()
+		return 2
+	}
+	if len(posArgs) > 1 {
+		fmt.Fprintf(stderr, "writ review link: unexpected arguments: %s\n", strings.Join(posArgs[1:], " "))
+		fs.Usage()
+		return 2
+	}
+
+	if opts.target == "" {
+		fmt.Fprintln(stderr, "writ review link: -target is required")
+		fs.Usage()
+		return 2
+	}
+
+	if opts.relation == "" {
+		fmt.Fprintln(stderr, "writ review link: -relation is required")
+		fs.Usage()
+		return 2
+	}
+
+	switch opts.relation {
+	case "fixes", "relates", "none":
+		// valid
+	default:
+		fmt.Fprintf(stderr, "writ review link: invalid relation %q (must be fixes, relates, or none)\n", opts.relation)
+		fs.Usage()
+		return 2
+	}
+
+	targetDir := opts.dir
+	if targetDir == "" {
+		targetDir = "."
+	}
+
+	store, err := openStore(targetDir)
+	if err != nil {
+		return renderErr(stderr, err)
+	}
+	defer store.Close()
+
+	reviewID, err := resolveReviewID(ctx, store, posArgs[0])
+	if err != nil {
+		return renderErr(stderr, err)
+	}
+
+	if err := store.Reviews.Link(ctx, reviewID, writ.Link{
+		Target:     opts.target,
+		Relation:   opts.relation,
+		TargetType: opts.targetType,
+	}); err != nil {
+		return renderErr(stderr, err)
+	}
+
+	fmt.Fprintf(stdout, "%s: link %s -> %s\n", reviewID, opts.relation, opts.target)
+	return 0
+}
+
 type reviewStatusOpts struct {
 	dir         string
 	reason      string
@@ -695,11 +863,19 @@ func runReviewStatus(ctx context.Context, defaultDir string, args []string, stdo
 			assignees = "-"
 		}
 
+		var labels string
+		if len(res.Review.Labels) > 0 {
+			labels = strings.Join(res.Review.Labels, ", ")
+		} else {
+			labels = "-"
+		}
+
 		fmt.Fprintf(stdout, "Review:      %s\n", res.ObjectID)
 		fmt.Fprintf(stdout, "Title:       %s\n", res.Review.Title)
 		fmt.Fprintf(stdout, "Status:      %s\n", status)
 		fmt.Fprintf(stdout, "Author:      %s\n", author)
 		fmt.Fprintf(stdout, "Assignees:   %s\n", assignees)
+		fmt.Fprintf(stdout, "Labels:      %s\n", labels)
 		fmt.Fprintf(stdout, "Revisions:   %d\n", len(res.Review.Revisions))
 		fmt.Fprintf(stdout, "Approvals:   %d\n", len(res.Review.Approvals))
 		fmt.Fprintf(stdout, "CI Checks:   %d\n", len(res.Review.CIStatuses))
@@ -708,6 +884,27 @@ func runReviewStatus(ctx context.Context, defaultDir string, args []string, stdo
 		}
 		if res.Review.Reason != "" {
 			fmt.Fprintf(stdout, "Reason:       %s\n", res.Review.Reason)
+		}
+
+		if len(res.Review.Links) > 0 {
+			fmt.Fprintln(stdout, "Links:")
+			for _, link := range res.Review.Links {
+				scope, slug, _, err := resolveIssueRef(ctx, store, link.Target)
+				var outcome string
+				if err != nil || scope == "unresolved" {
+					outcome = "unresolved"
+				} else if scope == "cross-repo" {
+					if slug != "" {
+						outcome = fmt.Sprintf("cross-repo %s", slug)
+					} else {
+						des, _, _ := state.ParseReference(link.Target)
+						outcome = fmt.Sprintf("cross-repo %s", des)
+					}
+				} else {
+					outcome = "local"
+				}
+				fmt.Fprintf(stdout, "  %s %s (%s)\n", link.Relation, link.Target, outcome)
+			}
 		}
 		return 0
 	}
@@ -748,6 +945,7 @@ type reviewListOpts struct {
 	dir       string
 	statuses  stringSliceFlag
 	assignees stringSliceFlag
+	labels    stringSliceFlag
 	authors   stringSliceFlag
 	text      string
 	limit     int
@@ -761,6 +959,7 @@ func newReviewListFlagSet(defaultDir string) (*flag.FlagSet, *reviewListOpts) {
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
 	fs.Var(&opts.statuses, "status", "Filter by review status `<s>` (repeatable)")
 	fs.Var(&opts.assignees, "assignee", "Filter by assignee `<a>` name or email (repeatable)")
+	fs.Var(&opts.labels, "label", "Filter by label `<l>` (repeatable)")
 	fs.Var(&opts.authors, "author", "Filter by author `<a>` name or email (repeatable)")
 	fs.StringVar(&opts.text, "text", "", "Filter by text `<q>` match in title or description")
 	fs.IntVar(&opts.limit, "limit", 0, "Maximum number `N` of reviews to return")
@@ -821,6 +1020,7 @@ func runReviewList(ctx context.Context, defaultDir string, args []string, stdout
 	reviews, err := store.Query.Reviews(writ.ReviewFilter{
 		Status:   opts.statuses,
 		Assignee: opts.assignees,
+		Label:    opts.labels,
 		Author:   opts.authors,
 		Text:     opts.text,
 		Limit:    opts.limit,

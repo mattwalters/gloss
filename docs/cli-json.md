@@ -109,6 +109,8 @@ Fetches detailed status and folded state for a single code review.
 | `created_at` | string | Creation timestamp in RFC 3339 UTC. |
 | `updated_at` | string | Last modification timestamp in RFC 3339 UTC. |
 | `assignees` | array of strings | Assigned reviewer emails or user identities: `[ string ]`. |
+| `labels` | array of strings | Labels attached to the review, converged from concurrent add/remove operations. |
+| `links` | array of objects | Cross-reference links: `[ { "target": string, "target_type": string, "relation": string } ]`. `target` is either a bare object ID (same repo) or `<repo-id>#<object-id>` (cross-repo). |
 | `revisions` | array of objects | Pushed revisions: `[ { "base": string, "head": string } ]`. |
 | `approvals` | array of objects | Recorded review verdicts: `[ { "subject": string, "revision": string, "verdict": string, "message": string } ]`. |
 | `ci_statuses` | array of objects | Automated CI checks: `[ { "revision": string, "name": string, "state": string, "url": string, "description": string, "started_at": string, "completed_at": string, "external_id": string } ]`. |
@@ -133,6 +135,16 @@ Fetches detailed status and folded state for a single code review.
     "updated_at": "2026-01-01T00:05:00Z",
     "assignees": [
       "bob@example.com"
+    ],
+    "labels": [
+      "area/engine"
+    ],
+    "links": [
+      {
+        "target": "fedcba9876543210fedcba9876543210",
+        "target_type": "issue",
+        "relation": "fixes"
+      }
     ],
     "revisions": [
       {

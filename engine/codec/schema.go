@@ -14,10 +14,11 @@ import (
 const schemaIDPrefix = "https://writ.dev/spec/"
 
 const (
-	envelopeSchemaID  = schemaIDPrefix + "op-envelope.schema.json"
-	reviewOpsSchemaID = schemaIDPrefix + "review-ops.schema.json"
-	commentSchemaID   = schemaIDPrefix + "comment.schema.json"
-	anchorSchemaID    = schemaIDPrefix + "anchor.schema.json"
+	envelopeSchemaID    = schemaIDPrefix + "op-envelope.schema.json"
+	identifiersSchemaID = schemaIDPrefix + "identifiers.schema.json"
+	reviewOpsSchemaID   = schemaIDPrefix + "review-ops.schema.json"
+	commentSchemaID     = schemaIDPrefix + "comment.schema.json"
+	anchorSchemaID      = schemaIDPrefix + "anchor.schema.json"
 )
 
 type compiledSchemas struct {
@@ -34,6 +35,7 @@ var schemasOnce = sync.OnceValue(func() compiledSchemas {
 		id   string
 	}{
 		{"schemas/op-envelope.schema.json", envelopeSchemaID},
+		{"schemas/identifiers.schema.json", identifiersSchemaID},
 		{"schemas/anchor.schema.json", anchorSchemaID},
 		{"schemas/review-ops.schema.json", reviewOpsSchemaID},
 		{"schemas/comment.schema.json", commentSchemaID},

@@ -114,6 +114,13 @@ func (d *DB) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 		}
 	}
 
+	if len(f.Label) > 0 {
+		sb.WriteString(" AND EXISTS (SELECT 1 FROM review_labels rl WHERE rl.review_object_id = r.object_id AND rl.label IN (" + placeholders(len(f.Label)) + "))")
+		for _, l := range f.Label {
+			args = append(args, l)
+		}
+	}
+
 	if f.Text != "" {
 		sb.WriteString(" AND (r.title LIKE ? ESCAPE '\\' OR r.description LIKE ? ESCAPE '\\')")
 		escaped := "%" + escapeLike(f.Text) + "%"
@@ -212,6 +219,42 @@ func (d *DB) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 	}
 	asRows.Close()
 
+	// Batch load labels
+	labelsMap := make(map[string][]string)
+	lblRows, err := d.queryIn("SELECT review_object_id, label FROM review_labels WHERE review_object_id IN (?) ORDER BY review_object_id ASC, label ASC", objectIDs)
+	if err != nil {
+		return nil, fmt.Errorf("projection: query review labels: %w", err)
+	}
+	for lblRows.Next() {
+		var objID, label string
+		if err := lblRows.Scan(&objID, &label); err != nil {
+			lblRows.Close()
+			return nil, fmt.Errorf("projection: scan review label: %w", err)
+		}
+		labelsMap[objID] = append(labelsMap[objID], label)
+	}
+	lblRows.Close()
+
+	// Batch load links
+	linksMap := make(map[string][]state.Link)
+	lnkRows, err := d.queryIn("SELECT review_object_id, target, target_type, relation FROM review_links WHERE review_object_id IN (?) ORDER BY review_object_id ASC, target ASC", objectIDs)
+	if err != nil {
+		return nil, fmt.Errorf("projection: query review links: %w", err)
+	}
+	for lnkRows.Next() {
+		var objID, target, targetType, relation string
+		if err := lnkRows.Scan(&objID, &target, &targetType, &relation); err != nil {
+			lnkRows.Close()
+			return nil, fmt.Errorf("projection: scan review link: %w", err)
+		}
+		linksMap[objID] = append(linksMap[objID], state.Link{
+			Target:     target,
+			TargetType: targetType,
+			Relation:   relation,
+		})
+	}
+	lnkRows.Close()
+
 	// Batch load approvals
 	approvalsMap := make(map[string][]state.Approval)
 	appRows, err := d.queryIn("SELECT review_object_id, subject, revision, verdict, message FROM approvals WHERE review_object_id IN (?) ORDER BY review_object_id ASC, subject ASC, revision ASC", objectIDs)
@@ -288,6 +331,8 @@ func (d *DB) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 			MergeCommit: rr.mergeCommit,
 			Reason:      rr.reason,
 			Assignees:   assigneesMap[rr.objectID],
+			Labels:      labelsMap[rr.objectID],
+			Links:       linksMap[rr.objectID],
 			Revisions:   revisionsMap[rr.objectID],
 			Approvals:   approvalsMap[rr.objectID],
 			CIStatuses:  ciMap[rr.objectID],
@@ -1165,6 +1210,44 @@ func (d *DB) Review(objectID string) (ReviewResult, error) {
 		return ReviewResult{}, fmt.Errorf("projection: iterate review assignees: %w", err)
 	}
 
+	var labels []string
+	lblRows, err := d.db.Query("SELECT label FROM review_labels WHERE review_object_id = ? ORDER BY label ASC", objectID)
+	if err != nil {
+		return ReviewResult{}, fmt.Errorf("projection: query review labels: %w", err)
+	}
+	defer lblRows.Close()
+	for lblRows.Next() {
+		var label string
+		if err := lblRows.Scan(&label); err != nil {
+			return ReviewResult{}, fmt.Errorf("projection: scan review label: %w", err)
+		}
+		labels = append(labels, label)
+	}
+	if err := lblRows.Err(); err != nil {
+		return ReviewResult{}, fmt.Errorf("projection: iterate review labels: %w", err)
+	}
+
+	var links []state.Link
+	lnkRows, err := d.db.Query("SELECT target, target_type, relation FROM review_links WHERE review_object_id = ? ORDER BY target ASC", objectID)
+	if err != nil {
+		return ReviewResult{}, fmt.Errorf("projection: query review links: %w", err)
+	}
+	defer lnkRows.Close()
+	for lnkRows.Next() {
+		var target, targetType, relation string
+		if err := lnkRows.Scan(&target, &targetType, &relation); err != nil {
+			return ReviewResult{}, fmt.Errorf("projection: scan review link: %w", err)
+		}
+		links = append(links, state.Link{
+			Target:     target,
+			TargetType: targetType,
+			Relation:   relation,
+		})
+	}
+	if err := lnkRows.Err(); err != nil {
+		return ReviewResult{}, fmt.Errorf("projection: iterate review links: %w", err)
+	}
+
 	var approvals []state.Approval
 	appRows, err := d.db.Query("SELECT subject, revision, verdict, message FROM approvals WHERE review_object_id = ? ORDER BY subject ASC, revision ASC", objectID)
 	if err != nil {
@@ -1247,6 +1330,8 @@ func (d *DB) Review(objectID string) (ReviewResult, error) {
 			MergeCommit: rr.mergeCommit,
 			Reason:      rr.reason,
 			Assignees:   assignees,
+			Labels:      labels,
+			Links:       links,
 			Revisions:   revisions,
 			Approvals:   approvals,
 			CIStatuses:  ciStatuses,

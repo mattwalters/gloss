@@ -19,6 +19,8 @@ slug: "cli"
 - [`writ review comment`](#writ-review-comment)
 - [`writ review approve`](#writ-review-approve)
 - [`writ review assign`](#writ-review-assign)
+- [`writ review label`](#writ-review-label)
+- [`writ review link`](#writ-review-link)
 - [`writ review status`](#writ-review-status)
 - [`writ review list`](#writ-review-list)
 - [`writ sync`](#writ-sync)
@@ -322,6 +324,61 @@ writ review assign 01J8ABC -add alice@example.com
 writ review assign 01J8ABC -remove bob@example.com
 ```
 
+### `writ review label`
+
+Add or remove review labels
+
+#### Synopsis
+
+```console
+Usage: writ review label [-C <dir>] <id> [-add <l>]... [-remove <l>]...
+```
+
+#### Description
+
+Add or remove review labels.
+
+#### Flags
+
+- `-C <dir>`: Run as if writ was started in <dir>
+- `-add <l>`: Add label <l> (repeatable)
+- `-remove <l>`: Remove label <l> (repeatable)
+
+#### Examples
+
+```bash
+writ review label 01J8ABC -add area/engine
+writ review label 01J8ABC -remove wip
+```
+
+### `writ review link`
+
+Manage review cross-reference links
+
+#### Synopsis
+
+```console
+Usage: writ review link [-C <dir>] <id> -target <ref> -relation fixes|relates|none [-target-type <t>]
+```
+
+#### Description
+
+Manage review cross-reference links.
+
+#### Flags
+
+- `-C <dir>`: Run as if writ was started in <dir>
+- `-target <ref>`: Target reference <ref> (required, e.g. <repo-id>#<object-id> or <object-id>)
+- `-relation <rel>`: Link relation <rel>: fixes, relates, or none (required)
+- `-target-type <t>`: Target object type <t>
+
+#### Examples
+
+```bash
+writ review link 01J8ABC -target 01J8DEF -relation fixes
+writ review link 01J8ABC -target other-repo#01J8DEF -relation relates
+```
+
 ### `writ review status`
 
 View or update review status
@@ -362,7 +419,7 @@ List code reviews
 #### Synopsis
 
 ```console
-Usage: writ review list [-C <dir>] [-status <s>]... [-assignee <a>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>] [--json]
+Usage: writ review list [-C <dir>] [-status <s>]... [-assignee <a>]... [-label <l>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>] [--json]
 ```
 
 #### Description
@@ -374,6 +431,7 @@ List code reviews.
 - `-C <dir>`: Run as if writ was started in <dir>
 - `-status <s>`: Filter by review status <s> (repeatable)
 - `-assignee <a>`: Filter by assignee <a> name or email (repeatable)
+- `-label <l>`: Filter by label <l> (repeatable)
 - `-author <a>`: Filter by author <a> name or email (repeatable)
 - `-text <q>`: Filter by text <q> match in title or description
 - `-limit N`: Maximum number N of reviews to return
@@ -386,6 +444,7 @@ List code reviews.
 writ review list
 writ review list -status open
 writ review list -assignee alice@example.com
+writ review list -label area/engine
 writ review list -status open -status draft --json
 ```
 

@@ -319,4 +319,40 @@ func assertReviewFoldAgreement(t *testing.T, review writ.Review, state writ.Obje
 			}
 		}
 	}
+
+	// 5. Links: compare active relations
+	if rawRelations, ok := state.State["relation"].([]any); ok {
+		activeRelations := make(map[string]string)
+		for _, v := range rawRelations {
+			if m, ok := v.(map[string]any); ok {
+				var keyList []string
+				switch ks := m["key"].(type) {
+				case []string:
+					keyList = ks
+				case []any:
+					for _, k := range ks {
+						keyList = append(keyList, fmt.Sprint(k))
+					}
+				}
+				if len(keyList) >= 1 {
+					target := keyList[0]
+					val := fmt.Sprint(m["value"])
+					if val != "none" && val != "" {
+						activeRelations[target] = val
+					}
+				}
+			}
+		}
+
+		if len(review.Links) != len(activeRelations) {
+			t.Errorf("[%s/%s] links count mismatch: FoldReview=%d, Fold active=%d",
+				fixtureName, objectID, len(review.Links), len(activeRelations))
+		}
+		for _, l := range review.Links {
+			if expectedRel, exists := activeRelations[l.Target]; !exists || expectedRel != l.Relation {
+				t.Errorf("[%s/%s] link %s mismatch: FoldReview relation=%q, Fold=%q",
+					fixtureName, objectID, l.Target, l.Relation, expectedRel)
+			}
+		}
+	}
 }

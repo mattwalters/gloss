@@ -33,6 +33,8 @@ func FoldReview(ops []codec.Op) (Review, error) {
 	}
 	var assignAdds []orSetRecord
 	var assignRemoves []orSetRecord
+	var labelAdds []orSetRecord
+	var labelRemoves []orSetRecord
 
 	type approvalKey struct {
 		subject  string
@@ -45,6 +47,7 @@ func FoldReview(ops []codec.Op) (Review, error) {
 
 	approvalsMap := make(map[approvalKey]*Approval)
 	ciStatusesMap := make(map[ciStatusKey]*CIStatus)
+	linksMap := make(map[string]*Link)
 
 	for _, o := range orderedOps {
 		op := o.Op
@@ -104,6 +107,42 @@ func FoldReview(ops []codec.Op) (Review, error) {
 			} else if remRaw, ok := body["remove"].([]string); ok {
 				for _, it := range remRaw {
 					assignRemoves = append(assignRemoves, orSetRecord{opID: op.ID, item: it})
+				}
+			}
+
+		case "label":
+			if addRaw, ok := body["add"].([]any); ok {
+				for _, it := range addRaw {
+					labelAdds = append(labelAdds, orSetRecord{opID: op.ID, item: fmt.Sprint(it)})
+				}
+			} else if addRaw, ok := body["add"].([]string); ok {
+				for _, it := range addRaw {
+					labelAdds = append(labelAdds, orSetRecord{opID: op.ID, item: it})
+				}
+			}
+			if remRaw, ok := body["remove"].([]any); ok {
+				for _, it := range remRaw {
+					labelRemoves = append(labelRemoves, orSetRecord{opID: op.ID, item: fmt.Sprint(it)})
+				}
+			} else if remRaw, ok := body["remove"].([]string); ok {
+				for _, it := range remRaw {
+					labelRemoves = append(labelRemoves, orSetRecord{opID: op.ID, item: it})
+				}
+			}
+
+		case "link":
+			target, _ := body["target"].(string)
+			if target != "" {
+				entry, ok := linksMap[target]
+				if !ok {
+					entry = &Link{Target: target}
+					linksMap[target] = entry
+				}
+				if tt, ok := body["target_type"].(string); ok {
+					entry.TargetType = tt
+				}
+				if rel, ok := body["relation"].(string); ok {
+					entry.Relation = rel
 				}
 			}
 
@@ -202,6 +241,39 @@ func FoldReview(ops []codec.Op) (Review, error) {
 	sort.Strings(assignees)
 	state.Assignees = assignees
 
+	// Labels OR-set: add-wins over causal removes, emitted sorted
+	labelPresent := make(map[string]bool)
+	for _, add := range labelAdds {
+		removed := false
+		for _, rem := range labelRemoves {
+			if rem.item == add.item && reach.IsAncestor(add.opID, rem.opID) {
+				removed = true
+				break
+			}
+		}
+		if !removed {
+			labelPresent[add.item] = true
+		}
+	}
+	var labels []string
+	for k := range labelPresent {
+		labels = append(labels, k)
+	}
+	sort.Strings(labels)
+	state.Labels = labels
+
+	// Links keyed-LWW: omit entries with relation "none" or empty, sort by target
+	var links []Link
+	for _, l := range linksMap {
+		if l.Relation != "none" && l.Relation != "" {
+			links = append(links, *l)
+		}
+	}
+	sort.Slice(links, func(i, j int) bool {
+		return links[i].Target < links[j].Target
+	})
+	state.Links = links
+
 	// Approvals: omit entries whose folded verdict is "none" or empty.
 	// Sort deterministically by (subject, revision).
 	var approvals []Approval
@@ -260,5 +332,10 @@ func ReviewRules() []Rule {
 		{OpType: "ci-status", OpVersion: 1, Field: "started_at", Strategy: "keyed-lww", Key: []string{"revision", "name"}},
 		{OpType: "ci-status", OpVersion: 1, Field: "completed_at", Strategy: "keyed-lww", Key: []string{"revision", "name"}},
 		{OpType: "ci-status", OpVersion: 1, Field: "external_id", Strategy: "keyed-lww", Key: []string{"revision", "name"}},
+		{OpType: "label", OpVersion: 1, Field: "add", Strategy: "set-observed-remove"},
+		{OpType: "label", OpVersion: 1, Field: "remove", Strategy: "set-observed-remove"},
+		{OpType: "link", OpVersion: 1, Field: "target", Strategy: "keyed-lww", Key: []string{"target"}},
+		{OpType: "link", OpVersion: 1, Field: "target_type", Strategy: "keyed-lww", Key: []string{"target"}},
+		{OpType: "link", OpVersion: 1, Field: "relation", Strategy: "keyed-lww", Key: []string{"target"}},
 	}
 }

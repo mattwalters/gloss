@@ -1,6 +1,6 @@
 package projection
 
-const schemaVersion = 5
+const schemaVersion = 6
 
 var projectionTables = []string{
 	"meta",
@@ -12,6 +12,8 @@ var projectionTables = []string{
 	"reviews",
 	"review_revisions",
 	"review_assignees",
+	"review_labels",
+	"review_links",
 	"approvals",
 	"ci_statuses",
 	"comments",
@@ -38,6 +40,8 @@ var tableQueries = map[string]string{
 	"reviews":            "SELECT * FROM reviews ORDER BY object_id ASC",
 	"review_revisions":   "SELECT * FROM review_revisions ORDER BY review_object_id ASC, revision_index ASC",
 	"review_assignees":   "SELECT * FROM review_assignees ORDER BY review_object_id ASC, assignee ASC",
+	"review_labels":      "SELECT * FROM review_labels ORDER BY review_object_id ASC, label ASC",
+	"review_links":       "SELECT * FROM review_links ORDER BY review_object_id ASC, target ASC",
 	"approvals":          "SELECT * FROM approvals ORDER BY review_object_id ASC, subject ASC, revision ASC",
 	"ci_statuses":        "SELECT * FROM ci_statuses ORDER BY review_object_id ASC, revision ASC, name ASC",
 	"comments":           "SELECT * FROM comments ORDER BY object_id ASC",
@@ -139,6 +143,21 @@ CREATE TABLE IF NOT EXISTS review_assignees (
     PRIMARY KEY (review_object_id, assignee)
 );
 CREATE INDEX IF NOT EXISTS idx_review_assignees_assignee ON review_assignees(assignee);
+
+CREATE TABLE IF NOT EXISTS review_labels (
+    review_object_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    PRIMARY KEY (review_object_id, label)
+);
+CREATE INDEX IF NOT EXISTS idx_review_labels_label ON review_labels(label);
+
+CREATE TABLE IF NOT EXISTS review_links (
+    review_object_id TEXT NOT NULL,
+    target TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    relation TEXT NOT NULL,
+    PRIMARY KEY (review_object_id, target)
+);
 
 CREATE TABLE IF NOT EXISTS approvals (
     review_object_id TEXT NOT NULL,

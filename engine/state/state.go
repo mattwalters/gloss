@@ -44,6 +44,8 @@ type Review struct {
 	MergeCommit string      `json:"merge_commit,omitempty"`
 	Reason      string      `json:"reason,omitempty"`
 	Assignees   []string    `json:"assignees,omitempty"`
+	Labels      []string    `json:"labels,omitempty"`
+	Links       []Link      `json:"links,omitempty"`
 	Revisions   []Revision  `json:"revisions,omitempty"`
 	Approvals   []Approval  `json:"approvals,omitempty"`
 	CIStatuses  []CIStatus  `json:"ci_statuses,omitempty"`
