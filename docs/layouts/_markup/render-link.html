@@ -1,0 +1,58 @@
+{{- /*
+  render-link.html — rewrite spec cross-references for the docs site.
+
+  The spec markdown is mounted into the site verbatim (no front-matter
+  changes, no path rewrites in the source) so it stays correct on GitHub.
+  This hook does the translating at render time:
+
+    1. Sibling .md links (e.g. "comments.md") → the page's RelPermalink
+       inside the site, preserving any #fragment.
+
+    2. Non-published paths (schemas/, testdata/, fixtures/) → the repo
+       at this build's ref, so frozen versioned docs point at the tree
+       they were cut from rather than whatever main has moved on to.
+
+  site.Params.repo and site.Params.ref are declared in hugo.toml;
+  CI sets ref to the release tag for versioned builds.
+*/ -}}
+
+{{- /* Parse the destination to separate path from fragment. */ -}}
+{{- $url   := urls.Parse .Destination -}}
+{{- $path  := $url.Path -}}
+{{- $frag  := "" -}}
+{{- with $url.Fragment }}{{ $frag = printf "#%s" . }}{{ end -}}
+
+{{- /* External / absolute / protocol links — pass through unchanged. */ -}}
+{{- if $url.IsAbs -}}
+  <a href="{{ .Destination | safeURL }}"{{ with .Title }} title="{{ . }}"{{ end }}>{{ .Text }}</a>
+
+{{- /* Fragment-only links — same-page anchors, pass through. */ -}}
+{{- else if eq $path "" -}}
+  <a href="{{ $frag }}"{{ with .Title }} title="{{ . }}"{{ end }}>{{ .Text }}</a>
+
+{{- /* Sibling .md link — resolve to a Hugo page when the site publishes it. */ -}}
+{{- else if strings.HasSuffix $path ".md" -}}
+  {{- $slug   := strings.TrimSuffix ".md" $path -}}
+  {{- $target := .Page.GetPage $slug -}}
+  {{- if $target -}}
+    <a href="{{ $target.RelPermalink }}{{ $frag }}"{{ with $.Title }} title="{{ . }}"{{ end }}>{{ $.Text }}</a>
+  {{- else -}}
+    {{- /* .md exists in the repo but is not published — link to repo. */ -}}
+    {{- $repoPath := printf "spec/%s" $path -}}
+    <a href="{{ site.Params.repo }}/blob/{{ site.Params.ref }}/{{ $repoPath }}{{ $frag }}"{{ with $.Title }} title="{{ . }}"{{ end }}>{{ $.Text }}</a>
+  {{- end -}}
+
+{{- /* Non-published repository artifacts — schemas, testdata, fixtures. */ -}}
+{{- else if or (hasPrefix $path "schemas/") (hasPrefix $path "testdata/") (hasPrefix $path "fixtures/") -}}
+  {{- $repoPath := printf "spec/%s" $path -}}
+  {{- /* Directories get /tree/, files get /blob/. */ -}}
+  {{- $verb := "blob" -}}
+  {{- if strings.HasSuffix $path "/" -}}
+    {{- $verb = "tree" -}}
+  {{- end -}}
+  <a href="{{ site.Params.repo }}/{{ $verb }}/{{ site.Params.ref }}/{{ $repoPath }}{{ $frag }}"{{ with $.Title }} title="{{ . }}"{{ end }}>{{ $.Text }}</a>
+
+{{- /* Everything else — pass through unchanged. */ -}}
+{{- else -}}
+  <a href="{{ .Destination | safeURL }}"{{ with .Title }} title="{{ . }}"{{ end }}>{{ .Text }}</a>
+{{- end -}}
