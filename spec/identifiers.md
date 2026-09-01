@@ -127,17 +127,26 @@ and forge export formats (GitHub, GitLab, Gerrit).
 
 ### Length bound
 
-A person identifier is **1–320 characters**: non-empty after normalization
-(see below), and no longer than 320.
+A person identifier is **1–320 characters**, counted as Unicode code points
+to match JSON Schema `maxLength`: non-empty after normalization (see below),
+and no longer than 320.
 
-320 is the ceiling an RFC 5321 email address can reach — a 64-octet local
-part, `@`, and a 255-octet domain — which is exactly what `person-id`'s
-stated format is. The bound exists because op bodies are written into
-signed, immutable commits in an append-only log: an unbounded string field
-is stored once per op and never reclaimed, so a multi-megabyte identifier
-is permanent repository weight. Bounding it in the shared `person-id`
-definition bounds every person field uniformly — assignees, approval and
-dismissal subjects, and comment `resolved_by`.
+The bound exists to cap storage, not to check conformance. Op bodies are
+written into signed, immutable commits in an append-only log: an unbounded
+string field is stored once per op and never reclaimed, so a multi-megabyte
+identifier is permanent repository weight. Bounding it in the shared
+`person-id` definition bounds every person field uniformly — assignees,
+approval and dismissal subjects, and comment `resolved_by`.
+
+320 is the figure because it is the ceiling an RFC 5321 email address can
+reach — a 64-octet local part, `@`, and a 255-octet domain — and an email
+address is `person-id`'s stated format. Note the unit shift: RFC 5321 counts
+octets, `maxLength` counts code points. They coincide for the ASCII addresses
+the format targets, which is what makes the derivation sound; a non-ASCII
+identifier at 320 code points may occupy up to 1280 UTF-8 bytes. This is a
+**resource bound, not an RFC 5321 conformance check**: Writ does not parse
+email addresses, and length is the only shape constraint the schema applies
+to a person identifier.
 
 The bound applies to the string as it appears in the op body, which
 producers MUST already have normalized.

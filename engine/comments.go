@@ -137,7 +137,11 @@ func (c *Comments) Resolve(ctx context.Context, id string, res CommentResolve) e
 	body := map[string]any{
 		"resolved": res.Resolved,
 	}
-	if resolvedBy := NormalizePerson(res.ResolvedBy); resolvedBy != "" {
+	resolvedBy, err := normalizePersonBounded("resolved_by", res.ResolvedBy)
+	if err != nil {
+		return err
+	}
+	if resolvedBy != "" {
 		body["resolved_by"] = resolvedBy
 	}
 

@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -417,5 +418,122 @@ func TestCommentsResolveWhitespaceResolvedByOmitsKey(t *testing.T) {
 	}
 	if comments[0].Comment.ResolvedBy != "" {
 		t.Errorf("expected empty resolved_by, got %q", comments[0].Comment.ResolvedBy)
+	}
+}
+
+// personIDAtLimit and personIDOverLimit bracket the person identifier length
+// bound declared by spec/schemas/identifiers.schema.json (maxLength: 320): an
+// email-shaped identifier exactly at the limit, and one a single character over.
+func personIDAtLimit(t *testing.T) string {
+	t.Helper()
+	s := strings.Repeat("a", 64) + "@" + strings.Repeat("b", 251) + ".com"
+	if len(s) != 320 {
+		t.Fatalf("test setup: at-limit identifier is %d characters, want 320", len(s))
+	}
+	return s
+}
+
+func personIDOverLimit(t *testing.T) string {
+	t.Helper()
+	s := strings.Repeat("a", 64) + "@" + strings.Repeat("b", 252) + ".com"
+	if len(s) != 321 {
+		t.Fatalf("test setup: over-limit identifier is %d characters, want 321", len(s))
+	}
+	return s
+}
+
+// TestCommentsResolvePersonIDLengthBound is the upper-bound counterpart to
+// TestCommentsResolveWhitespaceResolvedByOmitsKey. The engine must not append an
+// op the person-id schema would reject (maxLength: 320): op commits are signed,
+// immutable and append-only, so an over-length identifier would be permanent
+// unreclaimable weight. Rejection must be an error rather than a truncation —
+// two distinct identifiers truncated to the same bytes would collapse into one
+// person.
+func TestCommentsResolvePersonIDLengthBound(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+
+	headHash := runGitCmd(t, repoDir, "rev-parse", "HEAD")[:40]
+	reviewID, err := s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Person ID Length Bound Review",
+		Base:  headHash,
+		Head:  headHash,
+	})
+	if err != nil {
+		t.Fatalf("Create review failed: %v", err)
+	}
+
+	atLimit := personIDAtLimit(t)
+	overLimit := personIDOverLimit(t)
+
+	// An identifier exactly at the bound is accepted.
+	acceptedID, err := s.Reviews.Comment(ctx, reviewID, writ.NewComment{Text: "At the bound"})
+	if err != nil {
+		t.Fatalf("Comment failed: %v", err)
+	}
+	if err := s.Comments.Resolve(ctx, acceptedID, writ.CommentResolve{
+		Resolved:   true,
+		ResolvedBy: atLimit,
+	}); err != nil {
+		t.Fatalf("Resolve with a 320-character identifier failed: %v", err)
+	}
+
+	// One character over, and the write is refused.
+	rejectedID, err := s.Reviews.Comment(ctx, reviewID, writ.NewComment{Text: "Over the bound"})
+	if err != nil {
+		t.Fatalf("Comment failed: %v", err)
+	}
+	err = s.Comments.Resolve(ctx, rejectedID, writ.CommentResolve{
+		Resolved:   true,
+		ResolvedBy: overLimit,
+	})
+	if err == nil {
+		t.Fatal("expected Resolve to reject a 321-character identifier, got nil error")
+	}
+	if !strings.Contains(err.Error(), "resolved_by") || !strings.Contains(err.Error(), "320") {
+		t.Errorf("expected an error naming resolved_by and the 320-character limit, got %q", err)
+	}
+
+	// The rejected write must have left nothing behind: no resolve op at all,
+	// truncated or otherwise.
+	ident, _ := identity.ParseWriterID("0123456789abcdef")
+	dagStore, err := dag.Open(repoDir, identity.Identity{WriterID: ident})
+	if err != nil {
+		t.Fatalf("dag.Open failed: %v", err)
+	}
+	enumRes, err := dagStore.Enumerate()
+	if err != nil {
+		t.Fatalf("dagStore.Enumerate failed: %v", err)
+	}
+	for _, op := range enumRes.Ops[rejectedID] {
+		if op.OpType == "resolve" {
+			t.Errorf("expected no resolve op for the rejected identifier, got body %s", op.Body)
+		}
+	}
+
+	// The accepted one round-trips unchanged — no truncation on the way in.
+	comments, err := s.Query.Comments(writ.CommentFilter{SubjectID: reviewID})
+	if err != nil {
+		t.Fatalf("Query.Comments failed: %v", err)
+	}
+	var found bool
+	for _, c := range comments {
+		if c.ObjectID != acceptedID {
+			continue
+		}
+		found = true
+		if c.Comment.ResolvedBy != atLimit {
+			t.Errorf("expected the 320-character identifier to round-trip unchanged, got %d characters", len(c.Comment.ResolvedBy))
+		}
+	}
+	if !found {
+		t.Errorf("accepted comment %s not found in query results", acceptedID)
 	}
 }
