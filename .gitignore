@@ -47,3 +47,6 @@ dist/
 # Hugo site build output
 public/
 docs/.hugo_build.lock
+
+# htmltest scratch (its default cache dir, written by a local link check)
+tmp/
