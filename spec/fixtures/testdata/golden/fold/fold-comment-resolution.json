@@ -1,6 +1,31 @@
 {
   "objects": [
     {
+      "object_id": "c-norm-root",
+      "object_type": "comment",
+      "total_order": [
+        {
+          "commit": "a8621a93431735dd602c756c7a111c906081cd23",
+          "label": "alice-norm-root-create",
+          "t_star": 1767226020
+        },
+        {
+          "commit": "52f985c4250ba833f6ff3a5247b5b61fedd9cf2d",
+          "label": "alice-norm-root-resolve",
+          "t_star": 1767226080
+        }
+      ],
+      "state": {
+        "actor": "alice@example.com",
+        "resolved": true,
+        "subject": {
+          "object_id": "r-7f3a",
+          "object_type": "review"
+        },
+        "text": "Root comment resolved by a non-normalized actor"
+      }
+    },
+    {
       "object_id": "c-race-root",
       "object_type": "comment",
       "total_order": [

@@ -1,8 +1,10 @@
 name: fold-comment-resolution
 description: >
   Thread resolution exercising: resolve operation with actor, reply-after-resolve
-  (root remains resolved), explicit unresolve, and concurrent resolve vs unresolve
-  racing across writer branches (lww tiebreak).
+  (root remains resolved), explicit unresolve, concurrent resolve vs unresolve
+  racing across writer branches (lww tiebreak), and person identifier
+  normalization of the resolution actor (whitespace trimming, case folding)
+  at the fold layer.
 
 refs:
   - name: refs/writ/0123456789abcdef/comment
@@ -108,6 +110,36 @@ refs:
               body:
                 resolved: true
                 actor: alice
+            expect: accept
+
+          - id: alice-norm-root-create
+            parents: [alice-race-root-resolve]
+            author: alice
+            timestamp: 2026-01-01T00:07:00Z
+            op:
+              object_id: c-norm-root
+              object_type: comment
+              op_type: create
+              op_version: 1
+              body:
+                subject:
+                  object_type: review
+                  object_id: r-7f3a
+                text: "Root comment resolved by a non-normalized actor"
+            expect: accept
+
+          - id: alice-norm-root-resolve
+            parents: [alice-norm-root-create]
+            author: alice
+            timestamp: 2026-01-01T00:08:00Z
+            op:
+              object_id: c-norm-root
+              object_type: comment
+              op_type: resolve
+              op_version: 1
+              body:
+                resolved: true
+                actor: "  Alice@Example.COM  "
             expect: accept
 
   - name: refs/writ/fedcba9876543210/comment

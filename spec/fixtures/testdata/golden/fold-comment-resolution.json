@@ -2,7 +2,7 @@
   "refs": [
     {
       "name": "refs/writ/0123456789abcdef/comment",
-      "commit": "49288c80b90a74f2d64c69a0780d79125a30dc60"
+      "commit": "52f985c4250ba833f6ff3a5247b5b61fedd9cf2d"
     },
     {
       "name": "refs/writ/fedcba9876543210/comment",
@@ -87,6 +87,28 @@
           "author": "Alice Example \u003calice@example.test\u003e",
           "timestamp": "2026-01-01T00:06:00Z",
           "message": "writ: resolve comment/c-race-root\n",
+          "signed": true
+        },
+        {
+          "sha": "a8621a93431735dd602c756c7a111c906081cd23",
+          "tree": "7fc32c1aba6696053e03dd78c42b7350ac3b7020",
+          "parents": [
+            "49288c80b90a74f2d64c69a0780d79125a30dc60"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:07:00Z",
+          "message": "writ: create comment/c-norm-root\n",
+          "signed": true
+        },
+        {
+          "sha": "52f985c4250ba833f6ff3a5247b5b61fedd9cf2d",
+          "tree": "5d6847746e7a63d86d50d19951ea251d0828e8f1",
+          "parents": [
+            "a8621a93431735dd602c756c7a111c906081cd23"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:08:00Z",
+          "message": "writ: resolve comment/c-norm-root\n",
           "signed": true
         }
       ]
