@@ -78,11 +78,11 @@ func newIssueCreateFlagSet(defaultDir string) (*flag.FlagSet, *issueCreateOpts) 
 	fs := flag.NewFlagSet("issue create", flag.ContinueOnError)
 	opts := &issueCreateOpts{}
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.StringVar(&opts.title, "title", "", "Issue title")
-	fs.StringVar(&opts.description, "description", "", "Issue description")
-	fs.StringVar(&opts.stateVal, "state", "", "Initial issue state (open or closed)")
-	fs.Var(&opts.fixes, "fixes", "Add a 'fixes' cross-reference link (repeatable)")
-	fs.Var(&opts.relates, "relates", "Add a 'relates' cross-reference link (repeatable)")
+	fs.StringVar(&opts.title, "title", "", "Issue title `<t>` (required)")
+	fs.StringVar(&opts.description, "description", "", "Issue description `<d>`")
+	fs.StringVar(&opts.stateVal, "state", "", "Initial issue state `<state>` (open or closed)")
+	fs.Var(&opts.fixes, "fixes", "Add a 'fixes' cross-reference link `<ref>` (repeatable)")
+	fs.Var(&opts.relates, "relates", "Add a 'relates' cross-reference link `<ref>` (repeatable)")
 	fs.Usage = func() {
 		renderUsage(fs.Output(), []string{"issue", "create"}, issueCreateCmd)
 	}
@@ -175,7 +175,7 @@ func newIssueStatusFlagSet(defaultDir string) (*flag.FlagSet, *issueStatusOpts) 
 	fs := flag.NewFlagSet("issue status", flag.ContinueOnError)
 	opts := &issueStatusOpts{}
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.StringVar(&opts.reason, "reason", "", "Reason for status change")
+	fs.StringVar(&opts.reason, "reason", "", "Reason `<r>` for status change")
 	fs.BoolVar(&opts.jsonMode, "json", false, "Output result as JSON (view mode only)")
 	fs.Usage = func() {
 		renderUsage(fs.Output(), []string{"issue", "status"}, issueStatusCmd)
@@ -343,8 +343,8 @@ func newIssueAssignFlagSet(defaultDir string) (*flag.FlagSet, *issueAssignOpts) 
 	fs := flag.NewFlagSet("issue assign", flag.ContinueOnError)
 	opts := &issueAssignOpts{}
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.Var(&opts.add, "add", "Add assignee email or ID (repeatable)")
-	fs.Var(&opts.remove, "remove", "Remove assignee email or ID (repeatable)")
+	fs.Var(&opts.add, "add", "Add assignee `<a>` email or ID (repeatable)")
+	fs.Var(&opts.remove, "remove", "Remove assignee `<a>` email or ID (repeatable)")
 	fs.Usage = func() {
 		renderUsage(fs.Output(), []string{"issue", "assign"}, issueAssignCmd)
 	}
@@ -420,13 +420,13 @@ func newIssueListFlagSet(defaultDir string) (*flag.FlagSet, *issueListOpts) {
 	fs := flag.NewFlagSet("issue list", flag.ContinueOnError)
 	opts := &issueListOpts{}
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.Var(&opts.states, "state", "Filter by issue state (repeatable: -state open -state closed)")
-	fs.Var(&opts.assignees, "assignee", "Filter by assignee name or email (repeatable)")
-	fs.Var(&opts.labels, "label", "Filter by label (repeatable)")
-	fs.Var(&opts.authors, "author", "Filter by author name or email (repeatable)")
-	fs.StringVar(&opts.text, "text", "", "Filter by text match in title or description")
-	fs.IntVar(&opts.limit, "limit", 0, "Maximum number of issues to return")
-	fs.StringVar(&opts.sortOrder, "sort", "", "Sort order: created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc")
+	fs.Var(&opts.states, "state", "Filter by issue state `<s>` (repeatable)")
+	fs.Var(&opts.assignees, "assignee", "Filter by assignee `<a>` name or email (repeatable)")
+	fs.Var(&opts.labels, "label", "Filter by label `<l>` (repeatable)")
+	fs.Var(&opts.authors, "author", "Filter by author `<a>` name or email (repeatable)")
+	fs.StringVar(&opts.text, "text", "", "Filter by text `<q>` match in title or description")
+	fs.IntVar(&opts.limit, "limit", 0, "Maximum number `N` of issues to return")
+	fs.StringVar(&opts.sortOrder, "sort", "", "Sort order `<order>` (created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc)")
 	fs.BoolVar(&opts.jsonMode, "json", false, "Output result as JSON")
 	fs.Usage = func() {
 		renderUsage(fs.Output(), []string{"issue", "list"}, issueListCmd)
@@ -534,9 +534,9 @@ func newIssueLinkFlagSet(defaultDir string) (*flag.FlagSet, *issueLinkOpts) {
 	fs := flag.NewFlagSet("issue link", flag.ContinueOnError)
 	opts := &issueLinkOpts{}
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.StringVar(&opts.target, "target", "", "Target reference (e.g. <repo-id>#<object-id> or <object-id>)")
-	fs.StringVar(&opts.relation, "relation", "", "Link relation: fixes, relates, or none")
-	fs.StringVar(&opts.targetType, "target-type", "", "Target object type")
+	fs.StringVar(&opts.target, "target", "", "Target reference `<ref>` (required, e.g. <repo-id>#<object-id> or <object-id>)")
+	fs.StringVar(&opts.relation, "relation", "", "Link relation `<rel>`: fixes, relates, or none (required)")
+	fs.StringVar(&opts.targetType, "target-type", "", "Target object type `<t>`")
 	fs.Usage = func() {
 		renderUsage(fs.Output(), []string{"issue", "link"}, issueLinkCmd)
 	}

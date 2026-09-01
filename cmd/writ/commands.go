@@ -1,14 +1,15 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"strings"
 )
 
 type flagSpec struct {
-	Name       string   // "title", "status"
-	Arg        string   // "<t>", "" for bool flags
+	Name       string // "title", "status"
+	Arg        string // "<t>", "" for bool flags
 	Usage      string
 	Values     []string // closed enum, for completion: approve|request-changes|none
 	Repeatable bool
@@ -16,7 +17,7 @@ type flagSpec struct {
 
 type command struct {
 	Name, Short string
-	UsageLine   string   // first line, verbatim
+	UsageLine   string // first line, verbatim
 	Long        string
 	Examples    []string // at least one per verb (DoD)
 	ExitCodes   []string // only sync populates this today
@@ -54,11 +55,7 @@ var initCmd = &command{
 	Long: "Initialize writ repository configuration by resolving or minting a writer ID,\n" +
 		"verifying SSH signing key configuration, and adding fetch refspecs for git remotes.",
 	Flags: []flagSpec{
-		{
-			Name:  "C",
-			Arg:   "<dir>",
-			Usage: "Run as if writ was started in <dir>",
-		},
+		{Name: "C"},
 	},
 	Examples: []string{
 		"writ init",
@@ -93,39 +90,12 @@ var issueCreateCmd = &command{
 	UsageLine: "Usage: writ issue create [-C <dir>] -title <t> [-description <d>] [-state open|closed] [-fixes <ref>]... [-relates <ref>]...",
 	Long:      "Create a new issue.",
 	Flags: []flagSpec{
-		{
-			Name:  "C",
-			Arg:   "<dir>",
-			Usage: "Run as if writ was started in <dir>",
-		},
-		{
-			Name:  "title",
-			Arg:   "<t>",
-			Usage: "Issue title (required)",
-		},
-		{
-			Name:  "description",
-			Arg:   "<d>",
-			Usage: "Issue description",
-		},
-		{
-			Name:   "state",
-			Arg:    "<state>",
-			Usage:  "Initial issue state (open or closed)",
-			Values: []string{"open", "closed"},
-		},
-		{
-			Name:       "fixes",
-			Arg:        "<ref>",
-			Usage:      "Add a 'fixes' cross-reference link (repeatable)",
-			Repeatable: true,
-		},
-		{
-			Name:       "relates",
-			Arg:        "<ref>",
-			Usage:      "Add a 'relates' cross-reference link (repeatable)",
-			Repeatable: true,
-		},
+		{Name: "C"},
+		{Name: "title"},
+		{Name: "description"},
+		{Name: "state", Values: []string{"open", "closed"}},
+		{Name: "fixes", Repeatable: true},
+		{Name: "relates", Repeatable: true},
 	},
 	Examples: []string{
 		`writ issue create -title "Fix memory leak"`,
@@ -139,20 +109,9 @@ var issueStatusCmd = &command{
 	UsageLine: "Usage: writ issue status [-C <dir>] <id> [<state>] [-reason <r>] [--json]",
 	Long:      "View or update issue status.\n\nStates:\n  open, closed",
 	Flags: []flagSpec{
-		{
-			Name:  "C",
-			Arg:   "<dir>",
-			Usage: "Run as if writ was started in <dir>",
-		},
-		{
-			Name:  "reason",
-			Arg:   "<r>",
-			Usage: "Reason for status change",
-		},
-		{
-			Name:  "json",
-			Usage: "Output result as JSON (view mode only)",
-		},
+		{Name: "C"},
+		{Name: "reason"},
+		{Name: "json"},
 	},
 	Examples: []string{
 		"writ issue status 01J8ABC",
@@ -167,23 +126,9 @@ var issueAssignCmd = &command{
 	UsageLine: "Usage: writ issue assign [-C <dir>] <id> [-add <a>]... [-remove <a>]...",
 	Long:      "Add or remove issue assignees.",
 	Flags: []flagSpec{
-		{
-			Name:  "C",
-			Arg:   "<dir>",
-			Usage: "Run as if writ was started in <dir>",
-		},
-		{
-			Name:       "add",
-			Arg:        "<a>",
-			Usage:      "Add assignee email or ID (repeatable)",
-			Repeatable: true,
-		},
-		{
-			Name:       "remove",
-			Arg:        "<a>",
-			Usage:      "Remove assignee email or ID (repeatable)",
-			Repeatable: true,
-		},
+		{Name: "C"},
+		{Name: "add", Repeatable: true},
+		{Name: "remove", Repeatable: true},
 	},
 	Examples: []string{
 		"writ issue assign 01J8ABC -add alice@example.com",
@@ -197,56 +142,15 @@ var issueListCmd = &command{
 	UsageLine: "Usage: writ issue list [-C <dir>] [-state <s>]... [-assignee <a>]... [-label <l>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>] [--json]",
 	Long:      "List issues.",
 	Flags: []flagSpec{
-		{
-			Name:  "C",
-			Arg:   "<dir>",
-			Usage: "Run as if writ was started in <dir>",
-		},
-		{
-			Name:       "state",
-			Arg:        "<s>",
-			Usage:      "Filter by issue state (repeatable)",
-			Values:     []string{"open", "closed"},
-			Repeatable: true,
-		},
-		{
-			Name:       "assignee",
-			Arg:        "<a>",
-			Usage:      "Filter by assignee name or email (repeatable)",
-			Repeatable: true,
-		},
-		{
-			Name:       "label",
-			Arg:        "<l>",
-			Usage:      "Filter by label (repeatable)",
-			Repeatable: true,
-		},
-		{
-			Name:       "author",
-			Arg:        "<a>",
-			Usage:      "Filter by author name or email (repeatable)",
-			Repeatable: true,
-		},
-		{
-			Name:  "text",
-			Arg:   "<q>",
-			Usage: "Filter by text match in title or description",
-		},
-		{
-			Name:  "limit",
-			Arg:   "N",
-			Usage: "Maximum number of issues to return",
-		},
-		{
-			Name:   "sort",
-			Arg:    "<order>",
-			Usage:  "Sort order (created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc)",
-			Values: []string{"created_at_asc", "created_at_desc", "updated_at_asc", "updated_at_desc", "title_asc", "title_desc"},
-		},
-		{
-			Name:  "json",
-			Usage: "Output result as JSON",
-		},
+		{Name: "C"},
+		{Name: "state", Values: []string{"open", "closed"}, Repeatable: true},
+		{Name: "assignee", Repeatable: true},
+		{Name: "label", Repeatable: true},
+		{Name: "author", Repeatable: true},
+		{Name: "text"},
+		{Name: "limit"},
+		{Name: "sort", Values: []string{"created_at_asc", "created_at_desc", "updated_at_asc", "updated_at_desc", "title_asc", "title_desc"}},
+		{Name: "json"},
 	},
 	Examples: []string{
 		"writ issue list",
@@ -261,27 +165,10 @@ var issueLinkCmd = &command{
 	UsageLine: "Usage: writ issue link [-C <dir>] <id> -target <ref> -relation fixes|relates|none [-target-type <t>]",
 	Long:      "Manage issue cross-reference links.",
 	Flags: []flagSpec{
-		{
-			Name:  "C",
-			Arg:   "<dir>",
-			Usage: "Run as if writ was started in <dir>",
-		},
-		{
-			Name:  "target",
-			Arg:   "<ref>",
-			Usage: "Target reference (required, e.g. <repo-id>#<object-id> or <object-id>)",
-		},
-		{
-			Name:   "relation",
-			Arg:    "<rel>",
-			Usage:  "Link relation: fixes, relates, or none (required)",
-			Values: []string{"fixes", "relates", "none"},
-		},
-		{
-			Name:  "target-type",
-			Arg:   "<t>",
-			Usage: "Target object type",
-		},
+		{Name: "C"},
+		{Name: "target"},
+		{Name: "relation", Values: []string{"fixes", "relates", "none"}},
+		{Name: "target-type"},
 	},
 	Examples: []string{
 		"writ issue link 01J8ABC -target 01J8DEF -relation fixes",
@@ -316,35 +203,12 @@ var reviewOpenCmd = &command{
 	UsageLine: "Usage: writ review open [-C <dir>] -title <t> [-description <d>] [-base <ref> -head <ref>] [-draft]",
 	Long:      "Create a new code review.",
 	Flags: []flagSpec{
-		{
-			Name:  "C",
-			Arg:   "<dir>",
-			Usage: "Run as if writ was started in <dir>",
-		},
-		{
-			Name:  "title",
-			Arg:   "<t>",
-			Usage: "Review title (required)",
-		},
-		{
-			Name:  "description",
-			Arg:   "<d>",
-			Usage: "Review description",
-		},
-		{
-			Name:  "base",
-			Arg:   "<ref>",
-			Usage: "Base revision commit or ref",
-		},
-		{
-			Name:  "head",
-			Arg:   "<ref>",
-			Usage: "Head revision commit or ref",
-		},
-		{
-			Name:  "draft",
-			Usage: "Create review in draft state",
-		},
+		{Name: "C"},
+		{Name: "title"},
+		{Name: "description"},
+		{Name: "base"},
+		{Name: "head"},
+		{Name: "draft"},
 	},
 	Examples: []string{
 		`writ review open -title "Add feature X"`,
@@ -359,21 +223,9 @@ var reviewCommentCmd = &command{
 	UsageLine: "Usage: writ review comment [-C <dir>] <id> -m <text> [-reply-to <comment-id>]",
 	Long:      "Add a comment to a review.",
 	Flags: []flagSpec{
-		{
-			Name:  "C",
-			Arg:   "<dir>",
-			Usage: "Run as if writ was started in <dir>",
-		},
-		{
-			Name:  "m",
-			Arg:   "<text>",
-			Usage: "Comment message text (required)",
-		},
-		{
-			Name:  "reply-to",
-			Arg:   "<comment-id>",
-			Usage: "Comment ID to reply to",
-		},
+		{Name: "C"},
+		{Name: "m"},
+		{Name: "reply-to"},
 	},
 	Examples: []string{
 		`writ review comment 01J8ABC -m "Looks good to me"`,
@@ -387,32 +239,11 @@ var reviewApproveCmd = &command{
 	UsageLine: "Usage: writ review approve [-C <dir>] <id> [-verdict approve|request-changes|none] [-revision <ref>] [-m <msg>] [-subject <s>]",
 	Long:      "Record a review verdict.",
 	Flags: []flagSpec{
-		{
-			Name:  "C",
-			Arg:   "<dir>",
-			Usage: "Run as if writ was started in <dir>",
-		},
-		{
-			Name:   "verdict",
-			Arg:    "approve|request-changes|none",
-			Usage:  "Verdict (default: approve)",
-			Values: []string{"approve", "request-changes", "none"},
-		},
-		{
-			Name:  "revision",
-			Arg:   "<ref>",
-			Usage: "Revision commit ref or SHA (defaults to latest head)",
-		},
-		{
-			Name:  "m",
-			Arg:   "<msg>",
-			Usage: "Verdict message",
-		},
-		{
-			Name:  "subject",
-			Arg:   "<s>",
-			Usage: "Subject identity (defaults to writer email or writer ID)",
-		},
+		{Name: "C"},
+		{Name: "verdict", Values: []string{"approve", "request-changes", "none"}},
+		{Name: "revision"},
+		{Name: "m"},
+		{Name: "subject"},
 	},
 	Examples: []string{
 		"writ review approve 01J8ABC",
@@ -426,25 +257,10 @@ var reviewStatusCmd = &command{
 	UsageLine: "Usage: writ review status [-C <dir>] <id> [<state>] [-reason <r>] [-merge-commit <ref>] [--json]",
 	Long:      "View or update review status.\n\nStates:\n  draft, open, closed, merged",
 	Flags: []flagSpec{
-		{
-			Name:  "C",
-			Arg:   "<dir>",
-			Usage: "Run as if writ was started in <dir>",
-		},
-		{
-			Name:  "reason",
-			Arg:   "<r>",
-			Usage: "Reason for status change",
-		},
-		{
-			Name:  "merge-commit",
-			Arg:   "<ref>",
-			Usage: "Merge commit ref or SHA (valid when setting status to merged)",
-		},
-		{
-			Name:  "json",
-			Usage: "Output result as JSON (view mode only)",
-		},
+		{Name: "C"},
+		{Name: "reason"},
+		{Name: "merge-commit"},
+		{Name: "json"},
 	},
 	Examples: []string{
 		"writ review status 01J8ABC",
@@ -460,44 +276,13 @@ var reviewListCmd = &command{
 	UsageLine: "Usage: writ review list [-C <dir>] [-status <s>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>] [--json]",
 	Long:      "List code reviews.",
 	Flags: []flagSpec{
-		{
-			Name:  "C",
-			Arg:   "<dir>",
-			Usage: "Run as if writ was started in <dir>",
-		},
-		{
-			Name:       "status",
-			Arg:        "<s>",
-			Usage:      "Filter by review status (repeatable)",
-			Values:     []string{"draft", "open", "closed", "merged"},
-			Repeatable: true,
-		},
-		{
-			Name:       "author",
-			Arg:        "<a>",
-			Usage:      "Filter by author name or email (repeatable)",
-			Repeatable: true,
-		},
-		{
-			Name:  "text",
-			Arg:   "<q>",
-			Usage: "Filter by text match in title or description",
-		},
-		{
-			Name:  "limit",
-			Arg:   "N",
-			Usage: "Maximum number of reviews to return",
-		},
-		{
-			Name:   "sort",
-			Arg:    "<order>",
-			Usage:  "Sort order (created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc)",
-			Values: []string{"created_at_asc", "created_at_desc", "updated_at_asc", "updated_at_desc", "title_asc", "title_desc"},
-		},
-		{
-			Name:  "json",
-			Usage: "Output result as JSON",
-		},
+		{Name: "C"},
+		{Name: "status", Values: []string{"draft", "open", "closed", "merged"}, Repeatable: true},
+		{Name: "author", Repeatable: true},
+		{Name: "text"},
+		{Name: "limit"},
+		{Name: "sort", Values: []string{"created_at_asc", "created_at_desc", "updated_at_asc", "updated_at_desc", "title_asc", "title_desc"}},
+		{Name: "json"},
 	},
 	Examples: []string{
 		"writ review list",
@@ -514,19 +299,9 @@ var syncCmd = &command{
 		"Fetch remote operations, push local operations, and refresh the local projection cache.\n" +
 		"With no remote specified, defaults to 'origin' or the sole configured remote.",
 	Flags: []flagSpec{
-		{
-			Name:  "C",
-			Arg:   "<dir>",
-			Usage: "Run as if writ was started in <dir>",
-		},
-		{
-			Name:  "status",
-			Usage: "Report unpushed ops count without network transport",
-		},
-		{
-			Name:  "json",
-			Usage: "Output result as JSON",
-		},
+		{Name: "C"},
+		{Name: "status"},
+		{Name: "json"},
 	},
 	ExitCodes: []string{
 		"0  Success",
@@ -580,6 +355,49 @@ var helpCmd = &command{
 	},
 }
 
+var flagSetConstructors map[string]func() *flag.FlagSet
+
+func init() {
+	flagSetConstructors = map[string]func() *flag.FlagSet{
+		"init":           func() *flag.FlagSet { fs, _ := newInitFlagSet(""); return fs },
+		"issue create":   func() *flag.FlagSet { fs, _ := newIssueCreateFlagSet(""); return fs },
+		"issue status":   func() *flag.FlagSet { fs, _ := newIssueStatusFlagSet(""); return fs },
+		"issue assign":   func() *flag.FlagSet { fs, _ := newIssueAssignFlagSet(""); return fs },
+		"issue list":     func() *flag.FlagSet { fs, _ := newIssueListFlagSet(""); return fs },
+		"issue link":     func() *flag.FlagSet { fs, _ := newIssueLinkFlagSet(""); return fs },
+		"review open":    func() *flag.FlagSet { fs, _ := newReviewOpenFlagSet(""); return fs },
+		"review comment": func() *flag.FlagSet { fs, _ := newReviewCommentFlagSet(""); return fs },
+		"review approve": func() *flag.FlagSet { fs, _ := newReviewApproveFlagSet(""); return fs },
+		"review status":  func() *flag.FlagSet { fs, _ := newReviewStatusFlagSet(""); return fs },
+		"review list":    func() *flag.FlagSet { fs, _ := newReviewListFlagSet(""); return fs },
+		"sync":           func() *flag.FlagSet { fs, _ := newSyncFlagSet(""); return fs },
+	}
+}
+
+func commandFlags(path []string, c *command) []flagSpec {
+	cmdPath := strings.Join(path, " ")
+	ctor, ok := flagSetConstructors[cmdPath]
+	if !ok {
+		return c.Flags
+	}
+	fs := ctor()
+	flags := make([]flagSpec, len(c.Flags))
+	for i, f := range c.Flags {
+		flagObj := fs.Lookup(f.Name)
+		arg, usage := "", ""
+		if flagObj != nil {
+			arg, usage = flag.UnquoteUsage(flagObj)
+		}
+		flags[i] = flagSpec{
+			Name:       f.Name,
+			Arg:        arg,
+			Usage:      usage,
+			Values:     f.Values,
+			Repeatable: f.Repeatable,
+		}
+	}
+	return flags
+}
 
 func findCommandByPath(path []string) (*command, []string, error) {
 	if len(path) == 0 {
@@ -648,7 +466,8 @@ func renderUsage(w io.Writer, path []string, c *command) {
 		return
 	}
 
-	if len(c.Flags) > 0 {
+	flags := commandFlags(path, c)
+	if len(flags) > 0 {
 		fmt.Fprintln(w, "Flags:")
 		maxFlagLen := 0
 		type flagFormat struct {
@@ -656,7 +475,7 @@ func renderUsage(w io.Writer, path []string, c *command) {
 			usage   string
 		}
 		var formatted []flagFormat
-		for _, f := range c.Flags {
+		for _, f := range flags {
 			disp := "-" + f.Name
 			if f.Arg != "" {
 				disp += " " + f.Arg

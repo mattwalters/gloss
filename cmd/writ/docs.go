@@ -77,10 +77,11 @@ func renderDocs(w io.Writer) error {
 			fmt.Fprintln(w)
 		}
 
-		if len(item.cmd.Flags) > 0 {
+		flags := commandFlags(item.path, item.cmd)
+		if len(flags) > 0 {
 			fmt.Fprintln(w, "#### Flags")
 			fmt.Fprintln(w)
-			for _, f := range item.cmd.Flags {
+			for _, f := range flags {
 				disp := "-" + f.Name
 				if f.Arg != "" {
 					disp += " " + f.Arg
