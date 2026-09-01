@@ -88,7 +88,9 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: |
           mkdir /tmp/root
-          for f in index.html why style.css sitemap.xml robots.txt; do
+          # Anything not named here is deleted before deploy. A new root
+          # page or asset must be added, or it silently stops being served.
+          for f in index.html why style.css favicon.svg sitemap.xml robots.txt; do
             [ -e "public/$f" ] && mv "public/$f" /tmp/root/
           done
           rm -rf public
