@@ -1,7 +1,7 @@
 name: fold-approval-subject-denormalized
 description: >
   Approval ops whose LWW-winning write carries a denormalized subject
-  ('  Carol@Example.COM  ', 'DAVE@EXAMPLE.COM'), as a pre-normalization or
+  ('  Carol@Example.COM  ', ' DAVE@Example.com '), as a pre-normalization or
   foreign client would emit. Verifies that keyed-lww normalizes the stored
   person identifier and not merely the composite key, so the folded 'subject'
   entry reads back normalized and agrees with the typed review reducer.
