@@ -90,12 +90,41 @@ jobs:
           mkdir /tmp/root
           # Anything not named here is deleted before deploy. A new root
           # page or asset must be added, or it silently stops being served.
-          for f in index.html why style.css favicon.svg sitemap.xml robots.txt; do
+          for f in index.html why style.css favicon.svg sitemap.xml robots.txt casts posters; do
             [ -e "public/$f" ] && mv "public/$f" /tmp/root/
           done
           rm -rf public
           mkdir public
           mv /tmp/root/* public/
+
+      # Casts are rendered from the tag's own tree, same as the docs below,
+      # so a recording always shows the released binary rather than whatever
+      # merged last.
+      - name: Set up Go
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - uses: charmbracelet/vhs-action@v2
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+      - name: Render casts
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        run: make casts
+
+      # The root is marketing and tracks main (see "Build root" above), so it
+      # never runs a Hugo build on this tag push to pick casts up from a
+      # mount. This is the last release's recordings, staged at the site
+      # root directly — a plain copy, not a build — so the splash page plays
+      # them too. keep_files preserves it between tags: a push to main stages
+      # nothing at public/casts (main renders no casts of its own), so it
+      # goes on serving whatever the last tag put here.
+      - name: Stage this release's casts at the site root
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        run: |
+          mkdir -p public/casts
+          cp -r docs/static/casts/. public/casts/
+          mkdir -p public/posters
+          cp -r docs/static/posters/. public/posters/
 
       # Versioned docs: only from tags.
       - name: Build latest

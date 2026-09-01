@@ -177,6 +177,21 @@ article th { background: var(--code-bg); }
 .home { text-align: center; padding: 4rem 0; }
 .home h1 { font-size: 3rem; margin-bottom: 0.5rem; }
 .home .tagline { font-size: 1.25rem; opacity: 0.7; margin-bottom: 1.5rem; }
+
+/* Cast video */
+figure.cast {
+  margin: 2rem 0;
+}
+
+figure.cast video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1200 / 640;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
 .home .cta {
   display: flex;
   gap: 1rem;
