@@ -1,0 +1,50 @@
+# Static binaries for people without a Go toolchain. `go install` stays the
+# documented path (see README); this exists so that a tagged release is also
+# a download.
+#
+# Nothing here is a build system either — the same two facts the Makefile
+# stamps, an import path and a version, expressed for six platforms at once.
+version: 2
+
+builds:
+  - id: writ
+    main: ./cmd/writ
+    binary: writ
+    # Writ chose pure-Go modernc.org/sqlite (WRIT-60) specifically so
+    # CGO_ENABLED=0 cross-compilation works with nothing but GOOS/GOARCH.
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # The same -X target `make install` uses, so a downloaded binary and a
+    # locally built one report their version through the same hook.
+    ldflags:
+      - -s -w -X github.com/writtendev/writ/internal/version.Version=v{{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - formats: [tar.gz]
+    name_template: "writ_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+release:
+  prerelease: auto
+
+changelog:
+  disable: true

@@ -108,7 +108,7 @@ _writ() {
             COMPREPLY=($(compgen -W "-C -h -help --help" -- "$cur"))
             return 0
         fi
-        COMPREPLY=($(compgen -W "init issue review sync completion help" -- "$cur"))
+        COMPREPLY=($(compgen -W "init issue review sync version completion help" -- "$cur"))
         return 0
     fi
 
@@ -142,7 +142,7 @@ _writ() {
             ;;
         help)
             if [ -z "$subcmd" ]; then
-                COMPREPLY=($(compgen -W "init issue review sync completion help" -- "$cur"))
+                COMPREPLY=($(compgen -W "init issue review sync version completion help" -- "$cur"))
                 return 0
             fi
             case "$subcmd" in
@@ -333,6 +333,7 @@ _writ() {
                 'issue:Manage issues'
                 'review:Manage code reviews'
                 'sync:Synchronize collaborative SDLC operations'
+                'version:Print the writ version'
                 'completion:Generate shell completion scripts'
                 'help:Show help for writ commands'
             )
@@ -363,7 +364,7 @@ _writ() {
                     ;;
                 help)
                     _arguments -s -S \
-                        '1:command:(init issue review sync completion help)' \
+                        '1:command:(init issue review sync version completion help)' \
                         '2:subcommand:->help_subcommand'
                     case $line[1] in
                         issue) _values 'issue subcommand' create status assign list link ;;
@@ -634,7 +635,7 @@ complete -c writ -l help -s h -d 'Show help information'
 complete -c writ -n '__fish_writ_using_command completion' -f -a 'bash zsh fish'
 
 # Subcommands for help
-complete -c writ -n '__fish_writ_needs_subcommand help' -f -a 'init issue review sync completion help'
+complete -c writ -n '__fish_writ_needs_subcommand help' -f -a 'init issue review sync version completion help'
 complete -c writ -n '__fish_writ_needs_subcommand help issue' -f -a 'create status assign list link'
 complete -c writ -n '__fish_writ_needs_subcommand help review' -f -a 'open comment approve status list'
 
