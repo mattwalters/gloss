@@ -365,7 +365,7 @@ _writ() {
                     _arguments -s -S \
                         '1:command:(init issue review sync completion help)' \
                         '2:subcommand:->help_subcommand'
-                    case $line[2] in
+                    case $line[1] in
                         issue) _values 'issue subcommand' create status assign list link ;;
                         review) _values 'review subcommand' open comment approve status list ;;
                     esac
@@ -558,7 +558,9 @@ function __fish_writ_args
         end
         set -a args "$arg"
     end
-    echo $args
+    for arg in $args
+        echo $arg
+    end
 end
 
 function __fish_writ_needs_command

@@ -71,6 +71,10 @@ func TestCompletion_Zsh(t *testing.T) {
 		}
 	}
 
+	if !strings.Contains(script, "case $line[1] in") {
+		t.Errorf("zsh completion for help must inspect line[1]")
+	}
+
 	if _, err := exec.LookPath("zsh"); err == nil {
 		cmd := exec.Command("zsh", "-n")
 		cmd.Stdin = strings.NewReader(script)
@@ -107,6 +111,11 @@ func TestCompletion_Fish(t *testing.T) {
 	// Verify Round 2 Finding 1 & 2: __fish_writ_needs_subcommand and __fish_writ_args exist
 	if !strings.Contains(script, "__fish_writ_needs_subcommand issue") || !strings.Contains(script, "__fish_writ_args") {
 		t.Errorf("fish completion missing __fish_writ_needs_subcommand or __fish_writ_args")
+	}
+
+	// Verify Round 3 Finding 1: newline separation in __fish_writ_args
+	if !strings.Contains(script, "for arg in $args\n        echo $arg\n    end") {
+		t.Errorf("fish completion missing per-line echo in __fish_writ_args")
 	}
 
 	// Verify Finding 5: single char options use -s
