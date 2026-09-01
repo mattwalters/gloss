@@ -68,7 +68,7 @@ func (c *Client) Push(ctx context.Context, remote string) (*PushResult, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	before, err := dag.Chains(c.repo.Storer)
+	before, err := dag.Chains(c.storer)
 	if err != nil {
 		return nil, fmt.Errorf("sync: read chains before push: %w", err)
 	}
@@ -77,7 +77,7 @@ func (c *Client) Push(ctx context.Context, remote string) (*PushResult, error) {
 
 	pushedRefs := parsePushPorcelain(string(stdout))
 
-	after, err := dag.Chains(c.repo.Storer)
+	after, err := dag.Chains(c.storer)
 	if err != nil {
 		after = before
 	}

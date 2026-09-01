@@ -98,7 +98,7 @@ func (s *Store) Sync(ctx context.Context, remote string) (SyncResult, error) {
 	// 2. Fetch remote operations
 	var fetchRes *writsync.FetchResult
 	var stopTipsBeforeFetch []plumbing.Hash
-	chainsBefore, _ := dag.Chains(s.repo.Storer)
+	chainsBefore, _ := dag.Chains(s.storer)
 	for _, c := range chainsBefore {
 		if c.Tip != plumbing.ZeroHash {
 			stopTipsBeforeFetch = append(stopTipsBeforeFetch, c.Tip)
@@ -115,7 +115,7 @@ func (s *Store) Sync(ctx context.Context, remote string) (SyncResult, error) {
 
 	opsFetched := 0
 	if fetchRes != nil {
-		opsFetched = writsync.CountChainUpdates(s.repo, fetchRes.Updates, stopTipsBeforeFetch)
+		opsFetched = writsync.CountChainUpdates(s.storer, fetchRes.Updates, stopTipsBeforeFetch)
 	}
 
 	// 3. Push local operations if identity is configured
@@ -123,7 +123,7 @@ func (s *Store) Sync(ctx context.Context, remote string) (SyncResult, error) {
 	var pushRes *writsync.PushResult
 	if syncErr == nil && s.hasIdentity && s.identity.WriterID != "" {
 		var stopTipsBeforePush []plumbing.Hash
-		chainsBeforePush, err := dag.Chains(s.repo.Storer)
+		chainsBeforePush, err := dag.Chains(s.storer)
 		if err == nil {
 			for _, c := range chainsBeforePush {
 				if c.Ref.Remote == remote && c.Tip != plumbing.ZeroHash {
@@ -137,7 +137,7 @@ func (s *Store) Sync(ctx context.Context, remote string) (SyncResult, error) {
 			syncErr = pushErr
 		}
 		if pushRes != nil {
-			opsPushed = writsync.CountChainUpdates(s.repo, pushRes.Updates, stopTipsBeforePush)
+			opsPushed = writsync.CountChainUpdates(s.storer, pushRes.Updates, stopTipsBeforePush)
 		}
 	}
 
@@ -147,7 +147,7 @@ func (s *Store) Sync(ctx context.Context, remote string) (SyncResult, error) {
 	// Record sync cursors in local DB if sync succeeded
 	if syncErr == nil {
 		now := time.Now().UTC()
-		chains, err := dag.Chains(s.repo.Storer)
+		chains, err := dag.Chains(s.storer)
 		if err == nil {
 			for refName, chain := range chains {
 				if chain.Ref.Remote == remote || (chain.Ref.Remote == "" && s.hasIdentity && chain.Ref.WriterID == s.identity.WriterID) {
@@ -232,7 +232,7 @@ func (s *Store) SyncStatus(ctx context.Context, remote string) (SyncStatus, erro
 		writerID = s.identity.WriterID
 	}
 
-	status, err := writsync.ComputeStatus(s.repo, writerID, remote)
+	status, err := writsync.ComputeStatus(s.storer, writerID, remote)
 	if err != nil {
 		return SyncStatus{}, err
 	}
@@ -276,7 +276,7 @@ func (s *Store) countUnsynced(ctx context.Context, remote string) (int, error) {
 		return 0, nil
 	}
 
-	status, err := writsync.ComputeStatus(s.repo, s.identity.WriterID, remote)
+	status, err := writsync.ComputeStatus(s.storer, s.identity.WriterID, remote)
 	if err != nil {
 		return 0, err
 	}

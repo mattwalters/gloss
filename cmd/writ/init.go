@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/dag"
 	"github.com/writtendev/writ/engine/identity"
 	"github.com/writtendev/writ/engine/sync"
+	"github.com/writtendev/writ/internal/gitdir"
 )
 
 type initOpts struct {
@@ -76,9 +76,9 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 
 	// 2. Discover existing chains for collision avoidance
 	var taken func(identity.WriterID) bool
-	repo, err := git.PlainOpenWithOptions(repoRoot, &git.PlainOpenOptions{DetectDotGit: true})
-	if err == nil {
-		if chains, err := dag.Chains(repo.Storer); err == nil {
+	if gitInfo, err := gitdir.Resolve(repoRoot); err == nil {
+		storer := gitdir.OpenStorage(gitInfo)
+		if chains, err := dag.Chains(storer); err == nil {
 			existing := make(map[identity.WriterID]struct{}, len(chains))
 			for _, chain := range chains {
 				existing[chain.Ref.WriterID] = struct{}{}

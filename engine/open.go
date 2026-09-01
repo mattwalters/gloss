@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/dag"
 	"github.com/writtendev/writ/engine/identity"
 	"github.com/writtendev/writ/engine/projection"
 	writsync "github.com/writtendev/writ/engine/sync"
+	"github.com/writtendev/writ/internal/gitdir"
 )
 
 type openConfig struct {
@@ -94,10 +94,11 @@ func Open(path string, opts ...Option) (*Store, error) {
 		repoDir = gitInfo.GitDir
 	}
 
-	repo, err := git.PlainOpen(repoDir)
-	if err != nil {
-		return nil, fmt.Errorf("writ: open git repo %s: %w", repoDir, err)
-	}
+	storer := gitdir.OpenStorage(gitdir.Info{
+		WorkTree:  gitInfo.WorkTree,
+		GitDir:    gitInfo.GitDir,
+		CommonDir: gitInfo.CommonDir,
+	})
 
 	// Read writer identity (non-fatal if unconfigured)
 	ident, identErr := identity.Load(context.Background(), repoDir)
@@ -147,7 +148,7 @@ func Open(path string, opts ...Option) (*Store, error) {
 	if hasSigner {
 		dagOpts = append(dagOpts, dag.WithSigner(signer))
 	}
-	dagStore, err := dag.OpenRepo(repo, ident, dagOpts...)
+	dagStore, err := dag.OpenStorage(storer, ident, dagOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("writ: open dag store: %w", err)
 	}
@@ -169,7 +170,7 @@ func Open(path string, opts ...Option) (*Store, error) {
 	}
 
 	// Open sync client
-	syncClient, err := writsync.OpenRepo(repo, repoDir, ident, writsync.WithGitBinary(cfg.gitBin))
+	syncClient, err := writsync.OpenStorage(storer, repoDir, ident, writsync.WithGitBinary(cfg.gitBin))
 	if err != nil {
 		_ = projDB.Close()
 		return nil, fmt.Errorf("writ: open sync client: %w", err)
@@ -197,7 +198,7 @@ func Open(path string, opts ...Option) (*Store, error) {
 
 	s := &Store{
 		gitInfo:     gitInfo,
-		repo:        repo,
+		storer:      storer,
 		dagStore:    dagStore,
 		projection:  projDB,
 		syncClient:  syncClient,

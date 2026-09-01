@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/storage"
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/identity"
+	"github.com/writtendev/writ/internal/gitdir"
 )
 
 // Signer is an alias for codec.Signer.
@@ -41,7 +43,7 @@ func WithNow(now func() time.Time) Option {
 // chain enumeration over a git repository.
 type Store struct {
 	repoDir  string
-	repo     *git.Repository
+	storer   storage.Storer
 	identity identity.Identity
 	signer   Signer
 	now      func() time.Time
@@ -50,13 +52,14 @@ type Store struct {
 
 // Open opens a git repository at repoDir and initializes a Store with the given identity.
 func Open(repoDir string, ident identity.Identity, opts ...Option) (*Store, error) {
-	repo, err := git.PlainOpen(repoDir)
+	info, err := gitdir.Resolve(repoDir)
 	if err != nil {
 		return nil, fmt.Errorf("dag: open repo %s: %w", repoDir, err)
 	}
+	storer := gitdir.OpenStorage(info)
 	s := &Store{
 		repoDir:  repoDir,
-		repo:     repo,
+		storer:   storer,
 		identity: ident,
 		now:      func() time.Time { return time.Now().UTC() },
 	}
@@ -64,6 +67,22 @@ func Open(repoDir string, ident identity.Identity, opts ...Option) (*Store, erro
 		opt(s)
 	}
 	return s, nil
+}
+
+// OpenStorage initializes a Store with a storage.Storer.
+func OpenStorage(s storage.Storer, ident identity.Identity, opts ...Option) (*Store, error) {
+	if s == nil {
+		return nil, fmt.Errorf("dag: nil storer")
+	}
+	store := &Store{
+		storer:   s,
+		identity: ident,
+		now:      func() time.Time { return time.Now().UTC() },
+	}
+	for _, opt := range opts {
+		opt(store)
+	}
+	return store, nil
 }
 
 // OpenRepo initializes a Store with an existing go-git repository instance.
@@ -71,20 +90,12 @@ func OpenRepo(repo *git.Repository, ident identity.Identity, opts ...Option) (*S
 	if repo == nil {
 		return nil, fmt.Errorf("dag: nil repo")
 	}
-	s := &Store{
-		repo:     repo,
-		identity: ident,
-		now:      func() time.Time { return time.Now().UTC() },
-	}
-	for _, opt := range opts {
-		opt(s)
-	}
-	return s, nil
+	return OpenStorage(repo.Storer, ident, opts...)
 }
 
-// Repo returns the underlying *git.Repository.
-func (s *Store) Repo() *git.Repository {
-	return s.repo
+// Storer returns the underlying storage.Storer.
+func (s *Store) Storer() storage.Storer {
+	return s.storer
 }
 
 // Identity returns the configured writer identity.

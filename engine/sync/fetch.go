@@ -51,7 +51,7 @@ func (c *Client) Fetch(ctx context.Context, remote string) (*FetchResult, error)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	before, err := dag.Chains(c.repo.Storer)
+	before, err := dag.Chains(c.storer)
 	if err != nil {
 		return nil, fmt.Errorf("sync: read chains before fetch: %w", err)
 	}
@@ -61,7 +61,7 @@ func (c *Client) Fetch(ctx context.Context, remote string) (*FetchResult, error)
 		return nil, c.classifyGitError(remote, []string{"fetch", remote}, err, stderr, stdout)
 	}
 
-	after, err := dag.Chains(c.repo.Storer)
+	after, err := dag.Chains(c.storer)
 	if err != nil {
 		return nil, fmt.Errorf("sync: read chains after fetch: %w", err)
 	}

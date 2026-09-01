@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/storage"
 	"github.com/writtendev/writ/engine/codec"
 )
 
@@ -48,7 +48,7 @@ func (s *Store) Enumerate() (*EnumerateResult, error) {
 // cursors, decodes new commits through codec, and groups valid ops by ObjectID.
 func (s *Store) EnumerateSince(cursors CursorSet) (*EnumerateResult, error) {
 	// Step 1: Single IterReferences pass
-	chains, err := Chains(s.repo.Storer)
+	chains, err := Chains(s.storer)
 	if err != nil {
 		return nil, fmt.Errorf("dag: enumerate chains: %w", err)
 	}
@@ -82,7 +82,7 @@ func (s *Store) EnumerateSince(cursors CursorSet) (*EnumerateResult, error) {
 		}
 
 		// Tip moved. Check if cursorHash is an ancestor of currentTip.
-		ancestor, err := isAncestor(s.repo, currentTip, cursorHash)
+		ancestor, err := isAncestor(s.storer, currentTip, cursorHash)
 		if err != nil {
 			ancestor = false
 		}
@@ -124,7 +124,7 @@ func (s *Store) EnumerateSince(cursors CursorSet) (*EnumerateResult, error) {
 		currHash := queue[0]
 		queue = queue[1:]
 
-		commitObj, err := s.repo.CommitObject(currHash)
+		commitObj, err := object.GetCommit(s.storer, currHash)
 		if err != nil {
 			result.Rejections = append(result.Rejections, Rejection{
 				CommitID: currHash.String(),
@@ -153,7 +153,7 @@ func (s *Store) EnumerateSince(cursors CursorSet) (*EnumerateResult, error) {
 
 	// Step 4: Decode commits and handle rejections
 	for _, commitObj := range commitsToDecode {
-		pureCommit, err := codec.FromGitCommit(s.repo, commitObj)
+		pureCommit, err := codec.FromGitCommit(s.storer, commitObj)
 		if err != nil {
 			result.Rejections = append(result.Rejections, Rejection{
 				CommitID: commitObj.Hash.String(),
@@ -199,7 +199,7 @@ func (s *Store) EnumerateSince(cursors CursorSet) (*EnumerateResult, error) {
 }
 
 // isAncestor reports whether candidate is reachable from tip.
-func isAncestor(repo *git.Repository, tip, candidate plumbing.Hash) (bool, error) {
+func isAncestor(s storage.Storer, tip, candidate plumbing.Hash) (bool, error) {
 	if tip == candidate {
 		return true, nil
 	}
@@ -213,7 +213,7 @@ func isAncestor(repo *git.Repository, tip, candidate plumbing.Hash) (bool, error
 		curr := queue[0]
 		queue = queue[1:]
 
-		commit, err := repo.CommitObject(curr)
+		commit, err := object.GetCommit(s, curr)
 		if err != nil {
 			continue
 		}

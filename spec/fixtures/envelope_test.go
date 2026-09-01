@@ -109,7 +109,7 @@ func runEnvelopeFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 }
 
 func evaluateOpCommit(t *testing.T, fix *fixtures.Fixture, refName string, commit *object.Commit, cd fixtures.CommitDesc, trustStore codec.TrustStore) (*OpGoldenState, error) {
-	pureCommit, err := codec.FromGitCommit(fix.Repo, commit)
+	pureCommit, err := codec.FromGitCommit(fix.Repo.Storer, commit)
 	if err != nil {
 		return nil, fmt.Errorf("from git commit: %w", err)
 	}
