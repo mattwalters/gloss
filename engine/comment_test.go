@@ -2,6 +2,7 @@ package writ_test
 
 import (
 	"context"
+	"encoding/json"
 	"math/rand"
 	"path/filepath"
 	"reflect"
@@ -337,5 +338,84 @@ func TestCommentsResolveWorkflow(t *testing.T) {
 	}
 	if len(unresolvedComments) != 2 {
 		t.Errorf("expected 2 unresolved comments (root + reply), got %d", len(unresolvedComments))
+	}
+}
+
+// TestCommentsResolveWhitespaceActorOmitsKey guards against emitting a
+// schema-invalid empty "actor" (person ids have minLength 1) when the caller
+// supplies a whitespace-only actor.
+func TestCommentsResolveWhitespaceActorOmitsKey(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+
+	headHash := runGitCmd(t, repoDir, "rev-parse", "HEAD")[:40]
+	reviewID, err := s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Whitespace Actor Review",
+		Base:  headHash,
+		Head:  headHash,
+	})
+	if err != nil {
+		t.Fatalf("Create review failed: %v", err)
+	}
+
+	commentID, err := s.Reviews.Comment(ctx, reviewID, writ.NewComment{Text: "Root comment"})
+	if err != nil {
+		t.Fatalf("Comment failed: %v", err)
+	}
+
+	if err := s.Comments.Resolve(ctx, commentID, writ.CommentResolve{
+		Resolved: true,
+		Actor:    "   ",
+	}); err != nil {
+		t.Fatalf("Resolve failed: %v", err)
+	}
+
+	ident, _ := identity.ParseWriterID("0123456789abcdef")
+	dagStore, err := dag.Open(repoDir, identity.Identity{WriterID: ident})
+	if err != nil {
+		t.Fatalf("dag.Open failed: %v", err)
+	}
+	enumRes, err := dagStore.Enumerate()
+	if err != nil {
+		t.Fatalf("dagStore.Enumerate failed: %v", err)
+	}
+
+	var resolveOps int
+	for _, op := range enumRes.Ops[commentID] {
+		if op.OpType != "resolve" {
+			continue
+		}
+		resolveOps++
+		var body map[string]json.RawMessage
+		if err := json.Unmarshal(op.Body, &body); err != nil {
+			t.Fatalf("unmarshal resolve body: %v", err)
+		}
+		if _, ok := body["actor"]; ok {
+			t.Errorf("expected no actor key for whitespace-only actor, got body %s", op.Body)
+		}
+	}
+	if resolveOps != 1 {
+		t.Fatalf("expected 1 resolve op, got %d", resolveOps)
+	}
+
+	comments, err := s.Query.Comments(writ.CommentFilter{SubjectID: reviewID})
+	if err != nil {
+		t.Fatalf("Query.Comments failed: %v", err)
+	}
+	if len(comments) != 1 {
+		t.Fatalf("expected 1 comment, got %d", len(comments))
+	}
+	if !comments[0].Comment.IsResolved() {
+		t.Errorf("expected comment to be resolved")
+	}
+	if comments[0].Comment.Actor != "" {
+		t.Errorf("expected empty actor, got %q", comments[0].Comment.Actor)
 	}
 }
