@@ -1,0 +1,15 @@
+{{ define "main" }}
+<article class="home">
+  <h1>writ</h1>
+  <p class="tagline">Open SDLC layer in git</p>
+  <p>
+    Code review — and eventually the whole software development lifecycle —
+    stored inside the git repository itself, as signed, append-only operations.
+    No server, no API tokens, works with every git host.
+  </p>
+  <div class="cta">
+    <a href="{{ "docs/" | relURL }}" class="btn">Get Started</a>
+    <a href="{{ "spec/" | relURL }}" class="btn btn-outline">Read the Spec</a>
+  </div>
+</article>
+{{ end }}

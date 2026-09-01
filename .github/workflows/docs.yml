@@ -1,0 +1,137 @@
+# The docs site on GitHub Pages.
+#
+# Two kinds of page, two triggers. The docs are versioned documentation and
+# publish only on tags: /latest/ and /vX.Y.Z/ are both built from the tag's
+# own tree. The root — the splash page — is marketing, not documentation: it
+# tracks main, rebuilding on every push, because nothing there describes a
+# version and nothing there should wait for a release to change.
+#
+# One-time setup, in this order: merging this workflow lets its first run of
+# main create the gh-pages branch, and Pages is then pointed at that branch by
+# hand (Settings → Pages). Until that second act the site builds and deploys
+# to a branch nobody serves.
+name: docs
+
+on:
+  push:
+    branches: [main]
+    tags: ["v[0-9]*.[0-9]*.[0-9]*"]
+  pull_request:
+    paths:
+      - "docs/**"
+      - "spec/**"
+      - "Makefile"
+      - ".github/workflows/docs.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  # A PR proves the site still builds. Nothing is deployed.
+  build:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: pin
+        run: |
+          version="$(make -s hugo-version)"
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+      - uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: ${{ steps.pin.outputs.version }}
+      # Unversioned root build
+      - run: hugo --source docs --destination "$PWD/public"
+        env:
+          HUGO_PARAMS_VERSION: ""
+      # Versioned build (tests the version picker template path)
+      - run: hugo --source docs --destination "$PWD/public-frozen"
+        env:
+          HUGO_PARAMS_VERSION: v0.0.0
+          HUGO_PARAMS_VERSIONROOT: ".."
+
+  publish:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: docs-publish-${{ github.ref }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: pin
+        run: |
+          version="$(make -s hugo-version)"
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+      - uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: ${{ steps.pin.outputs.version }}
+
+      # Root: marketing splash, tracks main, not versioned.
+      - name: Build root
+        if: github.ref == 'refs/heads/main'
+        run: hugo --source docs --destination "$PWD/public"
+        env:
+          HUGO_PARAMS_VERSION: ""
+
+      # Keep only the root pages, prune docs (they come from tags).
+      - name: Stage only the root from the root build
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mkdir /tmp/root
+          for f in index.html style.css sitemap.xml robots.txt; do
+            [ -e "public/$f" ] && mv "public/$f" /tmp/root/
+          done
+          rm -rf public
+          mkdir public
+          mv /tmp/root/* public/
+
+      # Versioned docs: only from tags.
+      - name: Build latest
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        run: hugo --source docs --destination "$PWD/public/latest"
+        env:
+          HUGO_PARAMS_VERSION: latest
+          HUGO_PARAMS_VERSIONROOT: ".."
+          HUGO_PARAMS_REF: ${{ github.ref_name }}
+
+      - name: Build ${{ github.ref_name }}
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        run: hugo --source docs --destination "$PWD/public/$GITHUB_REF_NAME"
+        env:
+          HUGO_PARAMS_VERSION: ${{ github.ref_name }}
+          HUGO_PARAMS_VERSIONROOT: ".."
+          HUGO_PARAMS_REF: ${{ github.ref_name }}
+
+      # Append this tag to the version manifest, sorted newest first.
+      - name: Update versions.json
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        run: |
+          status=0
+          git ls-remote --exit-code --heads origin gh-pages >/dev/null || status=$?
+          if [ "$status" -eq 0 ]; then
+            git fetch origin gh-pages --depth=1
+            git show FETCH_HEAD:versions.json > versions.json || echo "[]" > versions.json
+          elif [ "$status" -eq 2 ]; then
+            echo "[]" > versions.json
+          else
+            echo "gh-pages lookup failed (exit $status) — refusing to publish a manifest built from nothing"
+            exit 1
+          fi
+          jq --arg v "$GITHUB_REF_NAME" \
+            '. + [$v] | unique | sort_by(
+               (ltrimstr("v") | split("-")) as $p
+               | ($p[0] | split(".") | map(tonumber? // 0))
+                 + [if ($p | length) > 1 then 0 else 1 end]
+             ) | reverse' \
+            versions.json > public/versions.json
+          cat public/versions.json
+
+      # keep_files: released versions are never rebuilt or deleted.
+      - name: Deploy
+        if: hashFiles('public/**') != ''
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          keep_files: true

@@ -43,3 +43,7 @@ spec/fixtures/out/
 
 # goreleaser snapshot/release output
 dist/
+
+# Hugo site build output
+public/
+docs/.hugo_build.lock
