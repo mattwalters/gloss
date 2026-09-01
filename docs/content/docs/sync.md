@@ -7,7 +7,7 @@ Synchronize operations with git remotes: fetch remote operations, push local ope
 
 ## Synopsis
 
-```
+```console
 writ sync [--status] [--json] [remote...]
 ```
 

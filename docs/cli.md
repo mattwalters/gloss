@@ -33,7 +33,7 @@ Initialize writ configuration (writer ID and remote fetch refspecs)
 
 #### Synopsis
 
-```
+```console
 Usage: writ init [-C <dir>] [remote...]
 ```
 
@@ -59,7 +59,7 @@ Create a new issue
 
 #### Synopsis
 
-```
+```console
 Usage: writ issue create [-C <dir>] -title <t> [-description <d>] [-state open|closed] [-fixes <ref>]... [-relates <ref>]...
 ```
 
@@ -89,7 +89,7 @@ View or update issue status
 
 #### Synopsis
 
-```
+```console
 Usage: writ issue status [-C <dir>] <id> [<state>] [-reason <r>] [--json]
 ```
 
@@ -120,7 +120,7 @@ Add or remove issue assignees
 
 #### Synopsis
 
-```
+```console
 Usage: writ issue assign [-C <dir>] <id> [-add <a>]... [-remove <a>]...
 ```
 
@@ -147,7 +147,7 @@ List issues
 
 #### Synopsis
 
-```
+```console
 Usage: writ issue list [-C <dir>] [-state <s>]... [-assignee <a>]... [-label <l>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>] [--json]
 ```
 
@@ -181,7 +181,7 @@ Manage issue cross-reference links
 
 #### Synopsis
 
-```
+```console
 Usage: writ issue link [-C <dir>] <id> -target <ref> -relation fixes|relates|none [-target-type <t>]
 ```
 
@@ -209,7 +209,7 @@ Create a new code review
 
 #### Synopsis
 
-```
+```console
 Usage: writ review open [-C <dir>] -title <t> [-description <d>] [-base <ref> -head <ref>] [-draft]
 ```
 
@@ -240,7 +240,7 @@ Add a comment to a review
 
 #### Synopsis
 
-```
+```console
 Usage: writ review comment [-C <dir>] <id> -m <text> [-reply-to <comment-id>]
 ```
 
@@ -267,7 +267,7 @@ Record a review verdict
 
 #### Synopsis
 
-```
+```console
 Usage: writ review approve [-C <dir>] <id> [-verdict approve|request-changes|none] [-revision <ref>] [-m <msg>] [-subject <s>]
 ```
 
@@ -296,7 +296,7 @@ View or update review status
 
 #### Synopsis
 
-```
+```console
 Usage: writ review status [-C <dir>] <id> [<state>] [-reason <r>] [-merge-commit <ref>] [--json]
 ```
 
@@ -329,7 +329,7 @@ List code reviews
 
 #### Synopsis
 
-```
+```console
 Usage: writ review list [-C <dir>] [-status <s>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>] [--json]
 ```
 
@@ -361,7 +361,7 @@ Synchronize operations with git remotes
 
 #### Synopsis
 
-```
+```console
 Usage: writ sync [-C <dir>] [--status] [--json] [remote...]
 ```
 
@@ -404,7 +404,7 @@ Print the writ version
 
 #### Synopsis
 
-```
+```console
 Usage: writ version
 ```
 
@@ -424,7 +424,7 @@ Generate shell completion scripts
 
 #### Synopsis
 
-```
+```console
 Usage: writ completion <shell>
 ```
 
@@ -448,7 +448,7 @@ Show help for commands
 
 #### Synopsis
 
-```
+```console
 Usage: writ help [<command> [<subcommand>]]
 ```
 
