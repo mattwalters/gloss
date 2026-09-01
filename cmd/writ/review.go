@@ -43,14 +43,16 @@ func parseArgs(fs *flag.FlagSet, args []string) ([]string, error) {
 
 func runReview(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		printReviewUsage(stderr)
+		renderUsage(stderr, []string{"review"}, reviewCmd)
 		return 2
 	}
 
 	switch args[0] {
-	case "-h", "-help", "--help", "help":
-		printReviewUsage(stdout)
+	case "-h", "-help", "--help":
+		renderUsage(stdout, []string{"review"}, reviewCmd)
 		return 0
+	case "help":
+		return runHelp(append([]string{"review"}, args[1:]...), stdout, stderr)
 	}
 
 	targetDir := defaultDir
@@ -62,15 +64,17 @@ func runReview(ctx context.Context, defaultDir string, args []string, stdout, st
 		targetDir = args[1]
 		args = args[2:]
 		if len(args) == 0 {
-			printReviewUsage(stderr)
+			renderUsage(stderr, []string{"review"}, reviewCmd)
 			return 2
 		}
 	}
 
 	switch args[0] {
-	case "-h", "-help", "--help", "help":
-		printReviewUsage(stdout)
+	case "-h", "-help", "--help":
+		renderUsage(stdout, []string{"review"}, reviewCmd)
 		return 0
+	case "help":
+		return runHelp(append([]string{"review"}, args[1:]...), stdout, stderr)
 	case "open":
 		return runReviewOpen(ctx, targetDir, args[1:], stdout, stderr)
 	case "comment":
@@ -83,59 +87,39 @@ func runReview(ctx context.Context, defaultDir string, args []string, stdout, st
 		return runReviewList(ctx, targetDir, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "writ review: unknown subcommand %q\n\n", args[0])
-		printReviewUsage(stderr)
+		renderUsage(stderr, []string{"review"}, reviewCmd)
 		return 2
 	}
 }
 
-func printReviewUsage(w io.Writer) {
-	fmt.Fprint(w, `Usage: writ review [-C <dir>] <subcommand> [arguments]
 
-Manage code reviews.
+type reviewOpenOpts struct {
+	dir         string
+	title       string
+	description string
+	base        string
+	head        string
+	draft       bool
+}
 
-Subcommands:
-  open       Create a new code review
-  comment    Add a comment to a review
-  approve    Record a review verdict
-  status     View or update review status
-  list       List code reviews
-
-Run 'writ review <subcommand> -h' for more information on a subcommand.
-`)
+func newReviewOpenFlagSet(defaultDir string) (*flag.FlagSet, *reviewOpenOpts) {
+	fs := flag.NewFlagSet("review open", flag.ContinueOnError)
+	opts := &reviewOpenOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
+	fs.StringVar(&opts.title, "title", "", "Review title")
+	fs.StringVar(&opts.description, "description", "", "Review description")
+	fs.StringVar(&opts.base, "base", "", "Base revision commit or ref")
+	fs.StringVar(&opts.head, "head", "", "Head revision commit or ref")
+	fs.BoolVar(&opts.draft, "draft", false, "Create review in draft state")
+	fs.Usage = func() {
+		renderUsage(fs.Output(), []string{"review", "open"}, reviewOpenCmd)
+	}
+	return fs, opts
 }
 
 func runReviewOpen(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("review open", flag.ContinueOnError)
+	fs, opts := newReviewOpenFlagSet(defaultDir)
 	fs.SetOutput(stderr)
-
-	var dir string
-	var title string
-	var description string
-	var base string
-	var head string
-	var draft bool
-
-	fs.StringVar(&dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.StringVar(&title, "title", "", "Review title")
-	fs.StringVar(&description, "description", "", "Review description")
-	fs.StringVar(&base, "base", "", "Base revision commit or ref")
-	fs.StringVar(&head, "head", "", "Head revision commit or ref")
-	fs.BoolVar(&draft, "draft", false, "Create review in draft state")
-
-	fs.Usage = func() {
-		fmt.Fprint(stderr, `Usage: writ review open [-C <dir>] -title <t> [-description <d>] [-base <ref> -head <ref>] [-draft]
-
-Create a new code review.
-
-Flags:
-  -C <dir>           Run as if writ was started in <dir>
-  -title <t>         Review title (required)
-  -description <d>   Review description
-  -base <ref>        Base revision commit or ref
-  -head <ref>        Head revision commit or ref
-  -draft             Create review in draft state
-`)
-	}
 
 	posArgs, err := parseArgs(fs, args)
 	if err != nil {
@@ -151,30 +135,30 @@ Flags:
 		return 2
 	}
 
-	if title == "" {
+	if opts.title == "" {
 		fmt.Fprintln(stderr, "writ review open: -title is required")
 		fs.Usage()
 		return 2
 	}
 
-	if (base != "" && head == "") || (base == "" && head != "") {
+	if (opts.base != "" && opts.head == "") || (opts.base == "" && opts.head != "") {
 		fmt.Fprintln(stderr, "writ review open: both -base and -head must be specified")
 		fs.Usage()
 		return 2
 	}
 
-	targetDir := dir
+	targetDir := opts.dir
 	if targetDir == "" {
 		targetDir = "."
 	}
 
 	var baseOID, headOID string
-	if base != "" && head != "" {
-		bOID, err := gitRevParse(ctx, targetDir, base)
+	if opts.base != "" && opts.head != "" {
+		bOID, err := gitRevParse(ctx, targetDir, opts.base)
 		if err != nil {
 			return renderErr(stderr, err)
 		}
-		hOID, err := gitRevParse(ctx, targetDir, head)
+		hOID, err := gitRevParse(ctx, targetDir, opts.head)
 		if err != nil {
 			return renderErr(stderr, err)
 		}
@@ -189,8 +173,8 @@ Flags:
 	defer store.Close()
 
 	id, err := store.Reviews.Create(ctx, writ.NewReview{
-		Title:       title,
-		Description: description,
+		Title:       opts.title,
+		Description: opts.description,
 		Base:        baseOID,
 		Head:        headOID,
 	})
@@ -199,7 +183,7 @@ Flags:
 	}
 
 	status := "open"
-	if draft {
+	if opts.draft {
 		status = "draft"
 	}
 
@@ -207,33 +191,31 @@ Flags:
 		return renderErr(stderr, err)
 	}
 
-	fmt.Fprintf(stdout, "%s (%s) %s\n", id, status, title)
+	fmt.Fprintf(stdout, "%s (%s) %s\n", id, status, opts.title)
 	return 0
 }
 
-func runReviewComment(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+type reviewCommentOpts struct {
+	dir     string
+	message string
+	replyTo string
+}
+
+func newReviewCommentFlagSet(defaultDir string) (*flag.FlagSet, *reviewCommentOpts) {
 	fs := flag.NewFlagSet("review comment", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-
-	var dir string
-	var message string
-	var replyTo string
-
-	fs.StringVar(&dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.StringVar(&message, "m", "", "Comment message text")
-	fs.StringVar(&replyTo, "reply-to", "", "Comment ID to reply to")
-
+	opts := &reviewCommentOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
+	fs.StringVar(&opts.message, "m", "", "Comment message text")
+	fs.StringVar(&opts.replyTo, "reply-to", "", "Comment ID to reply to")
 	fs.Usage = func() {
-		fmt.Fprint(stderr, `Usage: writ review comment [-C <dir>] <id> -m <text> [-reply-to <comment-id>]
-
-Add a comment to a review.
-
-Flags:
-  -C <dir>                Run as if writ was started in <dir>
-  -m <text>               Comment message text (required)
-  -reply-to <comment-id>  Comment ID to reply to
-`)
+		renderUsage(fs.Output(), []string{"review", "comment"}, reviewCommentCmd)
 	}
+	return fs, opts
+}
+
+func runReviewComment(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+	fs, opts := newReviewCommentFlagSet(defaultDir)
+	fs.SetOutput(stderr)
 
 	posArgs, err := parseArgs(fs, args)
 	if err != nil {
@@ -254,13 +236,13 @@ Flags:
 		return 2
 	}
 
-	if message == "" {
+	if opts.message == "" {
 		fmt.Fprintln(stderr, "writ review comment: -m is required")
 		fs.Usage()
 		return 2
 	}
 
-	targetDir := dir
+	targetDir := opts.dir
 	if targetDir == "" {
 		targetDir = "."
 	}
@@ -277,7 +259,7 @@ Flags:
 	}
 
 	var replyToID string
-	if replyTo != "" {
+	if opts.replyTo != "" {
 		comments, err := store.Query.Comments(writ.CommentFilter{
 			SubjectType:    "review",
 			SubjectID:      reviewID,
@@ -288,21 +270,21 @@ Flags:
 		}
 		var matches []string
 		for _, c := range comments {
-			if strings.HasPrefix(c.ObjectID, replyTo) {
+			if strings.HasPrefix(c.ObjectID, opts.replyTo) {
 				matches = append(matches, c.ObjectID)
 			}
 		}
 		if len(matches) == 1 {
 			replyToID = matches[0]
 		} else if len(matches) > 1 {
-			return renderErr(stderr, fmt.Errorf("ambiguous comment ID prefix %q matches %d comments (%s)", replyTo, len(matches), strings.Join(matches, ", ")))
+			return renderErr(stderr, fmt.Errorf("ambiguous comment ID prefix %q matches %d comments (%s)", opts.replyTo, len(matches), strings.Join(matches, ", ")))
 		} else {
-			replyToID = replyTo
+			replyToID = opts.replyTo
 		}
 	}
 
 	commentID, err := store.Reviews.Comment(ctx, reviewID, writ.NewComment{
-		Text:      message,
+		Text:      opts.message,
 		InReplyTo: replyToID,
 	})
 	if err != nil {
@@ -313,35 +295,31 @@ Flags:
 	return 0
 }
 
-func runReviewApprove(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+type reviewApproveOpts struct {
+	dir      string
+	verdict  string
+	revision string
+	message  string
+	subject  string
+}
+
+func newReviewApproveFlagSet(defaultDir string) (*flag.FlagSet, *reviewApproveOpts) {
 	fs := flag.NewFlagSet("review approve", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-
-	var dir string
-	var verdict string
-	var revision string
-	var message string
-	var subject string
-
-	fs.StringVar(&dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.StringVar(&verdict, "verdict", "approve", "Review verdict: approve, request-changes, or none")
-	fs.StringVar(&revision, "revision", "", "Revision commit ref or SHA (defaults to latest head)")
-	fs.StringVar(&message, "m", "", "Review verdict message")
-	fs.StringVar(&subject, "subject", "", "Subject identity (defaults to writer email or writer ID)")
-
+	opts := &reviewApproveOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
+	fs.StringVar(&opts.verdict, "verdict", "approve", "Review verdict: approve, request-changes, or none")
+	fs.StringVar(&opts.revision, "revision", "", "Revision commit ref or SHA (defaults to latest head)")
+	fs.StringVar(&opts.message, "m", "", "Review verdict message")
+	fs.StringVar(&opts.subject, "subject", "", "Subject identity (defaults to writer email or writer ID)")
 	fs.Usage = func() {
-		fmt.Fprint(stderr, `Usage: writ review approve [-C <dir>] <id> [-verdict approve|request-changes|none] [-revision <ref>] [-m <msg>] [-subject <s>]
-
-Record a review verdict.
-
-Flags:
-  -C <dir>                                         Run as if writ was started in <dir>
-  -verdict approve|request-changes|none            Verdict (default: approve)
-  -revision <ref>                                  Revision commit ref or SHA (defaults to latest head)
-  -m <msg>                                         Verdict message
-  -subject <s>                                     Subject identity (defaults to writer email or writer ID)
-`)
+		renderUsage(fs.Output(), []string{"review", "approve"}, reviewApproveCmd)
 	}
+	return fs, opts
+}
+
+func runReviewApprove(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+	fs, opts := newReviewApproveFlagSet(defaultDir)
+	fs.SetOutput(stderr)
 
 	posArgs, err := parseArgs(fs, args)
 	if err != nil {
@@ -362,23 +340,23 @@ Flags:
 		return 2
 	}
 
-	switch verdict {
+	switch opts.verdict {
 	case "approve", "request-changes", "none":
 		// valid
 	default:
-		fmt.Fprintf(stderr, "writ review approve: invalid verdict %q (must be approve, request-changes, or none)\n", verdict)
+		fmt.Fprintf(stderr, "writ review approve: invalid verdict %q (must be approve, request-changes, or none)\n", opts.verdict)
 		fs.Usage()
 		return 2
 	}
 
-	targetDir := dir
+	targetDir := opts.dir
 	if targetDir == "" {
 		targetDir = "."
 	}
 
 	var revOID string
-	if revision != "" {
-		rOID, err := gitRevParse(ctx, targetDir, revision)
+	if opts.revision != "" {
+		rOID, err := gitRevParse(ctx, targetDir, opts.revision)
 		if err != nil {
 			return renderErr(stderr, err)
 		}
@@ -396,6 +374,7 @@ Flags:
 		return renderErr(stderr, err)
 	}
 
+	subject := opts.subject
 	if subject == "" {
 		writer := store.Writer()
 		subject = writer.Email
@@ -405,47 +384,41 @@ Flags:
 	}
 
 	if err := store.Reviews.Approve(ctx, reviewID, writ.Approval{
-		Verdict:  verdict,
+		Verdict:  opts.verdict,
 		Revision: revOID,
-		Message:  message,
+		Message:  opts.message,
 		Subject:  subject,
 	}); err != nil {
 		return renderErr(stderr, err)
 	}
 
-	fmt.Fprintf(stdout, "%s: recorded %s\n", reviewID, verdict)
+	fmt.Fprintf(stdout, "%s: recorded %s\n", reviewID, opts.verdict)
 	return 0
 }
 
-func runReviewStatus(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+type reviewStatusOpts struct {
+	dir         string
+	reason      string
+	mergeCommit string
+	jsonMode    bool
+}
+
+func newReviewStatusFlagSet(defaultDir string) (*flag.FlagSet, *reviewStatusOpts) {
 	fs := flag.NewFlagSet("review status", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-
-	var dir string
-	var reason string
-	var mergeCommit string
-	var jsonMode bool
-
-	fs.StringVar(&dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.StringVar(&reason, "reason", "", "Reason for status transition")
-	fs.StringVar(&mergeCommit, "merge-commit", "", "Merge commit ref or SHA (valid with status merged)")
-	fs.BoolVar(&jsonMode, "json", false, "Output result as JSON (view mode only)")
-
+	opts := &reviewStatusOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
+	fs.StringVar(&opts.reason, "reason", "", "Reason for status transition")
+	fs.StringVar(&opts.mergeCommit, "merge-commit", "", "Merge commit ref or SHA (valid with status merged)")
+	fs.BoolVar(&opts.jsonMode, "json", false, "Output result as JSON (view mode only)")
 	fs.Usage = func() {
-		fmt.Fprint(stderr, `Usage: writ review status [-C <dir>] <id> [<state>] [-reason <r>] [-merge-commit <ref>] [--json]
-
-View or update review status.
-
-States:
-  draft, open, closed, merged
-
-Flags:
-  -C <dir>              Run as if writ was started in <dir>
-  -reason <r>           Reason for status change
-  -merge-commit <ref>   Merge commit ref or SHA (valid when setting status to merged)
-  --json                Output result as JSON (view mode only)
-`)
+		renderUsage(fs.Output(), []string{"review", "status"}, reviewStatusCmd)
 	}
+	return fs, opts
+}
+
+func runReviewStatus(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+	fs, opts := newReviewStatusFlagSet(defaultDir)
+	fs.SetOutput(stderr)
 
 	posArgs, err := parseArgs(fs, args)
 	if err != nil {
@@ -468,18 +441,18 @@ Flags:
 
 	var newState string
 	if len(posArgs) == 1 {
-		if mergeCommit != "" {
+		if opts.mergeCommit != "" {
 			fmt.Fprintln(stderr, "writ review status: -merge-commit is only valid when setting status to merged")
 			fs.Usage()
 			return 2
 		}
-		if reason != "" {
+		if opts.reason != "" {
 			fmt.Fprintln(stderr, "writ review status: -reason is only valid when setting status")
 			fs.Usage()
 			return 2
 		}
 	} else {
-		if jsonMode {
+		if opts.jsonMode {
 			fmt.Fprintln(stderr, "writ review status: --json is only valid when viewing status")
 			fs.Usage()
 			return 2
@@ -495,14 +468,14 @@ Flags:
 			return 2
 		}
 
-		if mergeCommit != "" && newState != "merged" {
+		if opts.mergeCommit != "" && newState != "merged" {
 			fmt.Fprintln(stderr, "writ review status: -merge-commit is only valid when setting status to merged")
 			fs.Usage()
 			return 2
 		}
 	}
 
-	targetDir := dir
+	targetDir := opts.dir
 	if targetDir == "" {
 		targetDir = "."
 	}
@@ -525,7 +498,7 @@ Flags:
 			return renderErr(stderr, err)
 		}
 
-		if jsonMode {
+		if opts.jsonMode {
 			wireReview := wire.FromReviewResult(res)
 			if err := emitJSON(stdout, wire.KindReviewStatus, wireReview); err != nil {
 				fmt.Fprintf(stderr, "writ review status: marshal json: %v\n", err)
@@ -576,8 +549,8 @@ Flags:
 	}
 
 	var mergeCommitOID string
-	if mergeCommit != "" {
-		mOID, err := gitRevParse(ctx, targetDir, mergeCommit)
+	if opts.mergeCommit != "" {
+		mOID, err := gitRevParse(ctx, targetDir, opts.mergeCommit)
 		if err != nil {
 			return renderErr(stderr, err)
 		}
@@ -586,7 +559,7 @@ Flags:
 
 	if err := store.Reviews.SetStatus(ctx, reviewID, writ.ReviewStatus{
 		Status:      newState,
-		Reason:      reason,
+		Reason:      opts.reason,
 		MergeCommit: mergeCommitOID,
 	}); err != nil {
 		return renderErr(stderr, err)
@@ -596,41 +569,35 @@ Flags:
 	return 0
 }
 
-func runReviewList(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+type reviewListOpts struct {
+	dir       string
+	statuses  stringSliceFlag
+	authors   stringSliceFlag
+	text      string
+	limit     int
+	sortOrder string
+	jsonMode  bool
+}
+
+func newReviewListFlagSet(defaultDir string) (*flag.FlagSet, *reviewListOpts) {
 	fs := flag.NewFlagSet("review list", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-
-	var dir string
-	var statuses stringSliceFlag
-	var authors stringSliceFlag
-	var text string
-	var limit int
-	var sortOrder string
-	var jsonMode bool
-
-	fs.StringVar(&dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.Var(&statuses, "status", "Filter by review status (repeatable: -status open -status draft)")
-	fs.Var(&authors, "author", "Filter by author name or email (repeatable)")
-	fs.StringVar(&text, "text", "", "Filter by title or description text query")
-	fs.IntVar(&limit, "limit", 0, "Maximum number of reviews to return")
-	fs.StringVar(&sortOrder, "sort", "", "Sort order: created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc")
-	fs.BoolVar(&jsonMode, "json", false, "Output result as JSON")
-
+	opts := &reviewListOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
+	fs.Var(&opts.statuses, "status", "Filter by review status (repeatable: -status open -status draft)")
+	fs.Var(&opts.authors, "author", "Filter by author name or email (repeatable)")
+	fs.StringVar(&opts.text, "text", "", "Filter by title or description text query")
+	fs.IntVar(&opts.limit, "limit", 0, "Maximum number of reviews to return")
+	fs.StringVar(&opts.sortOrder, "sort", "", "Sort order: created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc")
+	fs.BoolVar(&opts.jsonMode, "json", false, "Output result as JSON")
 	fs.Usage = func() {
-		fmt.Fprint(stderr, `Usage: writ review list [-C <dir>] [-status <s>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>] [--json]
-
-List code reviews.
-
-Flags:
-  -C <dir>         Run as if writ was started in <dir>
-  -status <s>      Filter by review status (repeatable)
-  -author <a>      Filter by author name or email (repeatable)
-  -text <q>        Filter by text match in title or description
-  -limit N         Maximum number of reviews to return
-  -sort <order>    Sort order (created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc)
-  --json           Output result as JSON
-`)
+		renderUsage(fs.Output(), []string{"review", "list"}, reviewListCmd)
 	}
+	return fs, opts
+}
+
+func runReviewList(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+	fs, opts := newReviewListFlagSet(defaultDir)
+	fs.SetOutput(stderr)
 
 	posArgs, err := parseArgs(fs, args)
 	if err != nil {
@@ -646,24 +613,24 @@ Flags:
 		return 2
 	}
 
-	if limit < 0 {
-		fmt.Fprintf(stderr, "writ review list: -limit must be non-negative, got %d\n", limit)
+	if opts.limit < 0 {
+		fmt.Fprintf(stderr, "writ review list: -limit must be non-negative, got %d\n", opts.limit)
 		fs.Usage()
 		return 2
 	}
 
 	var orderBy writ.OrderBy
-	if sortOrder != "" {
+	if opts.sortOrder != "" {
 		var err error
-		orderBy, err = parseOrderBy(sortOrder)
+		orderBy, err = parseOrderBy(opts.sortOrder)
 		if err != nil {
-			fmt.Fprintf(stderr, "writ review list: invalid sort order %q\n", sortOrder)
+			fmt.Fprintf(stderr, "writ review list: invalid sort order %q\n", opts.sortOrder)
 			fs.Usage()
 			return 2
 		}
 	}
 
-	targetDir := dir
+	targetDir := opts.dir
 	if targetDir == "" {
 		targetDir = "."
 	}
@@ -675,17 +642,17 @@ Flags:
 	defer store.Close()
 
 	reviews, err := store.Query.Reviews(writ.ReviewFilter{
-		Status:  statuses,
-		Author:  authors,
-		Text:    text,
-		Limit:   limit,
+		Status:  opts.statuses,
+		Author:  opts.authors,
+		Text:    opts.text,
+		Limit:   opts.limit,
 		OrderBy: orderBy,
 	})
 	if err != nil {
 		return renderErr(stderr, err)
 	}
 
-	if jsonMode {
+	if opts.jsonMode {
 		wireSummaries := wire.FromReviewResultSummaries(reviews)
 		if err := emitJSON(stdout, wire.KindReviewList, wireSummaries); err != nil {
 			fmt.Fprintf(stderr, "writ review list: marshal json: %v\n", err)

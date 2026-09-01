@@ -46,6 +46,18 @@ jobs:
           go-version: "1.25"
       - run: make api-check
 
+  docs:
+    name: docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - run: make docs-check
+
+
   lint:
     name: lint
     runs-on: ubuntu-latest

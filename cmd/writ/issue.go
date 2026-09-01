@@ -16,14 +16,16 @@ import (
 
 func runIssue(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		printIssueUsage(stderr)
+		renderUsage(stderr, []string{"issue"}, issueCmd)
 		return 2
 	}
 
 	switch args[0] {
-	case "-h", "-help", "--help", "help":
-		printIssueUsage(stdout)
+	case "-h", "-help", "--help":
+		renderUsage(stdout, []string{"issue"}, issueCmd)
 		return 0
+	case "help":
+		return runHelp(append([]string{"issue"}, args[1:]...), stdout, stderr)
 	}
 
 	targetDir := defaultDir
@@ -35,15 +37,17 @@ func runIssue(ctx context.Context, defaultDir string, args []string, stdout, std
 		targetDir = args[1]
 		args = args[2:]
 		if len(args) == 0 {
-			printIssueUsage(stderr)
+			renderUsage(stderr, []string{"issue"}, issueCmd)
 			return 2
 		}
 	}
 
 	switch args[0] {
-	case "-h", "-help", "--help", "help":
-		printIssueUsage(stdout)
+	case "-h", "-help", "--help":
+		renderUsage(stdout, []string{"issue"}, issueCmd)
 		return 0
+	case "help":
+		return runHelp(append([]string{"issue"}, args[1:]...), stdout, stderr)
 	case "create":
 		return runIssueCreate(ctx, targetDir, args[1:], stdout, stderr)
 	case "status":
@@ -56,59 +60,38 @@ func runIssue(ctx context.Context, defaultDir string, args []string, stdout, std
 		return runIssueLink(ctx, targetDir, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "writ issue: unknown subcommand %q\n\n", args[0])
-		printIssueUsage(stderr)
+		renderUsage(stderr, []string{"issue"}, issueCmd)
 		return 2
 	}
 }
 
-func printIssueUsage(w io.Writer) {
-	fmt.Fprint(w, `Usage: writ issue [-C <dir>] <subcommand> [arguments]
+type issueCreateOpts struct {
+	dir         string
+	title       string
+	description string
+	stateVal    string
+	fixes       stringSliceFlag
+	relates     stringSliceFlag
+}
 
-Manage issues.
-
-Subcommands:
-  create    Create a new issue
-  status    View or update issue status
-  assign    Add or remove issue assignees
-  list      List issues
-  link      Manage issue cross-reference links
-
-Run 'writ issue <subcommand> -h' for more information on a subcommand.
-`)
+func newIssueCreateFlagSet(defaultDir string) (*flag.FlagSet, *issueCreateOpts) {
+	fs := flag.NewFlagSet("issue create", flag.ContinueOnError)
+	opts := &issueCreateOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
+	fs.StringVar(&opts.title, "title", "", "Issue title")
+	fs.StringVar(&opts.description, "description", "", "Issue description")
+	fs.StringVar(&opts.stateVal, "state", "", "Initial issue state (open or closed)")
+	fs.Var(&opts.fixes, "fixes", "Add a 'fixes' cross-reference link (repeatable)")
+	fs.Var(&opts.relates, "relates", "Add a 'relates' cross-reference link (repeatable)")
+	fs.Usage = func() {
+		renderUsage(fs.Output(), []string{"issue", "create"}, issueCreateCmd)
+	}
+	return fs, opts
 }
 
 func runIssueCreate(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("issue create", flag.ContinueOnError)
+	fs, opts := newIssueCreateFlagSet(defaultDir)
 	fs.SetOutput(stderr)
-
-	var dir string
-	var title string
-	var description string
-	var stateVal string
-	var fixes stringSliceFlag
-	var relates stringSliceFlag
-
-	fs.StringVar(&dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.StringVar(&title, "title", "", "Issue title")
-	fs.StringVar(&description, "description", "", "Issue description")
-	fs.StringVar(&stateVal, "state", "", "Initial issue state (open or closed)")
-	fs.Var(&fixes, "fixes", "Add a 'fixes' cross-reference link (repeatable)")
-	fs.Var(&relates, "relates", "Add a 'relates' cross-reference link (repeatable)")
-
-	fs.Usage = func() {
-		fmt.Fprint(stderr, `Usage: writ issue create [-C <dir>] -title <t> [-description <d>] [-state open|closed] [-fixes <ref>]... [-relates <ref>]...
-
-Create a new issue.
-
-Flags:
-  -C <dir>           Run as if writ was started in <dir>
-  -title <t>         Issue title (required)
-  -description <d>   Issue description
-  -state <state>     Initial issue state (open or closed)
-  -fixes <ref>       Add a 'fixes' cross-reference link (repeatable)
-  -relates <ref>     Add a 'relates' cross-reference link (repeatable)
-`)
-	}
 
 	posArgs, err := parseArgs(fs, args)
 	if err != nil {
@@ -124,19 +107,19 @@ Flags:
 		return 2
 	}
 
-	if title == "" {
+	if opts.title == "" {
 		fmt.Fprintln(stderr, "writ issue create: -title is required")
 		fs.Usage()
 		return 2
 	}
 
-	if stateVal != "" && stateVal != "open" && stateVal != "closed" {
-		fmt.Fprintf(stderr, "writ issue create: invalid state %q (must be open or closed)\n", stateVal)
+	if opts.stateVal != "" && opts.stateVal != "open" && opts.stateVal != "closed" {
+		fmt.Fprintf(stderr, "writ issue create: invalid state %q (must be open or closed)\n", opts.stateVal)
 		fs.Usage()
 		return 2
 	}
 
-	targetDir := dir
+	targetDir := opts.dir
 	if targetDir == "" {
 		targetDir = "."
 	}
@@ -148,66 +131,61 @@ Flags:
 	defer store.Close()
 
 	id, err := store.Issues.Create(ctx, writ.NewIssue{
-		Title:       title,
-		Description: description,
+		Title:       opts.title,
+		Description: opts.description,
 	})
 	if err != nil {
 		return renderErr(stderr, err)
 	}
 
-	if stateVal != "" {
-		if err := store.Issues.SetState(ctx, id, writ.IssueState{State: stateVal}); err != nil {
+	if opts.stateVal != "" {
+		if err := store.Issues.SetState(ctx, id, writ.IssueState{State: opts.stateVal}); err != nil {
 			return renderErr(stderr, err)
 		}
 	}
 
-	for _, fix := range fixes {
+	for _, fix := range opts.fixes {
 		if err := store.Issues.Link(ctx, id, writ.Link{Target: fix, Relation: "fixes"}); err != nil {
 			return renderErr(stderr, err)
 		}
 	}
 
-	for _, rel := range relates {
+	for _, rel := range opts.relates {
 		if err := store.Issues.Link(ctx, id, writ.Link{Target: rel, Relation: "relates"}); err != nil {
 			return renderErr(stderr, err)
 		}
 	}
 
-	dispState := stateVal
+	dispState := opts.stateVal
 	if dispState == "" {
 		dispState = "open"
 	}
 
-	fmt.Fprintf(stdout, "%s (%s) %s\n", id, dispState, title)
+	fmt.Fprintf(stdout, "%s (%s) %s\n", id, dispState, opts.title)
 	return 0
 }
 
-func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+type issueStatusOpts struct {
+	dir      string
+	reason   string
+	jsonMode bool
+}
+
+func newIssueStatusFlagSet(defaultDir string) (*flag.FlagSet, *issueStatusOpts) {
 	fs := flag.NewFlagSet("issue status", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-
-	var dir string
-	var reason string
-	var jsonMode bool
-
-	fs.StringVar(&dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.StringVar(&reason, "reason", "", "Reason for status change")
-	fs.BoolVar(&jsonMode, "json", false, "Output result as JSON (view mode only)")
-
+	opts := &issueStatusOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
+	fs.StringVar(&opts.reason, "reason", "", "Reason for status change")
+	fs.BoolVar(&opts.jsonMode, "json", false, "Output result as JSON (view mode only)")
 	fs.Usage = func() {
-		fmt.Fprint(stderr, `Usage: writ issue status [-C <dir>] <id> [<state>] [-reason <r>] [--json]
-
-View or update issue status.
-
-States:
-  open, closed
-
-Flags:
-  -C <dir>      Run as if writ was started in <dir>
-  -reason <r>   Reason for status change
-  --json        Output result as JSON (view mode only)
-`)
+		renderUsage(fs.Output(), []string{"issue", "status"}, issueStatusCmd)
 	}
+	return fs, opts
+}
+
+func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+	fs, opts := newIssueStatusFlagSet(defaultDir)
+	fs.SetOutput(stderr)
 
 	posArgs, err := parseArgs(fs, args)
 	if err != nil {
@@ -230,13 +208,13 @@ Flags:
 
 	var newState string
 	if len(posArgs) == 1 {
-		if reason != "" {
+		if opts.reason != "" {
 			fmt.Fprintln(stderr, "writ issue status: -reason is only valid when setting status")
 			fs.Usage()
 			return 2
 		}
 	} else {
-		if jsonMode {
+		if opts.jsonMode {
 			fmt.Fprintln(stderr, "writ issue status: --json is only valid when viewing status")
 			fs.Usage()
 			return 2
@@ -250,7 +228,7 @@ Flags:
 		}
 	}
 
-	targetDir := dir
+	targetDir := opts.dir
 	if targetDir == "" {
 		targetDir = "."
 	}
@@ -273,7 +251,7 @@ Flags:
 			return renderErr(stderr, err)
 		}
 
-		if jsonMode {
+		if opts.jsonMode {
 			wireIssue := wire.FromIssueResult(res)
 			if err := emitJSON(stdout, wire.KindIssueStatus, wireIssue); err != nil {
 				fmt.Fprintf(stderr, "writ issue status: marshal json: %v\n", err)
@@ -346,7 +324,7 @@ Flags:
 	// 2. Update / Transition status mode (len(posArgs) == 2)
 	if err := store.Issues.SetState(ctx, issueID, writ.IssueState{
 		State:  newState,
-		Reason: reason,
+		Reason: opts.reason,
 	}); err != nil {
 		return renderErr(stderr, err)
 	}
@@ -355,29 +333,27 @@ Flags:
 	return 0
 }
 
-func runIssueAssign(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+type issueAssignOpts struct {
+	dir    string
+	add    stringSliceFlag
+	remove stringSliceFlag
+}
+
+func newIssueAssignFlagSet(defaultDir string) (*flag.FlagSet, *issueAssignOpts) {
 	fs := flag.NewFlagSet("issue assign", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-
-	var dir string
-	var add stringSliceFlag
-	var remove stringSliceFlag
-
-	fs.StringVar(&dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.Var(&add, "add", "Add assignee email or ID (repeatable)")
-	fs.Var(&remove, "remove", "Remove assignee email or ID (repeatable)")
-
+	opts := &issueAssignOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
+	fs.Var(&opts.add, "add", "Add assignee email or ID (repeatable)")
+	fs.Var(&opts.remove, "remove", "Remove assignee email or ID (repeatable)")
 	fs.Usage = func() {
-		fmt.Fprint(stderr, `Usage: writ issue assign [-C <dir>] <id> [-add <a>]... [-remove <a>]...
-
-Add or remove issue assignees.
-
-Flags:
-  -C <dir>       Run as if writ was started in <dir>
-  -add <a>       Add assignee email or ID (repeatable)
-  -remove <a>    Remove assignee email or ID (repeatable)
-`)
+		renderUsage(fs.Output(), []string{"issue", "assign"}, issueAssignCmd)
 	}
+	return fs, opts
+}
+
+func runIssueAssign(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+	fs, opts := newIssueAssignFlagSet(defaultDir)
+	fs.SetOutput(stderr)
 
 	posArgs, err := parseArgs(fs, args)
 	if err != nil {
@@ -398,13 +374,13 @@ Flags:
 		return 2
 	}
 
-	if len(add) == 0 && len(remove) == 0 {
+	if len(opts.add) == 0 && len(opts.remove) == 0 {
 		fmt.Fprintln(stderr, "writ issue assign: at least one -add or -remove is required")
 		fs.Usage()
 		return 2
 	}
 
-	targetDir := dir
+	targetDir := opts.dir
 	if targetDir == "" {
 		targetDir = "."
 	}
@@ -420,7 +396,7 @@ Flags:
 		return renderErr(stderr, err)
 	}
 
-	if err := store.Issues.Assign(ctx, issueID, add, remove); err != nil {
+	if err := store.Issues.Assign(ctx, issueID, opts.add, opts.remove); err != nil {
 		return renderErr(stderr, err)
 	}
 
@@ -428,47 +404,39 @@ Flags:
 	return 0
 }
 
-func runIssueList(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+type issueListOpts struct {
+	dir       string
+	states    stringSliceFlag
+	assignees stringSliceFlag
+	labels    stringSliceFlag
+	authors   stringSliceFlag
+	text      string
+	limit     int
+	sortOrder string
+	jsonMode  bool
+}
+
+func newIssueListFlagSet(defaultDir string) (*flag.FlagSet, *issueListOpts) {
 	fs := flag.NewFlagSet("issue list", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-
-	var dir string
-	var states stringSliceFlag
-	var assignees stringSliceFlag
-	var labels stringSliceFlag
-	var authors stringSliceFlag
-	var text string
-	var limit int
-	var sortOrder string
-	var jsonMode bool
-
-	fs.StringVar(&dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.Var(&states, "state", "Filter by issue state (repeatable: -state open -state closed)")
-	fs.Var(&assignees, "assignee", "Filter by assignee name or email (repeatable)")
-	fs.Var(&labels, "label", "Filter by label (repeatable)")
-	fs.Var(&authors, "author", "Filter by author name or email (repeatable)")
-	fs.StringVar(&text, "text", "", "Filter by text match in title or description")
-	fs.IntVar(&limit, "limit", 0, "Maximum number of issues to return")
-	fs.StringVar(&sortOrder, "sort", "", "Sort order: created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc")
-	fs.BoolVar(&jsonMode, "json", false, "Output result as JSON")
-
+	opts := &issueListOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
+	fs.Var(&opts.states, "state", "Filter by issue state (repeatable: -state open -state closed)")
+	fs.Var(&opts.assignees, "assignee", "Filter by assignee name or email (repeatable)")
+	fs.Var(&opts.labels, "label", "Filter by label (repeatable)")
+	fs.Var(&opts.authors, "author", "Filter by author name or email (repeatable)")
+	fs.StringVar(&opts.text, "text", "", "Filter by text match in title or description")
+	fs.IntVar(&opts.limit, "limit", 0, "Maximum number of issues to return")
+	fs.StringVar(&opts.sortOrder, "sort", "", "Sort order: created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc")
+	fs.BoolVar(&opts.jsonMode, "json", false, "Output result as JSON")
 	fs.Usage = func() {
-		fmt.Fprint(stderr, `Usage: writ issue list [-C <dir>] [-state <s>]... [-assignee <a>]... [-label <l>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>] [--json]
-
-List issues.
-
-Flags:
-  -C <dir>         Run as if writ was started in <dir>
-  -state <s>       Filter by issue state (repeatable)
-  -assignee <a>    Filter by assignee name or email (repeatable)
-  -label <l>       Filter by label (repeatable)
-  -author <a>      Filter by author name or email (repeatable)
-  -text <q>        Filter by text match in title or description
-  -limit N         Maximum number of issues to return
-  -sort <order>    Sort order (created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc)
-  --json           Output result as JSON
-`)
+		renderUsage(fs.Output(), []string{"issue", "list"}, issueListCmd)
 	}
+	return fs, opts
+}
+
+func runIssueList(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+	fs, opts := newIssueListFlagSet(defaultDir)
+	fs.SetOutput(stderr)
 
 	posArgs, err := parseArgs(fs, args)
 	if err != nil {
@@ -484,24 +452,24 @@ Flags:
 		return 2
 	}
 
-	if limit < 0 {
-		fmt.Fprintf(stderr, "writ issue list: -limit must be non-negative, got %d\n", limit)
+	if opts.limit < 0 {
+		fmt.Fprintf(stderr, "writ issue list: -limit must be non-negative, got %d\n", opts.limit)
 		fs.Usage()
 		return 2
 	}
 
 	var orderBy writ.OrderBy
-	if sortOrder != "" {
+	if opts.sortOrder != "" {
 		var err error
-		orderBy, err = parseOrderBy(sortOrder)
+		orderBy, err = parseOrderBy(opts.sortOrder)
 		if err != nil {
-			fmt.Fprintf(stderr, "writ issue list: invalid sort order %q\n", sortOrder)
+			fmt.Fprintf(stderr, "writ issue list: invalid sort order %q\n", opts.sortOrder)
 			fs.Usage()
 			return 2
 		}
 	}
 
-	targetDir := dir
+	targetDir := opts.dir
 	if targetDir == "" {
 		targetDir = "."
 	}
@@ -513,19 +481,19 @@ Flags:
 	defer store.Close()
 
 	issues, err := store.Query.Issues(writ.IssueFilter{
-		State:    states,
-		Assignee: assignees,
-		Label:    labels,
-		Author:   authors,
-		Text:     text,
-		Limit:    limit,
+		State:    opts.states,
+		Assignee: opts.assignees,
+		Label:    opts.labels,
+		Author:   opts.authors,
+		Text:     opts.text,
+		Limit:    opts.limit,
 		OrderBy:  orderBy,
 	})
 	if err != nil {
 		return renderErr(stderr, err)
 	}
 
-	if jsonMode {
+	if opts.jsonMode {
 		wireSummaries := wire.FromIssueResultSummaries(issues)
 		if err := emitJSON(stdout, wire.KindIssueList, wireSummaries); err != nil {
 			fmt.Fprintf(stderr, "writ issue list: marshal json: %v\n", err)
@@ -555,32 +523,29 @@ Flags:
 	return 0
 }
 
-func runIssueLink(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+type issueLinkOpts struct {
+	dir        string
+	target     string
+	relation   string
+	targetType string
+}
+
+func newIssueLinkFlagSet(defaultDir string) (*flag.FlagSet, *issueLinkOpts) {
 	fs := flag.NewFlagSet("issue link", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-
-	var dir string
-	var target string
-	var relation string
-	var targetType string
-
-	fs.StringVar(&dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.StringVar(&target, "target", "", "Target reference (e.g. <repo-id>#<object-id> or <object-id>)")
-	fs.StringVar(&relation, "relation", "", "Link relation: fixes, relates, or none")
-	fs.StringVar(&targetType, "target-type", "", "Target object type")
-
+	opts := &issueLinkOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
+	fs.StringVar(&opts.target, "target", "", "Target reference (e.g. <repo-id>#<object-id> or <object-id>)")
+	fs.StringVar(&opts.relation, "relation", "", "Link relation: fixes, relates, or none")
+	fs.StringVar(&opts.targetType, "target-type", "", "Target object type")
 	fs.Usage = func() {
-		fmt.Fprint(stderr, `Usage: writ issue link [-C <dir>] <id> -target <ref> -relation fixes|relates|none [-target-type <t>]
-
-Manage issue cross-reference links.
-
-Flags:
-  -C <dir>           Run as if writ was started in <dir>
-  -target <ref>      Target reference (required, e.g. <repo-id>#<object-id> or <object-id>)
-  -relation <rel>    Link relation: fixes, relates, or none (required)
-  -target-type <t>   Target object type
-`)
+		renderUsage(fs.Output(), []string{"issue", "link"}, issueLinkCmd)
 	}
+	return fs, opts
+}
+
+func runIssueLink(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+	fs, opts := newIssueLinkFlagSet(defaultDir)
+	fs.SetOutput(stderr)
 
 	posArgs, err := parseArgs(fs, args)
 	if err != nil {
@@ -601,28 +566,28 @@ Flags:
 		return 2
 	}
 
-	if target == "" {
+	if opts.target == "" {
 		fmt.Fprintln(stderr, "writ issue link: -target is required")
 		fs.Usage()
 		return 2
 	}
 
-	if relation == "" {
+	if opts.relation == "" {
 		fmt.Fprintln(stderr, "writ issue link: -relation is required")
 		fs.Usage()
 		return 2
 	}
 
-	switch relation {
+	switch opts.relation {
 	case "fixes", "relates", "none":
 		// valid
 	default:
-		fmt.Fprintf(stderr, "writ issue link: invalid relation %q (must be fixes, relates, or none)\n", relation)
+		fmt.Fprintf(stderr, "writ issue link: invalid relation %q (must be fixes, relates, or none)\n", opts.relation)
 		fs.Usage()
 		return 2
 	}
 
-	targetDir := dir
+	targetDir := opts.dir
 	if targetDir == "" {
 		targetDir = "."
 	}
@@ -639,13 +604,13 @@ Flags:
 	}
 
 	if err := store.Issues.Link(ctx, issueID, writ.Link{
-		Target:     target,
-		Relation:   relation,
-		TargetType: targetType,
+		Target:     opts.target,
+		Relation:   opts.relation,
+		TargetType: opts.targetType,
 	}); err != nil {
 		return renderErr(stderr, err)
 	}
 
-	fmt.Fprintf(stdout, "%s: link %s -> %s\n", issueID, relation, target)
+	fmt.Fprintf(stdout, "%s: link %s -> %s\n", issueID, opts.relation, opts.target)
 	return 0
 }

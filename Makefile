@@ -1,6 +1,6 @@
 APIDIFF := go run golang.org/x/exp/cmd/apidiff@v0.0.0-20250128182459-e0ece0dbea4c
 
-.PHONY: build test api api-check
+.PHONY: build test api api-check docs docs-check
 
 build:
 	go build ./...
@@ -20,3 +20,10 @@ api-check:
 		echo "$$out"; \
 		exit 1; \
 	fi
+
+docs:
+	go test ./cmd/writ -run TestDocsGolden -update-docs
+
+docs-check:
+	go test ./cmd/writ -run TestDocsGolden
+

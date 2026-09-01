@@ -17,14 +17,14 @@ func main() {
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		printUsage(stderr)
+		renderUsage(stderr, nil, rootCommand)
 		return 2
 	}
 
 	// Handle help flags at root
 	switch args[0] {
-	case "-h", "-help", "--help", "help":
-		printUsage(stdout)
+	case "-h", "-help", "--help":
+		renderUsage(stdout, nil, rootCommand)
 		return 0
 	}
 
@@ -38,15 +38,19 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		defaultDir = args[1]
 		args = args[2:]
 		if len(args) == 0 {
-			printUsage(stderr)
+			renderUsage(stderr, nil, rootCommand)
 			return 2
 		}
 	}
 
 	switch args[0] {
-	case "-h", "-help", "--help", "help":
-		printUsage(stdout)
+	case "-h", "-help", "--help":
+		renderUsage(stdout, nil, rootCommand)
 		return 0
+	case "help":
+		return runHelp(args[1:], stdout, stderr)
+	case "completion":
+		return runCompletion(args[1:], stdout, stderr)
 	case "init":
 		return runInit(ctx, defaultDir, args[1:], stdout, stderr)
 	case "issue":
@@ -57,23 +61,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return runSync(ctx, defaultDir, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "writ: unknown command %q\n\n", args[0])
-		printUsage(stderr)
+		renderUsage(stderr, nil, rootCommand)
 		return 2
 	}
 }
 
-func printUsage(w io.Writer) {
-	fmt.Fprint(w, `Usage: writ [-C <dir>] <command> [arguments]
-
-Commands:
-  init      Initialize writ configuration (writer ID and remote fetch refspecs)
-  issue     Manage issues (create, status, assign, list, link)
-  review    Manage code reviews (open, comment, approve, status, list)
-  sync      Synchronize operations with git remotes
-
-Plumbing:
-  Every read verb supports --json for machine-readable output.
-
-Run 'writ <command> -h' for more information on a command.
-`)
-}
