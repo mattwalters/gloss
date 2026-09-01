@@ -583,8 +583,8 @@ func (r *Reviews) Approve(ctx context.Context, id string, a Approval) error {
 		"revision": a.Revision,
 		"verdict":  a.Verdict,
 	}
-	if a.Subject != "" {
-		body["subject"] = state.NormalizePerson(a.Subject)
+	if subject := state.NormalizePerson(a.Subject); subject != "" {
+		body["subject"] = subject
 	}
 	if a.Message != "" {
 		body["message"] = a.Message
