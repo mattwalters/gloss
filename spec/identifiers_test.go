@@ -270,6 +270,11 @@ func TestPersonIdentifierNormalization(t *testing.T) {
 		{"DEV+1@EXAMPLE.COM", "dev+1@example.com", true},
 	}
 
+	// Deliberately spelled out here rather than calling any implementation:
+	// this test checks the prose rule in spec/identifiers.md, so it must be
+	// able to fail when every implementation agrees on the wrong thing.
+	// TestReffoldNormalizePersonMatchesEngine is the test that binds the
+	// implementations to each other.
 	norm := func(s string) string {
 		return strings.ToLower(strings.TrimSpace(s))
 	}

@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/writtendev/writ/engine/codec"
+	"github.com/writtendev/writ/engine/internal/person"
 )
 
 // Accumulator defines the interface for state reducers in the closed strategy catalogue.
@@ -56,7 +56,7 @@ func newLWWAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 func (a *lwwAccumulator) Apply(op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	if val, ok := body[a.field]; ok && val != nil {
 		if s, ok := val.(string); ok && a.field == "actor" && op.OpType == "resolve" {
-			val = strings.ToLower(strings.TrimSpace(s))
+			val = person.NormalizePerson(s)
 		}
 		a.val = val
 		a.hasVal = true
@@ -200,7 +200,7 @@ func (a *setObservedRemoveAccumulator) Apply(op codec.Op, body map[string]any, _
 	// from both sides of the OR-set, whatever the op type (spec/fold.md §5.4).
 	normalizeItem := func(it string) string {
 		if op.OpType == "assign" {
-			return strings.ToLower(strings.TrimSpace(it))
+			return person.NormalizePerson(it)
 		}
 		return it
 	}
@@ -410,7 +410,7 @@ func (a *keyedLWWAccumulator) Apply(op codec.Op, body map[string]any, _ map[stri
 	// mirrors: a person identifier reads back normalized per spec/identifiers.md.
 	if a.field == "subject" && op.OpType == "approval" {
 		if s, isStr := val.(string); isStr {
-			val = strings.ToLower(strings.TrimSpace(s))
+			val = person.NormalizePerson(s)
 		}
 	}
 	key := make([]string, 0, len(a.keyCols))
@@ -418,7 +418,7 @@ func (a *keyedLWWAccumulator) Apply(op codec.Op, body map[string]any, _ map[stri
 		if val, ok := body[kf]; ok && val != nil {
 			vStr := fmt.Sprint(val)
 			if kf == "subject" && op.OpType == "approval" {
-				vStr = strings.ToLower(strings.TrimSpace(vStr))
+				vStr = person.NormalizePerson(vStr)
 			}
 			key = append(key, vStr)
 		} else {
