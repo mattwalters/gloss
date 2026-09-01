@@ -160,6 +160,11 @@ For example:
 - **Readers and Reducers MUST** normalize person identifiers upon reading op
   payloads prior to evaluating set membership, keyed lookups, deduplication,
   or projection indices.
+- **Reducers MUST** carry the normalized form into folded state, not merely into
+  the comparison. A person identifier read out of folded state — an OR-set member,
+  a `keyed-lww` key component, or the value stored under such a key — is the
+  normalized string, so independent implementations fold denormalized producer
+  output to byte-identical state.
 
 ### Relationship to `writer-id`
 

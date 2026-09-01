@@ -1,0 +1,79 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/0123456789abcdef/review",
+      "commit": "dc65afd07abc529e9b04b90c941907bd0c142391"
+    },
+    {
+      "name": "refs/writ/fedcba9876543210/review",
+      "commit": "acffa1f73f0eaf4cac781f71f07326a8f3a8ea25"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/0123456789abcdef/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "fb86c435daa18fe53b38447f9d047289de11ac90",
+          "tree": "a8046416297e149b36ba8aa198ce3a6661ac893f",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create review/r-subject-denorm\n",
+          "signed": true
+        },
+        {
+          "sha": "636dedff17641c010924f61c758d7bff14e8d057",
+          "tree": "6b4f33ef7cc80b21721102211742871cf53a355f",
+          "parents": [
+            "fb86c435daa18fe53b38447f9d047289de11ac90"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: revision review/r-subject-denorm\n",
+          "signed": true
+        },
+        {
+          "sha": "132b8279bcd7c1abc7bcf112452c57e6ca3ba649",
+          "tree": "e8f1c0b2ccfcd0f2304221a5f736ba144483c834",
+          "parents": [
+            "636dedff17641c010924f61c758d7bff14e8d057"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: approval review/r-subject-denorm\n",
+          "signed": true
+        },
+        {
+          "sha": "dc65afd07abc529e9b04b90c941907bd0c142391",
+          "tree": "876d785d3bd04c2a49f3b1f25584bdc6849dbdff",
+          "parents": [
+            "132b8279bcd7c1abc7bcf112452c57e6ca3ba649"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:04:00Z",
+          "message": "writ: approval review/r-subject-denorm\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/fedcba9876543210/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "acffa1f73f0eaf4cac781f71f07326a8f3a8ea25",
+          "tree": "9b406b280eb5574630091b723949024330e3bc17",
+          "parents": [
+            "636dedff17641c010924f61c758d7bff14e8d057"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:03:00Z",
+          "message": "writ: approval review/r-subject-denorm\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

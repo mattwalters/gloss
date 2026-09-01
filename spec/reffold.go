@@ -537,6 +537,14 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 							continue
 						}
 						hasKeyed = true
+						// The stored value is normalized on the same terms as the
+						// key component it mirrors: a person identifier reads back
+						// normalized per spec/identifiers.md.
+						if fieldName == "subject" && op.OpType == "approval" {
+							if s, isStr := val.(string); isStr {
+								val = strings.ToLower(strings.TrimSpace(s))
+							}
+						}
 						key := make([]string, 0, len(rule.Key))
 						for _, kf := range rule.Key {
 							if val, ok := op.Body[kf]; ok && val != nil {

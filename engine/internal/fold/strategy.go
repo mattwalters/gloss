@@ -394,6 +394,13 @@ func (a *keyedLWWAccumulator) Apply(op codec.Op, body map[string]any, _ map[stri
 		return nil
 	}
 	a.hasKeyed = true
+	// The stored value is normalized on the same terms as the key component it
+	// mirrors: a person identifier reads back normalized per spec/identifiers.md.
+	if a.field == "subject" && op.OpType == "approval" {
+		if s, isStr := val.(string); isStr {
+			val = strings.ToLower(strings.TrimSpace(s))
+		}
+	}
 	key := make([]string, 0, len(a.keyCols))
 	for _, kf := range a.keyCols {
 		if val, ok := body[kf]; ok && val != nil {
