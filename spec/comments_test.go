@@ -380,7 +380,7 @@ func TestCommentFieldRules(t *testing.T) {
 		"create":  {"subject", "text", "in_reply_to", "anchor"},
 		"edit":    {"text"},
 		"delete":  {"deleted"},
-		"resolve": {"resolved", "actor"},
+		"resolve": {"resolved", "resolved_by"},
 	}
 
 	for opType, fields := range expectedFields {

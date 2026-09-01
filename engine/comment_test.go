@@ -246,8 +246,8 @@ func TestCommentsResolveWorkflow(t *testing.T) {
 
 	// 3. Resolve thread
 	if err := s.Comments.Resolve(ctx, commentID, writ.CommentResolve{
-		Resolved: true,
-		Actor:    "  Alice@Example.COM  ",
+		Resolved:   true,
+		ResolvedBy: "  Alice@Example.COM  ",
 	}); err != nil {
 		t.Fatalf("Resolve failed: %v", err)
 	}
@@ -263,8 +263,8 @@ func TestCommentsResolveWorkflow(t *testing.T) {
 	if !comments[0].Comment.IsResolved() {
 		t.Errorf("expected comment to be resolved")
 	}
-	if comments[0].Comment.Actor != "alice@example.com" {
-		t.Errorf("expected comment actor 'alice@example.com', got %q", comments[0].Comment.Actor)
+	if comments[0].Comment.ResolvedBy != "alice@example.com" {
+		t.Errorf("expected comment resolved_by 'alice@example.com', got %q", comments[0].Comment.ResolvedBy)
 	}
 
 	// 4. Post reply after resolve - verify thread root remains resolved
@@ -341,10 +341,10 @@ func TestCommentsResolveWorkflow(t *testing.T) {
 	}
 }
 
-// TestCommentsResolveWhitespaceActorOmitsKey guards against emitting a
-// schema-invalid empty "actor" (person ids have minLength 1) when the caller
-// supplies a whitespace-only actor.
-func TestCommentsResolveWhitespaceActorOmitsKey(t *testing.T) {
+// TestCommentsResolveWhitespaceResolvedByOmitsKey guards against emitting a
+// schema-invalid empty "resolved_by" (person ids have minLength 1) when the
+// caller supplies a whitespace-only person identifier.
+func TestCommentsResolveWhitespaceResolvedByOmitsKey(t *testing.T) {
 	repoDir, _ := setupConfiguredRepo(t)
 
 	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
@@ -357,7 +357,7 @@ func TestCommentsResolveWhitespaceActorOmitsKey(t *testing.T) {
 
 	headHash := runGitCmd(t, repoDir, "rev-parse", "HEAD")[:40]
 	reviewID, err := s.Reviews.Create(ctx, writ.NewReview{
-		Title: "Whitespace Actor Review",
+		Title: "Whitespace ResolvedBy Review",
 		Base:  headHash,
 		Head:  headHash,
 	})
@@ -371,8 +371,8 @@ func TestCommentsResolveWhitespaceActorOmitsKey(t *testing.T) {
 	}
 
 	if err := s.Comments.Resolve(ctx, commentID, writ.CommentResolve{
-		Resolved: true,
-		Actor:    "   ",
+		Resolved:   true,
+		ResolvedBy: "   ",
 	}); err != nil {
 		t.Fatalf("Resolve failed: %v", err)
 	}
@@ -397,8 +397,8 @@ func TestCommentsResolveWhitespaceActorOmitsKey(t *testing.T) {
 		if err := json.Unmarshal(op.Body, &body); err != nil {
 			t.Fatalf("unmarshal resolve body: %v", err)
 		}
-		if _, ok := body["actor"]; ok {
-			t.Errorf("expected no actor key for whitespace-only actor, got body %s", op.Body)
+		if _, ok := body["resolved_by"]; ok {
+			t.Errorf("expected no resolved_by key for whitespace-only input, got body %s", op.Body)
 		}
 	}
 	if resolveOps != 1 {
@@ -415,7 +415,7 @@ func TestCommentsResolveWhitespaceActorOmitsKey(t *testing.T) {
 	if !comments[0].Comment.IsResolved() {
 		t.Errorf("expected comment to be resolved")
 	}
-	if comments[0].Comment.Actor != "" {
-		t.Errorf("expected empty actor, got %q", comments[0].Comment.Actor)
+	if comments[0].Comment.ResolvedBy != "" {
+		t.Errorf("expected empty resolved_by, got %q", comments[0].Comment.ResolvedBy)
 	}
 }

@@ -55,7 +55,7 @@ func newLWWAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 
 func (a *lwwAccumulator) Apply(op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	if val, ok := body[a.field]; ok && val != nil {
-		if s, ok := val.(string); ok && a.field == "actor" && op.OpType == "resolve" {
+		if s, ok := val.(string); ok && a.field == "resolved_by" && op.OpType == "resolve" {
 			val = person.NormalizePerson(s)
 		}
 		a.val = val

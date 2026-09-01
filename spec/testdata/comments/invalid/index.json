@@ -75,6 +75,10 @@
     "kind": "canonicalization",
     "reason": "bytes must be canonical JSON without formatting whitespace"
   },
+  "overlong-resolved-by.json": {
+    "kind": "schema",
+    "reason": "resolve body resolved_by must be at most 320 characters (person-id bound)"
+  },
   "self-reply.json": {
     "kind": "invariant",
     "reason": "in_reply_to must not reference the comment's own object_id"

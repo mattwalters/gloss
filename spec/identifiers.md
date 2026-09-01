@@ -115,7 +115,7 @@ Person identifiers appear in op payloads across the SDLC vocabulary:
 - **Assignees** on reviews ([`spec/review-ops.md`](review-ops.md) §5 `assign`)
 - **Assignees** on issues ([`spec/issue-ops.md`](issue-ops.md) §4 `assign`)
 - **Approval and dismissal subjects** on reviews ([`spec/review-ops.md`](review-ops.md) §6 `approval`)
-- **Resolution actors** on comments ([`spec/comments.md`](comments.md) §5 `resolve`)
+- **Thread resolvers** (`resolved_by`) on comments ([`spec/comments.md`](comments.md) §5 `resolve`)
 
 ### Format
 
@@ -124,6 +124,23 @@ The canonical person identifier format is an **email address** (e.g.
 
 Email addresses match git author identities (`user.email`), git commit signatures,
 and forge export formats (GitHub, GitLab, Gerrit).
+
+### Length bound
+
+A person identifier is **1–320 characters**: non-empty after normalization
+(see below), and no longer than 320.
+
+320 is the ceiling an RFC 5321 email address can reach — a 64-octet local
+part, `@`, and a 255-octet domain — which is exactly what `person-id`'s
+stated format is. The bound exists because op bodies are written into
+signed, immutable commits in an append-only log: an unbounded string field
+is stored once per op and never reclaimed, so a multi-megabyte identifier
+is permanent repository weight. Bounding it in the shared `person-id`
+definition bounds every person field uniformly — assignees, approval and
+dismissal subjects, and comment `resolved_by`.
+
+The bound applies to the string as it appears in the op body, which
+producers MUST already have normalized.
 
 ### Normalization rules
 

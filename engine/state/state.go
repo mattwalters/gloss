@@ -95,7 +95,7 @@ type Comment struct {
 	Anchor     *Anchor        `json:"anchor,omitempty"`
 	Deleted    bool           `json:"deleted,omitempty"`
 	Resolved   *bool          `json:"resolved,omitempty"`
-	Actor      string         `json:"actor,omitempty"`
+	ResolvedBy string         `json:"resolved_by,omitempty"`
 	UnknownOps []UnknownOp    `json:"unknown_ops,omitempty"`
 }
 

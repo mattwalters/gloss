@@ -44,7 +44,7 @@
   {
     "op_type": "resolve",
     "op_version": 1,
-    "field": "actor",
+    "field": "resolved_by",
     "strategy": "lww"
   }
 ]

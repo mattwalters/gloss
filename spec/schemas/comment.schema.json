@@ -137,9 +137,9 @@
           "type": "boolean",
           "description": "Resolution status: true = resolved, false = unresolved."
         },
-        "actor": {
+        "resolved_by": {
           "$ref": "https://writ.dev/spec/identifiers.schema.json#/$defs/person-id",
-          "description": "Optional person identifier (email address) recording the resolution."
+          "description": "Optional person identifier (email address) recording who resolved the thread. Optional even when resolved is true."
         }
       },
       "required": ["resolved"],

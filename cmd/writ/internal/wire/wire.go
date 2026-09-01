@@ -573,7 +573,7 @@ func FromCommentResult(c writ.CommentResult) Comment {
 		Anchor:     anchor,
 		Deleted:    c.Comment.Deleted,
 		Resolved:   c.Comment.IsResolved(),
-		ResolvedBy: c.Comment.Actor,
+		ResolvedBy: c.Comment.ResolvedBy,
 		Positions:  positions,
 		UnknownOps: unknownOps,
 	}
@@ -610,7 +610,7 @@ func FromCommentThread(t state.CommentThread) CommentThread {
 			Anchor:     anchor,
 			Deleted:    t.Comment.Deleted,
 			Resolved:   t.Comment.IsResolved(),
-			ResolvedBy: t.Comment.Actor,
+			ResolvedBy: t.Comment.ResolvedBy,
 			UnknownOps: unknownOps,
 		},
 		Replies:    replies,
