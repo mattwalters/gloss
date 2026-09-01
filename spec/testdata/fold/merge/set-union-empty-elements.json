@@ -1,0 +1,43 @@
+{
+  "name": "set-union-empty-elements",
+  "description": "Empty elements are dropped from a grow-only set union, in array and scalar element form; a field whose every element is dropped is still written and folds to the empty set",
+  "object_id": "obj-1",
+  "fields": {
+    "tags": { "strategy": "set-union" },
+    "remote": { "strategy": "set-union" }
+  },
+  "ops": [
+    {
+      "id": "op-root",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "tags": ["", "alpha"],
+        "remote": ""
+      }
+    },
+    {
+      "id": "op-a",
+      "parents": ["op-root"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "tags": [""]
+      }
+    },
+    {
+      "id": "op-b",
+      "parents": ["op-a"],
+      "time": 300,
+      "object_id": "obj-1",
+      "body": {
+        "tags": ["beta", ""]
+      }
+    }
+  ],
+  "expected_state": {
+    "tags": ["alpha", "beta"],
+    "remote": []
+  }
+}

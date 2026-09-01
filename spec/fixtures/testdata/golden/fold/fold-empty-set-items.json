@@ -1,0 +1,70 @@
+{
+  "objects": [
+    {
+      "object_id": "r-empty-items",
+      "object_type": "review",
+      "total_order": [
+        {
+          "commit": "3c2cccfcd116407693f6a8b8190f00250ab65ff3",
+          "label": "alice-create",
+          "t_star": 1769904000
+        },
+        {
+          "commit": "bd5325691f8ff8501d31f47532eb6273d1301535",
+          "label": "alice-label-with-empty",
+          "t_star": 1769904060
+        },
+        {
+          "commit": "c43a9ce6cd1ffecd5ea887d6b32ce4670347270d",
+          "label": "alice-assign-with-empty",
+          "t_star": 1769904120
+        },
+        {
+          "commit": "e884c53eb92da543f5d732e46539613046de65c8",
+          "label": "bob-concurrent-label",
+          "t_star": 1769904150
+        },
+        {
+          "commit": "8bd025c54495f2a7318c270e7b68f396d5e2b3c5",
+          "label": "alice-unlabel-with-empty",
+          "t_star": 1769904180
+        }
+      ],
+      "state": {
+        "add": [
+          "  ",
+          "alice@example.test",
+          "area/fold",
+          "priority/high",
+          "wip"
+        ],
+        "description": "Empty elements must not enter set-valued folds",
+        "remove": [
+          "priority/high"
+        ],
+        "title": "Empty Set Items Test"
+      }
+    },
+    {
+      "object_id": "r-empty-only",
+      "object_type": "review",
+      "total_order": [
+        {
+          "commit": "fefb2b23e9eaff8f3c98416b8f762e74781438c3",
+          "label": "alice-create-empty-only",
+          "t_star": 1769904240
+        },
+        {
+          "commit": "852719067c6496273ecd5d971a3dbb24f99676b4",
+          "label": "alice-label-empty-only",
+          "t_star": 1769904300
+        }
+      ],
+      "state": {
+        "add": [],
+        "description": "Every set element is empty and every one is dropped",
+        "title": "Empty Items Only"
+      }
+    }
+  ]
+}

@@ -210,7 +210,8 @@ strategy requires a spec amendment.
 #### 3. `set-union`
 - **Initial state:** Empty set $\emptyset$.
 - **Reduction:** Any operation specifying one or more elements adds them to the set.
-- **Result:** The mathematical set union of all added elements. In serialized state, elements are emitted in canonical sorted order (UTF-16 code unit order for strings, ascending numerical order for numbers).
+- **Empty elements are dropped:** An element whose value, after any normalization the field declares (`spec/identifiers.md` §Person identifiers), is the empty string MUST NOT enter the set. This rule applies to **every** item-valued field regardless of its op type, not only to person-valued fields: an empty label, an empty remote URL, and an empty assignee are equally meaningless, and reducers MUST agree on discarding them. Producers are already forbidden from emitting such elements by the vocabulary schemas; the rule exists so that a non-conforming or future writer emitting an empty-string element cannot make two conforming readers disagree. That guarantee is scoped to empty-string elements and extends no further: this specification does not yet pin how a reducer coerces an element whose JSON value is not a string (a number, a boolean, an object) or a field whose value is `null`, and implementations are known to differ there (WRIT-126). Dropping governs materialized state only and does not weaken the preserve-and-ignore rule (`spec/forward-compatibility.md`): the operation carrying the element remains in the DAG, reachable, replicated, and byte-for-byte intact.
+- **Result:** The mathematical set union of all added elements. In serialized state, elements are emitted in canonical sorted order (UTF-16 code unit order for strings, ascending numerical order for numbers). An operation whose elements are all dropped still counts as a write of the field: the field is present in the generic folded state map with the empty set as its value. Typed domain serializations MAY omit an empty collection rather than emitting it.
 
 #### 4. `set-observed-remove` (Add-Wins OR-Set)
 - **Initial state:** Empty set $\emptyset$.
@@ -220,7 +221,8 @@ strategy requires a spec amendment.
   - An element $x$ is present in the folded set if and only if there exists at least one add operation $a \in S$ for $x$ such that no remove operation $r \in S$ for $x$ causally follows $a$:
     $$\text{present}(x) \iff \exists a \in S \text{ s.t. } \text{adds}(a, x) \land (\forall r \in S \text{ s.t. } \text{removes}(r, x), a \not\prec r)$$
 - **Concurrency behavior:** If an addition $a$ and removal $r$ of the same element $x$ are concurrent ($a \parallel r$), the addition wins and $x$ is present in the folded set.
-- **Result:** Present elements emitted in canonical sorted order.
+- **Empty elements are dropped:** As in `set-union` (§5.3), an element whose value, after any normalization the field declares, is the empty string MUST NOT enter either the add side or the remove side of the OR-set. This rule applies to **every** item-valued field regardless of its op type — `label` items are dropped on the same terms as `assign` items, even though only the latter are normalized before the test.
+- **Result:** Present elements emitted in canonical sorted order. An operation whose elements are all dropped still counts as a write of the field: the field is present in the generic folded state map with the empty set as its value. Typed domain serializations MAY omit an empty collection rather than emitting it.
 
 #### 5. `append`
 - **Initial state:** Empty list `[]`.
