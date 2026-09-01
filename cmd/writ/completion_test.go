@@ -33,6 +33,11 @@ func TestCompletion_Bash(t *testing.T) {
 		}
 	}
 
+	// Verify double-dash enum flag support
+	if !strings.Contains(script, "-verdict|--verdict") || !strings.Contains(script, "-state|--state") || !strings.Contains(script, "-status|--status") {
+		t.Errorf("bash completion missing double-dash flag matching for enums")
+	}
+
 	if _, err := exec.LookPath("bash"); err == nil {
 		cmd := exec.Command("bash", "-n")
 		cmd.Stdin = strings.NewReader(script)
@@ -99,9 +104,9 @@ func TestCompletion_Fish(t *testing.T) {
 		}
 	}
 
-	// Verify Finding 1: help subcommand completion is not self-cancelling
-	if strings.Contains(script, "__fish_seen_subcommand_from help; and not __fish_seen_subcommand_from init issue review sync completion help") {
-		t.Errorf("fish completion has self-cancelling condition for help")
+	// Verify Round 2 Finding 1 & 2: __fish_writ_needs_subcommand and __fish_writ_args exist
+	if !strings.Contains(script, "__fish_writ_needs_subcommand issue") || !strings.Contains(script, "__fish_writ_args") {
+		t.Errorf("fish completion missing __fish_writ_needs_subcommand or __fish_writ_args")
 	}
 
 	// Verify Finding 5: single char options use -s

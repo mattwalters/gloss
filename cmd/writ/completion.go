@@ -168,7 +168,7 @@ _writ() {
             case "$subcmd" in
                 create)
                     case "$prev" in
-                        -state)
+                        -state|--state)
                             COMPREPLY=($(compgen -W "open closed" -- "$cur"))
                             return 0
                             ;;
@@ -188,7 +188,7 @@ _writ() {
                     local j=$((subcmd_idx + 1))
                     while [ $j -lt $cword ]; do
                         case "${words[j]}" in
-                            -C|-reason) j=$((j + 2)) ;;
+                            -C|-reason|--reason) j=$((j + 2)) ;;
                             -*) j=$((j + 1)) ;;
                             *) pos_count=$((pos_count + 1)); j=$((j + 1)) ;;
                         esac
@@ -206,11 +206,11 @@ _writ() {
                     ;;
                 list)
                     case "$prev" in
-                        -state)
+                        -state|--state)
                             COMPREPLY=($(compgen -W "open closed" -- "$cur"))
                             return 0
                             ;;
-                        -sort)
+                        -sort|--sort)
                             COMPREPLY=($(compgen -W "created_at_asc created_at_desc updated_at_asc updated_at_desc title_asc title_desc" -- "$cur"))
                             return 0
                             ;;
@@ -222,7 +222,7 @@ _writ() {
                     ;;
                 link)
                     case "$prev" in
-                        -relation)
+                        -relation|--relation)
                             COMPREPLY=($(compgen -W "fixes relates none" -- "$cur"))
                             return 0
                             ;;
@@ -258,7 +258,7 @@ _writ() {
                     ;;
                 approve)
                     case "$prev" in
-                        -verdict)
+                        -verdict|--verdict)
                             COMPREPLY=($(compgen -W "approve request-changes none" -- "$cur"))
                             return 0
                             ;;
@@ -278,7 +278,7 @@ _writ() {
                     local j=$((subcmd_idx + 1))
                     while [ $j -lt $cword ]; do
                         case "${words[j]}" in
-                            -C|-reason|-merge-commit) j=$((j + 2)) ;;
+                            -C|-reason|--reason|-merge-commit|--merge-commit) j=$((j + 2)) ;;
                             -*) j=$((j + 1)) ;;
                             *) pos_count=$((pos_count + 1)); j=$((j + 1)) ;;
                         esac
@@ -290,11 +290,11 @@ _writ() {
                     ;;
                 list)
                     case "$prev" in
-                        -status)
+                        -status|--status)
                             COMPREPLY=($(compgen -W "draft open closed merged" -- "$cur"))
                             return 0
                             ;;
-                        -sort)
+                        -sort|--sort)
                             COMPREPLY=($(compgen -W "created_at_asc created_at_desc updated_at_asc updated_at_desc title_asc title_desc" -- "$cur"))
                             return 0
                             ;;
@@ -543,16 +543,49 @@ _writ "$@"`)
 func emitFishCompletion(w io.Writer) {
 	fmt.Fprintln(w, `# fish completion for writ
 
+function __fish_writ_args
+    set -l raw (commandline -opc)
+    set -l args
+    set -l skip 0
+    for arg in $raw
+        if test $skip -gt 0
+            set skip (math $skip - 1)
+            continue
+        end
+        if test "$arg" = "-C"
+            set skip 1
+            continue
+        end
+        set -a args "$arg"
+    end
+    echo $args
+end
+
 function __fish_writ_needs_command
-    set -l cmd (commandline -opc)
+    set -l cmd (__fish_writ_args)
     if test (count $cmd) -eq 1
         return 0
     end
     return 1
 end
 
+function __fish_writ_needs_subcommand
+    set -l cmd (__fish_writ_args)
+    set -l n (count $argv)
+    if test (count $cmd) -ne (math $n + 1)
+        return 1
+    end
+    for i in (seq 1 $n)
+        set -l pos (math $i + 1)
+        if test "$cmd[$pos]" != "$argv[$i]"
+            return 1
+        end
+    end
+    return 0
+end
+
 function __fish_writ_using_command
-    set -l cmd (commandline -opc)
+    set -l cmd (__fish_writ_args)
     set -l n (count $argv)
     if test (count $cmd) -le $n
         return 1
@@ -583,15 +616,15 @@ complete -c writ -l help -s h -d 'Show help information'
 	fmt.Fprintln(w, `
 # Subcommands for issue`)
 	for _, sub := range issueCmd.Subs {
-		fmt.Fprintf(w, "complete -c writ -n '__fish_writ_using_command issue; and not __fish_writ_using_command issue %s' -f -a '%s' -d '%s'\n",
-			sub.Name, sub.Name, escapeFishDesc(sub.Short))
+		fmt.Fprintf(w, "complete -c writ -n '__fish_writ_needs_subcommand issue' -f -a '%s' -d '%s'\n",
+			sub.Name, escapeFishDesc(sub.Short))
 	}
 
 	fmt.Fprintln(w, `
 # Subcommands for review`)
 	for _, sub := range reviewCmd.Subs {
-		fmt.Fprintf(w, "complete -c writ -n '__fish_writ_using_command review; and not __fish_writ_using_command review %s' -f -a '%s' -d '%s'\n",
-			sub.Name, sub.Name, escapeFishDesc(sub.Short))
+		fmt.Fprintf(w, "complete -c writ -n '__fish_writ_needs_subcommand review' -f -a '%s' -d '%s'\n",
+			sub.Name, escapeFishDesc(sub.Short))
 	}
 
 	fmt.Fprintln(w, `
@@ -599,9 +632,9 @@ complete -c writ -l help -s h -d 'Show help information'
 complete -c writ -n '__fish_writ_using_command completion' -f -a 'bash zsh fish'
 
 # Subcommands for help
-complete -c writ -n '__fish_writ_using_command help' -f -a 'init issue review sync completion help'
-complete -c writ -n '__fish_writ_using_command help issue' -f -a 'create status assign list link'
-complete -c writ -n '__fish_writ_using_command help review' -f -a 'open comment approve status list'
+complete -c writ -n '__fish_writ_needs_subcommand help' -f -a 'init issue review sync completion help'
+complete -c writ -n '__fish_writ_needs_subcommand help issue' -f -a 'create status assign list link'
+complete -c writ -n '__fish_writ_needs_subcommand help review' -f -a 'open comment approve status list'
 
 # Flags for commands`)
 
