@@ -13,7 +13,7 @@ disableKinds = ["taxonomy", "term", "rss"]
 
 [markup]
   [markup.highlight]
-    style = "github"
+    noClasses = false
     lineNos = false
   [markup.goldmark]
     [markup.goldmark.renderer]
