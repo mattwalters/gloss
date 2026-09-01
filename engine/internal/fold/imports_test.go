@@ -8,14 +8,19 @@ import (
 	"testing"
 )
 
+// engine/internal/person is on this list for the one definition of the
+// person-identifier normalization rule, which fold applies to assignee and
+// approval-subject values. That package imports strings and nothing else, so
+// admitting it grants fold no capability it did not already have. "strings"
+// itself comes off the list: no non-test file here imports it any more.
 var allowedImports = map[string]bool{
-	`"container/heap"`:                          true,
-	`"encoding/json"`:                           true,
-	`"errors"`:                                  true,
-	`"fmt"`:                                     true,
-	`"sort"`:                                    true,
-	`"strings"`:                                 true,
-	`"github.com/writtendev/writ/engine/codec"`: true,
+	`"container/heap"`:                                    true,
+	`"encoding/json"`:                                     true,
+	`"errors"`:                                            true,
+	`"fmt"`:                                               true,
+	`"sort"`:                                              true,
+	`"github.com/writtendev/writ/engine/codec"`:           true,
+	`"github.com/writtendev/writ/engine/internal/person"`: true,
 }
 
 func TestImportsAllowlist(t *testing.T) {

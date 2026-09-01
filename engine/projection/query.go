@@ -110,7 +110,7 @@ func (d *DB) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 	if len(f.Assignee) > 0 {
 		sb.WriteString(" AND EXISTS (SELECT 1 FROM review_assignees ra WHERE ra.review_object_id = r.object_id AND ra.assignee IN (" + placeholders(len(f.Assignee)) + "))")
 		for _, a := range f.Assignee {
-			args = append(args, strings.ToLower(strings.TrimSpace(a)))
+			args = append(args, state.NormalizePerson(a))
 		}
 	}
 
@@ -383,7 +383,7 @@ func (d *DB) Issues(f IssueFilter) ([]IssueResult, error) {
 	if len(f.Assignee) > 0 {
 		sb.WriteString(" AND EXISTS (SELECT 1 FROM issue_assignees ia WHERE ia.issue_object_id = i.object_id AND ia.assignee IN (" + placeholders(len(f.Assignee)) + "))")
 		for _, a := range f.Assignee {
-			args = append(args, strings.ToLower(strings.TrimSpace(a)))
+			args = append(args, state.NormalizePerson(a))
 		}
 	}
 

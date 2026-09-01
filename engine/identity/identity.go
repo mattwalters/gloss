@@ -26,12 +26,6 @@ func ParseWriterID(s string) (WriterID, error) {
 	return WriterID(s), nil
 }
 
-// NormalizePerson normalizes a person identifier string per spec/identifiers.md
-// (trimmed leading/trailing whitespace, lowercase).
-func NormalizePerson(s string) string {
-	return strings.ToLower(strings.TrimSpace(s))
-}
-
 // Author holds the commit author's display name and email address.
 type Author struct {
 	Name  string // user.name

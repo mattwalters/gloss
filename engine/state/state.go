@@ -2,15 +2,17 @@ package state
 
 import (
 	"encoding/json"
-	"strings"
 
+	"github.com/writtendev/writ/engine/internal/person"
 	"github.com/writtendev/writ/engine/resolve"
 )
 
 // NormalizePerson normalizes a person identifier string per spec/identifiers.md
-// (trimmed leading/trailing whitespace, lowercase).
+// (trimmed leading/trailing whitespace, lowercase). The rule itself lives in
+// engine/internal/person; this is the name the state package, its callers, and
+// the projection use.
 func NormalizePerson(s string) string {
-	return strings.ToLower(strings.TrimSpace(s))
+	return person.NormalizePerson(s)
 }
 
 // Anchor is a content-based comment position object (v1).

@@ -6,6 +6,18 @@ import (
 	"strings"
 )
 
+// normalizePerson normalizes a person identifier string per
+// spec/identifiers.md (trimmed leading/trailing whitespace, lowercase).
+//
+// The reference fold is deliberately standalone — it is what independent
+// implementations read — so it carries its own copy of the rule rather than
+// importing the engine's, which lives under engine/internal and is not
+// reachable from here in any case. TestReffoldNormalizePersonMatchesEngine
+// binds the two together so they cannot drift.
+func normalizePerson(s string) string {
+	return strings.ToLower(strings.TrimSpace(s))
+}
+
 // EffectiveTimes computes the causality-monotone effective timestamp
 // t*(u) = max(u.time, max_{p in Parents_S(u)} t*(p))
 // for all ops in the restricted input set for target objectID.
@@ -281,7 +293,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 					if opMatchesRule(op, r) {
 						if val, present := op.Body[fieldName]; present && val != nil {
 							if s, ok := val.(string); ok && fieldName == "actor" && op.OpType == "resolve" {
-								val = strings.ToLower(strings.TrimSpace(s))
+								val = normalizePerson(s)
 							}
 							state[fieldName] = val
 						}
@@ -386,7 +398,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 							// OR-set, whatever the op type (spec/fold.md §5.4).
 							normalizeItem := func(it string) string {
 								if op.OpType == "assign" {
-									return strings.ToLower(strings.TrimSpace(it))
+									return normalizePerson(it)
 								}
 								return it
 							}
@@ -555,7 +567,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 						// normalized per spec/identifiers.md.
 						if fieldName == "subject" && op.OpType == "approval" {
 							if s, isStr := val.(string); isStr {
-								val = strings.ToLower(strings.TrimSpace(s))
+								val = normalizePerson(s)
 							}
 						}
 						key := make([]string, 0, len(rule.Key))
@@ -563,7 +575,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 							if val, ok := op.Body[kf]; ok && val != nil {
 								vStr := fmt.Sprint(val)
 								if kf == "subject" && op.OpType == "approval" {
-									vStr = strings.ToLower(strings.TrimSpace(vStr))
+									vStr = normalizePerson(vStr)
 								}
 								key = append(key, vStr)
 							} else {
