@@ -290,6 +290,7 @@ func TestFieldRules(t *testing.T) {
 		"set_status_body": "set-status",
 		"approval_body":   "approval",
 		"ci_status_body":  "ci-status",
+		"assign_body":     "assign",
 	}
 
 	for defName, opType := range bodyDefs {

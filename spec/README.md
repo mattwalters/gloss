@@ -23,7 +23,7 @@ disagree, the fixtures win and the prose gets fixed.
 | `anchors.md` | Normative | Content-based comment anchors (v1): the dual-sided anchor object, context capture, re-anchoring and orphaning |
 | `fold.md` | Normative | Fold semantics: the input model, causality-monotone effective time `t*`, the deterministic total order, concurrency rules, the closed per-field merge strategy catalogue, tombstones, and state serialization |
 | `identifiers.md` | Normative | Workspace-global IDs, repo designators, cross-repo references, workspace repo, and reference resolution |
-| `review-ops.md` | Normative | The review family operation vocabulary (v1): review creation, revisions, status transitions, approvals, and CI statuses |
+| `review-ops.md` | Normative | The review family operation vocabulary (v1): review creation, revisions, status transitions, assignments, approvals, and CI statuses |
 | `comments.md` | Normative | Comment op vocabulary (v1): object model, create/edit/delete ops, threading, anchor reference, GitHub shapes |
 | `issue-ops.md` | Normative | The issue family operation vocabulary (v1): issue creation, metadata updates, state transitions, assignments, labels, and cross-references |
 | `project-cycle.md` | Normative | Project and cycle operation vocabularies (v1): workspace-scoped grouping types, creation, status transitions, cycle dates, and issue membership |

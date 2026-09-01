@@ -18,6 +18,7 @@ slug: "cli"
 - [`writ review open`](#writ-review-open)
 - [`writ review comment`](#writ-review-comment)
 - [`writ review approve`](#writ-review-approve)
+- [`writ review assign`](#writ-review-assign)
 - [`writ review status`](#writ-review-status)
 - [`writ review list`](#writ-review-list)
 - [`writ sync`](#writ-sync)
@@ -294,6 +295,33 @@ writ review approve 01J8ABC
 writ review approve 01J8ABC -verdict request-changes -m "Please fix tests"
 ```
 
+### `writ review assign`
+
+Add or remove review assignees (requested reviewers)
+
+#### Synopsis
+
+```console
+Usage: writ review assign [-C <dir>] <id> [-add <a>]... [-remove <a>]...
+```
+
+#### Description
+
+Add or remove review assignees (requested reviewers).
+
+#### Flags
+
+- `-C <dir>`: Run as if writ was started in <dir>
+- `-add <a>`: Add assignee <a> email or ID (repeatable)
+- `-remove <a>`: Remove assignee <a> email or ID (repeatable)
+
+#### Examples
+
+```bash
+writ review assign 01J8ABC -add alice@example.com
+writ review assign 01J8ABC -remove bob@example.com
+```
+
 ### `writ review status`
 
 View or update review status
@@ -334,7 +362,7 @@ List code reviews
 #### Synopsis
 
 ```console
-Usage: writ review list [-C <dir>] [-status <s>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>] [--json]
+Usage: writ review list [-C <dir>] [-status <s>]... [-assignee <a>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>] [--json]
 ```
 
 #### Description
@@ -345,6 +373,7 @@ List code reviews.
 
 - `-C <dir>`: Run as if writ was started in <dir>
 - `-status <s>`: Filter by review status <s> (repeatable)
+- `-assignee <a>`: Filter by assignee <a> name or email (repeatable)
 - `-author <a>`: Filter by author <a> name or email (repeatable)
 - `-text <q>`: Filter by text <q> match in title or description
 - `-limit N`: Maximum number N of reviews to return
@@ -356,6 +385,7 @@ List code reviews.
 ```bash
 writ review list
 writ review list -status open
+writ review list -assignee alice@example.com
 writ review list -status open -status draft --json
 ```
 
@@ -399,7 +429,7 @@ With no remote specified, defaults to 'origin' or the sole configured remote.
 writ sync
 writ sync origin
 writ sync --status
-writ sync --json
+writ sync --status --json
 ```
 
 ### `writ version`
@@ -448,22 +478,24 @@ writ completion fish > ~/.config/fish/completions/writ.fish
 
 ### `writ help`
 
-Show help for commands
+Show help for writ or a subcommand
 
 #### Synopsis
 
 ```console
-Usage: writ help [<command> [<subcommand>]]
+Usage: writ help [command...]
 ```
 
 #### Description
 
-Show detailed help and examples for a command or subcommand.
+Show help for writ or a subcommand.
 
 #### Examples
 
 ```bash
 writ help
+writ help issue
+writ help issue create
 writ help review
 writ help review open
 ```

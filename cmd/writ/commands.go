@@ -178,7 +178,7 @@ var issueLinkCmd = &command{
 
 var reviewCmd = &command{
 	Name:      "review",
-	Short:     "Manage code reviews (open, comment, approve, status, list)",
+	Short:     "Manage code reviews (open, comment, approve, assign, status, list)",
 	UsageLine: "Usage: writ review [-C <dir>] <subcommand> [arguments]",
 	Long:      "Manage code reviews.",
 	Flags: []flagSpec{
@@ -192,6 +192,7 @@ var reviewCmd = &command{
 		reviewOpenCmd,
 		reviewCommentCmd,
 		reviewApproveCmd,
+		reviewAssignCmd,
 		reviewStatusCmd,
 		reviewListCmd,
 	},
@@ -255,6 +256,22 @@ var reviewApproveCmd = &command{
 	},
 }
 
+var reviewAssignCmd = &command{
+	Name:      "assign",
+	Short:     "Add or remove review assignees (requested reviewers)",
+	UsageLine: "Usage: writ review assign [-C <dir>] <id> [-add <a>]... [-remove <a>]...",
+	Long:      "Add or remove review assignees (requested reviewers).",
+	Flags: []flagSpec{
+		{Name: "C"},
+		{Name: "add", Repeatable: true},
+		{Name: "remove", Repeatable: true},
+	},
+	Examples: []string{
+		"writ review assign 01J8ABC -add alice@example.com",
+		"writ review assign 01J8ABC -remove bob@example.com",
+	},
+}
+
 var reviewStatusCmd = &command{
 	Name:      "status",
 	Short:     "View or update review status",
@@ -277,11 +294,12 @@ var reviewStatusCmd = &command{
 var reviewListCmd = &command{
 	Name:      "list",
 	Short:     "List code reviews",
-	UsageLine: "Usage: writ review list [-C <dir>] [-status <s>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>] [--json]",
+	UsageLine: "Usage: writ review list [-C <dir>] [-status <s>]... [-assignee <a>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>] [--json]",
 	Long:      "List code reviews.",
 	Flags: []flagSpec{
 		{Name: "C"},
 		{Name: "status", Values: []string{"draft", "open", "closed", "merged"}, Repeatable: true},
+		{Name: "assignee", Repeatable: true},
 		{Name: "author", Repeatable: true},
 		{Name: "text"},
 		{Name: "limit"},
@@ -291,6 +309,7 @@ var reviewListCmd = &command{
 	Examples: []string{
 		"writ review list",
 		"writ review list -status open",
+		"writ review list -assignee alice@example.com",
 		"writ review list -status open -status draft --json",
 	},
 }
@@ -321,7 +340,7 @@ var syncCmd = &command{
 		"writ sync",
 		"writ sync origin",
 		"writ sync --status",
-		"writ sync --json",
+		"writ sync --status --json",
 	},
 }
 
@@ -349,11 +368,13 @@ var completionCmd = &command{
 
 var helpCmd = &command{
 	Name:      "help",
-	Short:     "Show help for commands",
-	UsageLine: "Usage: writ help [<command> [<subcommand>]]",
-	Long:      "Show detailed help and examples for a command or subcommand.",
+	Short:     "Show help for writ or a subcommand",
+	UsageLine: "Usage: writ help [command...]",
+	Long:      "Show help for writ or a subcommand.",
 	Examples: []string{
 		"writ help",
+		"writ help issue",
+		"writ help issue create",
 		"writ help review",
 		"writ help review open",
 	},
@@ -372,6 +393,7 @@ func init() {
 		"review open":    func() *flag.FlagSet { fs, _ := newReviewOpenFlagSet(""); return fs },
 		"review comment": func() *flag.FlagSet { fs, _ := newReviewCommentFlagSet(""); return fs },
 		"review approve": func() *flag.FlagSet { fs, _ := newReviewApproveFlagSet(""); return fs },
+		"review assign":  func() *flag.FlagSet { fs, _ := newReviewAssignFlagSet(""); return fs },
 		"review status":  func() *flag.FlagSet { fs, _ := newReviewStatusFlagSet(""); return fs },
 		"review list":    func() *flag.FlagSet { fs, _ := newReviewListFlagSet(""); return fs },
 		"sync":           func() *flag.FlagSet { fs, _ := newSyncFlagSet(""); return fs },

@@ -1,6 +1,6 @@
 package projection
 
-const schemaVersion = 4
+const schemaVersion = 5
 
 var projectionTables = []string{
 	"meta",
@@ -11,6 +11,7 @@ var projectionTables = []string{
 	"unknown_ops",
 	"reviews",
 	"review_revisions",
+	"review_assignees",
 	"approvals",
 	"ci_statuses",
 	"comments",
@@ -36,6 +37,7 @@ var tableQueries = map[string]string{
 	"unknown_ops":        "SELECT * FROM unknown_ops ORDER BY object_id ASC, op_index ASC",
 	"reviews":            "SELECT * FROM reviews ORDER BY object_id ASC",
 	"review_revisions":   "SELECT * FROM review_revisions ORDER BY review_object_id ASC, revision_index ASC",
+	"review_assignees":   "SELECT * FROM review_assignees ORDER BY review_object_id ASC, assignee ASC",
 	"approvals":          "SELECT * FROM approvals ORDER BY review_object_id ASC, subject ASC, revision ASC",
 	"ci_statuses":        "SELECT * FROM ci_statuses ORDER BY review_object_id ASC, revision ASC, name ASC",
 	"comments":           "SELECT * FROM comments ORDER BY object_id ASC",
@@ -130,6 +132,13 @@ CREATE TABLE IF NOT EXISTS review_revisions (
     PRIMARY KEY (review_object_id, revision_index)
 );
 CREATE INDEX IF NOT EXISTS idx_review_revisions_review_object_id ON review_revisions(review_object_id);
+
+CREATE TABLE IF NOT EXISTS review_assignees (
+    review_object_id TEXT NOT NULL,
+    assignee TEXT NOT NULL,
+    PRIMARY KEY (review_object_id, assignee)
+);
+CREATE INDEX IF NOT EXISTS idx_review_assignees_assignee ON review_assignees(assignee);
 
 CREATE TABLE IF NOT EXISTS approvals (
     review_object_id TEXT NOT NULL,

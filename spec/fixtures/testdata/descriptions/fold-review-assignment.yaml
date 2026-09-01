@@ -1,0 +1,65 @@
+name: fold-review-assignment
+description: >
+  Assignment and reviewer routing operations on a code review object from
+  multiple writers (Alice and Bob), exercising assign:add and assign:remove
+  under set-observed-remove (add-wins OR-set) with causal and concurrent mutations.
+
+refs:
+  - name: refs/writ/0123456789abcdef/review
+    history:
+      - commits:
+          - id: alice-create
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            op:
+              object_id: r-assign
+              object_type: review
+              op_type: create
+              op_version: 1
+              body:
+                title: "Review Assignment Test"
+            expect: accept
+
+          - id: alice-assign-initial
+            parents: [alice-create]
+            author: alice
+            timestamp: 2026-01-01T00:01:00Z
+            op:
+              object_id: r-assign
+              object_type: review
+              op_type: assign
+              op_version: 1
+              body:
+                add: ["alice", "bob"]
+            expect: accept
+
+          - id: alice-reassign
+            parents: [alice-assign-initial]
+            author: alice
+            timestamp: 2026-01-01T00:03:00Z
+            op:
+              object_id: r-assign
+              object_type: review
+              op_type: assign
+              op_version: 1
+              body:
+                remove: ["bob"]
+                add: ["charlie"]
+            expect: accept
+
+  - name: refs/writ/fedcba9876543210/review
+    history:
+      - commits:
+          - id: bob-concurrent-assign
+            parents: [alice-create]
+            author: bob
+            timestamp: 2026-01-01T00:02:00Z
+            op:
+              object_id: r-assign
+              object_type: review
+              op_type: assign
+              op_version: 1
+              body:
+                remove: ["charlie"]
+                add: ["david"]
+            expect: accept

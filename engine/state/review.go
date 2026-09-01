@@ -21,9 +21,18 @@ func FoldReview(ops []codec.Op) (Review, error) {
 		return Review{}, err
 	}
 
+	reach := fold.BuildReachability(orderedOps)
+
 	var state Review
 	var revisions []Revision
 	var unknownOps []UnknownOp
+
+	type orSetRecord struct {
+		opID string
+		item string
+	}
+	var assignAdds []orSetRecord
+	var assignRemoves []orSetRecord
 
 	type approvalKey struct {
 		subject  string
@@ -76,6 +85,26 @@ func FoldReview(ops []codec.Op) (Review, error) {
 			}
 			if r, ok := body["reason"].(string); ok {
 				state.Reason = r
+			}
+
+		case "assign":
+			if addRaw, ok := body["add"].([]any); ok {
+				for _, it := range addRaw {
+					assignAdds = append(assignAdds, orSetRecord{opID: op.ID, item: fmt.Sprint(it)})
+				}
+			} else if addRaw, ok := body["add"].([]string); ok {
+				for _, it := range addRaw {
+					assignAdds = append(assignAdds, orSetRecord{opID: op.ID, item: it})
+				}
+			}
+			if remRaw, ok := body["remove"].([]any); ok {
+				for _, it := range remRaw {
+					assignRemoves = append(assignRemoves, orSetRecord{opID: op.ID, item: fmt.Sprint(it)})
+				}
+			} else if remRaw, ok := body["remove"].([]string); ok {
+				for _, it := range remRaw {
+					assignRemoves = append(assignRemoves, orSetRecord{opID: op.ID, item: it})
+				}
 			}
 
 		case "revision":
@@ -152,6 +181,27 @@ func FoldReview(ops []codec.Op) (Review, error) {
 	state.Revisions = revisions
 	state.UnknownOps = unknownOps
 
+	// Assignees OR-set: add-wins over causal removes, emitted sorted
+	assignPresent := make(map[string]bool)
+	for _, add := range assignAdds {
+		removed := false
+		for _, rem := range assignRemoves {
+			if rem.item == add.item && reach.IsAncestor(add.opID, rem.opID) {
+				removed = true
+				break
+			}
+		}
+		if !removed {
+			assignPresent[add.item] = true
+		}
+	}
+	var assignees []string
+	for k := range assignPresent {
+		assignees = append(assignees, k)
+	}
+	sort.Strings(assignees)
+	state.Assignees = assignees
+
 	// Approvals: omit entries whose folded verdict is "none" or empty.
 	// Sort deterministically by (subject, revision).
 	var approvals []Approval
@@ -196,6 +246,8 @@ func ReviewRules() []Rule {
 		{OpType: "set-status", OpVersion: 1, Field: "status", Strategy: "lww"},
 		{OpType: "set-status", OpVersion: 1, Field: "merge_commit", Strategy: "lww"},
 		{OpType: "set-status", OpVersion: 1, Field: "reason", Strategy: "lww"},
+		{OpType: "assign", OpVersion: 1, Field: "add", Strategy: "set-observed-remove"},
+		{OpType: "assign", OpVersion: 1, Field: "remove", Strategy: "set-observed-remove"},
 		{OpType: "approval", OpVersion: 1, Field: "revision", Strategy: "keyed-lww", Key: []string{"subject", "revision"}},
 		{OpType: "approval", OpVersion: 1, Field: "verdict", Strategy: "keyed-lww", Key: []string{"subject", "revision"}},
 		{OpType: "approval", OpVersion: 1, Field: "subject", Strategy: "keyed-lww", Key: []string{"subject", "revision"}},

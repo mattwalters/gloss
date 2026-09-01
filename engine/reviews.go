@@ -272,6 +272,63 @@ func (r *Reviews) SetStatus(ctx context.Context, id string, status ReviewStatus)
 	return nil
 }
 
+// Assign adds and/or removes assignees (requested reviewers) on a review.
+func (r *Reviews) Assign(ctx context.Context, id string, add, remove []string) error {
+	if r == nil || r.store == nil {
+		return fmt.Errorf("writ: store is nil")
+	}
+	if err := r.store.ensureWritable(); err != nil {
+		return err
+	}
+	if id == "" {
+		return fmt.Errorf("writ: review id cannot be empty")
+	}
+	if len(add) == 0 && len(remove) == 0 {
+		return fmt.Errorf("writ: add or remove must be non-empty")
+	}
+
+	if err := r.store.maybeAutoRefresh(ctx); err != nil {
+		return fmt.Errorf("writ: auto refresh: %w", err)
+	}
+
+	if _, err := r.store.projection.Review(id); err != nil {
+		return err
+	}
+
+	frontier, err := r.store.projection.Frontier(id)
+	if err != nil {
+		return fmt.Errorf("writ: get frontier: %w", err)
+	}
+
+	body := make(map[string]any)
+	if len(add) > 0 {
+		body["add"] = add
+	}
+	if len(remove) > 0 {
+		body["remove"] = remove
+	}
+
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("writ: marshal assign body: %w", err)
+	}
+
+	env := codec.Envelope{
+		ObjectID:   id,
+		ObjectType: "review",
+		OpType:     "assign",
+		OpVersion:  1,
+		Body:       bodyBytes,
+	}
+
+	if _, err := r.store.dagStore.Append(ctx, env, frontier); err != nil {
+		return fmt.Errorf("writ: assign review: %w", err)
+	}
+
+	_ = r.store.maybeAutoRefresh(ctx)
+	return nil
+}
+
 // Comment appends a new comment collaborative object attached to the review.
 func (r *Reviews) Comment(ctx context.Context, id string, c NewComment) (string, error) {
 	if r == nil || r.store == nil {

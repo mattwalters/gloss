@@ -107,6 +107,13 @@ func (d *DB) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 		}
 	}
 
+	if len(f.Assignee) > 0 {
+		sb.WriteString(" AND EXISTS (SELECT 1 FROM review_assignees ra WHERE ra.review_object_id = r.object_id AND ra.assignee IN (" + placeholders(len(f.Assignee)) + "))")
+		for _, a := range f.Assignee {
+			args = append(args, a)
+		}
+	}
+
 	if f.Text != "" {
 		sb.WriteString(" AND (r.title LIKE ? ESCAPE '\\' OR r.description LIKE ? ESCAPE '\\')")
 		escaped := "%" + escapeLike(f.Text) + "%"
@@ -189,6 +196,22 @@ func (d *DB) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 	}
 	revRows.Close()
 
+	// Batch load assignees
+	assigneesMap := make(map[string][]string)
+	asRows, err := d.queryIn("SELECT review_object_id, assignee FROM review_assignees WHERE review_object_id IN (?) ORDER BY review_object_id ASC, assignee ASC", objectIDs)
+	if err != nil {
+		return nil, fmt.Errorf("projection: query review assignees: %w", err)
+	}
+	for asRows.Next() {
+		var objID, assignee string
+		if err := asRows.Scan(&objID, &assignee); err != nil {
+			asRows.Close()
+			return nil, fmt.Errorf("projection: scan review assignee: %w", err)
+		}
+		assigneesMap[objID] = append(assigneesMap[objID], assignee)
+	}
+	asRows.Close()
+
 	// Batch load approvals
 	approvalsMap := make(map[string][]state.Approval)
 	appRows, err := d.queryIn("SELECT review_object_id, subject, revision, verdict, message FROM approvals WHERE review_object_id IN (?) ORDER BY review_object_id ASC, subject ASC, revision ASC", objectIDs)
@@ -264,6 +287,7 @@ func (d *DB) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 			Status:      rr.status,
 			MergeCommit: rr.mergeCommit,
 			Reason:      rr.reason,
+			Assignees:   assigneesMap[rr.objectID],
 			Revisions:   revisionsMap[rr.objectID],
 			Approvals:   approvalsMap[rr.objectID],
 			CIStatuses:  ciMap[rr.objectID],
@@ -1124,6 +1148,23 @@ func (d *DB) Review(objectID string) (ReviewResult, error) {
 		return ReviewResult{}, fmt.Errorf("projection: iterate review revisions: %w", err)
 	}
 
+	var assignees []string
+	asRows, err := d.db.Query("SELECT assignee FROM review_assignees WHERE review_object_id = ? ORDER BY assignee ASC", objectID)
+	if err != nil {
+		return ReviewResult{}, fmt.Errorf("projection: query review assignees: %w", err)
+	}
+	defer asRows.Close()
+	for asRows.Next() {
+		var assignee string
+		if err := asRows.Scan(&assignee); err != nil {
+			return ReviewResult{}, fmt.Errorf("projection: scan review assignee: %w", err)
+		}
+		assignees = append(assignees, assignee)
+	}
+	if err := asRows.Err(); err != nil {
+		return ReviewResult{}, fmt.Errorf("projection: iterate review assignees: %w", err)
+	}
+
 	var approvals []state.Approval
 	appRows, err := d.db.Query("SELECT subject, revision, verdict, message FROM approvals WHERE review_object_id = ? ORDER BY subject ASC, revision ASC", objectID)
 	if err != nil {
@@ -1205,6 +1246,7 @@ func (d *DB) Review(objectID string) (ReviewResult, error) {
 			Status:      rr.status,
 			MergeCommit: rr.mergeCommit,
 			Reason:      rr.reason,
+			Assignees:   assignees,
 			Revisions:   revisions,
 			Approvals:   approvals,
 			CIStatuses:  ciStatuses,

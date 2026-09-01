@@ -378,5 +378,75 @@ func TestReviewsValidationAndNotFound(t *testing.T) {
 	if err := s.Comments.Resolve(ctx, missingID, writ.CommentResolve{Resolved: true}); !errors.Is(err, writ.ErrNotFound) {
 		t.Errorf("expected ErrNotFound for Resolve on missing comment, got %v", err)
 	}
+	if err := s.Reviews.Assign(ctx, missingID, []string{"alice"}, nil); !errors.Is(err, writ.ErrNotFound) {
+		t.Errorf("expected ErrNotFound for Assign on missing review, got %v", err)
+	}
 }
+
+func TestReviewsAssign(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+
+	// 1. Create review
+	reviewID, err := s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Assignee Test Review",
+	})
+	if err != nil {
+		t.Fatalf("Create review failed: %v", err)
+	}
+
+	// 2. Assign alice and bob
+	if err := s.Reviews.Assign(ctx, reviewID, []string{"alice", "bob"}, nil); err != nil {
+		t.Fatalf("Assign failed: %v", err)
+	}
+
+	res, err := s.Query.Review(reviewID)
+	if err != nil {
+		t.Fatalf("Query.Review failed: %v", err)
+	}
+	if !reflect.DeepEqual(res.Review.Assignees, []string{"alice", "bob"}) {
+		t.Fatalf("expected assignees [alice, bob], got %v", res.Review.Assignees)
+	}
+
+	// 3. Remove bob, add charlie
+	if err := s.Reviews.Assign(ctx, reviewID, []string{"charlie"}, []string{"bob"}); err != nil {
+		t.Fatalf("Assign update failed: %v", err)
+	}
+
+	res, err = s.Query.Review(reviewID)
+	if err != nil {
+		t.Fatalf("Query.Review failed: %v", err)
+	}
+	if !reflect.DeepEqual(res.Review.Assignees, []string{"alice", "charlie"}) {
+		t.Fatalf("expected assignees [alice, charlie], got %v", res.Review.Assignees)
+	}
+
+	// 4. Query reviews with Assignee filter
+	aliceReviews, err := s.Query.Reviews(writ.ReviewFilter{
+		Assignee: []string{"alice"},
+	})
+	if err != nil {
+		t.Fatalf("Query.Reviews with assignee filter failed: %v", err)
+	}
+	if len(aliceReviews) != 1 || aliceReviews[0].ObjectID != reviewID {
+		t.Fatalf("expected reviewID in alice reviews, got %v", aliceReviews)
+	}
+
+	bobReviews, err := s.Query.Reviews(writ.ReviewFilter{
+		Assignee: []string{"bob"},
+	})
+	if err != nil {
+		t.Fatalf("Query.Reviews with bob filter failed: %v", err)
+	}
+	if len(bobReviews) != 0 {
+		t.Fatalf("expected 0 reviews for removed assignee bob, got %v", bobReviews)
+	}
+}
+
 

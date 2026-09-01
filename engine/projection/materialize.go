@@ -74,6 +74,16 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 			}
 		}
 
+		for _, a := range review.Assignees {
+			_, err = tx.Exec(
+				"INSERT INTO review_assignees (review_object_id, assignee) VALUES (?, ?)",
+				objectID, a,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert review assignee %s (%s): %w", objectID, a, err)
+			}
+		}
+
 		for _, app := range review.Approvals {
 			_, err = tx.Exec(
 				"INSERT INTO approvals (review_object_id, subject, revision, verdict, message) VALUES (?, ?, ?, ?, ?)",
@@ -351,6 +361,7 @@ func deleteObjectState(tx *sql.Tx, objectID string) error {
 		"DELETE FROM unknown_ops WHERE object_id = ?",
 		"DELETE FROM reviews WHERE object_id = ?",
 		"DELETE FROM review_revisions WHERE review_object_id = ?",
+		"DELETE FROM review_assignees WHERE review_object_id = ?",
 		"DELETE FROM approvals WHERE review_object_id = ?",
 		"DELETE FROM ci_statuses WHERE review_object_id = ?",
 		"DELETE FROM comments WHERE object_id = ?",

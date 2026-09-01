@@ -352,18 +352,40 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 				}
 				for _, r := range frs {
 					if opMatchesRule(op, r) {
-						if raw, present := op.Body[fieldName]; present {
-							hasOps = true
-							if bodyMap, ok := raw.(map[string]any); ok {
-								if addRaw, ok := bodyMap["add"].([]any); ok {
-									for _, it := range addRaw {
-										adds = append(adds, addRecord{opID: op.ID, item: fmt.Sprint(it)})
-									}
+						var addRaw, remRaw any
+						if bodyMap, ok := op.Body[fieldName].(map[string]any); ok {
+							addRaw = bodyMap["add"]
+							remRaw = bodyMap["remove"]
+						} else {
+							if raw, ok := op.Body[fieldName]; ok && raw != nil {
+								if fieldName == "add" {
+									addRaw = raw
+									remRaw = op.Body["remove"]
+								} else if fieldName == "remove" {
+									remRaw = raw
+									addRaw = op.Body["add"]
 								}
-								if remRaw, ok := bodyMap["remove"].([]any); ok {
-									for _, it := range remRaw {
-										removes = append(removes, removeRecord{opID: op.ID, item: fmt.Sprint(it)})
-									}
+							}
+						}
+
+						if addRaw != nil || remRaw != nil {
+							hasOps = true
+							if slice, ok := addRaw.([]any); ok {
+								for _, it := range slice {
+									adds = append(adds, addRecord{opID: op.ID, item: fmt.Sprint(it)})
+								}
+							} else if slice, ok := addRaw.([]string); ok {
+								for _, it := range slice {
+									adds = append(adds, addRecord{opID: op.ID, item: it})
+								}
+							}
+							if slice, ok := remRaw.([]any); ok {
+								for _, it := range slice {
+									removes = append(removes, removeRecord{opID: op.ID, item: fmt.Sprint(it)})
+								}
+							} else if slice, ok := remRaw.([]string); ok {
+								for _, it := range slice {
+									removes = append(removes, removeRecord{opID: op.ID, item: it})
 								}
 							}
 						}
@@ -385,7 +407,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 						presentSet[add.item] = true
 					}
 				}
-				var result []string
+				result := make([]string, 0, len(presentSet))
 				for k := range presentSet {
 					result = append(result, k)
 				}

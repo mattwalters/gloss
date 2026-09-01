@@ -37,11 +37,14 @@ func setupSeededDB(t *testing.T) *projection.DB {
 		"rev-1", "Fix 100% CPU in loop_worker", "Resolves high CPU usage during batching", "open", "", "")
 	execSQL(t, rawDB, "INSERT INTO review_revisions (review_object_id, revision_index, base, head) VALUES (?, ?, ?, ?)",
 		"rev-1", 0, "base-1", "head-1")
+	execSQL(t, rawDB, "INSERT INTO review_assignees (review_object_id, assignee) VALUES (?, ?)", "rev-1", "alice")
+	execSQL(t, rawDB, "INSERT INTO review_assignees (review_object_id, assignee) VALUES (?, ?)", "rev-1", "bob")
 	execSQL(t, rawDB, "INSERT INTO approvals (review_object_id, subject, revision, verdict, message) VALUES (?, ?, ?, ?, ?)",
 		"rev-1", "bob@example.com", "head-1", "approved", "LGTM")
 
 	execSQL(t, rawDB, "INSERT INTO reviews (object_id, title, description, status, merge_commit, reason) VALUES (?, ?, ?, ?, ?, ?)",
 		"rev-2", "Add feature foo_bar", "Implements foo_bar integration", "merged", "merge-sha-2", "")
+	execSQL(t, rawDB, "INSERT INTO review_assignees (review_object_id, assignee) VALUES (?, ?)", "rev-2", "bob")
 	execSQL(t, rawDB, "INSERT INTO reviews (object_id, title, description, status, merge_commit, reason) VALUES (?, ?, ?, ?, ?, ?)",
 		"rev-3", "Refactor storage layer", "Clean up legacy drivers", "closed", "", "abandoned")
 
@@ -161,6 +164,16 @@ func TestReviewsFilter(t *testing.T) {
 			name:    "filter text with literal underscore wildcard escaping",
 			filter:  projection.ReviewFilter{Text: "foo_bar"},
 			wantIDs: []string{"rev-2"},
+		},
+		{
+			name:    "filter by single assignee",
+			filter:  projection.ReviewFilter{Assignee: []string{"alice"}},
+			wantIDs: []string{"rev-1"},
+		},
+		{
+			name:    "filter by assignee matching multiple reviews",
+			filter:  projection.ReviewFilter{Assignee: []string{"bob"}},
+			wantIDs: []string{"rev-1", "rev-2"},
 		},
 		{
 			name:    "filter text no match",

@@ -1,4 +1,4 @@
-# Review Operations — review, approval, ci-status (v1)
+# Review Operations — review, revision, assign, approval, ci-status (v1)
 
 Status: **normative**. Schema: [`schemas/review-ops.schema.json`](schemas/review-ops.schema.json).
 Vectors: [`testdata/review-ops/`](testdata/review-ops/).
@@ -6,8 +6,9 @@ Field rules: [`testdata/review-ops/field-rules.json`](testdata/review-ops/field-
 
 This document defines the operation vocabulary, payload schemas, and fold
 semantics for code reviews in Writ (`object_type: "review"`). It covers
-review creation, revision pushes, status transitions, approvals and review
-votes, and CI status attachments (ARCHITECTURE.md §Object types).
+review creation, revision pushes, status transitions, assignments (requested
+reviewers), approvals and review votes, and CI status attachments
+(ARCHITECTURE.md §Object types).
 
 The key words MUST, MUST NOT, SHOULD, and MAY are to be interpreted as
 described in RFC 2119.
@@ -15,32 +16,53 @@ described in RFC 2119.
 ## Scope & Object Model
 
 A code review is represented in Writ as a single collaborative object with
-`object_type: "review"`. Approvals, change requests, and CI status reports
-are operations that fold directly into fields of the `review` object rather
-than standalone collaborative objects.
+`object_type: "review"`. Approvals, change requests, assignments, and CI status
+reports are operations that fold directly into fields of the `review` object
+rather than standalone collaborative objects.
 
-### Decision: what is an object, and what is an op
+### Decisions behind the vocabulary
 
-ARCHITECTURE.md §Object types originally sketched `approval` and `ci-status`
-alongside `review` and `comment` as repo-scoped object types. Under the
-per-writer chain-ref layout (ARCHITECTURE.md §Ref layout, WRIT-7), object
-membership is determined by the payload's `object_id`. If approvals and CI
-statuses were standalone objects, each approval and status would require its
-own object ID and a back-reference to the review, forcing readers to walk
-every writer's approval and status chains and build secondary join indices
-just to materialize a single review.
-
-Comments justify separate object status (WRIT-9) because they carry rich
-text bodies, multi-turn threading, position edits, and are the primary volume
-driver in code reviews. A vote or a CI check status does not: an approval is
-a small vote record scoped to `(subject, revision)`, and a CI status is a
-status record scoped to `(revision, name)`.
-
-Therefore, `review` is the single collaborative object type defined in this
-specification. Approvals and CI statuses are operations on the review object
-that fold into the materialized `Review` state (`Review{status, revisions,
-approvals, ci_statuses}`), matching the reducer signature established in
-ARCHITECTURE.md §The six machines.
+- **Decision: what is an object, and what is an op:**
+  ARCHITECTURE.md §Object types originally sketched `approval` and `ci-status`
+  alongside `review` and `comment` as repo-scoped object types. Under the
+  per-writer chain-ref layout (ARCHITECTURE.md §Ref layout, WRIT-7), object
+  membership is determined by the payload's `object_id`. If approvals and CI
+  statuses were standalone objects, each approval and status would require its
+  own object ID and a back-reference to the review, forcing readers to walk
+  every writer's approval and status chains and build secondary join indices
+  just to materialize a single review.
+  Comments justify separate object status (WRIT-9) because they carry rich
+  text bodies, multi-turn threading, position edits, and are the primary volume
+  driver in code reviews. A vote, assignment, or CI check status does not: an
+  approval is a small vote record scoped to `(subject, revision)`, an assignment
+  is an add-wins set mutation, and a CI status is a status record scoped to
+  `(revision, name)`.
+  Therefore, `review` is the single collaborative object type defined in this
+  specification. Assignments, approvals, and CI statuses are operations on the
+  review object that fold into the materialized `Review` state (`Review{title,
+  description, status, merge_commit, reason, assignees, revisions, approvals,
+  ci_statuses}`), matching the reducer signature established in ARCHITECTURE.md
+  §The six machines.
+- **Requested reviewer vs. Assignee:**
+  GitHub maintains separate lists for `assignees` (who owns the PR) and
+  `requested_reviewers` (who was asked to review); Gerrit has `reviewers` and
+  `CC`. In Writ, reviews define a single unified `assignees` list via the
+  `assign` op. One unified list is simpler, eliminates ambiguity about who is
+  expected to act, mirrors the `issue` object model symmetrically (`object_type:
+  "issue"`), and allows clients, bridges, and UI components to share routing
+  and assignment logic across object types.
+- **`assign` is an add-wins OR-set (`set-observed-remove`):**
+  Concurrent assignment on one device and removal on another is reconciled
+  via `set-observed-remove` (WRIT-12, `spec/fold.md`). Additions win over
+  concurrent removals. Assignee values are opaque non-empty strings (e.g.
+  usernames or email addresses).
+- **Interaction with `approval`:**
+  Approving a review does **not** automatically clear the assignment or request.
+  The assignment is a historical fact about who was asked to review, while an
+  approval is a fact about what evaluation occurred. Collapsing or automatically
+  clearing assignments upon approval destroys history in an append-only log
+  designed to preserve historical fidelity. Explicit removals (`"remove": [...]`)
+  are required to unassign a reviewer.
 
 ### Scope boundaries
 
@@ -75,7 +97,7 @@ uniform length, matching the repository's single object format.
 
 ## Operation Vocabulary
 
-The review family defines six operation types for `op_version: 1`:
+The review family defines seven operation types for `op_version: 1`:
 
 | `op_type` | Body Schema | Description |
 | --- | --- | --- |
@@ -83,6 +105,7 @@ The review family defines six operation types for `op_version: 1`:
 | `revision` | `{"base": oid, "head": oid}` | Code revision push (base and head commits). |
 | `update` | `{"title"?: string, "description"?: string}` | Metadata edits (title, description). |
 | `set-status` | `{"status": enum, "merge_commit"?: oid, "reason"?: string}` | Status transitions (`draft`, `open`, `closed`, `merged`). |
+| `assign` | `{"add"?: [string], "remove"?: [string]}` | Add or remove review assignees (requested reviewers). |
 | `approval` | `{"revision": oid, "verdict": enum, "subject"?: string, "message"?: string}` | Review vote (`approve`, `request-changes`, `none`). |
 | `ci-status` | `{"revision": oid, "name": string, "state": enum, "url"?: string, "description"?: string, "started_at"?: timestamp, "completed_at"?: timestamp, "external_id"?: string}` | CI check result on a revision head. |
 
@@ -210,7 +233,30 @@ transition out of `"merged"` (e.g. transitioning `merged` $\to$ `open`).
 Readers MUST NOT reject such operations if encountered, ensuring fold
 determinism and forward tolerance without non-lattice joins.
 
-### 5. `approval`
+### 5. `assign`
+
+Adds or removes assignees (requested reviewers) for the review.
+
+```jsonc
+{
+  "object_id": "r-7f3a",
+  "object_type": "review",
+  "op_type": "assign",
+  "op_version": 1,
+  "body": {
+    "add": ["alice", "bob"],
+    "remove": ["charlie"]
+  }
+}
+```
+
+- `add` (array of non-empty strings, optional): Assignee / requested reviewer identifiers to add.
+- `remove` (array of non-empty strings, optional): Assignee / requested reviewer identifiers to remove.
+
+At least one of `add` or `remove` MUST be present and contain at least one item.
+An empty `{}` body or empty arrays (`"add": []`) are invalid.
+
+### 6. `approval`
 
 Records a review verdict (approval, change request, or dismissal) for a
 specific revision head.
@@ -256,7 +302,7 @@ authorized — belong to the coordination service or client application
 event capture without imposing an enforcement mechanism it cannot verify
 offline.
 
-### 6. `ci-status`
+### 7. `ci-status`
 
 Attaches a continuous integration or automated check result to a revision
 head.
@@ -299,6 +345,8 @@ Every body property defined in this vocabulary is mapped to one merge strategy
 from WRIT-12's closed catalogue. A machine-readable copy of these rules is
 published in `spec/testdata/review-ops/field-rules.json`.
 
+Folded review state is `Review{title, description, status, merge_commit, reason, assignees, revisions, approvals, ci_statuses}`.
+
 Per WRIT-12, **any field without a declared strategy is not merged**; it is
 treated as unknown data, preserved in the DAG, and ignored during fold.
 
@@ -313,6 +361,8 @@ treated as unknown data, preserved in the DAG, and ignored during fold.
 | `set-status` | `status` | `lww` | Last writer wins |
 | `set-status` | `merge_commit` | `lww` | Last writer wins |
 | `set-status` | `reason` | `lww` | Last writer wins |
+| `assign` | `add` | `set-observed-remove` | Add-wins OR-set over assignee strings |
+| `assign` | `remove` | `set-observed-remove` | Add-wins OR-set over assignee strings |
 | `approval` | `revision` | `keyed-lww` | Scoped by key `[subject, revision]` |
 | `approval` | `verdict` | `keyed-lww` | Scoped by key `[subject, revision]`; `"none"` retracts verdict |
 | `approval` | `subject` | `keyed-lww` | Scoped by key `[subject, revision]` |
@@ -357,7 +407,7 @@ representable in Writ.
 
 The conversion vectors under [`testdata/review-ops/github/`](testdata/review-ops/github/)
 demonstrate this mapping for opened PRs, force-pushes (`synchronize`), reviews,
-dismissals, check runs, commit statuses, and merges.
+dismissals, check runs, commit statuses, requested reviewers, and merges.
 
 ### 1. Pull Request Payload Mapping
 
@@ -372,7 +422,8 @@ dismissals, check runs, commit statuses, and merges.
 | `created_at`, `updated_at`, `closed_at`, `merged_at` | Op commit author timestamps on respective ops |
 | `number`, `id`, `node_id` | External metadata / workspace-global ID mapping (WRIT-16) |
 | `comments`, `review_comments` | Separate `comment` objects (WRIT-9) referencing `object_id` |
-| `assignees`, `labels`, `milestone` | Workspace metadata / issue links (WRIT-10, WRIT-11) |
+| `assignees`, `requested_reviewers` (added / removed) | `assign.add` / `assign.remove` (`set-observed-remove`) |
+| `labels`, `milestone` | Workspace metadata / issue links (WRIT-10, WRIT-11) |
 | `mergeable`, `rebaseable` | Derived state computed from git trees by client/projection |
 
 ### 2. Pull Request Review Payload Mapping
@@ -406,3 +457,4 @@ dismissals, check runs, commit statuses, and merges.
 | `completed_at` | `ci-status.completed_at` |
 | `id` / `external_id` | `ci-status.external_id` |
 | `head_sha` / `sha` | `ci-status.revision` |
+

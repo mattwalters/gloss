@@ -94,5 +94,15 @@
     "rejects": "canonicalization",
     "category": "not-canonical",
     "reason": "keys are not sorted canonically"
+  },
+  {
+    "file": "assign-empty-body.json",
+    "rejects": "schema",
+    "reason": "assign body must provide at least add or remove"
+  },
+  {
+    "file": "assign-empty-add-array.json",
+    "rejects": "schema",
+    "reason": "add array must contain at least 1 item"
   }
 ]

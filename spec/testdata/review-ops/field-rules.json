@@ -54,6 +54,18 @@
     "strategy": "lww"
   },
   {
+    "op_type": "assign",
+    "op_version": 1,
+    "field": "add",
+    "strategy": "set-observed-remove"
+  },
+  {
+    "op_type": "assign",
+    "op_version": 1,
+    "field": "remove",
+    "strategy": "set-observed-remove"
+  },
+  {
     "op_type": "approval",
     "op_version": 1,
     "field": "revision",

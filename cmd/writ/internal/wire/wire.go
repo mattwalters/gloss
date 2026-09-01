@@ -93,6 +93,7 @@ type Review struct {
 	Author      Author      `json:"author"`
 	CreatedAt   time.Time   `json:"created_at"`
 	UpdatedAt   time.Time   `json:"updated_at"`
+	Assignees   []string    `json:"assignees"`
 	Revisions   []Revision  `json:"revisions"`
 	Approvals   []Approval  `json:"approvals"`
 	CIStatuses  []CIStatus  `json:"ci_statuses"`
@@ -294,6 +295,10 @@ func FromReviewResult(r writ.ReviewResult) Review {
 			OpVersion: u.OpVersion,
 		}
 	}
+	assignees := r.Review.Assignees
+	if assignees == nil {
+		assignees = []string{}
+	}
 
 	return Review{
 		ObjectID:    r.ObjectID,
@@ -305,6 +310,7 @@ func FromReviewResult(r writ.ReviewResult) Review {
 		Author:      Author{Name: r.Author.Name, Email: r.Author.Email},
 		CreatedAt:   r.CreatedAt.UTC(),
 		UpdatedAt:   r.UpdatedAt.UTC(),
+		Assignees:   assignees,
 		Revisions:   revisions,
 		Approvals:   approvals,
 		CIStatuses:  ciStatuses,

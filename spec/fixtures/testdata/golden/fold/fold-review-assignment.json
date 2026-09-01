@@ -1,0 +1,42 @@
+{
+  "objects": [
+    {
+      "object_id": "r-assign",
+      "object_type": "review",
+      "total_order": [
+        {
+          "commit": "bb0431b16cc476ef7ad95bcdf0e2291c11f8b736",
+          "label": "alice-create",
+          "t_star": 1767225600
+        },
+        {
+          "commit": "612866f32a988f2080b04b9da1a6abfdc0ef9828",
+          "label": "alice-assign-initial",
+          "t_star": 1767225660
+        },
+        {
+          "commit": "f0ea3efba18569aaa0ba38e5e70bb992cae9808f",
+          "label": "bob-concurrent-assign",
+          "t_star": 1767225720
+        },
+        {
+          "commit": "306fde0f90660e23730167a81657f8e157cdbedb",
+          "label": "alice-reassign",
+          "t_star": 1767225780
+        }
+      ],
+      "state": {
+        "add": [
+          "alice",
+          "charlie",
+          "david"
+        ],
+        "remove": [
+          "charlie",
+          "david"
+        ],
+        "title": "Review Assignment Test"
+      }
+    }
+  ]
+}

@@ -14,8 +14,8 @@ func TestOpenCloseMemory(t *testing.T) {
 	}
 	defer db.Close()
 
-	if v := projection.SchemaVersion(); v != 4 {
-		t.Fatalf("expected schema version 4, got %d", v)
+	if v := projection.SchemaVersion(); v != 5 {
+		t.Fatalf("expected schema version 5, got %d", v)
 	}
 
 	var version string
@@ -23,8 +23,8 @@ func TestOpenCloseMemory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query schema_version failed: %v", err)
 	}
-	if version != "4" {
-		t.Fatalf("expected stored schema_version '4', got %q", version)
+	if version != "5" {
+		t.Fatalf("expected stored schema_version '5', got %q", version)
 	}
 }
 
@@ -51,7 +51,7 @@ func TestSchemaVersionMismatchRecreates(t *testing.T) {
 	}
 	_ = db.Close()
 
-	// 2. Re-open: should detect mismatch, drop tables, and recreate with schema_version 4
+	// 2. Re-open: should detect mismatch, drop tables, and recreate with schema_version 5
 	db2, err := projection.Open(dbPath)
 	if err != nil {
 		t.Fatalf("re-open after mismatch failed: %v", err)
@@ -63,8 +63,8 @@ func TestSchemaVersionMismatchRecreates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query schema_version failed: %v", err)
 	}
-	if version != "4" {
-		t.Fatalf("expected recreated schema_version '4', got %q", version)
+	if version != "5" {
+		t.Fatalf("expected recreated schema_version '5', got %q", version)
 	}
 
 	// The dummy object must no longer exist (tables recreated)

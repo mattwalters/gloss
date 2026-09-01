@@ -577,3 +577,74 @@ func TestFoldReviewAgreement(t *testing.T) {
 		t.Errorf("unexpected active ci status: %+v", reviewState.CIStatuses[0])
 	}
 }
+
+func TestFoldReviewAssign(t *testing.T) {
+	now := time.Unix(100, 0).UTC()
+
+	// Initial create
+	op1 := codec.Op{
+		ID: "op1",
+		Envelope: codec.Envelope{
+			ObjectID:   "r-assign",
+			ObjectType: "review",
+			OpType:     "create",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"title":"Review with Assignees"}`),
+		},
+		Author: codec.Identity{Email: "alice@example.com", When: now},
+	}
+
+	// Assign alice and bob
+	op2 := codec.Op{
+		ID:      "op2",
+		Parents: []string{"op1"},
+		Envelope: codec.Envelope{
+			ObjectID:   "r-assign",
+			ObjectType: "review",
+			OpType:     "assign",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"add":["alice","bob"]}`),
+		},
+		Author: codec.Identity{Email: "alice@example.com", When: now.Add(time.Minute)},
+	}
+
+	// Causal remove bob, add charlie
+	op3 := codec.Op{
+		ID:      "op3",
+		Parents: []string{"op2"},
+		Envelope: codec.Envelope{
+			ObjectID:   "r-assign",
+			ObjectType: "review",
+			OpType:     "assign",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"remove":["bob"],"add":["charlie"]}`),
+		},
+		Author: codec.Identity{Email: "alice@example.com", When: now.Add(2 * time.Minute)},
+	}
+
+	// Concurrent op removing charlie from op1 (before charlie was added in op3)
+	op4 := codec.Op{
+		ID:      "op4",
+		Parents: []string{"op1"},
+		Envelope: codec.Envelope{
+			ObjectID:   "r-assign",
+			ObjectType: "review",
+			OpType:     "assign",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"remove":["charlie"]}`),
+		},
+		Author: codec.Identity{Email: "bob@example.com", When: now.Add(3 * time.Minute)},
+	}
+
+	state, err := s.FoldReview([]codec.Op{op1, op2, op3, op4})
+	if err != nil {
+		t.Fatalf("FoldReview failed: %v", err)
+	}
+
+	// Alice and Charlie should be present (charlie add in op3 wins over concurrent remove in op4; bob removed causally)
+	wantAssignees := []string{"alice", "charlie"}
+	if !reflect.DeepEqual(state.Assignees, wantAssignees) {
+		t.Fatalf("assignees mismatch: got %v, want %v", state.Assignees, wantAssignees)
+	}
+}
+
