@@ -125,6 +125,41 @@ article pre code {
   padding: 0;
 }
 
+/* Syntax highlighting (Chroma - Light / GitHub) */
+.chroma { color: var(--fg); }
+.chroma .c, .chroma .ch, .chroma .cm, .chroma .c1, .chroma .cs, .chroma .cp, .chroma .cpf { color: #57606a; }
+.chroma .k, .chroma .kc, .chroma .kd, .chroma .kn, .chroma .kp, .chroma .kr, .chroma .kt { color: #cf222e; }
+.chroma .na, .chroma .nc, .chroma .nx, .chroma .p { color: #1f2328; }
+.chroma .no, .chroma .nd, .chroma .nt, .chroma .m, .chroma .mb, .chroma .mf, .chroma .mh, .chroma .mi, .chroma .il, .chroma .mo, .chroma .o, .chroma .ow, .chroma .or { color: #0550ae; }
+.chroma .ni, .chroma .nb, .chroma .nf, .chroma .fm { color: #6639ba; }
+.chroma .nv, .chroma .vc, .chroma .vg, .chroma .vi, .chroma .vm { color: #953800; }
+.chroma .s, .chroma .sa, .chroma .sb, .chroma .sc, .chroma .dl, .chroma .sd, .chroma .s2, .chroma .se, .chroma .sh, .chroma .si, .chroma .sx, .chroma .sr, .chroma .s1 { color: #0a3069; }
+.chroma .ss { color: #032f62; }
+.chroma .bp { color: #6a737d; }
+.chroma .err { color: #82071e; }
+.chroma .gd { color: #82071e; background-color: #ffebe9; }
+.chroma .gi { color: #116329; background-color: #dafbe1; }
+.chroma .hl { background-color: #dedede; }
+
+/* Syntax highlighting (Chroma - Dark / GitHub Dark) */
+@media (prefers-color-scheme: dark) {
+  .chroma .c, .chroma .ch, .chroma .cm, .chroma .c1, .chroma .cs, .chroma .cp, .chroma .cpf { color: #8b949e; font-style: italic; }
+  .chroma .k, .chroma .kd, .chroma .kn, .chroma .kr, .chroma .kt, .chroma .nn, .chroma .o, .chroma .ow, .chroma .or, .chroma .gt { color: #ff7b72; }
+  .chroma .kc, .chroma .kp, .chroma .no, .chroma .nl, .chroma .py, .chroma .nv, .chroma .vc, .chroma .vg, .chroma .vi, .chroma .vm, .chroma .ld, .chroma .sa, .chroma .dl, .chroma .se, .chroma .sh, .chroma .sr, .chroma .gh, .chroma .gu { color: #79c0ff; }
+  .chroma .nc, .chroma .ni, .chroma .ne { color: #ffa657; font-weight: bold; }
+  .chroma .nd, .chroma .nf, .chroma .fm { color: #d2a8ff; font-weight: bold; }
+  .chroma .nx { color: #e6edf3; }
+  .chroma .nb { color: #d2a8ff; }
+  .chroma .bp { color: #8b949e; }
+  .chroma .nt { color: #7ee787; }
+  .chroma .l, .chroma .s, .chroma .sb, .chroma .sc, .chroma .sd, .chroma .s2, .chroma .si, .chroma .sx, .chroma .s1, .chroma .ss, .chroma .m, .chroma .mb, .chroma .mf, .chroma .mh, .chroma .mi, .chroma .il, .chroma .mo { color: #a5d6ff; }
+  .chroma .err, .chroma .gr { color: #f85149; }
+  .chroma .gd { color: #ffa198; background-color: #490202; }
+  .chroma .gi { color: #56d364; background-color: #0f5323; }
+  .chroma .hl { background-color: #6e7681; }
+  .chroma .w { color: #6e7681; }
+}
+
 article table {
   width: 100%;
   border-collapse: collapse;
