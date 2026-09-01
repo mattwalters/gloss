@@ -81,6 +81,9 @@ func convertCommentFold(cf fold.CommentFold) (Comment, error) {
 		}
 	}
 
+	// Actor is already normalized by the fold layer; normalizing again here is a
+	// no-op kept for defence in depth, matching how the issue and review reducers
+	// re-normalize their assignee and approval-subject person identifiers.
 	c := Comment{
 		Text:       cf.Text,
 		InReplyTo:  cf.InReplyTo,

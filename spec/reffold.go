@@ -280,6 +280,9 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 				for _, r := range frs {
 					if opMatchesRule(op, r) {
 						if val, present := op.Body[fieldName]; present && val != nil {
+							if s, ok := val.(string); ok && fieldName == "actor" && op.OpType == "resolve" {
+								val = strings.ToLower(strings.TrimSpace(s))
+							}
 							state[fieldName] = val
 						}
 					}

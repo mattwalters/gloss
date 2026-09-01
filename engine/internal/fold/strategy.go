@@ -53,8 +53,11 @@ func newLWWAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 	return &lwwAccumulator{field: rule.Field}, nil
 }
 
-func (a *lwwAccumulator) Apply(_ codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
+func (a *lwwAccumulator) Apply(op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	if val, ok := body[a.field]; ok && val != nil {
+		if s, ok := val.(string); ok && a.field == "actor" && op.OpType == "resolve" {
+			val = strings.ToLower(strings.TrimSpace(s))
+		}
 		a.val = val
 		a.hasVal = true
 	}
