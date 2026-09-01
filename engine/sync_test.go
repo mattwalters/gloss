@@ -2,6 +2,7 @@ package writ_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -163,3 +164,115 @@ func TestStoreSyncLifecycle(t *testing.T) {
 		t.Errorf("Alice unexpected approvals: %+v", resA2.Review.Approvals)
 	}
 }
+
+func TestStoreSync_PreReceiveHookFailureAndRetry(t *testing.T) {
+	bareDir, aliceDir, bobDir := setupSyncHarness(t)
+	ctx := context.Background()
+
+	// Install a failing pre-receive hook on bare remote
+	hooksDir := filepath.Join(bareDir, "hooks")
+	if err := os.MkdirAll(hooksDir, 0755); err != nil {
+		t.Fatalf("mkdir hooks: %v", err)
+	}
+	hookPath := filepath.Join(hooksDir, "pre-receive")
+	hookScript := "#!/bin/sh\necho \"pre-receive hook declined update\" >&2\nexit 1\n"
+	if err := os.WriteFile(hookPath, []byte(hookScript), 0755); err != nil {
+		t.Fatalf("write hook: %v", err)
+	}
+
+	sA, err := writ.Open(aliceDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open Alice failed: %v", err)
+	}
+	defer sA.Close()
+
+	// Alice creates a review
+	reviewID, err := sA.Reviews.Create(ctx, writ.NewReview{
+		Title: "Hook Failure Review",
+	})
+	if err != nil {
+		t.Fatalf("Alice create review: %v", err)
+	}
+
+	// Initial status shows 1 unsynced op
+	statusBefore, err := sA.SyncStatus(ctx, "origin")
+	if err != nil {
+		t.Fatalf("SyncStatus before: %v", err)
+	}
+	if statusBefore.Unsynced != 1 {
+		t.Fatalf("expected 1 unsynced before sync, got %d", statusBefore.Unsynced)
+	}
+
+	// Alice attempts to sync, which must fail due to the hook
+	syncRes, err := sA.Sync(ctx, "origin")
+	if err == nil {
+		t.Fatalf("expected Sync to fail with pre-receive hook, but got nil error")
+	}
+
+	var syncErr *writ.SyncError
+	if !errors.As(err, &syncErr) {
+		t.Fatalf("expected error to be *writ.SyncError, got %T: %v", err, err)
+	}
+	if syncErr.Kind != "rejected" {
+		t.Errorf("syncErr.Kind = %q, want %q", syncErr.Kind, "rejected")
+	}
+	if !errors.Is(err, writ.ErrRefRejected) {
+		t.Errorf("errors.Is(err, writ.ErrRefRejected) = false, want true")
+	}
+	if syncErr.Unsynced != 1 {
+		t.Errorf("syncErr.Unsynced = %d, want 1", syncErr.Unsynced)
+	}
+	if syncRes.Unsynced != 1 {
+		t.Errorf("syncRes.Unsynced = %d, want 1", syncRes.Unsynced)
+	}
+
+	// Status still truthfully reports 1 unsynced op and no ops lost
+	statusAfter, err := sA.SyncStatus(ctx, "origin")
+	if err != nil {
+		t.Fatalf("SyncStatus after failed sync: %v", err)
+	}
+	if statusAfter.Unsynced != 1 {
+		t.Errorf("statusAfter.Unsynced = %d, want 1", statusAfter.Unsynced)
+	}
+
+	// Remove hook to unblock remote
+	if err := os.Remove(hookPath); err != nil {
+		t.Fatalf("remove hook: %v", err)
+	}
+
+	// Retry sync — must succeed and push all surviving local ops
+	retryRes, err := sA.Sync(ctx, "origin")
+	if err != nil {
+		t.Fatalf("Sync retry failed: %v", err)
+	}
+	if retryRes.OpsPushed != 1 {
+		t.Errorf("retry OpsPushed = %d, want 1", retryRes.OpsPushed)
+	}
+	if retryRes.Unsynced != 0 {
+		t.Errorf("retry Unsynced = %d, want 0", retryRes.Unsynced)
+	}
+
+	// Bob syncs and verifies review landed intact
+	sB, err := writ.Open(bobDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open Bob failed: %v", err)
+	}
+	defer sB.Close()
+
+	syncResB, err := sB.Sync(ctx, "origin")
+	if err != nil {
+		t.Fatalf("Bob sync failed: %v", err)
+	}
+	if syncResB.OpsFetched != 1 {
+		t.Errorf("Bob OpsFetched = %d, want 1", syncResB.OpsFetched)
+	}
+
+	resB, err := sB.Query.Review(reviewID)
+	if err != nil {
+		t.Fatalf("Bob Query.Review failed: %v", err)
+	}
+	if resB.Review.Title != "Hook Failure Review" {
+		t.Errorf("Bob Review.Title = %q, want 'Hook Failure Review'", resB.Review.Title)
+	}
+}
+

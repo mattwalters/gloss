@@ -27,6 +27,15 @@ var (
 	// or could not be found.
 	ErrUnknownRemote = writsync.ErrUnknownRemote
 
+	// ErrAuth indicates that git remote authentication or credentials failed.
+	ErrAuth = writsync.ErrAuth
+
+	// ErrNetwork indicates that the git remote is unreachable over the network.
+	ErrNetwork = writsync.ErrNetwork
+
+	// ErrRefRejected indicates that the remote rejected one or more ref updates.
+	ErrRefRejected = writsync.ErrRefRejected
+
 	// ErrWorkspaceRemoteURLNotSupported is returned when writ.workspace is configured as a remote URL.
 	ErrWorkspaceRemoteURLNotSupported = errors.New("writ: remote-URL workspaces are not supported; writ.workspace must be a local path")
 

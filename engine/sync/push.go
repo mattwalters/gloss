@@ -54,6 +54,7 @@ type PushResult struct {
 // pushing only the local writer's namespace (refs/writ/<writer-id>/*).
 //
 // Push never uses --force; operations fast-forward by construction.
+// A non-nil *PushResult may be returned alongside a non-nil error if git exits nonzero after a partial push.
 func (c *Client) Push(ctx context.Context, remote string) (*PushResult, error) {
 	if remote == "" {
 		return nil, fmt.Errorf("sync: remote name cannot be empty")
@@ -72,28 +73,31 @@ func (c *Client) Push(ctx context.Context, remote string) (*PushResult, error) {
 		return nil, fmt.Errorf("sync: read chains before push: %w", err)
 	}
 
-	stdout, stderr, err := c.runGit(ctx, "push", "--porcelain", remote, refspec)
-	if err != nil {
-		return nil, c.classifyGitError(remote, []string{"push", "--porcelain", remote, refspec}, err, stderr, stdout)
-	}
+	stdout, stderr, runErr := c.runGit(ctx, "push", "--porcelain", remote, refspec)
 
 	pushedRefs := parsePushPorcelain(string(stdout))
 
 	after, err := dag.Chains(c.repo.Storer)
 	if err != nil {
-		return nil, fmt.Errorf("sync: read chains after push: %w", err)
+		after = before
 	}
 
 	updates := diffChains(before, after)
 
-	return &PushResult{
+	pushRes := &PushResult{
 		Remote:     remote,
 		Refspec:    refspec,
 		PushedRefs: pushedRefs,
 		Updates:    updates,
 		RawStdout:  string(stdout),
 		RawStderr:  string(stderr),
-	}, nil
+	}
+
+	if runErr != nil {
+		return pushRes, c.classifyGitError(remote, []string{"push", "--porcelain", remote, refspec}, runErr, stderr, stdout)
+	}
+
+	return pushRes, nil
 }
 
 // parsePushPorcelain parses the porcelain v1 output produced by git push --porcelain.

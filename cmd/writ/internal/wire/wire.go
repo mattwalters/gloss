@@ -5,6 +5,7 @@
 package wire
 
 import (
+	"errors"
 	"time"
 
 	"github.com/writtendev/writ/engine"
@@ -201,19 +202,29 @@ type CommentThread struct {
 	UnknownOps []UnknownOp     `json:"unknown_ops"`
 }
 
+// Failure represents structured error reporting for a failed sync operation.
+type Failure struct {
+	Kind      string `json:"kind"`
+	Message   string `json:"message"`
+	Advice    string `json:"advice,omitempty"`
+	Retryable bool   `json:"retryable"`
+}
+
 // SyncStatus reports synchronization status for a single remote.
 type SyncStatus struct {
-	Remote   string `json:"remote"`
-	Unsynced int    `json:"unsynced"`
+	Remote   string   `json:"remote"`
+	Unsynced int      `json:"unsynced"`
+	Failure  *Failure `json:"failure,omitempty"`
 }
 
 // SyncResult reports aggregate statistics from a sync operation for a single remote.
 type SyncResult struct {
-	Remote         string `json:"remote"`
-	OpsFetched     int    `json:"ops_fetched"`
-	OpsPushed      int    `json:"ops_pushed"`
-	ObjectsTouched int    `json:"objects_touched"`
-	Unsynced       int    `json:"unsynced"`
+	Remote         string   `json:"remote"`
+	OpsFetched     int      `json:"ops_fetched"`
+	OpsPushed      int      `json:"ops_pushed"`
+	ObjectsTouched int      `json:"objects_touched"`
+	Unsynced       int      `json:"unsynced"`
+	Failure        *Failure `json:"failure,omitempty"`
 }
 
 // FromReviewResultSummary converts a writ.ReviewResult into a ReviewSummary wire struct.
@@ -376,6 +387,34 @@ func FromSyncStatus(s writ.SyncStatus) SyncStatus {
 	}
 }
 
+// FromSyncStatusFailure converts a remote name, error, and unsynced count into a SyncStatus wire struct with Failure populated.
+func FromSyncStatusFailure(remote string, err error, unsynced int) SyncStatus {
+	var failure *Failure
+	if err != nil {
+		var syncErr *writ.SyncError
+		if errors.As(err, &syncErr) {
+			failure = &Failure{
+				Kind:      syncErr.Kind,
+				Message:   syncErr.Message,
+				Advice:    syncErr.Advice,
+				Retryable: syncErr.Retryable,
+			}
+			unsynced = syncErr.Unsynced
+		} else {
+			failure = &Failure{
+				Kind:      "unknown",
+				Message:   err.Error(),
+				Retryable: false,
+			}
+		}
+	}
+	return SyncStatus{
+		Remote:   remote,
+		Unsynced: unsynced,
+		Failure:  failure,
+	}
+}
+
 // FromSyncResult converts a remote name and writ.SyncResult into a SyncResult wire struct.
 func FromSyncResult(remote string, res writ.SyncResult) SyncResult {
 	return SyncResult{
@@ -384,6 +423,38 @@ func FromSyncResult(remote string, res writ.SyncResult) SyncResult {
 		OpsPushed:      res.OpsPushed,
 		ObjectsTouched: res.ObjectsTouched,
 		Unsynced:       res.Unsynced,
+	}
+}
+
+// FromSyncResultFailure converts a remote name, writ.SyncResult, and error into a SyncResult wire struct with Failure populated.
+func FromSyncResultFailure(remote string, res writ.SyncResult, err error) SyncResult {
+	var failure *Failure
+	unsynced := res.Unsynced
+	if err != nil {
+		var syncErr *writ.SyncError
+		if errors.As(err, &syncErr) {
+			failure = &Failure{
+				Kind:      syncErr.Kind,
+				Message:   syncErr.Message,
+				Advice:    syncErr.Advice,
+				Retryable: syncErr.Retryable,
+			}
+			unsynced = syncErr.Unsynced
+		} else {
+			failure = &Failure{
+				Kind:      "unknown",
+				Message:   err.Error(),
+				Retryable: false,
+			}
+		}
+	}
+	return SyncResult{
+		Remote:         remote,
+		OpsFetched:     res.OpsFetched,
+		OpsPushed:      res.OpsPushed,
+		ObjectsTouched: res.ObjectsTouched,
+		Unsynced:       unsynced,
+		Failure:        failure,
 	}
 }
 
