@@ -114,19 +114,25 @@ func (a *setUnionAccumulator) Apply(_ codec.Op, body map[string]any, _ map[strin
 		return nil
 	}
 	a.hasSet = true
+	// Elements that are the empty string are dropped (spec/fold.md §5.3).
+	add := func(item string) {
+		if item != "" {
+			a.set[item] = true
+		}
+	}
 	switch val := raw.(type) {
 	case []any:
 		for _, item := range val {
-			a.set[fmt.Sprint(item)] = true
+			add(fmt.Sprint(item))
 		}
 	case []string:
 		for _, item := range val {
-			a.set[item] = true
+			add(item)
 		}
 	case string:
-		a.set[val] = true
+		add(val)
 	default:
-		a.set[fmt.Sprint(val)] = true
+		add(fmt.Sprint(val))
 	}
 	return nil
 }
@@ -189,6 +195,9 @@ func (a *setObservedRemoveAccumulator) Apply(op codec.Op, body map[string]any, _
 	}
 	a.hasOps = true
 
+	// Person-valued fields normalize per spec/identifiers.md; every other item
+	// is taken verbatim. Items that are empty after normalization are dropped
+	// from both sides of the OR-set, whatever the op type (spec/fold.md §5.4).
 	normalizeItem := func(it string) string {
 		if op.OpType == "assign" {
 			return strings.ToLower(strings.TrimSpace(it))

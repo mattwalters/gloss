@@ -121,20 +121,28 @@ func FoldReview(ops []codec.Op) (Review, error) {
 		case "label":
 			if addRaw, ok := body["add"].([]any); ok {
 				for _, it := range addRaw {
-					labelAdds = append(labelAdds, orSetRecord{opID: op.ID, item: fmt.Sprint(it)})
+					if item := fmt.Sprint(it); item != "" {
+						labelAdds = append(labelAdds, orSetRecord{opID: op.ID, item: item})
+					}
 				}
 			} else if addRaw, ok := body["add"].([]string); ok {
 				for _, it := range addRaw {
-					labelAdds = append(labelAdds, orSetRecord{opID: op.ID, item: it})
+					if it != "" {
+						labelAdds = append(labelAdds, orSetRecord{opID: op.ID, item: it})
+					}
 				}
 			}
 			if remRaw, ok := body["remove"].([]any); ok {
 				for _, it := range remRaw {
-					labelRemoves = append(labelRemoves, orSetRecord{opID: op.ID, item: fmt.Sprint(it)})
+					if item := fmt.Sprint(it); item != "" {
+						labelRemoves = append(labelRemoves, orSetRecord{opID: op.ID, item: item})
+					}
 				}
 			} else if remRaw, ok := body["remove"].([]string); ok {
 				for _, it := range remRaw {
-					labelRemoves = append(labelRemoves, orSetRecord{opID: op.ID, item: it})
+					if it != "" {
+						labelRemoves = append(labelRemoves, orSetRecord{opID: op.ID, item: it})
+					}
 				}
 			}
 

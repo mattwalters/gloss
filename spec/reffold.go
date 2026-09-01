@@ -312,24 +312,30 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 					if opMatchesRule(op, r) {
 						if raw, present := op.Body[fieldName]; present {
 							hasSet = true
+							// Elements that are the empty string are dropped (spec/fold.md §5.3).
+							add := func(item string) {
+								if item != "" {
+									unionSet[item] = true
+								}
+							}
 							switch val := raw.(type) {
 							case []any:
 								for _, item := range val {
-									unionSet[fmt.Sprint(item)] = true
+									add(fmt.Sprint(item))
 								}
 							case []string:
 								for _, item := range val {
-									unionSet[item] = true
+									add(item)
 								}
 							case string:
-								unionSet[val] = true
+								add(val)
 							}
 						}
 					}
 				}
 			}
 			if hasSet {
-				var result []string
+				result := make([]string, 0, len(unionSet))
 				for k := range unionSet {
 					result = append(result, k)
 				}
@@ -374,6 +380,10 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 
 						if addRaw != nil || remRaw != nil {
 							hasOps = true
+							// Person-valued fields normalize per spec/identifiers.md;
+							// every other item is taken verbatim. Items that are empty
+							// after normalization are dropped from both sides of the
+							// OR-set, whatever the op type (spec/fold.md §5.4).
 							normalizeItem := func(it string) string {
 								if op.OpType == "assign" {
 									return strings.ToLower(strings.TrimSpace(it))

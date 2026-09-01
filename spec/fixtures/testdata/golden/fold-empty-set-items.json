@@ -1,0 +1,101 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/0123456789abcdef/review",
+      "commit": "4544759f89fa5e9fbebdb5e01a6d17cecafccc09"
+    },
+    {
+      "name": "refs/writ/fedcba9876543210/review",
+      "commit": "e884c53eb92da543f5d732e46539613046de65c8"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/0123456789abcdef/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "3c2cccfcd116407693f6a8b8190f00250ab65ff3",
+          "tree": "52b0146d0a995b2b2c83d040d56e98b5dfb94eeb",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-02-01T00:00:00Z",
+          "message": "writ: create review/r-empty-items\n",
+          "signed": true
+        },
+        {
+          "sha": "ace8f6bca12afb0184077214a23c81d630c2e8a4",
+          "tree": "49ff2e79f889d530a06841495aff6933d1c1e47e",
+          "parents": [
+            "3c2cccfcd116407693f6a8b8190f00250ab65ff3"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-02-01T00:01:00Z",
+          "message": "writ: label review/r-empty-items\n",
+          "signed": true
+        },
+        {
+          "sha": "a6a04168c27b6627d84096bd9bcf456f77869210",
+          "tree": "cca54a93c985ff1c4a3a1c54190f3831d99acedf",
+          "parents": [
+            "ace8f6bca12afb0184077214a23c81d630c2e8a4"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-02-01T00:02:00Z",
+          "message": "writ: assign review/r-empty-items\n",
+          "signed": true
+        },
+        {
+          "sha": "0b6a43f515722817ce57322f2cac57c1f8a393f6",
+          "tree": "fb07998b2fd951d50301af271baa8cce717bc093",
+          "parents": [
+            "a6a04168c27b6627d84096bd9bcf456f77869210"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-02-01T00:03:00Z",
+          "message": "writ: label review/r-empty-items\n",
+          "signed": true
+        },
+        {
+          "sha": "a55c466a1d1881457b3dd545926417df3d3c24ac",
+          "tree": "a2a3c60367689452935e71758184169709b48330",
+          "parents": [
+            "0b6a43f515722817ce57322f2cac57c1f8a393f6"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-02-01T00:04:00Z",
+          "message": "writ: create review/r-empty-only\n",
+          "signed": true
+        },
+        {
+          "sha": "4544759f89fa5e9fbebdb5e01a6d17cecafccc09",
+          "tree": "4528ad7082f7b079cbcf84de65ace6df7dd820b3",
+          "parents": [
+            "a55c466a1d1881457b3dd545926417df3d3c24ac"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-02-01T00:05:00Z",
+          "message": "writ: label review/r-empty-only\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/fedcba9876543210/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "e884c53eb92da543f5d732e46539613046de65c8",
+          "tree": "4557746cbf46f6dc96462c15cb55430e2cd4fb87",
+          "parents": [
+            "3c2cccfcd116407693f6a8b8190f00250ab65ff3"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-02-01T00:02:30Z",
+          "message": "writ: label review/r-empty-items\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}
