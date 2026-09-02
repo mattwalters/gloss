@@ -502,9 +502,103 @@ func TestLoad_GPGFormat(t *testing.T) {
 				if id.Key.Value != "/path/to/id_ed25519" {
 					t.Errorf("id.Key.Value = %q, want the configured path", id.Key.Value)
 				}
+				// Load accepts any spelling, so it must hand on one. It
+				// carried the user's spelling through, and engine/open.go
+				// compared the field against "ssh": gpg.format = SSH loaded
+				// clean, reported a signing key, and then had no signer.
+				if id.Key.Format != "ssh" {
+					t.Errorf("id.Key.Format = %q for gpg.format = %q, want the canonical %q", id.Key.Format, format, "ssh")
+				}
 			})
 		}
 	})
+}
+
+// TestLoad_WhitespaceOnlySigningKey is WRIT-131's defect three keys further
+// down the same function. git stores a whitespace-only user.signingKey
+// verbatim, a raw guard accepted it as a key path, and the repository then
+// reported itself configured and died at the first signed write with a
+// subprocess error naming a file called "   ".
+func TestLoad_WhitespaceOnlySigningKey(t *testing.T) {
+	for _, value := range []string{" ", "   ", "\t"} {
+		t.Run(fmt.Sprintf("%q", value), func(t *testing.T) {
+			env := setupTestEnv(t)
+			populateValidLocalConfig(t, env.repoDir)
+			setGitConfig(t, env.repoDir, "user.signingKey", value)
+
+			// git really does store it verbatim, so the test cannot pass by
+			// git having normalised the value away.
+			cmd := exec.Command("git", "config", "--get", "user.signingKey")
+			cmd.Dir = env.repoDir
+			out, err := cmd.Output()
+			if err != nil {
+				t.Fatalf("git config --get user.signingKey: %v", err)
+			}
+			if got := strings.TrimRight(string(out), "\n"); got != value {
+				t.Fatalf("git stored user.signingKey as %q, want %q verbatim", got, value)
+			}
+
+			_, err = identity.Load(context.Background(), env.repoDir)
+			if err == nil {
+				t.Fatalf("Load accepted a whitespace-only user.signingKey %q as a key path", value)
+			}
+			if !errors.Is(err, identity.ErrMissing) {
+				t.Errorf("Load error = %v, want errors.Is ErrMissing: a set key with nothing in it is nothing configured", err)
+			}
+			var cfgErr *identity.ConfigError
+			if !errors.As(err, &cfgErr) {
+				t.Fatalf("Load error is %T, want *identity.ConfigError", err)
+			}
+			if cfgErr.Key != "user.signingKey" {
+				t.Errorf("cfgErr.Key = %q, want \"user.signingKey\"", cfgErr.Key)
+			}
+		})
+	}
+
+	t.Run("literal key with nothing after the prefix", func(t *testing.T) {
+		env := setupTestEnv(t)
+		populateValidLocalConfig(t, env.repoDir)
+		setGitConfig(t, env.repoDir, "user.signingKey", "key::   ")
+
+		_, err := identity.Load(context.Background(), env.repoDir)
+		if err == nil {
+			t.Fatal("Load accepted \"key::   \" as a literal signing key")
+		}
+		if !errors.Is(err, identity.ErrInvalid) {
+			t.Errorf("Load error = %v, want errors.Is ErrInvalid", err)
+		}
+	})
+
+	t.Run("padding around a real key path is trimmed", func(t *testing.T) {
+		env := setupTestEnv(t)
+		populateValidLocalConfig(t, env.repoDir)
+		setGitConfig(t, env.repoDir, "user.signingKey", "  /path/to/id_ed25519  ")
+
+		id, err := identity.Load(context.Background(), env.repoDir)
+		if err != nil {
+			t.Fatalf("Load with a padded user.signingKey: %v", err)
+		}
+		if id.Key.Value != "/path/to/id_ed25519" {
+			t.Errorf("id.Key.Value = %q, want the padding trimmed off the path", id.Key.Value)
+		}
+	})
+}
+
+// TestLoad_WhitespaceOnlyAllowedSigners covers the last untrimmed key in
+// Load. It is optional configuration, so the only thing whitespace can buy is
+// a trust-store load against a path made of spaces.
+func TestLoad_WhitespaceOnlyAllowedSigners(t *testing.T) {
+	env := setupTestEnv(t)
+	populateValidLocalConfig(t, env.repoDir)
+	setGitConfig(t, env.repoDir, "gpg.ssh.allowedSignersFile", "   ")
+
+	id, err := identity.Load(context.Background(), env.repoDir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if id.AllowedSigners != "" {
+		t.Errorf("id.AllowedSigners = %q, want empty: a set key with nothing in it is nothing configured", id.AllowedSigners)
+	}
 }
 
 // TestConfigErrorMessage pins the two renderings of a ConfigError. Error

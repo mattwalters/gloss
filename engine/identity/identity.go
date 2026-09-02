@@ -35,8 +35,13 @@ type Author struct {
 
 // SigningKey holds SSH commit-signing key configuration.
 type SigningKey struct {
-	Format  string // gpg.format, verbatim
-	Value   string // user.signingKey: a path, or the literal after "key::"
+	// Format is gpg.format canonicalized to lower case. git compares the
+	// value case-insensitively and Load accepts any spelling of "ssh", so
+	// carrying the user's spelling through would make every consumer choose
+	// between EqualFold and a mismatch — and one of them chose wrong: a repo
+	// configured gpg.format = SSH loaded fine and then had no signer.
+	Format  string
+	Value   string // user.signingKey: a path, or the literal after "key::", trimmed
 	Literal bool   // true for the key:: form
 }
 
@@ -159,10 +164,20 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 			Problem: fmt.Errorf("%w: writ signs with ssh", ErrUnsupportedFormat),
 		}
 	}
+	// Carry the canonical spelling, not the configured one. Accepting SSH
+	// here and then comparing the field against "ssh" elsewhere is how a repo
+	// with gpg.format = SSH passed init and had no signer at write time.
+	gpgFormat = strings.ToLower(gpgFormat)
 
 	// 5. Signing Key: user.signingKey
-	rawSigningKey, ok := cfg["user.signingkey"]
-	if !ok || rawSigningKey == "" {
+	//
+	// Trimmed for the same reason user.name and user.email are: git stores a
+	// whitespace-only value verbatim, and a raw guard accepts one as a key
+	// path. Reporting the repository as configured and then failing at the
+	// first signed write — with a subprocess error naming a file called "   "
+	// — is worse than saying "not configured" up front.
+	rawSigningKey := strings.TrimSpace(cfg["user.signingkey"])
+	if rawSigningKey == "" {
 		return baseIdent, &ConfigError{
 			Key:     "user.signingKey",
 			Problem: ErrMissing,
@@ -171,7 +186,7 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 	var signingKey SigningKey
 	signingKey.Format = gpgFormat
 	if strings.HasPrefix(rawSigningKey, "key::") {
-		literalKey := strings.TrimPrefix(rawSigningKey, "key::")
+		literalKey := strings.TrimSpace(strings.TrimPrefix(rawSigningKey, "key::"))
 		if literalKey == "" {
 			return baseIdent, &ConfigError{
 				Key:     "user.signingKey",
@@ -186,8 +201,10 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 		signingKey.Literal = false
 	}
 
-	// 6. Allowed Signers: gpg.ssh.allowedSignersFile (optional)
-	allowedSigners := cfg["gpg.ssh.allowedsignersfile"]
+	// 6. Allowed Signers: gpg.ssh.allowedSignersFile (optional). Trimmed:
+	// unset and whitespace-only are the same absence, and the difference
+	// between them is otherwise a trust-store load against a garbage path.
+	allowedSigners := strings.TrimSpace(cfg["gpg.ssh.allowedsignersfile"])
 
 	return Identity{
 		WriterID: writerID,

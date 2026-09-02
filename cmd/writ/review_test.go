@@ -1252,10 +1252,17 @@ func TestReviewApprove_Subject(t *testing.T) {
 	})
 }
 
-// TestReviewApprove_PersonIDDiagnosis pins the difference between the two ways
-// a person identifier can be unavailable. Discarding the derivation error
-// collapses them, and the user who set writ.personId to something invalid is
-// told to set writ.personId — sending them to look at a key already there.
+// TestReviewApprove_PersonIDDiagnosis pins the invalid half of the diagnosis:
+// a user who set writ.personId to something that is not a person identifier
+// must be told the value is wrong, not that nothing is configured — the second
+// sends them to look at a key that is already there.
+//
+// It used to pin the difference between that and the missing half. It no
+// longer can. Since WRIT-131 a whitespace-only user.email is not an identity,
+// so Load returns a zero Identity with a nil PersonIDErr, engine/open.go
+// collapses the failure into ErrNoIdentity, and the missing case here takes
+// review approve's generic fallback rather than the PersonIDErr branch. The
+// missing half is pinned where it still runs, in TestInit_PersonID.
 func TestReviewApprove_PersonIDDiagnosis(t *testing.T) {
 	t.Run("invalid writ.personId is reported as invalid", func(t *testing.T) {
 		env := setupTestCLIEnv(t)
