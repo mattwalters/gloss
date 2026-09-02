@@ -2,61 +2,68 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://writ.dev/spec/comment.schema.json",
   "title": "Writ comment operation (v1)",
-  "description": "Op payload schema for the comment collaborative object type (op_version 1). An instance of this schema represents the op.json payload for a comment object op (create, edit, delete, or resolve). Unknown top-level and body fields are permitted: readers preserve and ignore fields they do not understand. See spec/comments.md for full field semantics and spec/op-envelope.md for the containing envelope.",
+  "description": "Op payload schema for the comment collaborative object type (op_version 1). An instance of this schema represents the op.json payload for a comment object op (create, edit, delete, or resolve). Unknown top-level and body fields are permitted: readers preserve and ignore fields they do not understand. The v1 body rules are gated on op_version 1, so an op carrying an unknown op_type or a future op_version is a valid instance of this schema — a reader must tolerate both (spec/forward-compatibility.md), and a validator built on this schema must not break that. Producers are separately bound to write only the op types and versions they define (spec/op-envelope.md, Producer validation rule 4). See spec/comments.md for full field semantics and spec/op-envelope.md for the containing envelope.",
   "type": "object",
   "allOf": [
     {
       "$ref": "https://writ.dev/spec/op-envelope.schema.json"
-    },
-    {
-      "properties": {
-        "object_type": { "const": "comment" },
-        "op_version": { "const": 1 },
-        "op_type": { "enum": ["create", "edit", "delete", "resolve"] }
-      },
-      "required": ["object_type", "op_version", "op_type"]
-    },
-    {
-      "if": {
-        "properties": { "op_type": { "const": "create" } }
-      },
-      "then": {
-        "properties": {
-          "body": { "$ref": "#/$defs/create_body" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": { "op_type": { "const": "edit" } }
-      },
-      "then": {
-        "properties": {
-          "body": { "$ref": "#/$defs/edit_body" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": { "op_type": { "const": "delete" } }
-      },
-      "then": {
-        "properties": {
-          "body": { "$ref": "#/$defs/delete_body" }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": { "op_type": { "const": "resolve" } }
-      },
-      "then": {
-        "properties": {
-          "body": { "$ref": "#/$defs/resolve_body" }
-        }
-      }
     }
   ],
+  "properties": {
+    "object_type": { "const": "comment" }
+  },
+  "required": ["object_type"],
+  "if": {
+    "properties": {
+      "object_type": { "const": "comment" },
+      "op_version": { "const": 1 }
+    },
+    "required": ["object_type", "op_version"]
+  },
+  "then": {
+    "allOf": [
+      {
+        "if": {
+          "properties": { "op_type": { "const": "create" } }
+        },
+        "then": {
+          "properties": {
+            "body": { "$ref": "#/$defs/create_body" }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": { "op_type": { "const": "edit" } }
+        },
+        "then": {
+          "properties": {
+            "body": { "$ref": "#/$defs/edit_body" }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": { "op_type": { "const": "delete" } }
+        },
+        "then": {
+          "properties": {
+            "body": { "$ref": "#/$defs/delete_body" }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": { "op_type": { "const": "resolve" } }
+        },
+        "then": {
+          "properties": {
+            "body": { "$ref": "#/$defs/resolve_body" }
+          }
+        }
+      }
+    ]
+  },
   "additionalProperties": true,
   "$defs": {
     "subject": {

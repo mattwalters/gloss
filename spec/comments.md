@@ -333,6 +333,26 @@ In accordance with `spec/op-envelope.md` and WRIT-15:
   and ignored by conforming readers.
 - Unknown `op_type` values under `object_type: "comment"` MUST be preserved
   in the DAG and ignored during fold reduction by v1 readers.
+- Ops carrying a future `op_version` under `object_type: "comment"` MUST
+  be preserved the same way: they remain in the DAG and contribute to
+  total ordering and ancestry, but contribute no field mutations to known
+  comment state (WRIT-15).
+
+[`schemas/comment.schema.json`](schemas/comment.schema.json) gates its v1
+body rules on `op_version: 1`, so an op carrying an unknown `op_type` or a
+future `op_version` is a **valid instance** of it. That is deliberate: the
+published schema is the artifact a third-party reader validates against,
+and it must not reject what this section requires readers to tolerate. The
+corpus pins it with
+[`testdata/comments/valid/unknown-op-type.json`](testdata/comments/valid/unknown-op-type.json)
+and
+[`testdata/comments/valid/unknown-future-version.json`](testdata/comments/valid/unknown-future-version.json),
+matching the equivalent vectors the other five vocabularies ship.
+
+Producers are bound the other way round: `spec/op-envelope.md` §Producer
+validation rule 4 forbids authoring an `op_type` or `op_version` the
+producer does not itself define for `comment`. Reader tolerance is not a
+licence to write an op no reader can interpret.
 
 ## Out of scope, with forward references
 
