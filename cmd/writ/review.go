@@ -216,8 +216,8 @@ func newReviewCommentFlagSet(defaultDir string) (*flag.FlagSet, *reviewCommentOp
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
 	fs.StringVar(&opts.message, "m", "", "Comment message text `<text>`")
 	fs.StringVar(&opts.replyTo, "reply-to", "", "Comment ID `<comment-id>` to reply to")
-	fs.BoolVar(&opts.resolve, "resolve", false, "Mark comment thread as resolved")
-	fs.BoolVar(&opts.unresolve, "unresolve", false, "Mark comment thread as unresolved")
+	fs.BoolVar(&opts.resolve, "resolve", false, "Mark comment thread as resolved, attributed to writ.personId, else email:<user.email>")
+	fs.BoolVar(&opts.unresolve, "unresolve", false, "Mark comment thread as unresolved, attributed to writ.personId, else email:<user.email>")
 	fs.Usage = func() {
 		renderUsage(fs.Output(), []string{"review", "comment"}, reviewCommentCmd)
 	}

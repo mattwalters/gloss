@@ -256,8 +256,8 @@ Add a comment to a review or resolve/unresolve a comment thread.
 - `-C <dir>`: Run as if writ was started in <dir>
 - `-m <text>`: Comment message text <text>
 - `-reply-to <comment-id>`: Comment ID <comment-id> to reply to
-- `-resolve`: Mark comment thread as resolved
-- `-unresolve`: Mark comment thread as unresolved
+- `-resolve`: Mark comment thread as resolved, attributed to writ.personId, else email:<user.email>
+- `-unresolve`: Mark comment thread as unresolved, attributed to writ.personId, else email:<user.email>
 
 #### Examples
 
