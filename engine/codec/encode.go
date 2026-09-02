@@ -69,11 +69,13 @@ func EncodePayload(env Envelope) ([]byte, error) {
 // fetched from the log whose raw bytes it did not keep — and a foreign op writ
 // reads perfectly well today must keep projecting.
 //
-// The cost is one JSON Schema validation per appended op, on the same order as
-// the canonical encoding directly above it and orders of magnitude below the
-// signature and the object write that follow on the same path
-// (BenchmarkProducerPath measures the three). It is paid once per write and
-// never on a read, which is the trade this check is worth.
+// The cost is one JSON Schema validation per appended op — roughly 17 µs,
+// against the 22 µs the canonical encoding directly above it already costs
+// (BenchmarkProducerPath measures both). It is the same order as the signing
+// that follows it on this path, not smaller: it is not free, it is affordable.
+// It is paid once per write and never on a read, and it buys the one failure
+// mode that cannot be repaired afterwards, which is the trade this check is
+// worth.
 func BuildCommit(env Envelope, author Identity, parents []string) (*Commit, error) {
 	raw, err := EncodePayload(env)
 	if err != nil {
