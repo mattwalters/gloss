@@ -25,9 +25,9 @@ func TestEnumerate_IncrementalCost(t *testing.T) {
 		env := codec.Envelope{
 			ObjectID:   "rev-1",
 			ObjectType: "review",
-			OpType:     "comment",
+			OpType:     "update",
 			OpVersion:  1,
-			Body:       json.RawMessage(fmt.Sprintf(`{"seq":%d}`, i)),
+			Body:       json.RawMessage(fmt.Sprintf(`{"seq":%d,"title":"Op %d"}`, i, i)),
 		}
 		if _, err := store.Append(context.Background(), env, nil); err != nil {
 			t.Fatalf("Append op %d failed: %v", i, err)
@@ -57,9 +57,9 @@ func TestEnumerate_IncrementalCost(t *testing.T) {
 		env := codec.Envelope{
 			ObjectID:   "rev-1",
 			ObjectType: "review",
-			OpType:     "comment",
+			OpType:     "update",
 			OpVersion:  1,
-			Body:       json.RawMessage(fmt.Sprintf(`{"seq":%d}`, i)),
+			Body:       json.RawMessage(fmt.Sprintf(`{"seq":%d,"title":"Op %d"}`, i, i)),
 		}
 		if _, err := store.Append(context.Background(), env, nil); err != nil {
 			t.Fatalf("Append op %d failed: %v", i, err)
@@ -105,9 +105,9 @@ func TestEnumerate_RewindDetection(t *testing.T) {
 		env := codec.Envelope{
 			ObjectID:   "rev-1",
 			ObjectType: "review",
-			OpType:     "comment",
+			OpType:     "update",
 			OpVersion:  1,
-			Body:       json.RawMessage(fmt.Sprintf(`{"seq":%d}`, i)),
+			Body:       json.RawMessage(fmt.Sprintf(`{"seq":%d,"title":"Op %d"}`, i, i)),
 		}
 		op, err := store.Append(context.Background(), env, nil)
 		if err != nil {
@@ -163,9 +163,9 @@ func TestEnumerate_PackedRefs(t *testing.T) {
 		env := codec.Envelope{
 			ObjectID:   "rev-1",
 			ObjectType: "review",
-			OpType:     "comment",
+			OpType:     "update",
 			OpVersion:  1,
-			Body:       json.RawMessage(`{}`),
+			Body:       json.RawMessage(`{"title":"Packed"}`),
 		}
 		_, _ = store1.Append(context.Background(), env, nil)
 		_, _ = store2.Append(context.Background(), env, nil)

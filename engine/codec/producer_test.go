@@ -3,7 +3,10 @@ package codec_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -161,95 +164,258 @@ func TestBuildCommitAcceptsForeignObjectTypes(t *testing.T) {
 	}
 }
 
-// TestVocabulariesDisagreeOnUnknownOpTypeAndVersion characterizes a real
-// divergence between the shipped vocabulary schemas, found in round 2 of this
-// PR's review. It is not an endorsement: it exists so the disagreement is
-// visible and so whichever way it is resolved, the resolution is deliberate.
+// TestVocabularySchemasTolerateUnknownOpTypeAndVersion pins reader safety, the
+// half of WRIT-148 that lives in the schemas: every shipped vocabulary gates
+// its body rules on op_version 1, so an op carrying an op type it never heard
+// of, or a version it does not implement, is a *valid instance* of it.
 //
-// Five vocabularies gate their body rules on `op_version: 1` inside an
-// if/then, so an unknown op_type or a future op_version validates — which is
-// what spec/testdata/{review-ops,issue-ops,project,cycle,repo}/valid/
-// unknown-op-type.json and the future-version vectors assert, five times over.
-// comment.schema.json instead pins op_version and an op_type enum in an
-// unconditional allOf, so it rejects both — which is what
-// spec/testdata/comments/invalid/invalid-op-type.json asserts, and which
-// contradicts spec/comments.md §Forward Compatibility ("Unknown op_type values
-// under object_type: comment MUST be preserved ... and ignored").
-//
-// The corpus disagrees with itself, and resolving it means changing normative
-// fixtures. Tracked as WRIT-148, which also removes this test; until then it
-// pins today's behavior so the change cannot happen by accident.
-func TestVocabulariesDisagreeOnUnknownOpTypeAndVersion(t *testing.T) {
-	tolerant := []string{"review", "issue", "project", "cycle", "repo"}
-
-	for _, objectType := range tolerant {
-		t.Run(objectType+"/unknown op type", func(t *testing.T) {
-			if _, err := codec.BuildCommit(codec.Envelope{
-				ObjectID:   "obj-1",
-				ObjectType: objectType,
-				OpType:     "annotate",
-				OpVersion:  1,
-				Body:       json.RawMessage(`{"note":"from a newer client"}`),
-			}, testAuthor(), nil); err != nil {
-				t.Fatalf("BuildCommit rejected an unknown op type this vocabulary's corpus declares valid: %v", err)
-			}
-		})
-		t.Run(objectType+"/future op version", func(t *testing.T) {
-			if _, err := codec.BuildCommit(codec.Envelope{
-				ObjectID:   "obj-1",
-				ObjectType: objectType,
-				OpType:     "create",
-				OpVersion:  2,
-				Body:       json.RawMessage(`{"headline":"v2 renamed the field"}`),
-			}, testAuthor(), nil); err != nil {
-				t.Fatalf("BuildCommit rejected a future op version this vocabulary's corpus declares valid: %v", err)
-			}
-		})
+// This is what a third party validating a foreign op against a published
+// vocabulary schema depends on, and until WRIT-148 comment.schema.json was the
+// one vocabulary that broke it — it pinned op_version and an op_type enum in an
+// unconditional allOf, contradicting five sibling vocabularies, the ten
+// unknown-op-type/future-version vectors their corpora ship, and
+// spec/comments.md §Forward compatibility. It goes through the schemas alone,
+// not through ValidateBody, because ValidateBody also enforces the producer
+// rules that TestBuildCommitRefusesOpTypesItDoesNotDefine covers.
+func TestVocabularySchemasTolerateUnknownOpTypeAndVersion(t *testing.T) {
+	for _, objectType := range sortedVocabularies(t) {
+		cases := []struct {
+			name string
+			env  codec.Envelope
+		}{
+			{
+				name: "unknown op type",
+				env: codec.Envelope{
+					ObjectID:   "obj-1",
+					ObjectType: objectType,
+					OpType:     "annotate",
+					OpVersion:  1,
+					Body:       json.RawMessage(`{"note":"from a newer client"}`),
+				},
+			},
+			{
+				name: "future op version",
+				env: codec.Envelope{
+					ObjectID:   "obj-1",
+					ObjectType: objectType,
+					OpType:     "create",
+					OpVersion:  codec.VocabularyOpVersion + 1,
+					Body:       json.RawMessage(`{"headline":"v2 renamed the field"}`),
+				},
+			},
+		}
+		for _, tc := range cases {
+			t.Run(objectType+"/"+tc.name, func(t *testing.T) {
+				raw, err := codec.EncodePayload(tc.env)
+				if err != nil {
+					t.Fatalf("EncodePayload: %v", err)
+				}
+				if err := codec.ValidateAgainstVocabularySchema(objectType, raw); err != nil {
+					t.Fatalf("%s.schema.json rejected an op a reader must tolerate (spec/forward-compatibility.md): %v",
+						objectType, err)
+				}
+			})
+		}
 	}
+}
 
-	t.Run("comment/unknown op type is refused", func(t *testing.T) {
-		if _, err := codec.BuildCommit(codec.Envelope{
-			ObjectID:   "c-1",
-			ObjectType: "comment",
-			OpType:     "pin",
-			OpVersion:  1,
-			Body:       json.RawMessage(`{"pinned":true}`),
-		}, testAuthor(), nil); err == nil {
-			t.Fatal("comment.schema.json accepted an unknown op type — the divergence this test characterizes has been resolved (WRIT-148); delete this test and the spec note with it")
+// producerTypos is one misspelling of an op type each vocabulary really
+// defines. A typo is the case producer rule 4 exists for: it is not caught by
+// schema validation — the schemas are reader-safe by construction, so an
+// unrecognized op type means the body is never examined at all — and the op it
+// would write is one no reader will ever interpret.
+var producerTypos = map[string]string{
+	"review":  "aproval",
+	"comment": "resolv",
+	"issue":   "set-stat",
+	"project": "add-isue",
+	"cycle":   "set-date",
+	"repo":    "add-remot",
+}
+
+// TestBuildCommitRefusesOpTypesItDoesNotDefine pins producer rule 4
+// (spec/op-envelope.md §Producer validation) across every vocabulary writ
+// registers: an op_type or op_version this build does not define for an object
+// type it does define is refused before the commit is built, so it is never
+// signed and never appended.
+func TestBuildCommitRefusesOpTypesItDoesNotDefine(t *testing.T) {
+	for _, objectType := range sortedVocabularies(t) {
+		typo := producerTypos[objectType]
+		if typo == "" {
+			t.Fatalf("vocabulary %q has no entry in producerTypos — add one so this test covers it", objectType)
 		}
-	})
-	t.Run("comment/future op version is refused", func(t *testing.T) {
-		if _, err := codec.BuildCommit(codec.Envelope{
-			ObjectID:   "c-1",
-			ObjectType: "comment",
-			OpType:     "create",
-			OpVersion:  2,
-			Body:       json.RawMessage(`{"headline":"v2 renamed the field"}`),
-		}, testAuthor(), nil); err == nil {
-			t.Fatal("comment.schema.json accepted a future op version — the divergence this test characterizes has been resolved (WRIT-148); delete this test and the spec note with it")
+		if defined := codec.VocabularyOpTypes[objectType]; slices.Contains(defined, typo) {
+			t.Fatalf("producerTypos[%q] = %q is an op type the vocabulary defines; pick a misspelling", objectType, typo)
 		}
-	})
+
+		cases := []struct {
+			name string
+			env  codec.Envelope
+		}{
+			{
+				name: "typo in a defined op type",
+				env: codec.Envelope{
+					ObjectID:   "obj-1",
+					ObjectType: objectType,
+					OpType:     typo,
+					OpVersion:  1,
+					Body:       json.RawMessage(`{"title":"Initial"}`),
+				},
+			},
+			{
+				name: "op type from a newer client",
+				env: codec.Envelope{
+					ObjectID:   "obj-1",
+					ObjectType: objectType,
+					OpType:     "annotate",
+					OpVersion:  1,
+					Body:       json.RawMessage(`{"note":"from a newer client"}`),
+				},
+			},
+			{
+				name: "op version this build does not implement",
+				env: codec.Envelope{
+					ObjectID:   "obj-1",
+					ObjectType: objectType,
+					OpType:     "create",
+					OpVersion:  codec.VocabularyOpVersion + 1,
+					Body:       json.RawMessage(`{"headline":"v2 renamed the field"}`),
+				},
+			},
+		}
+		for _, tc := range cases {
+			t.Run(objectType+"/"+tc.name, func(t *testing.T) {
+				if _, err := codec.BuildCommit(tc.env, testAuthor(), nil); err == nil {
+					t.Fatalf("BuildCommit signed an op writ cannot interpret: object_type %q, op_type %q, op_version %d",
+						tc.env.ObjectType, tc.env.OpType, tc.env.OpVersion)
+				}
+				// The same op must still validate against the vocabulary
+				// schema: rule 4 binds the producer, and the schema stays
+				// reader-safe.
+				raw, err := codec.EncodePayload(tc.env)
+				if err != nil {
+					t.Fatalf("EncodePayload: %v", err)
+				}
+				if err := codec.ValidateAgainstVocabularySchema(objectType, raw); err != nil {
+					t.Fatalf("the vocabulary schema rejected it too, so the refusal is not producer-only: %v", err)
+				}
+			})
+		}
+	}
+}
+
+// TestProducerOpTypesMatchShippedVocabularies keeps the producer's op-type
+// registry and the shipped schemas in agreement. The registry cannot be read
+// out of the schemas at runtime — they are reader-safe, so they accept op types
+// they do not define — but they do carry an if/then branch per op type they do
+// define, and that is what this compares against.
+//
+// A vocabulary that grows an op type without a registry entry fails here, and
+// would otherwise fail closed at the producer with a confusing "not one this
+// build defines" on an op type the spec plainly lists.
+func TestProducerOpTypesMatchShippedVocabularies(t *testing.T) {
+	for objectType, file := range shippedVocabularies(t) {
+		raw, err := spec.FS.ReadFile("schemas/" + file)
+		if err != nil {
+			t.Fatalf("read schema %s: %v", file, err)
+		}
+		var doc map[string]any
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			t.Fatalf("parse schema %s: %v", file, err)
+		}
+
+		inSchema := constsUnderProperty(doc, "op_type")
+		if len(inSchema) == 0 {
+			t.Errorf("spec/schemas/%s pins no op_type consts, so this test cannot check the registry against it", file)
+			continue
+		}
+		registered := append([]string(nil), codec.VocabularyOpTypes[objectType]...)
+		sort.Strings(registered)
+		if !slices.Equal(inSchema, registered) {
+			t.Errorf("object type %q: spec/schemas/%s defines op types %v, the codec's producer registry has %v — update vocabularyOpTypes in engine/codec/schema.go",
+				objectType, file, inSchema, registered)
+		}
+	}
+}
+
+// TestShippedVocabulariesGateOnTheProducedOpVersion pins the assumption behind
+// the single vocabularyOpVersion constant: all six vocabularies gate their body
+// rules on the same version this build writes. The first vocabulary to ship a
+// v2 fails here, which is the signal to make the constant a per-object-type
+// set rather than to widen it.
+func TestShippedVocabulariesGateOnTheProducedOpVersion(t *testing.T) {
+	for objectType, file := range shippedVocabularies(t) {
+		raw, err := spec.FS.ReadFile("schemas/" + file)
+		if err != nil {
+			t.Fatalf("read schema %s: %v", file, err)
+		}
+		var doc map[string]any
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			t.Fatalf("parse schema %s: %v", file, err)
+		}
+
+		versions := constsUnderProperty(doc, "op_version")
+		want := []string{strconv.FormatInt(codec.VocabularyOpVersion, 10)}
+		if !slices.Equal(versions, want) {
+			t.Errorf("object type %q: spec/schemas/%s gates on op_version %v, the codec produces %v",
+				objectType, file, versions, want)
+		}
+	}
 }
 
 // TestEncodePayloadDoesNotValidateBody guards the read path. EncodePayload is
 // used by the projection to re-encode ops fetched from the log whose raw bytes
-// it did not keep (engine/projection/refresh.go). If body validation ever moves
-// into it, writ starts refusing to project foreign ops it reads perfectly well
-// today — so the check lives in BuildCommit and this test says so.
+// it did not keep (engine/projection/refresh.go). If producer validation ever
+// moves into it, writ starts refusing to project foreign ops it reads perfectly
+// well today — so the checks live in BuildCommit and this test says so.
+//
+// Both producer rules have to be covered, because they fail differently. Rule 3
+// (the body check) would break re-encoding of an op whose op_type this build
+// knows; rule 4 (the op_type/op_version check) would break it for an op from a
+// newer writ, which is the forward-compatibility break this whole change
+// exists to prevent. A defined op_type with a bad body does not exercise
+// rule 4 at all, so the unknown-op-type case is not a variation on the first
+// one — it is the other half of the guard.
 func TestEncodePayloadDoesNotValidateBody(t *testing.T) {
-	env := codec.Envelope{
-		ObjectID:   "rev-1",
-		ObjectType: "review",
-		OpType:     "approval",
-		OpVersion:  1,
-		Body:       json.RawMessage(`{"revision":"not-an-oid","verdict":"bogus"}`),
+	cases := []struct {
+		name string
+		env  codec.Envelope
+	}{
+		{
+			// Rule 3: a defined op_type whose body the vocabulary rejects.
+			name: "defined op type, schema-invalid body",
+			env: codec.Envelope{
+				ObjectID:   "rev-1",
+				ObjectType: "review",
+				OpType:     "approval",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"not-an-oid","verdict":"bogus"}`),
+			},
+		},
+		{
+			// Rule 4: an op_type and op_version no build of writ this old
+			// defines — what an op written by a newer writ looks like on the
+			// way through the projection.
+			name: "undefined op type and future op version",
+			env: codec.Envelope{
+				ObjectID:   "rev-1",
+				ObjectType: "review",
+				OpType:     "annotate",
+				OpVersion:  2,
+				Body:       json.RawMessage(`{"annotation":"written by a newer writ"}`),
+			},
+		},
 	}
 
-	if _, err := codec.EncodePayload(env); err != nil {
-		t.Fatalf("EncodePayload rejected a body it must still re-encode: %v", err)
-	}
-	if _, err := codec.BuildCommit(env, testAuthor(), nil); err == nil {
-		t.Fatal("BuildCommit accepted the same body EncodePayload re-encodes")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := codec.EncodePayload(tc.env); err != nil {
+				t.Fatalf("EncodePayload rejected an op it must still re-encode: %v", err)
+			}
+			if _, err := codec.BuildCommit(tc.env, testAuthor(), nil); err == nil {
+				t.Fatal("BuildCommit accepted the same op EncodePayload re-encodes")
+			}
+		})
 	}
 }
 
@@ -457,6 +623,56 @@ func findConstObjectType(node any) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// constsUnderProperty collects every const a schema pins for the named
+// property, wherever in the document it appears — the shipped vocabularies put
+// their op_type consts in if branches nested under then/allOf, and their
+// op_version const in the top-level if. Values are returned sorted, in their
+// JSON text form, with duplicates removed.
+func constsUnderProperty(doc map[string]any, property string) []string {
+	found := map[string]bool{}
+	var walk func(node any)
+	walk = func(node any) {
+		switch n := node.(type) {
+		case map[string]any:
+			if props, ok := n["properties"].(map[string]any); ok {
+				if prop, ok := props[property].(map[string]any); ok {
+					if c, ok := prop["const"]; ok {
+						found[constText(c)] = true
+					}
+				}
+			}
+			for _, key := range sortedKeys(n) {
+				walk(n[key])
+			}
+		case []any:
+			for _, v := range n {
+				walk(v)
+			}
+		}
+	}
+	walk(doc)
+
+	values := make([]string, 0, len(found))
+	for v := range found {
+		values = append(values, v)
+	}
+	sort.Strings(values)
+	return values
+}
+
+// constText renders a JSON const value as text, so string and numeric consts
+// can be compared the same way.
+func constText(v any) string {
+	switch c := v.(type) {
+	case string:
+		return c
+	case float64:
+		return strconv.FormatFloat(c, 'f', -1, 64)
+	default:
+		return fmt.Sprintf("%v", c)
+	}
 }
 
 // sortedKeys keeps the walk deterministic, so a schema that somehow pinned two

@@ -82,9 +82,9 @@ func TestOrder_RealGitStoreMultiWriter(t *testing.T) {
 	envA3 := codec.Envelope{
 		ObjectID:   "rev-42",
 		ObjectType: "review",
-		OpType:     "approve",
+		OpType:     "set-status",
 		OpVersion:  1,
-		Body:       json.RawMessage(`{}`),
+		Body:       json.RawMessage(`{"status":"merged"}`),
 	}
 	opA3, err := storeAlice.Append(ctx, envA3, []string{opB1.ID})
 	if err != nil {

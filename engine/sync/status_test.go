@@ -1,6 +1,7 @@
 package sync_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/go-git/go-git/v5/plumbing"
@@ -37,7 +38,7 @@ func TestStatus_ReachabilityComputation(t *testing.T) {
 		store := mustOpenStore(t, dir, ident)
 
 		appendTestOp(t, store, "review", "rev-1", "create", map[string]any{"title": "Rev 1"})
-		appendTestOp(t, store, "review", "rev-1", "comment", map[string]any{"text": "Comment 1"})
+		appendTestOp(t, store, "review", "rev-1", "update", map[string]any{"description": "Description 1"})
 
 		status, err := sync.ComputeStatus(repo.Storer, ident.WriterID, "origin")
 		if err != nil {
@@ -105,7 +106,10 @@ func TestStatus_ReachabilityComputation(t *testing.T) {
 		// Alice creates a new chain whose causal parent includes Bob's op
 		aliceIdent := testIdentity(aliceID, "Alice", "alice@example.com")
 		aliceStore := mustOpenStore(t, dir, aliceIdent)
-		appendTestOp(t, aliceStore, "review", "rev-1", "approve", map[string]any{"verdict": "approve"})
+		appendTestOp(t, aliceStore, "review", "rev-1", "approval", map[string]any{
+			"revision": strings.Repeat("a", 40),
+			"verdict":  "approve",
+		})
 
 		// Status for Alice must report only Alice's 1 unsynced op, not Bob's op
 		status, err := sync.ComputeStatus(repo.Storer, aliceIdent.WriterID, "origin")
