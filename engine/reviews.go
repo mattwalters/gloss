@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 
 	"github.com/writtendev/writ/engine/codec"
@@ -61,6 +62,14 @@ func (r *Reviews) Create(ctx context.Context, n NewReview) (string, error) {
 	if (n.Base != "" && n.Head == "") || (n.Base == "" && n.Head != "") {
 		return "", fmt.Errorf("writ: both base and head must be specified for revision")
 	}
+	if n.Base != "" {
+		if err := requireCommitOID("base", n.Base); err != nil {
+			return "", err
+		}
+		if err := requireCommitOID("head", n.Head); err != nil {
+			return "", err
+		}
+	}
 
 	id := newObjectID()
 
@@ -84,10 +93,7 @@ func (r *Reviews) Create(ctx context.Context, n NewReview) (string, error) {
 		Body:       createBytes,
 	}
 
-	if _, err := r.store.dagStore.Append(ctx, createEnv, nil); err != nil {
-		return "", fmt.Errorf("writ: create review: %w", err)
-	}
-
+	var revEnv *codec.Envelope
 	if n.Base != "" && n.Head != "" {
 		revBytes, err := json.Marshal(map[string]string{
 			"base": n.Base,
@@ -97,15 +103,34 @@ func (r *Reviews) Create(ctx context.Context, n NewReview) (string, error) {
 			return "", fmt.Errorf("writ: marshal revision body: %w", err)
 		}
 
-		revEnv := codec.Envelope{
+		revEnv = &codec.Envelope{
 			ObjectID:   id,
 			ObjectType: "review",
 			OpType:     "revision",
 			OpVersion:  1,
 			Body:       revBytes,
 		}
+	}
 
-		if _, err := r.store.dagStore.Append(ctx, revEnv, nil); err != nil {
+	// Both ops are checked before either is written. Create is two appends, and
+	// an append is a signed commit in an append-only log: a create that lands
+	// followed by a revision the producer refuses would leave a review in the
+	// log forever that the caller never got an ID for, cannot address, cannot
+	// retry idempotently and cannot withdraw.
+	envs := []codec.Envelope{createEnv}
+	if revEnv != nil {
+		envs = append(envs, *revEnv)
+	}
+	if err := checkBeforeAppend(envs...); err != nil {
+		return "", fmt.Errorf("writ: create review: %w", err)
+	}
+
+	if _, err := r.store.dagStore.Append(ctx, createEnv, nil); err != nil {
+		return "", fmt.Errorf("writ: create review: %w", err)
+	}
+
+	if revEnv != nil {
+		if _, err := r.store.dagStore.Append(ctx, *revEnv, nil); err != nil {
 			return "", fmt.Errorf("writ: append initial revision: %w", err)
 		}
 	}
@@ -127,6 +152,12 @@ func (r *Reviews) Update(ctx context.Context, id string, edit ReviewEdit) error 
 	}
 	if edit.Title == nil && edit.Description == nil {
 		return fmt.Errorf("writ: at least one of title or description must be provided")
+	}
+	// A review has a title for its whole life: create requires one and the
+	// update body's title has minLength 1, so there is no "clear the title"
+	// state to reach. Pass nil to leave it alone.
+	if edit.Title != nil && *edit.Title == "" {
+		return fmt.Errorf("writ: review title cannot be empty: pass a nil title to leave it unchanged")
 	}
 
 	if err := r.store.maybeAutoRefresh(ctx); err != nil {
@@ -181,6 +212,12 @@ func (r *Reviews) PushRevision(ctx context.Context, id, base, head string) error
 	}
 	if id == "" || base == "" || head == "" {
 		return fmt.Errorf("writ: id, base, and head must be non-empty")
+	}
+	if err := requireCommitOID("base", base); err != nil {
+		return err
+	}
+	if err := requireCommitOID("head", head); err != nil {
+		return err
 	}
 
 	if err := r.store.maybeAutoRefresh(ctx); err != nil {
@@ -623,6 +660,43 @@ func (r *Reviews) Approve(ctx context.Context, id string, a Approval) error {
 	}
 
 	_ = r.store.maybeAutoRefresh(ctx)
+	return nil
+}
+
+// commitOIDPattern is the oid grammar the vocabulary schemas declare: a full
+// SHA-1 or SHA-256 object id, lowercase hex. Abbreviations and ref names are
+// not object ids.
+var commitOIDPattern = regexp.MustCompile(`^([0-9a-f]{40}|[0-9a-f]{64})$`)
+
+// requireCommitOID rejects a value the revision body's oid grammar would
+// reject, before any op is built.
+//
+// This is the domain half of the producer contract: the codec would catch the
+// same value, but only as a JSON Pointer into a canonicalized blob. "main" is
+// the input a caller actually types, and the fix — resolve the ref first — is
+// only obvious if the error says which one it was.
+func requireCommitOID(field, value string) error {
+	if commitOIDPattern.MatchString(value) {
+		return nil
+	}
+	return fmt.Errorf("writ: %s must be a commit OID, not a ref name: %q", field, value)
+}
+
+// checkBeforeAppend validates every op body a multi-append operation is about
+// to write, before the first of them is appended.
+//
+// An op is a signed commit in an append-only log. A sequence that appends one
+// op, is refused on the next, and returns an error to its caller has still
+// written the first one permanently — leaving state no caller holds a handle
+// to. Checking the whole sequence up front makes those operations all-or-
+// nothing against the producer check, which is the only failure mode the
+// engine can see coming.
+func checkBeforeAppend(envs ...codec.Envelope) error {
+	for _, env := range envs {
+		if err := codec.ValidateBody(env); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/dag"
 	"github.com/writtendev/writ/engine/identity"
+	"github.com/writtendev/writ/engine/resolve"
 	"github.com/writtendev/writ/engine/state"
 )
 
@@ -356,7 +357,9 @@ func TestReviewsValidationAndNotFound(t *testing.T) {
 	if err := s.Reviews.Update(ctx, missingID, writ.ReviewEdit{Title: &newTitle}); !errors.Is(err, writ.ErrNotFound) {
 		t.Errorf("expected ErrNotFound for Update on missing review, got %v", err)
 	}
-	if err := s.Reviews.PushRevision(ctx, missingID, "base", "head"); !errors.Is(err, writ.ErrNotFound) {
+	missingBase := strings.Repeat("a", 40)
+	missingHead := strings.Repeat("b", 40)
+	if err := s.Reviews.PushRevision(ctx, missingID, missingBase, missingHead); !errors.Is(err, writ.ErrNotFound) {
 		t.Errorf("expected ErrNotFound for PushRevision on missing review, got %v", err)
 	}
 	if err := s.Reviews.SetStatus(ctx, missingID, writ.ReviewStatus{Status: "closed"}); !errors.Is(err, writ.ErrNotFound) {
@@ -764,5 +767,184 @@ func TestReviewsApproveRejectsUnknownVerdict(t *testing.T) {
 		if err := s.Reviews.Approve(ctx, reviewID, writ.Approval{Verdict: verdict}); err != nil {
 			t.Errorf("Approve with verdict %q failed: %v", verdict, err)
 		}
+	}
+}
+
+// TestReviewsCreateWritesNothingWhenTheRevisionIsRefused pins the all-or-
+// nothing contract on the one public method that appends twice. Before the
+// domain guard, a ref name in Base got past Create's argument checks, the
+// create op was appended and signed, and only then did the producer refuse the
+// revision body. The caller saw an error and an empty id while the log kept a
+// review forever that nothing could address, retry or withdraw.
+func TestReviewsCreateWritesNothingWhenTheRevisionIsRefused(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+	id, err := s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Ref names are not OIDs",
+		Base:  "main",
+		Head:  "feature/oauth2",
+	})
+	if err == nil {
+		t.Fatal("expected Create to refuse a ref name in Base, got nil error")
+	}
+	if id != "" {
+		t.Errorf("expected an empty id on failure, got %q", id)
+	}
+	// The error names the field and the value, not a JSON Pointer.
+	if !strings.Contains(err.Error(), "base must be a commit OID") || !strings.Contains(err.Error(), `"main"`) {
+		t.Errorf("expected a legible domain error naming base and its value, got %v", err)
+	}
+
+	reviews, err := s.Query.Reviews(writ.ReviewFilter{})
+	if err != nil {
+		t.Fatalf("Query.Reviews failed: %v", err)
+	}
+	if len(reviews) != 0 {
+		t.Fatalf("Create left %d review(s) in the log after refusing: %+v", len(reviews), reviews)
+	}
+
+	// The same call with resolved OIDs still works, and writes both ops.
+	headHash := strings.TrimSpace(runGitCmd(t, repoDir, "rev-parse", "HEAD"))
+	id, err = s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Resolved first",
+		Base:  headHash,
+		Head:  headHash,
+	})
+	if err != nil {
+		t.Fatalf("Create with OIDs failed: %v", err)
+	}
+	res, err := s.Query.Review(id)
+	if err != nil {
+		t.Fatalf("Query.Review failed: %v", err)
+	}
+	if len(res.Review.Revisions) != 1 {
+		t.Errorf("expected the initial revision to be appended, got %d", len(res.Review.Revisions))
+	}
+}
+
+// TestReviewsCommentAnchorsAtFileEdges pins the nil-collar case through the
+// public API. writ.Anchor is a public type and Context.Before/After have no
+// omitempty, so a nil slice marshals to null, which anchor.schema.json rejects
+// as not an array. A comment on the first line of a file has no before-collar
+// and a comment on the last line has no after-collar: both are ordinary, and
+// both must still be writable now that the producer judges the body.
+func TestReviewsCommentAnchorsAtFileEdges(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+	headHash := strings.TrimSpace(runGitCmd(t, repoDir, "rev-parse", "HEAD"))
+	blobHash := strings.TrimSpace(runGitCmd(t, repoDir, "rev-parse", "HEAD:README.md"))
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+	reviewID, err := s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Anchored comments",
+		Base:  headHash,
+		Head:  headHash,
+	})
+	if err != nil {
+		t.Fatalf("Create review failed: %v", err)
+	}
+
+	sideAt := func(start, end int, before, after []string) *writ.Anchor {
+		return &writ.Anchor{
+			Version: 1,
+			New: &resolve.SideAnchor{
+				Commit: headHash,
+				Path:   "README.md",
+				Blob:   blobHash,
+				Range:  &resolve.Range{Start: start, End: end},
+				Context: &resolve.Context{
+					Before: before,
+					Lines:  []string{"# Test"},
+					After:  after,
+				},
+			},
+		}
+	}
+
+	cases := []struct {
+		name   string
+		anchor *writ.Anchor
+	}{
+		// A comment on line 1: nothing precedes it, so Before is the zero value.
+		{"first line, nil before", sideAt(1, 1, nil, []string{"next line"})},
+		// A comment on the last line: nothing follows it.
+		{"last line, nil after", sideAt(1, 1, []string{"previous line"}, nil)},
+		// A one-line file: neither collar exists.
+		{"only line, both nil", sideAt(1, 1, nil, nil)},
+		// The populated case, which worked before and must keep working.
+		{"both collars", sideAt(1, 1, []string{"previous line"}, []string{"next line"})},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			commentID, err := s.Reviews.Comment(ctx, reviewID, writ.NewComment{
+				Text:   "anchored",
+				Anchor: tc.anchor,
+			})
+			if err != nil {
+				t.Fatalf("Comment with an edge-of-file anchor was refused: %v", err)
+			}
+			if commentID == "" {
+				t.Fatal("expected a comment id")
+			}
+		})
+	}
+}
+
+// TestReviewsUpdateRejectsEmptyTitle records the ruling on clearing a title: a
+// review has one for its whole life (create requires it, update_body pins
+// minLength 1), so an empty title is a legible rejection rather than a
+// supported clear. Description, which has no minLength, still clears.
+func TestReviewsUpdateRejectsEmptyTitle(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+	headHash := strings.TrimSpace(runGitCmd(t, repoDir, "rev-parse", "HEAD"))
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+	id, err := s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Has a title",
+		Base:  headHash,
+		Head:  headHash,
+	})
+	if err != nil {
+		t.Fatalf("Create review failed: %v", err)
+	}
+
+	empty := ""
+	err = s.Reviews.Update(ctx, id, writ.ReviewEdit{Title: &empty})
+	if err == nil {
+		t.Fatal("expected Update to refuse an empty title, got nil error")
+	}
+	if !strings.Contains(err.Error(), "review title cannot be empty") {
+		t.Errorf("expected a legible domain error, got %v", err)
+	}
+
+	if err := s.Reviews.Update(ctx, id, writ.ReviewEdit{Description: &empty}); err != nil {
+		t.Errorf("clearing the description must still work: %v", err)
+	}
+
+	res, err := s.Query.Review(id)
+	if err != nil {
+		t.Fatalf("Query.Review failed: %v", err)
+	}
+	if res.Review.Title != "Has a title" {
+		t.Errorf("title changed after the refused update: %q", res.Review.Title)
 	}
 }

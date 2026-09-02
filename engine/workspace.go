@@ -201,6 +201,13 @@ func (w *Workspace) Register(ctx context.Context, slug string, remotes []string)
 		return fmt.Errorf("writ: get frontier for repo %s: %w", localRepoID, err)
 	}
 
+	// Register writes up to one create-or-set-slug op plus one add-remote op per
+	// new remote. The whole sequence is built and checked first, then appended:
+	// an op is a signed commit in an append-only log, so a run that appended the
+	// create and was then refused on an add-remote would have registered the
+	// repository under a slug the caller was told did not take.
+	var pending []codec.Envelope
+
 	if isNew {
 		// Determine if this repository is the workspace repository itself
 		isWorkspace := false
@@ -225,19 +232,13 @@ func (w *Workspace) Register(ctx context.Context, slug string, remotes []string)
 			return fmt.Errorf("writ: marshal repo create body: %w", err)
 		}
 
-		env := codec.Envelope{
+		pending = append(pending, codec.Envelope{
 			ObjectID:   localRepoID,
 			ObjectType: "repo",
 			OpType:     "create",
 			OpVersion:  1,
 			Body:       bodyBytes,
-		}
-
-		op, err := wsStore.dagStore.Append(ctx, env, frontier)
-		if err != nil {
-			return fmt.Errorf("writ: append repo create: %w", err)
-		}
-		frontier = []string{op.ID}
+		})
 	} else if existingRepo.Slug != slug {
 		body := map[string]any{
 			"slug": slug,
@@ -247,19 +248,13 @@ func (w *Workspace) Register(ctx context.Context, slug string, remotes []string)
 			return fmt.Errorf("writ: marshal set-slug body: %w", err)
 		}
 
-		env := codec.Envelope{
+		pending = append(pending, codec.Envelope{
 			ObjectID:   localRepoID,
 			ObjectType: "repo",
 			OpType:     "set-slug",
 			OpVersion:  1,
 			Body:       bodyBytes,
-		}
-
-		op, err := wsStore.dagStore.Append(ctx, env, frontier)
-		if err != nil {
-			return fmt.Errorf("writ: append set-slug: %w", err)
-		}
-		frontier = []string{op.ID}
+		})
 	}
 
 	existingRemotes := make(map[string]bool)
@@ -281,20 +276,26 @@ func (w *Workspace) Register(ctx context.Context, slug string, remotes []string)
 			return fmt.Errorf("writ: marshal add-remote body: %w", err)
 		}
 
-		env := codec.Envelope{
+		pending = append(pending, codec.Envelope{
 			ObjectID:   localRepoID,
 			ObjectType: "repo",
 			OpType:     "add-remote",
 			OpVersion:  1,
 			Body:       bodyBytes,
-		}
+		})
+		existingRemotes[remote] = true
+	}
 
+	if err := checkBeforeAppend(pending...); err != nil {
+		return fmt.Errorf("writ: register repo %s: %w", slug, err)
+	}
+
+	for _, env := range pending {
 		op, err := wsStore.dagStore.Append(ctx, env, frontier)
 		if err != nil {
-			return fmt.Errorf("writ: append add-remote: %w", err)
+			return fmt.Errorf("writ: append repo %s: %w", env.OpType, err)
 		}
 		frontier = []string{op.ID}
-		existingRemotes[remote] = true
 	}
 
 	_ = wsStore.maybeAutoRefresh(ctx)
