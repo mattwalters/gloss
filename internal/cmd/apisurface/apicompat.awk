@@ -44,7 +44,7 @@ BEGIN {
 	next
 }
 
-header != "" && ($0 ~ /\.\/engine/ || $0 ~ pkgre) {
+header != "" && ($0 ~ /^- \.\/engine[\/.:]/ || $0 ~ pkgre) {
 	n[rank]++
 	line[rank, n[rank]] = $0
 	head[rank] = header
