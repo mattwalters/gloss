@@ -46,6 +46,26 @@ func initMessage(err error) string {
 	return err.Error()
 }
 
+// workspaceRegisterMessage renders a workspace-registration failure for writ
+// init's own output.
+//
+// Registration writes into a second repository — the one writ.workspace points
+// at — and the identity errors it fails with carry "(run 'writ init' to
+// configure)". Printed here that advice is not merely circular, the way a
+// ConfigError from this repository would be: it is wrong. The reader is
+// already running writ init, in this repository, and no number of further runs
+// here will ever configure the workspace repository. The only useful thing to
+// say is which repository to go and run it in, so say that.
+func workspaceRegisterMessage(err error, wsPath string) string {
+	switch {
+	case errors.Is(err, writ.ErrNoIdentity):
+		return fmt.Sprintf("the workspace repository has no writer identity configured (run 'writ init' in the workspace repo %s)", wsPath)
+	case errors.Is(err, writ.ErrNoSigningKey):
+		return fmt.Sprintf("the workspace repository has no signing key configured (run 'writ init' in the workspace repo %s)", wsPath)
+	}
+	return initMessage(err)
+}
+
 // reportPartialInit names the state a failed run leaves the repository in.
 //
 // Everything that can be hoisted ahead of the first write has been, but git
@@ -192,7 +212,7 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 		fmt.Fprintf(stdout, "Repo ID: %s (already configured)\n", repoID)
 	}
 
-	// 3. Report the person identifier this repo will write into op payloads.
+	// 4. Report the person identifier this repo will write into op payloads.
 	// It is derived, not minted: writ.personId when set, else email:<user.email>.
 	// Reported separately from the identity load below because a repo with no
 	// signing key configured still has a person identifier, and because
@@ -212,21 +232,33 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 		}
 	}
 
-	// 4. Load identity to report author and key state
+	// 5. Load identity to report author and key state.
+	//
+	// A missing key gets the remediation for that key. The signing block used
+	// to catch every key beginning "user.", which swept user.name and
+	// user.email into it: a repo with no user.email was told its SSH signing
+	// was misconfigured and shown three git config lines, none of them the
+	// one it needed.
 	ident, err := identity.Load(ctx, repoRoot)
 	if err != nil {
 		var cfgErr *identity.ConfigError
 		if errors.As(err, &cfgErr) {
 			switch {
 			case errors.Is(cfgErr.Problem, identity.ErrMissing) || errors.Is(cfgErr.Problem, identity.ErrUnsupportedFormat) || errors.Is(cfgErr.Problem, identity.ErrInvalid):
-				if cfgErr.Key == "gpg.format" || cfgErr.Key == "user.signingKey" || strings.HasPrefix(cfgErr.Key, "user.") {
-					fmt.Fprintf(stderr, "warning: SSH signing key or identity not fully configured (%s)\n", initMessage(cfgErr))
+				switch cfgErr.Key {
+				case "gpg.format", "user.signingKey":
+					fmt.Fprintf(stderr, "warning: SSH signing key not fully configured (%s)\n", initMessage(cfgErr))
 					fmt.Fprintf(stderr, "To configure SSH signing for Writ and Git:\n")
 					fmt.Fprintf(stderr, "  git config gpg.format ssh\n")
 					fmt.Fprintf(stderr, "  git config user.signingKey ~/.ssh/id_ed25519.pub\n")
 					fmt.Fprintf(stderr, "Optionally configure verification allowed signers:\n")
 					fmt.Fprintf(stderr, "  git config gpg.ssh.allowedSignersFile ~/.ssh/allowed_signers\n")
-				} else {
+				case "user.name", "user.email":
+					fmt.Fprintf(stderr, "warning: author identity not fully configured (%s)\n", initMessage(cfgErr))
+					fmt.Fprintf(stderr, "To configure the identity Writ and Git author commits with:\n")
+					fmt.Fprintf(stderr, "  git config user.name \"Your Name\"\n")
+					fmt.Fprintf(stderr, "  git config user.email you@example.com\n")
+				default:
 					fmt.Fprintf(stderr, "warning: identity configuration: %s\n", initMessage(cfgErr))
 				}
 			default:
@@ -243,7 +275,7 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 		}
 	}
 
-	// 5. Configure fetch refspecs for the remotes resolved in step 2. The
+	// 6. Configure fetch refspecs for the remotes resolved in step 2. The
 	// repository is already open, so the client is built from that storer
 	// rather than opening it a second time — the second open is where a
 	// failure used to arrive too late to matter.
@@ -252,8 +284,10 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 	} else {
 		client, err := sync.OpenStorage(storer, repoRoot, identity.Identity{WriterID: writerID})
 		if err != nil {
+			// Not reachable from here: OpenStorage rejects only a nil storer,
+			// and storer came back non-nil in step 2. Checked rather than
+			// discarded so it stays honest if that ever changes.
 			fmt.Fprintf(stderr, "writ init: open sync client: %v\n", err)
-			reportPartialInit(stderr, writerID, repoID, nil, remotes)
 			return 1
 		}
 
@@ -272,7 +306,7 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 		}
 	}
 
-	// 6. Register repository in workspace if writ.workspace is configured
+	// 7. Register repository in workspace if writ.workspace is configured
 	gitCfg, _ := identity.ReadGitConfig(ctx, repoRoot)
 	if rawWs, ok := gitCfg["writ.workspace"]; ok && strings.TrimSpace(rawWs) != "" {
 		wsPath := strings.TrimSpace(rawWs)
@@ -297,7 +331,7 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 				if err := store.Workspace.Register(ctx, slug, remoteURLs); err == nil {
 					fmt.Fprintf(stdout, "Registered repository in workspace %s (%s)\n", wsPath, slug)
 				} else {
-					fmt.Fprintf(stderr, "warning: could not register in workspace: %v\n", err)
+					fmt.Fprintf(stderr, "warning: could not register in workspace: %s\n", workspaceRegisterMessage(err, wsPath))
 				}
 			}
 		}

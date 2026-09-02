@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -450,6 +451,11 @@ func TestInit_WorkspaceRegistration(t *testing.T) {
 
 func TestInit_SigningKeyGuidance(t *testing.T) {
 	env := setupTestCLIEnv(t)
+	// The author identity has to be configured for Load to get as far as the
+	// signing keys: without it this test asserted the signing remediation
+	// against a repository whose actual complaint was user.name.
+	setGitConfig(t, env.repoDir, "user.name", "Alice")
+	setGitConfig(t, env.repoDir, "user.email", "alice@example.com")
 
 	var stdout, stderr bytes.Buffer
 	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
@@ -466,6 +472,84 @@ func TestInit_SigningKeyGuidance(t *testing.T) {
 	}
 	if !strings.Contains(errStr, "git config gpg.ssh.allowedSignersFile") {
 		t.Errorf("stderr does not mention allowedSignersFile: %s", errStr)
+	}
+}
+
+// TestInit_GPGFormatSpellingAgreesWithTheWritePath pins the two halves of the
+// gpg.format check against each other. identity.Load compares the value
+// case-insensitively, the way git does; engine/open.go compared the loaded
+// field against "ssh" exactly. A repository configured gpg.format = SSH
+// therefore passed init — which reported a signing key and exited 0 — and then
+// had no signer at the first write. Reporting clean and failing later is the
+// exact complaint WRIT-94 is about, so the spellings init accepts and the
+// spellings a write accepts have to be the same set.
+func TestInit_GPGFormatSpellingAgreesWithTheWritePath(t *testing.T) {
+	for _, format := range []string{"ssh", "SSH", "Ssh"} {
+		t.Run(format, func(t *testing.T) {
+			env := setupTestCLIEnv(t)
+			setupSigningKey(t, env.repoDir)
+			setGitConfig(t, env.repoDir, "gpg.format", format)
+
+			var stdout, stderr bytes.Buffer
+			if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+				t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
+			}
+			if !strings.Contains(stdout.String(), "Signing key:") {
+				t.Fatalf("init did not report a signing key for gpg.format = %q:\n%s\n%s", format, stdout.String(), stderr.String())
+			}
+
+			commitFile(t, env.repoDir, "README.md", "# Hello", "initial commit")
+
+			stdout.Reset()
+			stderr.Reset()
+			if code := run(context.Background(), []string{
+				"review", "open", "-C", env.repoDir, "-title", "x",
+			}, &stdout, &stderr); code != 0 {
+				t.Fatalf("a signed write refused a repository init reported as configured (gpg.format = %q):\n%s", format, stderr.String())
+			}
+		})
+	}
+}
+
+// TestInit_AuthorIdentityGuidance pins the other half of that split. user.name
+// and user.email are matched by the same "user." prefix as user.signingKey, so
+// they were routed into the SSH signing remediation: a repository whose only
+// problem was a blank address was told its signing key was misconfigured and
+// shown three git config lines, not one of which was user.email.
+func TestInit_AuthorIdentityGuidance(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		key  string
+	}{
+		{name: "user.name", key: "user.name"},
+		{name: "user.email", key: "user.email"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := setupTestCLIEnv(t)
+			setGitConfig(t, env.repoDir, "user.name", "Alice")
+			setGitConfig(t, env.repoDir, "user.email", "alice@example.com")
+			setGitConfig(t, env.repoDir, "writ.personId", "user:alice")
+			setupSigningKey(t, env.repoDir)
+			// Whitespace, not unset: since WRIT-131 these are the same state,
+			// and this is the one the ticket was found in.
+			setGitConfig(t, env.repoDir, tc.key, "   ")
+
+			var stdout, stderr bytes.Buffer
+			if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+				t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
+			}
+
+			got := stderr.String()
+			if !strings.Contains(got, tc.key) {
+				t.Errorf("init did not name the unconfigured key %q:\n%s", tc.key, got)
+			}
+			if !strings.Contains(got, "git config user.name") || !strings.Contains(got, "git config user.email") {
+				t.Errorf("init did not print the remediation for the key it named:\n%s", got)
+			}
+			if strings.Contains(got, "git config gpg.format ssh") || strings.Contains(got, "git config user.signingKey") {
+				t.Errorf("init answered a missing %s with the SSH signing remediation:\n%s", tc.key, got)
+			}
+		})
 	}
 }
 
@@ -520,11 +604,77 @@ func TestInit_NeverAdvisesRunningInit(t *testing.T) {
 		})
 	}
 
+	// Registering into a workspace is the one place init may name itself, and
+	// the reason is the reason the advice is banned everywhere else: the
+	// reader must be told something that will actually fix their repository.
+	// The workspace is a second repository. Running writ init here — which is
+	// what the reader is doing — will never configure it, so the message has
+	// to name the repository to run it in.
+	t.Run("workspace registration names the other repo", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setupSigningKey(t, env.repoDir)
+		addRemote(t, env.repoDir, "origin", "https://example.com/repo.git")
+
+		// A workspace repository that is a git repository and nothing more:
+		// writ init has never been run in it, so it has no writer identity
+		// and registration cannot write to it.
+		wsDir := t.TempDir()
+		wsInit := exec.Command("git", "init")
+		wsInit.Dir = wsDir
+		if out, err := wsInit.CombinedOutput(); err != nil {
+			t.Fatalf("git init in workspace dir: %v (%s)", err, out)
+		}
+		setGitConfig(t, env.repoDir, "writ.workspace", wsDir)
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+			t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
+		}
+
+		got := stderr.String()
+		if !strings.Contains(got, "could not register in workspace") {
+			t.Fatalf("init did not report the failed registration:\n%s", got)
+		}
+		if !strings.Contains(got, wsDir) {
+			t.Errorf("the advice does not name the repository to run writ init in:\n%s", got)
+		}
+		// Every mention of writ init must be the one that names the other
+		// repository. A bare "(run 'writ init' to configure)" here sends the
+		// reader back to the command they are running, in the repository that
+		// is already configured.
+		for _, line := range strings.Split(got, "\n") {
+			if strings.Contains(line, "writ init") && !strings.Contains(line, "in the workspace repo "+wsDir) {
+				t.Errorf("init advised running itself without saying where:\n%s", line)
+			}
+		}
+	})
+
 	// The other half of the rule: suppressed for init, kept everywhere else.
 	// A verb that needs a signed write on an unconfigured repo is exactly
 	// where "run 'writ init' to configure" is the right thing to say.
 	t.Run("but another verb still says it", func(t *testing.T) {
 		env := setupTestCLIEnv(t)
+
+		// The contract init suppresses is ConfigError's own: the same
+		// repository state, read through the engine, still carries the
+		// remediation. Asserted directly, because no CLI verb renders a
+		// ConfigError today — engine/open.go flattens the ones Load returns
+		// into ErrNoIdentity — so the review open check below passes through
+		// a hardcoded string and would survive Error() dropping the hint.
+		_, loadErr := identity.Load(context.Background(), env.repoDir)
+		if loadErr == nil {
+			t.Fatal("identity.Load succeeded on an unconfigured repo")
+		}
+		var cfgErr *identity.ConfigError
+		if !errors.As(loadErr, &cfgErr) {
+			t.Fatalf("identity.Load error is %T, want *identity.ConfigError", loadErr)
+		}
+		if !strings.Contains(cfgErr.Error(), "run 'writ init' to configure") {
+			t.Errorf("ConfigError.Error dropped the remediation init suppresses: %q", cfgErr.Error())
+		}
+		if strings.Contains(cfgErr.Message(), "writ init") {
+			t.Errorf("ConfigError.Message kept the advice init must not print: %q", cfgErr.Message())
+		}
 
 		var stdout, stderr bytes.Buffer
 		if code := run(context.Background(), []string{"review", "open", "-C", env.repoDir, "-title", "x"}, &stdout, &stderr); code == 0 {
