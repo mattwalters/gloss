@@ -365,23 +365,57 @@ func TestShippedVocabulariesGateOnTheProducedOpVersion(t *testing.T) {
 
 // TestEncodePayloadDoesNotValidateBody guards the read path. EncodePayload is
 // used by the projection to re-encode ops fetched from the log whose raw bytes
-// it did not keep (engine/projection/refresh.go). If body validation ever moves
-// into it, writ starts refusing to project foreign ops it reads perfectly well
-// today — so the check lives in BuildCommit and this test says so.
+// it did not keep (engine/projection/refresh.go). If producer validation ever
+// moves into it, writ starts refusing to project foreign ops it reads perfectly
+// well today — so the checks live in BuildCommit and this test says so.
+//
+// Both producer rules have to be covered, because they fail differently. Rule 3
+// (the body check) would break re-encoding of an op whose op_type this build
+// knows; rule 4 (the op_type/op_version check) would break it for an op from a
+// newer writ, which is the forward-compatibility break this whole change
+// exists to prevent. A defined op_type with a bad body does not exercise
+// rule 4 at all, so the unknown-op-type case is not a variation on the first
+// one — it is the other half of the guard.
 func TestEncodePayloadDoesNotValidateBody(t *testing.T) {
-	env := codec.Envelope{
-		ObjectID:   "rev-1",
-		ObjectType: "review",
-		OpType:     "approval",
-		OpVersion:  1,
-		Body:       json.RawMessage(`{"revision":"not-an-oid","verdict":"bogus"}`),
+	cases := []struct {
+		name string
+		env  codec.Envelope
+	}{
+		{
+			// Rule 3: a defined op_type whose body the vocabulary rejects.
+			name: "defined op type, schema-invalid body",
+			env: codec.Envelope{
+				ObjectID:   "rev-1",
+				ObjectType: "review",
+				OpType:     "approval",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"not-an-oid","verdict":"bogus"}`),
+			},
+		},
+		{
+			// Rule 4: an op_type and op_version no build of writ this old
+			// defines — what an op written by a newer writ looks like on the
+			// way through the projection.
+			name: "undefined op type and future op version",
+			env: codec.Envelope{
+				ObjectID:   "rev-1",
+				ObjectType: "review",
+				OpType:     "annotate",
+				OpVersion:  2,
+				Body:       json.RawMessage(`{"annotation":"written by a newer writ"}`),
+			},
+		},
 	}
 
-	if _, err := codec.EncodePayload(env); err != nil {
-		t.Fatalf("EncodePayload rejected a body it must still re-encode: %v", err)
-	}
-	if _, err := codec.BuildCommit(env, testAuthor(), nil); err == nil {
-		t.Fatal("BuildCommit accepted the same body EncodePayload re-encodes")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := codec.EncodePayload(tc.env); err != nil {
+				t.Fatalf("EncodePayload rejected an op it must still re-encode: %v", err)
+			}
+			if _, err := codec.BuildCommit(tc.env, testAuthor(), nil); err == nil {
+				t.Fatal("BuildCommit accepted the same op EncodePayload re-encodes")
+			}
+		})
 	}
 }
 
