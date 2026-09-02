@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/writtendev/writ/spec"
 )
 
 func runCompletion(args []string, stdout, stderr io.Writer) int {
@@ -42,16 +44,16 @@ func flagEnumChoices(flagName string, cmdPath []string) string {
 	p := strings.Join(cmdPath, " ")
 	switch flagName {
 	case "state":
-		return "open closed"
+		return strings.Join(spec.IssueStates(), " ")
 	case "status":
 		if p == "review list" {
-			return "draft open closed merged"
+			return strings.Join(spec.ReviewStatuses(), " ")
 		}
 		return ""
 	case "verdict":
-		return "approve request-changes none"
+		return strings.Join(spec.ApprovalVerdicts(), " ")
 	case "relation":
-		return "fixes relates none"
+		return strings.Join(spec.LinkRelations(), " ")
 	case "sort":
 		return "created_at_asc created_at_desc updated_at_asc updated_at_desc title_asc title_desc"
 	default:

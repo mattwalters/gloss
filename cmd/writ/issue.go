@@ -6,12 +6,14 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/writtendev/writ/cmd/writ/internal/wire"
 	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/state"
+	"github.com/writtendev/writ/spec"
 )
 
 func runIssue(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
@@ -113,8 +115,8 @@ func runIssueCreate(ctx context.Context, defaultDir string, args []string, stdou
 		return 2
 	}
 
-	if opts.stateVal != "" && opts.stateVal != "open" && opts.stateVal != "closed" {
-		fmt.Fprintf(stderr, "writ issue create: invalid state %q (must be open or closed)\n", opts.stateVal)
+	if opts.stateVal != "" && !slices.Contains(spec.IssueStates(), opts.stateVal) {
+		fmt.Fprintf(stderr, "writ issue create: invalid state %q (must be %s)\n", opts.stateVal, spec.FormatOptions(spec.IssueStates()))
 		fs.Usage()
 		return 2
 	}
@@ -221,8 +223,8 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 		}
 
 		newState = posArgs[1]
-		if newState != "open" && newState != "closed" {
-			fmt.Fprintf(stderr, "writ issue status: invalid status %q (must be open or closed)\n", newState)
+		if !slices.Contains(spec.IssueStates(), newState) {
+			fmt.Fprintf(stderr, "writ issue status: invalid status %q (must be %s)\n", newState, spec.FormatOptions(spec.IssueStates()))
 			fs.Usage()
 			return 2
 		}
@@ -570,11 +572,8 @@ func runIssueLink(ctx context.Context, defaultDir string, args []string, stdout,
 		return 2
 	}
 
-	switch opts.relation {
-	case "fixes", "relates", "none":
-		// valid
-	default:
-		fmt.Fprintf(stderr, "writ issue link: invalid relation %q (must be fixes, relates, or none)\n", opts.relation)
+	if !slices.Contains(spec.LinkRelations(), opts.relation) {
+		fmt.Fprintf(stderr, "writ issue link: invalid relation %q (must be %s)\n", opts.relation, spec.FormatOptions(spec.LinkRelations()))
 		fs.Usage()
 		return 2
 	}

@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/identity"
 	"github.com/writtendev/writ/engine/state"
+	"github.com/writtendev/writ/spec"
 )
 
 // Issues provides operations on issue collaborative objects.
@@ -105,6 +107,9 @@ func (i *Issues) Update(ctx context.Context, id string, edit IssueEdit) error {
 	if edit.Title == nil && edit.Description == nil {
 		return fmt.Errorf("writ: at least one of title or description must be provided")
 	}
+	if edit.Title != nil && *edit.Title == "" {
+		return fmt.Errorf("writ: issue title cannot be empty: pass a nil title to leave it unchanged")
+	}
 
 	if err := target.maybeAutoRefresh(ctx); err != nil {
 		return fmt.Errorf("writ: auto refresh: %w", err)
@@ -157,8 +162,14 @@ func (i *Issues) SetState(ctx context.Context, id string, state IssueState) erro
 	if err := target.ensureWritable(); err != nil {
 		return err
 	}
-	if id == "" || state.State == "" {
-		return fmt.Errorf("writ: issue id and state must be non-empty")
+	if id == "" {
+		return fmt.Errorf("writ: issue id cannot be empty")
+	}
+	if state.State == "" {
+		return fmt.Errorf("writ: issue state cannot be empty")
+	}
+	if !slices.Contains(spec.IssueStates(), state.State) {
+		return fmt.Errorf("writ: invalid state %q (must be %s)", state.State, spec.FormatOptions(spec.IssueStates()))
 	}
 
 	if err := target.maybeAutoRefresh(ctx); err != nil {
@@ -295,8 +306,8 @@ func (i *Issues) Label(ctx context.Context, id string, add, remove []string) err
 	if id == "" {
 		return fmt.Errorf("writ: issue id cannot be empty")
 	}
-	if len(add) == 0 && len(remove) == 0 {
-		return fmt.Errorf("writ: add or remove must be non-empty")
+	if err := validateLabels(add, remove); err != nil {
+		return err
 	}
 
 	if err := target.maybeAutoRefresh(ctx); err != nil {
@@ -350,8 +361,14 @@ func (i *Issues) Link(ctx context.Context, id string, l Link) error {
 	if err := target.ensureWritable(); err != nil {
 		return err
 	}
-	if id == "" || l.Target == "" || l.Relation == "" {
+	if id == "" {
+		return fmt.Errorf("writ: issue id cannot be empty")
+	}
+	if l.Target == "" || l.Relation == "" {
 		return fmt.Errorf("writ: issue id, target, and relation must be non-empty")
+	}
+	if !slices.Contains(spec.LinkRelations(), l.Relation) {
+		return fmt.Errorf("writ: invalid relation %q (must be %s)", l.Relation, spec.FormatOptions(spec.LinkRelations()))
 	}
 
 	des, objID, err := state.ParseReference(l.Target)
@@ -434,6 +451,11 @@ func (i *Issues) Comment(ctx context.Context, id string, c NewComment) (string, 
 	}
 	if c.Text == "" {
 		return "", fmt.Errorf("writ: comment text cannot be empty")
+	}
+	if c.Anchor != nil {
+		if err := validateAnchor(c.Anchor); err != nil {
+			return "", err
+		}
 	}
 
 	if err := target.maybeAutoRefresh(ctx); err != nil {

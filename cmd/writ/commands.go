@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/writtendev/writ/spec"
 )
 
 type flagSpec struct {
@@ -93,7 +95,7 @@ var issueCreateCmd = &command{
 		{Name: "C"},
 		{Name: "title"},
 		{Name: "description"},
-		{Name: "state", Values: []string{"open", "closed"}},
+		{Name: "state", Values: spec.IssueStates()},
 		{Name: "fixes", Repeatable: true},
 		{Name: "relates", Repeatable: true},
 	},
@@ -143,7 +145,7 @@ var issueListCmd = &command{
 	Long:      "List issues.",
 	Flags: []flagSpec{
 		{Name: "C"},
-		{Name: "state", Values: []string{"open", "closed"}, Repeatable: true},
+		{Name: "state", Values: spec.IssueStates(), Repeatable: true},
 		{Name: "assignee", Repeatable: true},
 		{Name: "label", Repeatable: true},
 		{Name: "author", Repeatable: true},
@@ -167,7 +169,7 @@ var issueLinkCmd = &command{
 	Flags: []flagSpec{
 		{Name: "C"},
 		{Name: "target"},
-		{Name: "relation", Values: []string{"fixes", "relates", "none"}},
+		{Name: "relation", Values: spec.LinkRelations()},
 		{Name: "target-type"},
 	},
 	Examples: []string{
@@ -247,7 +249,7 @@ var reviewApproveCmd = &command{
 	Long:      "Record a review verdict.",
 	Flags: []flagSpec{
 		{Name: "C"},
-		{Name: "verdict", Values: []string{"approve", "request-changes", "none"}},
+		{Name: "verdict", Values: spec.ApprovalVerdicts()},
 		{Name: "revision"},
 		{Name: "m"},
 		{Name: "subject"},
@@ -299,7 +301,7 @@ var reviewLinkCmd = &command{
 	Flags: []flagSpec{
 		{Name: "C"},
 		{Name: "target"},
-		{Name: "relation", Values: []string{"fixes", "relates", "none"}},
+		{Name: "relation", Values: spec.LinkRelations()},
 		{Name: "target-type"},
 	},
 	Examples: []string{
@@ -334,7 +336,7 @@ var reviewListCmd = &command{
 	Long:      "List code reviews.",
 	Flags: []flagSpec{
 		{Name: "C"},
-		{Name: "status", Values: []string{"draft", "open", "closed", "merged"}, Repeatable: true},
+		{Name: "status", Values: spec.ReviewStatuses(), Repeatable: true},
 		{Name: "assignee", Repeatable: true},
 		{Name: "label", Repeatable: true},
 		{Name: "author", Repeatable: true},

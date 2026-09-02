@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
+	"slices"
 	"sort"
 
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/state"
+	"github.com/writtendev/writ/spec"
 )
 
 // Reviews provides operations on code review collaborative objects.
@@ -265,8 +266,19 @@ func (r *Reviews) SetStatus(ctx context.Context, id string, status ReviewStatus)
 	if err := r.store.ensureWritable(); err != nil {
 		return err
 	}
-	if id == "" || status.Status == "" {
-		return fmt.Errorf("writ: review id and status must be non-empty")
+	if id == "" {
+		return fmt.Errorf("writ: review id cannot be empty")
+	}
+	if status.Status == "" {
+		return fmt.Errorf("writ: review status cannot be empty")
+	}
+	if !slices.Contains(spec.ReviewStatuses(), status.Status) {
+		return fmt.Errorf("writ: invalid status %q (must be %s)", status.Status, spec.FormatOptions(spec.ReviewStatuses()))
+	}
+	if status.MergeCommit != "" {
+		if err := requireCommitOID("merge commit", status.MergeCommit); err != nil {
+			return err
+		}
 	}
 
 	if err := r.store.maybeAutoRefresh(ctx); err != nil {
@@ -404,8 +416,8 @@ func (r *Reviews) Label(ctx context.Context, id string, add, remove []string) er
 	if id == "" {
 		return fmt.Errorf("writ: review id cannot be empty")
 	}
-	if len(add) == 0 && len(remove) == 0 {
-		return fmt.Errorf("writ: add or remove must be non-empty")
+	if err := validateLabels(add, remove); err != nil {
+		return err
 	}
 
 	if err := r.store.maybeAutoRefresh(ctx); err != nil {
@@ -458,8 +470,14 @@ func (r *Reviews) Link(ctx context.Context, id string, l Link) error {
 	if err := r.store.ensureWritable(); err != nil {
 		return err
 	}
-	if id == "" || l.Target == "" || l.Relation == "" {
+	if id == "" {
+		return fmt.Errorf("writ: review id cannot be empty")
+	}
+	if l.Target == "" || l.Relation == "" {
 		return fmt.Errorf("writ: review id, target, and relation must be non-empty")
+	}
+	if !slices.Contains(spec.LinkRelations(), l.Relation) {
+		return fmt.Errorf("writ: invalid relation %q (must be %s)", l.Relation, spec.FormatOptions(spec.LinkRelations()))
 	}
 
 	if _, _, err := state.ParseReference(l.Target); err != nil {
@@ -521,6 +539,11 @@ func (r *Reviews) Comment(ctx context.Context, id string, c NewComment) (string,
 	}
 	if c.Text == "" {
 		return "", fmt.Errorf("writ: comment text cannot be empty")
+	}
+	if c.Anchor != nil {
+		if err := validateAnchor(c.Anchor); err != nil {
+			return "", err
+		}
 	}
 
 	if err := r.store.maybeAutoRefresh(ctx); err != nil {
@@ -602,12 +625,20 @@ func (r *Reviews) Approve(ctx context.Context, id string, a Approval) error {
 		return fmt.Errorf("writ: review id cannot be empty")
 	}
 
-	if err := r.store.maybeAutoRefresh(ctx); err != nil {
-		return fmt.Errorf("writ: auto refresh: %w", err)
-	}
-
 	if a.Verdict == "" {
 		a.Verdict = "approve"
+	}
+	if !slices.Contains(spec.ApprovalVerdicts(), a.Verdict) {
+		return fmt.Errorf("writ: invalid verdict %q (must be %s)", a.Verdict, spec.FormatOptions(spec.ApprovalVerdicts()))
+	}
+	if a.Revision != "" {
+		if err := requireCommitOID("revision", a.Revision); err != nil {
+			return err
+		}
+	}
+
+	if err := r.store.maybeAutoRefresh(ctx); err != nil {
+		return fmt.Errorf("writ: auto refresh: %w", err)
 	}
 
 	res, err := r.store.projection.Review(id)
@@ -663,24 +694,6 @@ func (r *Reviews) Approve(ctx context.Context, id string, a Approval) error {
 	return nil
 }
 
-// commitOIDPattern is the oid grammar the vocabulary schemas declare: a full
-// SHA-1 or SHA-256 object id, lowercase hex. Abbreviations and ref names are
-// not object ids.
-var commitOIDPattern = regexp.MustCompile(`^([0-9a-f]{40}|[0-9a-f]{64})$`)
-
-// requireCommitOID rejects a value the revision body's oid grammar would
-// reject, before any op is built.
-//
-// This is the domain half of the producer contract: the codec would catch the
-// same value, but only as a JSON Pointer into a canonicalized blob. "main" is
-// the input a caller actually types, and the fix — resolve the ref first — is
-// only obvious if the error says which one it was.
-func requireCommitOID(field, value string) error {
-	if commitOIDPattern.MatchString(value) {
-		return nil
-	}
-	return fmt.Errorf("writ: %s must be a commit OID, not a ref name: %q", field, value)
-}
 
 // checkBeforeAppend validates every op body a multi-append operation is about
 // to write, before the first of them is appended.
