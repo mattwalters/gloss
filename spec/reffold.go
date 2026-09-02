@@ -4,7 +4,17 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf8"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/unicode/norm"
 )
+
+// personUnicodeVersion is the Unicode version spec/identifiers.md pins the
+// person-identifier normalization algorithm to. x/text selects its tables by
+// Go build tag rather than by module version, so this is checked against the
+// tables actually compiled in rather than assumed.
+const personUnicodeVersion = "15.0.0"
 
 // splitPerson splits a person identifier into scheme and value on the FIRST
 // colon, per spec/identifiers.md. The first colon and not "a colon": an email
@@ -20,8 +30,7 @@ func splitPerson(s string) (scheme, value string, ok bool) {
 
 // normalizePerson normalizes a person identifier string per
 // spec/identifiers.md: the scheme is lowercased, and the value is trimmed of
-// leading and trailing whitespace and case-folded. The exact case-folding
-// algorithm is not pinned here and may come to differ per scheme (WRIT-117).
+// leading and trailing whitespace and folded by foldPersonValue.
 //
 // A string carrying no colon is not a conforming identifier; it is folded as
 // a flat string and preserved rather than rejected, because what a reader
@@ -37,9 +46,130 @@ func normalizePerson(s string) string {
 	s = strings.TrimSpace(s)
 	scheme, value, ok := splitPerson(s)
 	if !ok {
-		return strings.ToLower(s)
+		return foldPersonValue(s)
 	}
-	return strings.ToLower(scheme) + ":" + strings.ToLower(strings.TrimSpace(value))
+	return strings.ToLower(scheme) + ":" + foldPersonValue(strings.TrimSpace(value))
+}
+
+// foldPersonValue applies the value half of the normalization rule in
+// spec/identifiers.md §Normalization rules, pinned to Unicode
+// personUnicodeVersion: NFC, then Unicode default case folding (UAX #21 §2.3
+// toCasefold, the full C+F mappings, no locale tailoring), then NFC again. One
+// algorithm for every scheme.
+//
+// The trailing NFC is not redundant. Case folding does not preserve a normal
+// form — U+017F followed by U+0301 folds to "s" plus U+0301, which is not NFC
+// — so a rule that stopped after folding would give a different answer on a
+// second pass, and normalization runs at more than one layer.
+func foldPersonValue(s string) string {
+	if personIsASCII(s) {
+		return personLowerASCII(s)
+	}
+	return personNFC(personCaseFold(personNFC(s)))
+}
+
+func personIsASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= utf8.RuneSelf {
+			return false
+		}
+	}
+	return true
+}
+
+func personLowerASCII(s string) string {
+	var b []byte
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			if b == nil {
+				b = []byte(s)
+			}
+			b[i] = c + ('a' - 'A')
+		}
+	}
+	if b == nil {
+		return s
+	}
+	return string(b)
+}
+
+var personFoldCaser = cases.Fold()
+
+// Cherokee uppercase folds to itself: CaseFolding.txt maps Cherokee lowercase
+// *up* ("AB70..ABBF; C; 13A0..13EF"), and x/text encodes case mappings as XOR
+// deltas, which cannot express a mapping that is not an involution, so
+// cases.Fold toggles these code points rather than holding them fixed
+// (golang/go#46101). Folding is idempotent by definition, so the toggle is a
+// defect; an implementation that inherited it would never settle.
+const personCherokeeLo, personCherokeeHi = 0x13A0, 0x13F5
+
+// personCaseFold applies Unicode default case folding, holding the Cherokee
+// code points at their correct fixed points. Folding runs separately is exact
+// because toCasefold is context-free.
+func personCaseFold(s string) string {
+	if !personHasCherokee(s) {
+		return personFoldCaser.String(s)
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	run := 0
+	for i, r := range s {
+		if r < personCherokeeLo || r > personCherokeeHi {
+			continue
+		}
+		b.WriteString(personFoldCaser.String(s[run:i]))
+		b.WriteRune(r)
+		run = i + utf8.RuneLen(r)
+	}
+	b.WriteString(personFoldCaser.String(s[run:]))
+	return b.String()
+}
+
+func personHasCherokee(s string) bool {
+	for _, r := range s {
+		if r >= personCherokeeLo && r <= personCherokeeHi {
+			return true
+		}
+	}
+	return false
+}
+
+// personNFC composes s in Normalization Form C, verifying each segment rather
+// than trusting norm.NFC outright.
+//
+// x/text packs a composition pair into a 32-bit key as
+// uint16(a)<<16|uint16(b), so a starter above U+FFFF is truncated to its low
+// 16 bits and matches the BMP entry sharing them: NFC of U+10041 followed by
+// U+0300 returns "À" where the correct answer changes nothing. 16,956
+// (starter, mark) pairs compose falsely this way, and each one merges two
+// distinct people into one.
+//
+// NFD is trie-driven, does not use the packed key, and is unaffected, so
+// NFD(NFC(x)) == NFD(x) independently verifies that the composed form is
+// canonically equivalent to the input; a false composition fails it. The check
+// runs per normalization segment so one bad pair cannot discard the
+// compositions around it, and a failing segment falls back to its decomposed
+// form, which is canonical. No two of the 1088 canonical composing pairs in
+// Unicode 15.0.0 share a truncated key, so the guard can never block a
+// legitimate composition.
+func personNFC(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for len(s) > 0 {
+		n := norm.NFC.NextBoundaryInString(s, true)
+		if n <= 0 || n > len(s) {
+			n = len(s)
+		}
+		seg := s[:n]
+		out := norm.NFC.String(seg)
+		if norm.NFD.String(out) != norm.NFD.String(seg) {
+			out = norm.NFD.String(seg)
+		}
+		b.WriteString(out)
+		s = s[n:]
+	}
+	return b.String()
 }
 
 // EffectiveTimes computes the causality-monotone effective timestamp

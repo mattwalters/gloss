@@ -1,0 +1,110 @@
+{
+  "objects": [
+    {
+      "object_id": "r-person-unicode",
+      "object_type": "review",
+      "total_order": [
+        {
+          "commit": "bfcd698971914f57eca62669290763ead07dcc5c",
+          "label": "alice-create",
+          "t_star": 1767225600
+        },
+        {
+          "commit": "8ea065249970b07d5a09596d40c029d526712a5a",
+          "label": "alice-revision",
+          "t_star": 1767225660
+        },
+        {
+          "commit": "8a3fd3ad4822e5d98a18caa7506bbfcf9cc1d8fa",
+          "label": "alice-assign-composition",
+          "t_star": 1767225720
+        },
+        {
+          "commit": "01353849c3941aeb934dd2707a8251d875b530c2",
+          "label": "alice-assign-casefold",
+          "t_star": 1767225780
+        },
+        {
+          "commit": "9588964ad8e34e50197143c1fe1ea3a031d275c1",
+          "label": "alice-assign-cherokee",
+          "t_star": 1767225840
+        },
+        {
+          "commit": "49ef6f76d848d1cff135aac8f5376f858c299c03",
+          "label": "alice-assign-supplementary",
+          "t_star": 1767225900
+        },
+        {
+          "commit": "83540f436daf960cf7b9dbc58060d8e2618edc14",
+          "label": "alice-approval-decomposed",
+          "t_star": 1767225960
+        },
+        {
+          "commit": "e2d3aa131311b7359dc35865e29f14c2c8964d14",
+          "label": "alice-approval-precomposed",
+          "t_star": 1767226020
+        },
+        {
+          "commit": "fa060464953ad61c9c3630130447f0e0b91c9669",
+          "label": "bob-remove-normalized",
+          "t_star": 1767226080
+        }
+      ],
+      "state": {
+        "add": [
+          "user:i̇",
+          "user:josé",
+          "user:ss",
+          "user:à",
+          "user:𐁁̀"
+        ],
+        "base": [
+          "0000000000000000000000000000000000000001"
+        ],
+        "head": [
+          "0000000000000000000000000000000000000002"
+        ],
+        "message": [
+          {
+            "key": [
+              "user:josé",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "Updated under the precomposed spelling"
+          }
+        ],
+        "remove": [
+          "user:i̇"
+        ],
+        "revision": [
+          {
+            "key": [
+              "user:josé",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "0000000000000000000000000000000000000002"
+          }
+        ],
+        "subject": [
+          {
+            "key": [
+              "user:josé",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "user:josé"
+          }
+        ],
+        "title": "Unicode Person Identifier Folding",
+        "verdict": [
+          {
+            "key": [
+              "user:josé",
+              "0000000000000000000000000000000000000002"
+            ],
+            "value": "request-changes"
+          }
+        ]
+      }
+    }
+  ]
+}

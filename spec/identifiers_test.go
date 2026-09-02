@@ -9,6 +9,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	unicodecases "golang.org/x/text/cases"
+	unicodenorm "golang.org/x/text/unicode/norm"
 
 	"github.com/writtendev/writ/spec"
 )
@@ -255,8 +257,8 @@ func TestInvalidReferenceVectors(t *testing.T) {
 
 func TestPersonIdentifierNormalization(t *testing.T) {
 	// Normalization rule (spec/identifiers.md §Normalization rules): trim the
-	// identifier, split at the FIRST colon, lowercase the scheme, trim and
-	// case-fold the value.
+	// identifier, split at the FIRST colon, lowercase the scheme, trim the
+	// value and fold it with fold(v) = NFC(toCasefold(NFC(v))).
 	// Comparison rule: equal(A, B) <=> norm(A) == norm(B)
 	cases := []struct {
 		a     string
@@ -278,6 +280,17 @@ func TestPersonIdentifierNormalization(t *testing.T) {
 		{"KeyBase:Alice", "keybase:alice", true},
 		// The value's own colon belongs to the value.
 		{`email:"a:b"@example.com`, `email:"a:b"@example.com`, true},
+		// The folding algorithm, step by step.
+		{"user:Jos\u0065\u0301", "user:Jos\u00e9", true}, // NFC composes a decomposed value
+		{"user:\u0130", "user:\u0069\u0307", true},       // the pinned case fold
+		{"user:\u0130", "user:i", false},                 // and not the simple-lowercase answer
+		{"user:\u1e9e", "user:ss", true},                 // full folding, not simple
+		{"user:stra\u00dfe", "user:STRASSE", true},       // both spellings of the word fold together
+		{"user:\u017f\u0301", "user:\u015b", true},       // fold, then compose again
+		{"user:\u0041\u030a", "user:\u00c5", true},       // precomposed and decomposed ring
+		{"user:\u212b", "user:\u00c5", true},             // and the Angstrom sign, which NFC unifies
+		{"user:\u00e9", "user:e", false},                 // composing is not stripping
+		{"user:alice", "user:\u0410lice", false},         // Cyrillic A is not Latin A
 	}
 
 	// Deliberately spelled out here rather than calling any implementation:
@@ -285,13 +298,24 @@ func TestPersonIdentifierNormalization(t *testing.T) {
 	// able to fail when every implementation agrees on the wrong thing.
 	// TestReffoldNormalizePersonMatchesEngine is the test that binds the
 	// implementations to each other.
+	//
+	// This is the algorithm exactly as written, with no correction for the two
+	// x/text defects the implementations work around: a correction here would
+	// make this a third copy of the fix rather than an independent reading of
+	// the rule. Its cases therefore stay off that surface \u2014 Cherokee
+	// U+13A0..U+13F5, and supplementary starters \u2014 which is swept
+	// exhaustively against CPython in engine/internal/person's differential
+	// test instead.
+	fold := func(v string) string {
+		return unicodenorm.NFC.String(unicodecases.Fold().String(unicodenorm.NFC.String(v)))
+	}
 	norm := func(s string) string {
 		s = strings.TrimSpace(s)
 		i := strings.Index(s, ":")
 		if i < 0 {
-			return strings.ToLower(s)
+			return fold(s)
 		}
-		return strings.ToLower(s[:i]) + ":" + strings.ToLower(strings.TrimSpace(s[i+1:]))
+		return strings.ToLower(s[:i]) + ":" + fold(strings.TrimSpace(s[i+1:]))
 	}
 
 	for _, tc := range cases {
