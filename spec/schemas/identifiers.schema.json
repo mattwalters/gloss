@@ -35,9 +35,9 @@
     "reference": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 513,
+      "maxLength": 289,
       "pattern": "^([0-9a-f]{32}#)?[^#\\s]+$",
-      "description": "Reference string: optional 32-hex repo-id followed by #, followed by an object-id (canonical 32-hex or envelope-legal opaque ASCII without #). maxLength 513 counts code points, not octets and not UTF-16 code units; the pattern's second half admits non-ASCII, so the three units disagree here and the bound is bracketed in all of them under spec/testdata/references/. Enforced by rejection, never truncation: a truncated reference points at a different object. Normative text: spec/identifiers.md §Length bound."
+      "description": "Reference string: optional 32-hex repo-id followed by #, followed by an object-id (canonical 32-hex or envelope-legal opaque ASCII without #). maxLength 289 is derived (32 + 1 + 256) and counts code points, not octets and not UTF-16 code units; the pattern's second half admits non-ASCII, so the three units disagree here and the bound is bracketed in all of them under spec/testdata/references/. Enforced by rejection, never truncation: a truncated reference points at a different object. Normative text: spec/identifiers.md §Length bound."
     },
     "canonical-reference": {
       "type": "string",
