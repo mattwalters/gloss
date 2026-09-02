@@ -1,5 +1,6 @@
 PKG := github.com/writtendev/writ
 APISURFACE := go run ./internal/cmd/apisurface
+APIDIFF := go run golang.org/x/exp/cmd/apidiff@v0.0.0-20250128182459-e0ece0dbea4c
 
 # Resolve the install dir the way the go tool does: GOBIN when set, else
 # GOPATH/bin.
@@ -17,7 +18,7 @@ LDFLAGS = -X $(PKG)/internal/version.Version=$(VERSION)
 # `make -s hugo-version` in .github/workflows/docs.yml.
 HUGO_VERSION := 0.165.0
 
-.PHONY: build test install api api-check cli-docs cli-docs-check snapshot release hugo-version docs docs-serve casts render-tape
+.PHONY: build test install api api-check api-compat cli-docs cli-docs-check snapshot release hugo-version docs docs-serve casts render-tape
 
 build:
 	go build ./...
@@ -38,8 +39,12 @@ install: ## Build and install writ into Go's bin dir
 # varies with the Go version — which is what makes `api-check` below able to
 # say "the baseline is stale" rather than "your toolchain differs from mine".
 api: ## Regenerate api/engine.txt from the source
-	@mkdir -p api
-	$(APISURFACE) ./engine > api/engine.txt
+	@set -e; \
+	mkdir -p api; \
+	tmp=$$(mktemp "$${TMPDIR:-/tmp}/writ-api.XXXXXX"); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	$(APISURFACE) ./engine > "$$tmp"; \
+	mv "$$tmp" api/engine.txt
 
 api-check: ## Fail if api/engine.txt is stale (the CI gate)
 	@set -e; \
@@ -50,10 +55,54 @@ api-check: ## Fail if api/engine.txt is stale (the CI gate)
 	     api/engine.txt "$$tmp"; then \
 		echo; \
 		echo 'api-check: api/engine.txt does not match the code.'; \
-		echo 'api-check: run `make api` and commit the result. A line above that'; \
-		echo 'api-check: changes or disappears is a breaking API change — say so'; \
-		echo 'api-check: in the PR, and in CHANGELOG.md.'; \
+		echo 'api-check: run `make api` and commit the result. Read the diff above:'; \
+		echo 'api-check: a line that changes or disappears is a breaking change, and'; \
+		echo 'api-check: so is an added interface method or a constant inserted into'; \
+		echo 'api-check: an iota block, which renumbers the ones after it. `make'; \
+		echo 'api-check: api-compat` classifies the delta if you want it named.'; \
+		echo 'api-check: Breaking changes are allowed — say so in the PR, and in'; \
+		echo 'api-check: CHANGELOG.md.'; \
 		exit 1; \
+	fi
+
+# api-check answers "is the baseline current". It cannot answer "did that
+# break anyone", because two of the shapes that break callers reach the
+# listing as plain added lines: a method added to an exported interface
+# (breaking for implementors, indistinguishable from adding the same method
+# to a concrete type) and a constant inserted into an iota block (which
+# renumbers every constant after it, invisibly — implicit iota members print
+# without values). apidiff knows the difference. It runs against the merge
+# base rather than a committed baseline, so nothing it produces is stored and
+# no machine-specific paths ship.
+#
+# This is a report, not a gate: before 1.0 a breaking change is allowed, it
+# just may not be silent. It prints the classification and leaves the call to
+# whoever reviews the PR.
+BASE ?= origin/main
+
+api-compat: ## Name the engine API changes since BASE, breaking ones first (a report)
+	@set -e; \
+	base=$$(git merge-base '$(BASE)' HEAD) || { \
+	  printf 'api-compat: no merge base with %s — fetch it first\n' '$(BASE)' >&2; \
+	  exit 1; }; \
+	tmp=$$(mktemp -d "$${TMPDIR:-/tmp}/writ-apicompat.XXXXXX"); \
+	trap 'git worktree remove --force "$$tmp/base" >/dev/null 2>&1 || true; \
+	      rm -rf "$$tmp"' EXIT; \
+	git worktree add --quiet --detach "$$tmp/base" "$$base"; \
+	( cd "$$tmp/base" && $(APIDIFF) -m -w "$$tmp/base.api" $(PKG) ) 2>"$$tmp/err" \
+	  || { cat "$$tmp/err" >&2; exit 1; }; \
+	$(APIDIFF) -m "$$tmp/base.api" $(PKG) >"$$tmp/all.txt" 2>"$$tmp/err" \
+	  || { cat "$$tmp/err" >&2; exit 1; }; \
+	grep -v '^Ignoring internal package ' "$$tmp/err" >&2 || true; \
+	awk '/:$$/ && !/^-/ { header = $$0; next } \
+	     /\.\/engine/ { if (header != "") { print header; header = "" } print }' \
+	  "$$tmp/all.txt" > "$$tmp/engine.txt"; \
+	short=$$(git rev-parse --short "$$base"); \
+	if [ -s "$$tmp/engine.txt" ]; then \
+	  printf 'api-compat: engine API changes since %s:\n\n' "$$short"; \
+	  cat "$$tmp/engine.txt"; \
+	else \
+	  printf 'api-compat: no engine API change since %s.\n' "$$short"; \
 	fi
 
 # The CLI reference is generated from the command table in cmd/writ, not

@@ -46,6 +46,36 @@ jobs:
           go-version: "1.25"
       - run: make api-check
 
+  # api-check answers "is the baseline current". This answers "did anything
+  # break", which the text listing cannot: an added interface method and a
+  # constant inserted into an iota block both reach it as plain added lines.
+  # It needs a base revision to compare against, so it runs on pull requests
+  # only; a push to main has no meaningful base and the job is skipped.
+  #
+  # It reports rather than gates — before 1.0 a breaking change is allowed, it
+  # just may not be silent — so it is deliberately a separate job from `api`:
+  # fetching apidiff is a network call, and the gate must not depend on one.
+  api-compat:
+    name: api-compat
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - name: Classify the API delta against the merge base
+        run: |
+          git fetch --no-tags --quiet origin \
+            "+refs/heads/$GITHUB_BASE_REF:refs/remotes/origin/$GITHUB_BASE_REF"
+          out="$RUNNER_TEMP/api-compat.txt"
+          make api-compat BASE="origin/$GITHUB_BASE_REF" > "$out"
+          cat "$out"
+          { echo '```'; cat "$out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
   docs:
     name: docs
     runs-on: ubuntu-latest

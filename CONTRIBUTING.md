@@ -118,8 +118,9 @@ subpackages. Downstream tools are meant to need nothing but that surface, so
 it is kept as a file you can read rather than a fact you have to derive:
 
 ```
-make api        # regenerate api/engine.txt
-make api-check  # what CI's `api` job runs
+make api         # regenerate api/engine.txt
+make api-check   # what CI's `api` job runs: is the baseline current?
+make api-compat  # what CI's `api-compat` job runs: what changed, and did it break?
 ```
 
 **If you change the public API, run `make api` and commit the result in the
@@ -128,15 +129,45 @@ it against the committed one, so it fails on *any* drift — an added symbol as
 readily as a removed one. A green `api` job therefore means the baseline is
 current, not merely that nothing obviously broke.
 
-Read the diff it produces: added lines are new surface, and a line that
-changes or disappears is a breaking change. Breaking changes aren't forbidden
-before 1.0, but they are never silent — call it out in the PR and add a
-CHANGELOG.md entry.
+### Reading the diff
 
-The listing comes from `internal/cmd/apisurface`, which parses the source and
-prints declarations. No type checking, no compiler export data: the bytes
-depend only on the code, so two contributors on different machines and
-different Go versions produce the same file. The baseline it replaced was
-apidiff export data, which embedded the generating machine's absolute paths,
-changed wholesale between toolchains, and — because it was only ever consulted
-for *incompatible* changes — could not tell a stale baseline from a clean one.
+A line that changes or disappears is a breaking change. An added line is
+*usually* new surface — with two exceptions that are breaking despite reading
+as plain additions:
+
+- **A method added to an exported interface.** Every implementation outside
+  this repo stops satisfying it. In the listing it looks exactly like the same
+  method added to a concrete type, which breaks nobody.
+- **A constant inserted into an iota block.** It renumbers every constant
+  after it, silently changing values callers may have persisted. Implicit iota
+  members are listed without values, so the renumbering leaves no trace beyond
+  the one added line.
+
+Adding a field to an exported struct is not on this list: it is compatible.
+
+`make api-compat` is what settles it. It runs
+[apidiff](https://pkg.go.dev/golang.org/x/exp/cmd/apidiff) against the merge
+base with `main` and labels each change compatible or incompatible — the
+classification the text listing cannot express. It compares two checkouts
+rather than a committed baseline, so nothing it produces is stored and no
+machine-specific paths ship. CI runs it on every pull request and prints the
+result in the job summary.
+
+It is a **report, not a gate**. Breaking changes aren't forbidden before 1.0,
+so nothing fails on one — but they are never silent: call it out in the PR and
+add a CHANGELOG.md entry.
+
+### Where the listing comes from
+
+`internal/cmd/apisurface` parses the source and prints declarations. No type
+checking, no compiler export data: the bytes depend only on the code, so two
+contributors on different machines and different Go versions produce the same
+file. That is why `api-check` can say "the baseline is stale" rather than
+"your toolchain differs from mine" — and it is also why it needs `api-compat`
+beside it, since a source-level listing knows names and shapes but not what
+they resolve to. The tool's doc comment records the blind spots.
+
+The baseline this replaced was apidiff export data committed to the repo,
+which embedded the generating machine's absolute paths, changed wholesale
+between toolchains, and — because it was only ever consulted for
+*incompatible* changes — could not tell a stale baseline from a clean one.
