@@ -970,3 +970,92 @@ func TestFoldReviewNestedShapeAtFlatField(t *testing.T) {
 		t.Errorf("generic add = %v, want %v", generic.State["add"], want)
 	}
 }
+
+func TestFoldReviewMixedFlatAndNestedShapes(t *testing.T) {
+	labelOp := func(id, parent, body string, when int64) codec.Op {
+		op := codec.Op{
+			Envelope: codec.Envelope{
+				ObjectID:   "r-mixed",
+				ObjectType: "review",
+				OpType:     "label",
+				OpVersion:  1,
+				Body:       json.RawMessage(body),
+			},
+			ID:     id,
+			Author: codec.Identity{When: time.Unix(when, 0).UTC()},
+		}
+		if parent != "" {
+			op.Parents = []string{parent}
+		}
+		return op
+	}
+
+	// l1: flat add, nested remove
+	// l2: nested add, flat remove
+	// l3: nested add AND nested remove in the same op
+	ops := []codec.Op{
+		labelOp("l1", "", `{"add":"feature","remove":{"remove":["old"]}}`, 100),
+		labelOp("l2", "l1", `{"add":{"add":["bug"]},"remove":"temporary"}`, 200),
+		labelOp("l3", "l2", `{"add":{"add":["urgent"],"remove":["feature"]},"remove":{"add":["security"],"remove":["bug"]}}`, 300),
+	}
+
+	review, err := s.FoldReview(ops)
+	if err != nil {
+		t.Fatalf("FoldReview: %v", err)
+	}
+
+	// l1 adds "feature"
+	// l2 adds "bug"
+	// l3 removes "feature" (via add.remove), adds "urgent" (via add.add), adds "security" (via remove.add), removes "bug" (via remove.remove)
+	// Remaining: "security", "urgent"
+	want := []string{"security", "urgent"}
+	if !reflect.DeepEqual(review.Labels, want) {
+		t.Errorf("Labels = %v, want %v", review.Labels, want)
+	}
+
+	generic, err := s.Fold(ops, s.ReviewRules())
+	if err != nil {
+		t.Fatalf("Fold: %v", err)
+	}
+	if !reflect.DeepEqual(generic.State["add"], want) {
+		t.Errorf("generic add = %v, want %v", generic.State["add"], want)
+	}
+	if !reflect.DeepEqual(generic.State["remove"], want) {
+		t.Errorf("generic remove = %v, want %v", generic.State["remove"], want)
+	}
+
+	// Reference fold cross-check
+	var mergeOps []spec.MergeOp
+	for _, o := range ops {
+		var bm map[string]any
+		_ = json.Unmarshal(o.Body, &bm)
+		mergeOps = append(mergeOps, spec.MergeOp{
+			ID:        o.ID,
+			Parents:   o.Parents,
+			Time:      o.Author.When.Unix(),
+			ObjectID:  o.ObjectID,
+			OpType:    o.OpType,
+			OpVersion: o.OpVersion,
+			Body:      bm,
+		})
+	}
+	var fieldRules []spec.FieldRule
+	for _, r := range s.ReviewRules() {
+		fieldRules = append(fieldRules, spec.FieldRule{
+			OpType:    r.OpType,
+			OpVersion: r.OpVersion,
+			Field:     r.Field,
+			Strategy:  r.Strategy,
+		})
+	}
+	refRes, err := spec.Fold(mergeOps, fieldRules)
+	if err != nil {
+		t.Fatalf("spec.Fold: %v", err)
+	}
+	if !reflect.DeepEqual(refRes.State["add"], want) {
+		t.Errorf("ref add = %v, want %v", refRes.State["add"], want)
+	}
+	if !reflect.DeepEqual(refRes.State["remove"], want) {
+		t.Errorf("ref remove = %v, want %v", refRes.State["remove"], want)
+	}
+}

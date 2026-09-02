@@ -157,16 +157,6 @@ func orSetAccepts(field string, v any, body map[string]any) bool {
 		return isStringOrStringSlice(member)
 	}
 
-	if obj, ok := v.(map[string]any); ok {
-		for _, side := range []string{"add", "remove"} {
-			member, present := obj[side]
-			if !sideOK(member, present) {
-				return false
-			}
-		}
-		return true
-	}
-
 	if field == "add" || field == "remove" {
 		sibling := "remove"
 		if field == "remove" {
@@ -179,7 +169,7 @@ func orSetAccepts(field string, v any, body map[string]any) bool {
 		vMember, vPresent := body[field]
 		return sideOK(vMember, vPresent)
 	}
-	return isStringOrStringSlice(v)
+	return sideOK(v, true)
 }
 
 // orSetItems returns the items one side of an OR-set body carries. The side
