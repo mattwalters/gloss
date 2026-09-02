@@ -3,6 +3,7 @@ package identity_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -136,6 +137,81 @@ func TestLoad_ValidLiteralKey(t *testing.T) {
 	}
 	if id.AllowedSigners != "" {
 		t.Errorf("id.AllowedSigners = %q, want empty string when unset", id.AllowedSigners)
+	}
+}
+
+// TestLoad_WhitespaceOnlyAuthor pins the guard on user.name and user.email.
+// git config stores a whitespace-only value verbatim, so a raw == "" check let
+// one through as a configured identity — and that identity is written into the
+// commit author of every appended op and used as the principal signature
+// verification matches against allowed-signers. Whitespace-only is unset.
+func TestLoad_WhitespaceOnlyAuthor(t *testing.T) {
+	values := []struct {
+		name  string
+		value string
+	}{
+		{"spaces", "   "},
+		{"tab", "\t"},
+	}
+
+	for _, key := range []string{"user.name", "user.email"} {
+		for _, v := range values {
+			t.Run(key+"/"+v.name, func(t *testing.T) {
+				env := setupTestEnv(t)
+				populateValidLocalConfig(t, env.repoDir)
+				setGitConfig(t, env.repoDir, key, v.value)
+
+				// The value really did survive the round trip through git;
+				// otherwise this test would pass for the wrong reason.
+				cfg, err := identity.ReadGitConfig(context.Background(), env.repoDir)
+				if err != nil {
+					t.Fatalf("ReadGitConfig: %v", err)
+				}
+				if got := cfg[strings.ToLower(key)]; got != v.value {
+					t.Fatalf("git stored %s as %q, want %q verbatim", key, got, v.value)
+				}
+
+				_, err = identity.Load(context.Background(), env.repoDir)
+				if err == nil {
+					t.Fatalf("Load accepted whitespace-only %s", key)
+				}
+				if !errors.Is(err, identity.ErrMissing) {
+					t.Errorf("Load error = %v, want errors.Is ErrMissing", err)
+				}
+				var cfgErr *identity.ConfigError
+				if !errors.As(err, &cfgErr) {
+					t.Fatalf("Load error is %T, want *identity.ConfigError", err)
+				}
+				if cfgErr.Key != key {
+					t.Errorf("cfgErr.Key = %q, want %q", cfgErr.Key, key)
+				}
+			})
+		}
+	}
+}
+
+// TestLoad_TrimsAuthorPadding is the other half of the guard above: a padded
+// value is configured, so Load succeeds, but the padding does not travel into
+// the commit author or the verification principal.
+func TestLoad_TrimsAuthorPadding(t *testing.T) {
+	env := setupTestEnv(t)
+	populateValidLocalConfig(t, env.repoDir)
+	setGitConfig(t, env.repoDir, "user.name", "  Alice Example  ")
+	setGitConfig(t, env.repoDir, "user.email", "  alice@example.test\t")
+
+	id, err := identity.Load(context.Background(), env.repoDir)
+	if err != nil {
+		t.Fatalf("Load unexpected error: %v", err)
+	}
+	if id.Author.Name != "Alice Example" {
+		t.Errorf("id.Author.Name = %q, want %q", id.Author.Name, "Alice Example")
+	}
+	if id.Author.Email != "alice@example.test" {
+		t.Errorf("id.Author.Email = %q, want %q", id.Author.Email, "alice@example.test")
+	}
+	// The person identifier already trimmed; the author now agrees with it.
+	if id.PersonID != "email:alice@example.test" {
+		t.Errorf("id.PersonID = %q, want %q", id.PersonID, "email:alice@example.test")
 	}
 }
 
@@ -319,48 +395,279 @@ func TestLoad_InvalidSigningKey_EmptyLiteral(t *testing.T) {
 	}
 }
 
-func TestLoad_UnsupportedGPGFormat(t *testing.T) {
-	cases := []struct {
-		name      string
-		format    string
-		unset     bool
-		wantValue string
-	}{
-		{"unset", "", true, ""},
-		{"openpgp", "openpgp", false, "openpgp"},
-		{"x509", "x509", false, "x509"},
-		{"custom", "custom-crypto", false, "custom-crypto"},
-	}
+// TestLoad_GPGFormat covers all three states of gpg.format. Unset and
+// unsupported used to collapse into one error, so a repo with no signing
+// configuration at all was told its configuration was unsupported — writ
+// reporting something broken where the user had merely not configured
+// anything, on the first screen a new user sees.
+func TestLoad_GPGFormat(t *testing.T) {
+	t.Run("unset is missing, not unsupported", func(t *testing.T) {
+		absent := map[string]string{
+			"unset":      "",
+			"whitespace": "   ",
+		}
+		for name, value := range absent {
+			t.Run(name, func(t *testing.T) {
+				env := setupTestEnv(t)
+				populateValidLocalConfig(t, env.repoDir)
+				if value == "" {
+					cmd := exec.Command("git", "config", "--unset", "gpg.format")
+					cmd.Dir = env.repoDir
+					if out, err := cmd.CombinedOutput(); err != nil {
+						t.Fatalf("git config --unset gpg.format: %v (%s)", err, out)
+					}
+				} else {
+					setGitConfig(t, env.repoDir, "gpg.format", value)
+				}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
+				_, err := identity.Load(context.Background(), env.repoDir)
+				if err == nil {
+					t.Fatal("Load succeeded with no gpg.format configured")
+				}
+				if !errors.Is(err, identity.ErrMissing) {
+					t.Errorf("Load error = %v, want errors.Is ErrMissing", err)
+				}
+				if errors.Is(err, identity.ErrUnsupportedFormat) {
+					t.Errorf("Load error = %v, want absence reported as absence, not as an unsupported format", err)
+				}
+				var cfgErr *identity.ConfigError
+				if !errors.As(err, &cfgErr) {
+					t.Fatalf("Load error is %T, want *identity.ConfigError", err)
+				}
+				if cfgErr.Key != "gpg.format" {
+					t.Errorf("cfgErr.Key = %q, want \"gpg.format\"", cfgErr.Key)
+				}
+				if cfgErr.Value != "" {
+					t.Errorf("cfgErr.Value = %q, want empty: there is no value to quote back", cfgErr.Value)
+				}
+				if msg := err.Error(); !strings.Contains(msg, "missing") || strings.Contains(msg, "unsupported") {
+					t.Errorf("message %q should read as missing and not as unsupported", msg)
+				}
+			})
+		}
+	})
+
+	t.Run("configured but unsupported", func(t *testing.T) {
+		for _, format := range []string{"openpgp", "x509", "custom-crypto"} {
+			t.Run(format, func(t *testing.T) {
+				env := setupTestEnv(t)
+				populateValidLocalConfig(t, env.repoDir)
+				setGitConfig(t, env.repoDir, "gpg.format", format)
+
+				_, err := identity.Load(context.Background(), env.repoDir)
+				if err == nil {
+					t.Fatalf("Load succeeded with gpg.format = %q", format)
+				}
+				if !errors.Is(err, identity.ErrUnsupportedFormat) {
+					t.Errorf("Load error = %v, want errors.Is ErrUnsupportedFormat", err)
+				}
+				if errors.Is(err, identity.ErrMissing) {
+					t.Errorf("Load error = %v, want a configured value reported as configured", err)
+				}
+				var cfgErr *identity.ConfigError
+				if !errors.As(err, &cfgErr) {
+					t.Fatalf("Load error is %T, want *identity.ConfigError", err)
+				}
+				if cfgErr.Key != "gpg.format" {
+					t.Errorf("cfgErr.Key = %q, want \"gpg.format\"", cfgErr.Key)
+				}
+				// A deliberate choice writ is asking the user to reconsider,
+				// so the message quotes the choice back and says what writ
+				// signs with instead.
+				if cfgErr.Value != format {
+					t.Errorf("cfgErr.Value = %q, want %q", cfgErr.Value, format)
+				}
+				msg := err.Error()
+				if !strings.Contains(msg, format) {
+					t.Errorf("message %q does not quote the configured value back", msg)
+				}
+				if !strings.Contains(msg, "ssh") {
+					t.Errorf("message %q does not say what writ signs with", msg)
+				}
+			})
+		}
+	})
+
+	t.Run("configured correctly", func(t *testing.T) {
+		for _, format := range []string{"ssh", "SSH", " ssh "} {
+			t.Run(format, func(t *testing.T) {
+				env := setupTestEnv(t)
+				populateValidLocalConfig(t, env.repoDir)
+				setGitConfig(t, env.repoDir, "gpg.format", format)
+
+				id, err := identity.Load(context.Background(), env.repoDir)
+				if err != nil {
+					t.Fatalf("Load with gpg.format = %q: %v", format, err)
+				}
+				if id.Key.Value != "/path/to/id_ed25519" {
+					t.Errorf("id.Key.Value = %q, want the configured path", id.Key.Value)
+				}
+				// Load accepts any spelling, so it must hand on one. It
+				// carried the user's spelling through, and engine/open.go
+				// compared the field against "ssh": gpg.format = SSH loaded
+				// clean, reported a signing key, and then had no signer.
+				if id.Key.Format != "ssh" {
+					t.Errorf("id.Key.Format = %q for gpg.format = %q, want the canonical %q", id.Key.Format, format, "ssh")
+				}
+			})
+		}
+	})
+}
+
+// TestLoad_WhitespaceOnlySigningKey is WRIT-131's defect three keys further
+// down the same function. git stores a whitespace-only user.signingKey
+// verbatim, a raw guard accepted it as a key path, and the repository then
+// reported itself configured and died at the first signed write with a
+// subprocess error naming a file called "   ".
+func TestLoad_WhitespaceOnlySigningKey(t *testing.T) {
+	for _, value := range []string{" ", "   ", "\t"} {
+		t.Run(fmt.Sprintf("%q", value), func(t *testing.T) {
 			env := setupTestEnv(t)
 			populateValidLocalConfig(t, env.repoDir)
+			setGitConfig(t, env.repoDir, "user.signingKey", value)
 
-			if tc.unset {
-				cmd := exec.Command("git", "config", "--unset", "gpg.format")
-				cmd.Dir = env.repoDir
-				_ = cmd.Run()
-			} else {
-				setGitConfig(t, env.repoDir, "gpg.format", tc.format)
+			// git really does store it verbatim, so the test cannot pass by
+			// git having normalised the value away.
+			cmd := exec.Command("git", "config", "--get", "user.signingKey")
+			cmd.Dir = env.repoDir
+			out, err := cmd.Output()
+			if err != nil {
+				t.Fatalf("git config --get user.signingKey: %v", err)
+			}
+			if got := strings.TrimRight(string(out), "\n"); got != value {
+				t.Fatalf("git stored user.signingKey as %q, want %q verbatim", got, value)
 			}
 
-			_, err := identity.Load(context.Background(), env.repoDir)
+			_, err = identity.Load(context.Background(), env.repoDir)
 			if err == nil {
-				t.Fatalf("Load succeeded with unsupported gpg.format (format=%q, unset=%v)", tc.format, tc.unset)
+				t.Fatalf("Load accepted a whitespace-only user.signingKey %q as a key path", value)
 			}
-			if !errors.Is(err, identity.ErrUnsupportedFormat) {
-				t.Errorf("Load error = %v, want errors.Is ErrUnsupportedFormat", err)
+			if !errors.Is(err, identity.ErrMissing) {
+				t.Errorf("Load error = %v, want errors.Is ErrMissing: a set key with nothing in it is nothing configured", err)
 			}
 			var cfgErr *identity.ConfigError
 			if !errors.As(err, &cfgErr) {
 				t.Fatalf("Load error is %T, want *identity.ConfigError", err)
 			}
-			if cfgErr.Key != "gpg.format" {
-				t.Errorf("cfgErr.Key = %q, want \"gpg.format\"", cfgErr.Key)
+			if cfgErr.Key != "user.signingKey" {
+				t.Errorf("cfgErr.Key = %q, want \"user.signingKey\"", cfgErr.Key)
 			}
-			if cfgErr.Value != tc.wantValue {
-				t.Errorf("cfgErr.Value = %q, want %q", cfgErr.Value, tc.wantValue)
+		})
+	}
+
+	t.Run("literal key with nothing after the prefix", func(t *testing.T) {
+		env := setupTestEnv(t)
+		populateValidLocalConfig(t, env.repoDir)
+		setGitConfig(t, env.repoDir, "user.signingKey", "key::   ")
+
+		_, err := identity.Load(context.Background(), env.repoDir)
+		if err == nil {
+			t.Fatal("Load accepted \"key::   \" as a literal signing key")
+		}
+		if !errors.Is(err, identity.ErrInvalid) {
+			t.Errorf("Load error = %v, want errors.Is ErrInvalid", err)
+		}
+	})
+
+	t.Run("padding around a real key path is trimmed", func(t *testing.T) {
+		env := setupTestEnv(t)
+		populateValidLocalConfig(t, env.repoDir)
+		setGitConfig(t, env.repoDir, "user.signingKey", "  /path/to/id_ed25519  ")
+
+		id, err := identity.Load(context.Background(), env.repoDir)
+		if err != nil {
+			t.Fatalf("Load with a padded user.signingKey: %v", err)
+		}
+		if id.Key.Value != "/path/to/id_ed25519" {
+			t.Errorf("id.Key.Value = %q, want the padding trimmed off the path", id.Key.Value)
+		}
+	})
+}
+
+// TestLoad_WhitespaceOnlyAllowedSigners covers the last untrimmed key in
+// Load. It is optional configuration, so the only thing whitespace can buy is
+// a trust-store load against a path made of spaces.
+func TestLoad_WhitespaceOnlyAllowedSigners(t *testing.T) {
+	env := setupTestEnv(t)
+	populateValidLocalConfig(t, env.repoDir)
+	setGitConfig(t, env.repoDir, "gpg.ssh.allowedSignersFile", "   ")
+
+	id, err := identity.Load(context.Background(), env.repoDir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if id.AllowedSigners != "" {
+		t.Errorf("id.AllowedSigners = %q, want empty: a set key with nothing in it is nothing configured", id.AllowedSigners)
+	}
+}
+
+// TestConfigErrorMessage pins the two renderings of a ConfigError. Error
+// carries "(run 'writ init' to configure)", which is correct from every
+// command except one: writ init prints these errors itself, so the advice
+// there is circular and implies init failed at something it never attempts.
+// Message is the same text with that clause dropped and nothing else changed.
+func TestConfigErrorMessage(t *testing.T) {
+	const hint = " (run 'writ init' to configure)"
+
+	cases := []struct {
+		name     string
+		err      *identity.ConfigError
+		wantHint bool
+	}{
+		{
+			name:     "missing with a key",
+			err:      &identity.ConfigError{Key: "gpg.format", Problem: identity.ErrMissing},
+			wantHint: true,
+		},
+		{
+			name:     "missing with wrapped guidance",
+			err:      &identity.ConfigError{Key: "writ.personId", Problem: fmt.Errorf("%w: set it to user:alice", identity.ErrMissing)},
+			wantHint: true,
+		},
+		{
+			name:     "missing with no key at all",
+			err:      &identity.ConfigError{Problem: identity.ErrMissing},
+			wantHint: true,
+		},
+		{
+			name:     "unsupported with a value",
+			err:      &identity.ConfigError{Key: "gpg.format", Value: "openpgp", Problem: fmt.Errorf("%w: writ signs with ssh", identity.ErrUnsupportedFormat)},
+			wantHint: true,
+		},
+		{
+			// Invalid never carried the hint: a wrong value is not fixed by
+			// running init, which does not write signing configuration.
+			name:     "invalid",
+			err:      &identity.ConfigError{Key: "writ.writerId", Value: "nope", Problem: identity.ErrInvalid},
+			wantHint: false,
+		},
+		{
+			name:     "some other problem",
+			err:      &identity.ConfigError{Key: "user.name", Problem: errors.New("git exploded")},
+			wantHint: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotErr, gotMsg := tc.err.Error(), tc.err.Message()
+			if strings.Contains(gotMsg, "writ init") {
+				t.Errorf("Message() = %q, want no advice to run writ init", gotMsg)
+			}
+			if tc.wantHint {
+				if !strings.HasSuffix(gotErr, hint) {
+					t.Errorf("Error() = %q, want it to end with %q", gotErr, hint)
+				}
+				if want := strings.TrimSuffix(gotErr, hint); gotMsg != want {
+					t.Errorf("Message() = %q, want %q: the clause is all that may differ", gotMsg, want)
+				}
+				return
+			}
+			if strings.Contains(gotErr, "writ init") {
+				t.Errorf("Error() = %q, want no advice to run writ init", gotErr)
+			}
+			if gotMsg != gotErr {
+				t.Errorf("Message() = %q, want it identical to Error() = %q", gotMsg, gotErr)
 			}
 		})
 	}

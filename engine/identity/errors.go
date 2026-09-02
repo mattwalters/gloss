@@ -24,7 +24,28 @@ type ConfigError struct {
 	Problem error
 }
 
+// initHint is the remediation ConfigError.Error appends to the two problems a
+// user fixes by configuring something. It is correct for every emitter except
+// one: writ init prints these errors itself, and telling the reader to run the
+// command they are running is circular. Worse, it implies init failed at
+// something it never attempts — writ does not write signing configuration for
+// anyone; it prints the git config lines and expects the user to run them.
+// Message renders the same text without this clause for that caller.
+const initHint = " (run 'writ init' to configure)"
+
 func (e *ConfigError) Error() string {
+	return e.message(initHint)
+}
+
+// Message returns the same text as Error without the "run 'writ init' to
+// configure" remediation. It is for writ init, which is the one emitter the
+// remediation cannot help — it prints the git config lines to run directly
+// below. Every other caller wants Error.
+func (e *ConfigError) Message() string {
+	return e.message("")
+}
+
+func (e *ConfigError) message(hint string) string {
 	if errors.Is(e.Problem, ErrMissing) {
 		// Carry e.Problem's detail through, the way the ErrInvalid and
 		// ErrUnsupportedFormat arms below already do. Short-circuiting on the
@@ -36,23 +57,23 @@ func (e *ConfigError) Error() string {
 		detail = strings.TrimSpace(detail)
 		if e.Key != "" {
 			if detail != "" {
-				return fmt.Sprintf("identity: missing git config %q: %s (run 'writ init' to configure)", e.Key, detail)
+				return fmt.Sprintf("identity: missing git config %q: %s%s", e.Key, detail, hint)
 			}
-			return fmt.Sprintf("identity: missing git config %q (run 'writ init' to configure)", e.Key)
+			return fmt.Sprintf("identity: missing git config %q%s", e.Key, hint)
 		}
 		if detail != "" {
-			return fmt.Sprintf("identity: missing git configuration: %s (run 'writ init' to configure)", detail)
+			return fmt.Sprintf("identity: missing git configuration: %s%s", detail, hint)
 		}
-		return "identity: missing git configuration (run 'writ init' to configure)"
+		return "identity: missing git configuration" + hint
 	}
 	if errors.Is(e.Problem, ErrUnsupportedFormat) {
 		if e.Key != "" && e.Value != "" {
-			return fmt.Sprintf("identity: unsupported git config %q=%q: %v (run 'writ init' to configure)", e.Key, e.Value, e.Problem)
+			return fmt.Sprintf("identity: unsupported git config %q=%q: %v%s", e.Key, e.Value, e.Problem, hint)
 		}
 		if e.Key != "" {
-			return fmt.Sprintf("identity: unsupported git config %q: %v (run 'writ init' to configure)", e.Key, e.Problem)
+			return fmt.Sprintf("identity: unsupported git config %q: %v%s", e.Key, e.Problem, hint)
 		}
-		return fmt.Sprintf("identity: unsupported format: %v (run 'writ init' to configure)", e.Problem)
+		return fmt.Sprintf("identity: unsupported format: %v%s", e.Problem, hint)
 	}
 	if errors.Is(e.Problem, ErrInvalid) {
 		if e.Key != "" && e.Value != "" {

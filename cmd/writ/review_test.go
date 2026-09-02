@@ -1122,20 +1122,28 @@ func TestReviewComment_ResolveAttribution(t *testing.T) {
 		}
 	})
 
-	// With nothing to derive a person identifier from, the chain ends. It does
-	// not end at the writer ID: that has no scheme, so writing one would record
-	// a bare identifier no conforming reader can interpret. Refusing and saying
-	// what to configure is the only honest option left — the same ruling
+	// With no person identifier to be had, the chain ends. It does not end at
+	// the writer ID: that has no scheme, so writing one would record a bare
+	// identifier no conforming reader can interpret. Refusing and saying what
+	// to configure is the only honest option left — the same ruling
 	// `review approve` follows.
+	//
+	// The state is driven with a writ.personId writ cannot use, not with a
+	// blank user.email. Since WRIT-131 a whitespace-only user.email is not an
+	// identity at all: identity.Load returns a zero Identity, so that
+	// repository is the no_writer_identity case below rather than this one,
+	// and it is refused one guard earlier. An unusable writ.personId is now
+	// the only way to hold a valid writer identity and still have nothing to
+	// attribute a resolve to, so it is what keeps this branch covered.
 	t.Run("no_derivable_person_id", func(t *testing.T) {
 		env := setupTestCLIEnv(t)
 		setupSigningKey(t, env.repoDir)
 
 		reviewID, commentID := openReviewWithComment(t, env.repoDir)
 
-		// Set the whitespace email after the repo is stood up: setupSigningKey
-		// probes user.email, and review open needs a usable identity.
-		setGitConfig(t, env.repoDir, "user.email", "   ")
+		// Set it after the repo is stood up: review open needs a usable
+		// identity to create the comment being resolved here.
+		setGitConfig(t, env.repoDir, "writ.personId", "alice")
 
 		var stdout, stderr bytes.Buffer
 		code := run(context.Background(), []string{
@@ -1147,6 +1155,12 @@ func TestReviewComment_ResolveAttribution(t *testing.T) {
 		}
 		if !strings.Contains(stderr.String(), "writ.personId") {
 			t.Errorf("error should name writ.personId, got %q", stderr.String())
+		}
+		// The value is configured, so the diagnosis must say it is wrong
+		// rather than absent: telling a user to set a key they already set
+		// sends them to look at something that is already there.
+		if !strings.Contains(stderr.String(), "alice") {
+			t.Errorf("error should quote the offending value, got %q", stderr.String())
 		}
 
 		if resolved, resolvedBy := commentResolution(t, env.repoDir, reviewID, commentID); resolved || resolvedBy != "" {
@@ -1515,12 +1529,15 @@ func TestReviewApprove_Subject(t *testing.T) {
 		env := setupTestCLIEnv(t)
 		setGitConfig(t, env.repoDir, "writ.writerId", "cccccccccccccccc")
 		setupSigningKey(t, env.repoDir)
-		// Set the whitespace email after setupSigningKey: its getGitConfigAll
-		// probe trims and drops empty lines, so a whitespace user.email set
-		// before it would be overwritten with alice@example.com.
-		setGitConfig(t, env.repoDir, "user.email", "   ")
-
 		reviewID := openReviewWithRevision(t, env.repoDir)
+
+		// Blank the address only now. Since WRIT-131 identity.Load treats a
+		// whitespace-only user.email as unset, so a repo configured this way
+		// from the start cannot open a review to approve in the first place.
+		// The state under test is the one that outlives configuration: a
+		// review already on disk, and no person identifier left to sign it
+		// over to.
+		setGitConfig(t, env.repoDir, "user.email", "   ")
 
 		var stdout, stderr bytes.Buffer
 		code := run(context.Background(), []string{
@@ -1539,10 +1556,17 @@ func TestReviewApprove_Subject(t *testing.T) {
 	})
 }
 
-// TestReviewApprove_PersonIDDiagnosis pins the difference between the two ways
-// a person identifier can be unavailable. Discarding the derivation error
-// collapses them, and the user who set writ.personId to something invalid is
-// told to set writ.personId — sending them to look at a key already there.
+// TestReviewApprove_PersonIDDiagnosis pins the invalid half of the diagnosis:
+// a user who set writ.personId to something that is not a person identifier
+// must be told the value is wrong, not that nothing is configured — the second
+// sends them to look at a key that is already there.
+//
+// It used to pin the difference between that and the missing half. It no
+// longer can. Since WRIT-131 a whitespace-only user.email is not an identity,
+// so Load returns a zero Identity with a nil PersonIDErr, engine/open.go
+// collapses the failure into ErrNoIdentity, and the missing case here takes
+// review approve's generic fallback rather than the PersonIDErr branch. The
+// missing half is pinned where it still runs, in TestInit_PersonID.
 func TestReviewApprove_PersonIDDiagnosis(t *testing.T) {
 	t.Run("invalid writ.personId is reported as invalid", func(t *testing.T) {
 		env := setupTestCLIEnv(t)
@@ -1575,9 +1599,13 @@ func TestReviewApprove_PersonIDDiagnosis(t *testing.T) {
 	t.Run("nothing configured is reported as missing", func(t *testing.T) {
 		env := setupTestCLIEnv(t)
 		setupSigningKey(t, env.repoDir)
-		setGitConfig(t, env.repoDir, "user.email", "   ")
 
 		reviewID := openReviewWithRevision(t, env.repoDir)
+
+		// Blank the address only now: since WRIT-131 a whitespace-only
+		// user.email is not an identity, so a repo configured this way from
+		// the start could not open the review being approved here.
+		setGitConfig(t, env.repoDir, "user.email", "   ")
 
 		var stdout, stderr bytes.Buffer
 		code := run(context.Background(), []string{
@@ -1590,10 +1618,10 @@ func TestReviewApprove_PersonIDDiagnosis(t *testing.T) {
 		if !strings.Contains(got, "writ.personId") {
 			t.Errorf("error should name writ.personId, got %q", got)
 		}
-		// The ErrMissing arm of ConfigError.Error must carry the wrapped
-		// guidance through rather than short-circuiting on the sentinel.
+		// The guidance naming a concrete identifier must reach the reader
+		// whichever arm produces it.
 		if !strings.Contains(got, "user:alice") {
-			t.Errorf("error should carry the wrapped example through, got %q", got)
+			t.Errorf("error should carry the example through, got %q", got)
 		}
 	})
 }

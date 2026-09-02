@@ -115,7 +115,7 @@ func Open(path string, opts ...Option) (*Store, error) {
 		if cfg.signer != nil {
 			signer = cfg.signer
 			hasSigner = true
-		} else if ident.Key.Value != "" && ident.Key.Format == "ssh" {
+		} else if ident.Key.Value != "" && strings.EqualFold(ident.Key.Format, "ssh") {
 			s, err := codec.NewSigner(ident.Key)
 			if err == nil {
 				signer = s

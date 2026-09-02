@@ -31,6 +31,69 @@ func newInitFlagSet(defaultDir string) (*flag.FlagSet, *initOpts) {
 	return fs, opts
 }
 
+// initMessage renders err for writ init's own output. An identity.ConfigError
+// signs its message with "(run 'writ init' to configure)", which is the right
+// advice from every other command and the wrong advice from this one: it tells
+// the reader to run what they are already running, and implies init failed at
+// something it never attempts. writ does not write signing configuration for
+// anyone — it prints the git config lines and expects the user to run them,
+// which is what the reader sees directly below each of these warnings.
+func initMessage(err error) string {
+	var cfgErr *identity.ConfigError
+	if errors.As(err, &cfgErr) {
+		return cfgErr.Message()
+	}
+	return err.Error()
+}
+
+// workspaceRegisterMessage renders a workspace-registration failure for writ
+// init's own output.
+//
+// Registration writes into a second repository — the one writ.workspace points
+// at — and the identity errors it fails with carry "(run 'writ init' to
+// configure)". Printed here that advice is not merely circular, the way a
+// ConfigError from this repository would be: it is wrong. The reader is
+// already running writ init, in this repository, and no number of further runs
+// here will ever configure the workspace repository. The only useful thing to
+// say is which repository to go and run it in, so say that.
+func workspaceRegisterMessage(err error, wsPath string) string {
+	switch {
+	case errors.Is(err, writ.ErrNoIdentity):
+		return fmt.Sprintf("the workspace repository has no writer identity configured (run 'writ init' in the workspace repo %s)", wsPath)
+	case errors.Is(err, writ.ErrNoSigningKey):
+		return fmt.Sprintf("the workspace repository has no signing key configured (run 'writ init' in the workspace repo %s)", wsPath)
+	}
+	return initMessage(err)
+}
+
+// reportPartialInit names the state a failed run leaves the repository in.
+//
+// Everything that can be hoisted ahead of the first write has been, but git
+// config has no transaction and the refspec writes are still real writes that
+// can fail one remote in. There is nothing to roll back to, so the honest
+// alternative is to say which half stuck rather than let a non-zero exit imply
+// the repository is untouched: identity in config, refspec absent, is exactly
+// the state that reads as clean and is not.
+//
+// Naming writ init as the remedy here is not the circular advice this command
+// stopped giving: that told a reader init had failed to configure signing,
+// which init never attempts. This is a run that genuinely stopped half-way,
+// and re-running genuinely finishes it. Re-running is also safe, which is the
+// part worth stating out loud — EnsureWriterID and EnsureRepoID reuse what is
+// already in config, so a second run never mints a second writer-id for this
+// device. That would split one device's ops across two ref namespaces.
+func reportPartialInit(stderr io.Writer, writerID identity.WriterID, repoID identity.RepoID, done, pending []string) {
+	fmt.Fprintf(stderr, "writ init: stopped part-way; the repository is half-configured\n")
+	fmt.Fprintf(stderr, "  in git config now: writ.writerId %s, writ.repoId %s\n", writerID, repoID)
+	if len(done) > 0 {
+		fmt.Fprintf(stderr, "  fetch refspec configured for: %s\n", strings.Join(done, ", "))
+	}
+	if len(pending) > 0 {
+		fmt.Fprintf(stderr, "  fetch refspec NOT configured for: %s\n", strings.Join(pending, ", "))
+	}
+	fmt.Fprintf(stderr, "  re-run writ init after fixing the error above: it reuses both IDs and writes only what is missing\n")
+}
+
 func runInit(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
 	fs, opts := newInitFlagSet(defaultDir)
 	fs.SetOutput(stderr)
@@ -74,26 +137,57 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 		return 1
 	}
 
-	// 2. Discover existing chains for collision avoidance
-	var taken func(identity.WriterID) bool
-	if gitInfo, err := gitdir.Resolve(repoRoot); err == nil {
-		storer, err := gitdir.OpenStorage(gitInfo)
+	// 2. Open the repository, and work out which remotes this run is for.
+	//
+	// Both happen before anything is written. git config has no transaction,
+	// so the only defence against a half-configured repository is to do the
+	// steps that can fail while there is still nothing to undo. Opening the
+	// repository is a precondition, not a later step: one writ cannot open is
+	// one writ init cannot finish. This open used to happen at the end, inside
+	// sync.Open, which is exactly where WRIT-93's extensions.worktreeConfig
+	// failure landed — after both IDs were already persisted.
+	gitInfo, err := gitdir.Resolve(repoRoot)
+	if err != nil {
+		fmt.Fprintf(stderr, "writ init: %v\n", err)
+		return 1
+	}
+	storer, err := gitdir.OpenStorage(gitInfo)
+	if err != nil {
+		fmt.Fprintf(stderr, "writ init: %v\n", err)
+		return 1
+	}
+
+	remotes := fs.Args()
+	if len(remotes) == 0 {
+		cmdRemote := exec.CommandContext(ctx, "git", "remote")
+		cmdRemote.Dir = repoRoot
+		outRemote, err := cmdRemote.Output()
 		if err != nil {
-			fmt.Fprintf(stderr, "writ init: %v\n", err)
+			fmt.Fprintf(stderr, "writ init: list remotes: %v\n", err)
 			return 1
 		}
-		if chains, err := dag.Chains(storer); err == nil {
-			existing := make(map[identity.WriterID]struct{}, len(chains))
-			for _, chain := range chains {
-				existing[chain.Ref.WriterID] = struct{}{}
-			}
-			taken = func(id identity.WriterID) bool {
-				_, ok := existing[id]
-				return ok
+		for _, line := range strings.Split(strings.TrimSpace(string(outRemote)), "\n") {
+			if trimmed := strings.TrimSpace(line); trimmed != "" {
+				remotes = append(remotes, trimmed)
 			}
 		}
 	}
 
+	// Existing chains, for writer-id collision avoidance. Best effort by
+	// design: a listing that fails costs a collision check, not the run.
+	var taken func(identity.WriterID) bool
+	if chains, err := dag.Chains(storer); err == nil {
+		existing := make(map[identity.WriterID]struct{}, len(chains))
+		for _, chain := range chains {
+			existing[chain.Ref.WriterID] = struct{}{}
+		}
+		taken = func(id identity.WriterID) bool {
+			_, ok := existing[id]
+			return ok
+		}
+	}
+
+	// 3. From here on the command writes to git config.
 	writerID, minted, err := identity.EnsureWriterID(ctx, repoRoot, taken)
 	if err != nil {
 		fmt.Fprintf(stderr, "writ init: ensure writer ID: %v\n", err)
@@ -118,7 +212,7 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 		fmt.Fprintf(stdout, "Repo ID: %s (already configured)\n", repoID)
 	}
 
-	// 3. Report the person identifier this repo will write into op payloads.
+	// 4. Report the person identifier this repo will write into op payloads.
 	// It is derived, not minted: writ.personId when set, else email:<user.email>.
 	// Reported separately from the identity load below because a repo with no
 	// signing key configured still has a person identifier, and because
@@ -127,7 +221,7 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 		personID, personErr := identity.DerivePersonID(gitCfg)
 		switch {
 		case personErr != nil:
-			fmt.Fprintf(stderr, "warning: no person identifier: %v\n", personErr)
+			fmt.Fprintf(stderr, "warning: no person identifier: %s\n", initMessage(personErr))
 			fmt.Fprintf(stderr, "Configure one of:\n")
 			fmt.Fprintf(stderr, "  git config %s user:<handle>\n", identity.PersonIDKey)
 			fmt.Fprintf(stderr, "  git config user.email <address>\n")
@@ -138,28 +232,40 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 		}
 	}
 
-	// 4. Load identity to report author and key state
+	// 5. Load identity to report author and key state.
+	//
+	// A missing key gets the remediation for that key. The signing block used
+	// to catch every key beginning "user.", which swept user.name and
+	// user.email into it: a repo with no user.email was told its SSH signing
+	// was misconfigured and shown three git config lines, none of them the
+	// one it needed.
 	ident, err := identity.Load(ctx, repoRoot)
 	if err != nil {
 		var cfgErr *identity.ConfigError
 		if errors.As(err, &cfgErr) {
 			switch {
 			case errors.Is(cfgErr.Problem, identity.ErrMissing) || errors.Is(cfgErr.Problem, identity.ErrUnsupportedFormat) || errors.Is(cfgErr.Problem, identity.ErrInvalid):
-				if cfgErr.Key == "gpg.format" || cfgErr.Key == "user.signingKey" || strings.HasPrefix(cfgErr.Key, "user.") {
-					fmt.Fprintf(stderr, "warning: SSH signing key or identity not fully configured (%v)\n", cfgErr)
+				switch cfgErr.Key {
+				case "gpg.format", "user.signingKey":
+					fmt.Fprintf(stderr, "warning: SSH signing key not fully configured (%s)\n", initMessage(cfgErr))
 					fmt.Fprintf(stderr, "To configure SSH signing for Writ and Git:\n")
 					fmt.Fprintf(stderr, "  git config gpg.format ssh\n")
 					fmt.Fprintf(stderr, "  git config user.signingKey ~/.ssh/id_ed25519.pub\n")
 					fmt.Fprintf(stderr, "Optionally configure verification allowed signers:\n")
 					fmt.Fprintf(stderr, "  git config gpg.ssh.allowedSignersFile ~/.ssh/allowed_signers\n")
-				} else {
-					fmt.Fprintf(stderr, "warning: identity configuration: %v\n", cfgErr)
+				case "user.name", "user.email":
+					fmt.Fprintf(stderr, "warning: author identity not fully configured (%s)\n", initMessage(cfgErr))
+					fmt.Fprintf(stderr, "To configure the identity Writ and Git author commits with:\n")
+					fmt.Fprintf(stderr, "  git config user.name \"Your Name\"\n")
+					fmt.Fprintf(stderr, "  git config user.email you@example.com\n")
+				default:
+					fmt.Fprintf(stderr, "warning: identity configuration: %s\n", initMessage(cfgErr))
 				}
 			default:
-				fmt.Fprintf(stderr, "warning: identity configuration: %v\n", err)
+				fmt.Fprintf(stderr, "warning: identity configuration: %s\n", initMessage(err))
 			}
 		} else {
-			fmt.Fprintf(stderr, "warning: identity configuration: %v\n", err)
+			fmt.Fprintf(stderr, "warning: identity configuration: %s\n", initMessage(err))
 		}
 	} else {
 		if ident.Key.Literal {
@@ -169,38 +275,27 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 		}
 	}
 
-	// 5. Configure fetch refspecs for remotes
-	remotes := fs.Args()
-	if len(remotes) == 0 {
-		cmdRemote := exec.CommandContext(ctx, "git", "remote")
-		cmdRemote.Dir = repoRoot
-		outRemote, err := cmdRemote.Output()
-		if err != nil {
-			fmt.Fprintf(stderr, "writ init: list remotes: %v\n", err)
-			return 1
-		}
-		lines := strings.Split(strings.TrimSpace(string(outRemote)), "\n")
-		for _, line := range lines {
-			trimmed := strings.TrimSpace(line)
-			if trimmed != "" {
-				remotes = append(remotes, trimmed)
-			}
-		}
-	}
-
+	// 6. Configure fetch refspecs for the remotes resolved in step 2. The
+	// repository is already open, so the client is built from that storer
+	// rather than opening it a second time — the second open is where a
+	// failure used to arrive too late to matter.
 	if len(remotes) == 0 {
 		fmt.Fprintln(stdout, "No git remotes configured; fetch refspec will be added when a remote is configured.")
 	} else {
-		client, err := sync.Open(repoRoot, identity.Identity{WriterID: writerID})
+		client, err := sync.OpenStorage(storer, repoRoot, identity.Identity{WriterID: writerID})
 		if err != nil {
+			// Not reachable from here: OpenStorage rejects only a nil storer,
+			// and storer came back non-nil in step 2. Checked rather than
+			// discarded so it stays honest if that ever changes.
 			fmt.Fprintf(stderr, "writ init: open sync client: %v\n", err)
 			return 1
 		}
 
-		for _, remote := range remotes {
+		for i, remote := range remotes {
 			status, err := client.Ensure(ctx, remote)
 			if err != nil {
 				fmt.Fprintf(stderr, "writ init: remote %q: %v\n", remote, err)
+				reportPartialInit(stderr, writerID, repoID, remotes[:i], remotes[i:])
 				return 1
 			}
 			if status.Repaired {
@@ -211,7 +306,7 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 		}
 	}
 
-	// 6. Register repository in workspace if writ.workspace is configured
+	// 7. Register repository in workspace if writ.workspace is configured
 	gitCfg, _ := identity.ReadGitConfig(ctx, repoRoot)
 	if rawWs, ok := gitCfg["writ.workspace"]; ok && strings.TrimSpace(rawWs) != "" {
 		wsPath := strings.TrimSpace(rawWs)
@@ -236,7 +331,7 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 				if err := store.Workspace.Register(ctx, slug, remoteURLs); err == nil {
 					fmt.Fprintf(stdout, "Registered repository in workspace %s (%s)\n", wsPath, slug)
 				} else {
-					fmt.Fprintf(stderr, "warning: could not register in workspace: %v\n", err)
+					fmt.Fprintf(stderr, "warning: could not register in workspace: %s\n", workspaceRegisterMessage(err, wsPath))
 				}
 			}
 		}

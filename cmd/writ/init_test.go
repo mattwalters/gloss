@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -76,6 +77,266 @@ func TestInit_Idempotent(t *testing.T) {
 	if !strings.Contains(stdout2.String(), "already configured") {
 		t.Errorf("stdout2 does not mention 'already configured': %s", stdout2.String())
 	}
+}
+
+// TestInit_ValidatesRepositoryBeforeWriting pins the ordering that keeps a
+// failed init from leaving anything behind: opening the repository is a
+// precondition, not a later step. This is a guard rather than a reproduction —
+// the open now happens once, up front, and nothing may be written before it
+// succeeds, so moving it back down past the writes has to fail here.
+func TestInit_ValidatesRepositoryBeforeWriting(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	addRemote(t, env.repoDir, "origin", "https://example.com/repo.git")
+
+	// A repository git opens happily and writ cannot: writ reads git objects
+	// directly and only understands sha1.
+	setGitConfig(t, env.repoDir, "core.repositoryformatversion", "1")
+	setGitConfig(t, env.repoDir, "extensions.objectFormat", "sha256")
+
+	var stdout, stderr bytes.Buffer
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 1 {
+		t.Fatalf("init exited with %d, want 1; stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "unsupported repository format") {
+		t.Errorf("stderr does not say why the repository was refused:\n%s", stderr.String())
+	}
+
+	// Nothing may have been written, and nothing may have been claimed.
+	if got := getGitConfigAll(t, env.repoDir, "writ.writerId"); len(got) != 0 {
+		t.Errorf("writ.writerId = %v, want nothing written by a run that could not open the repo", got)
+	}
+	if got := getGitConfigAll(t, env.repoDir, "writ.repoId"); len(got) != 0 {
+		t.Errorf("writ.repoId = %v, want nothing written by a run that could not open the repo", got)
+	}
+	for _, entry := range getGitConfigAll(t, env.repoDir, "remote.origin.fetch") {
+		if strings.Contains(entry, "writ") {
+			t.Errorf("writ fetch refspec %q was written by a failed run", entry)
+		}
+	}
+	if strings.Contains(stdout.String(), "minted") {
+		t.Errorf("init reported minting an ID it never persisted:\n%s", stdout.String())
+	}
+}
+
+// TestInit_RefusesARepositoryItCannotResolve is the WRIT-95 scenario itself:
+// a first run that mints both IDs and then dies. gitdir.Resolve used to be
+// called under an `err == nil` guard that dropped its error on the floor, so a
+// repository writ could not resolve carried on through both config writes and
+// failed at the very end, inside sync.Open's second Resolve of the same
+// repository — identity persisted, no refspec, exit 1. Resolving once, up
+// front, and treating the failure as fatal is what makes that unreachable.
+//
+// The injector is git's own worktree/gitdir split: GIT_DIR and GIT_WORK_TREE
+// pointed at different directories give a work tree with no .git in it or
+// above it. git rev-parse --show-toplevel answers happily, git config writes
+// to GIT_DIR, and gitdir.Resolve — which walks the filesystem rather than
+// asking git — finds nothing.
+func TestInit_RefusesARepositoryItCannotResolve(t *testing.T) {
+	requireGit(t)
+
+	// Resolved, because git answers with the real path and macOS hands out
+	// temp directories under a symlinked /var.
+	tempDir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatalf("resolving the temp dir: %v", err)
+	}
+	globalCfgPath := filepath.Join(tempDir, "global_gitconfig")
+	if err := os.WriteFile(globalCfgPath, []byte(""), 0600); err != nil {
+		t.Fatalf("writing empty global config: %v", err)
+	}
+	gitDir := filepath.Join(tempDir, "gitdir.git")
+	workTree := filepath.Join(tempDir, "worktree")
+	if err := os.Mkdir(workTree, 0755); err != nil {
+		t.Fatalf("creating work tree: %v", err)
+	}
+	initCmd := exec.Command("git", "init", "--bare", gitDir)
+	if out, err := initCmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init --bare: %v (%s)", err, out)
+	}
+
+	t.Setenv("GIT_CONFIG_GLOBAL", globalCfgPath)
+	t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_DIR", gitDir)
+	t.Setenv("GIT_WORK_TREE", workTree)
+
+	// A remote, so that the old ordering reaches the second Resolve inside
+	// sync.Open and fails there — which is the whole shape of the bug: the
+	// run dies after both writes, at the step that should have been first.
+	addRemote(t, workTree, "origin", "https://example.com/repo.git")
+
+	// The premise: git itself is perfectly happy here, so init gets past the
+	// rev-parse and reaches the open with a repoRoot writ cannot resolve.
+	topLevel := exec.Command("git", "rev-parse", "--show-toplevel")
+	topLevel.Dir = workTree
+	if out, err := topLevel.Output(); err != nil {
+		t.Fatalf("git rev-parse --show-toplevel: %v", err)
+	} else if got := strings.TrimSpace(string(out)); got != workTree {
+		t.Fatalf("git reported toplevel %q, want %q — the test's premise does not hold", got, workTree)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if code := run(context.Background(), []string{"init", "-C", workTree}, &stdout, &stderr); code != 1 {
+		t.Fatalf("init exited with %d, want 1; stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "not a git repository") {
+		t.Errorf("stderr does not say why the repository was refused:\n%s", stderr.String())
+	}
+
+	// Nothing may have been written. Under the old ordering both of these
+	// held a freshly minted ID by the time the run failed.
+	if got := getGitConfigAll(t, workTree, "writ.writerId"); len(got) != 0 {
+		t.Errorf("writ.writerId = %v, want nothing written by a run that could not resolve the repo", got)
+	}
+	if got := getGitConfigAll(t, workTree, "writ.repoId"); len(got) != 0 {
+		t.Errorf("writ.repoId = %v, want nothing written by a run that could not resolve the repo", got)
+	}
+	for _, entry := range getGitConfigAll(t, workTree, "remote.origin.fetch") {
+		if strings.Contains(entry, "writ") {
+			t.Errorf("writ fetch refspec %q was written by a failed run", entry)
+		}
+	}
+	if strings.Contains(stdout.String(), "minted") {
+		t.Errorf("init reported minting an ID it never persisted:\n%s", stdout.String())
+	}
+}
+
+// TestInit_PartialFailureIsReportedAndRecovers covers the failure that cannot
+// be hoisted ahead of the writes: the refspec write itself. git config has no
+// transaction, so the repository really is left half-configured — identity in
+// config, refspec absent, which reads as clean and is not. The run has to say
+// so, and re-running has to finish the job without minting a second writer-id
+// for this device, which would split its ops across two ref namespaces.
+func TestInit_PartialFailureIsReportedAndRecovers(t *testing.T) {
+	env := setupTestCLIEnv(t)
+
+	// Mint the IDs on a run with no remote to configure, so the failure below
+	// lands where the ticket found it: after identity is in config.
+	var stdout, stderr bytes.Buffer
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+		t.Fatalf("first init exited with %d; stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "(minted)") {
+		t.Fatalf("first init did not mint the IDs:\n%s", stdout.String())
+	}
+	writerID := getGitConfigAll(t, env.repoDir, "writ.writerId")
+	repoID := getGitConfigAll(t, env.repoDir, "writ.repoId")
+	if len(writerID) != 1 || len(repoID) != 1 {
+		t.Fatalf("expected one writerId and one repoId, got %v and %v", writerID, repoID)
+	}
+
+	addRemote(t, env.repoDir, "origin", "https://example.com/repo.git")
+
+	// Hold git's config lock so the refspec write — and only the refspec
+	// write — fails. Reads do not take the lock, so everything ahead of it
+	// still succeeds, which is the shape of the failure being reported.
+	lockPath := filepath.Join(env.repoDir, ".git", "config.lock")
+	if err := os.WriteFile(lockPath, nil, 0600); err != nil {
+		t.Fatalf("holding the config lock: %v", err)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 1 {
+		t.Fatalf("init exited with %d, want 1, while the config was locked; stderr: %s", code, stderr.String())
+	}
+
+	failed := stderr.String()
+	for _, want := range []string{
+		"half-configured",
+		"writ.writerId " + writerID[0],
+		"writ.repoId " + repoID[0],
+		"NOT configured for: origin",
+		"re-run writ init",
+	} {
+		if !strings.Contains(failed, want) {
+			t.Errorf("failure report does not say %q:\n%s", want, failed)
+		}
+	}
+	// The IDs were read back, not minted again.
+	if strings.Contains(stdout.String(), "(minted)") {
+		t.Errorf("a re-run said (minted) for IDs it read out of config:\n%s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "already configured") {
+		t.Errorf("a re-run did not report the IDs as already configured:\n%s", stdout.String())
+	}
+	for _, entry := range getGitConfigAll(t, env.repoDir, "remote.origin.fetch") {
+		if strings.Contains(entry, "writ") {
+			t.Errorf("refspec %q exists despite the write failing", entry)
+		}
+	}
+
+	// Re-running once the error is fixed finishes the job, exactly as the
+	// report promised.
+	if err := os.Remove(lockPath); err != nil {
+		t.Fatalf("releasing the config lock: %v", err)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+		t.Fatalf("re-run exited with %d; stderr: %s", code, stderr.String())
+	}
+	if strings.Contains(stdout.String(), "(minted)") {
+		t.Errorf("the recovery run minted an ID:\n%s", stdout.String())
+	}
+	if got := getGitConfigAll(t, env.repoDir, "writ.writerId"); len(got) != 1 || got[0] != writerID[0] {
+		t.Errorf("writ.writerId = %v, want the original %v: a second writer-id splits this device across two ref namespaces", got, writerID)
+	}
+	if got := getGitConfigAll(t, env.repoDir, "writ.repoId"); len(got) != 1 || got[0] != repoID[0] {
+		t.Errorf("writ.repoId = %v, want the original %v", got, repoID)
+	}
+	var writEntries []string
+	for _, entry := range getGitConfigAll(t, env.repoDir, "remote.origin.fetch") {
+		if strings.Contains(entry, "writ") {
+			writEntries = append(writEntries, entry)
+		}
+	}
+	if len(writEntries) != 1 || writEntries[0] != "refs/writ/*:refs/remotes/origin/writ/*" {
+		t.Errorf("writ refspecs = %v, want exactly the canonical one", writEntries)
+	}
+}
+
+// TestInit_AlreadyInitialisedIsACleanNoOp pins the other end of the same
+// promise: on a repository that is already set up, init changes nothing and
+// warns about nothing.
+func TestInit_AlreadyInitialisedIsACleanNoOp(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+	addRemote(t, env.repoDir, "origin", "https://example.com/repo.git")
+
+	var stdout, stderr bytes.Buffer
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+		t.Fatalf("first init exited with %d; stderr: %s", code, stderr.String())
+	}
+	before := gitConfigSnapshot(t, env.repoDir)
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+		t.Fatalf("second init exited with %d; stderr: %s", code, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("second init on a configured repo warned about something:\n%s", stderr.String())
+	}
+	if strings.Contains(stdout.String(), "minted") {
+		t.Errorf("second init claimed to mint something:\n%s", stdout.String())
+	}
+	if after := gitConfigSnapshot(t, env.repoDir); after != before {
+		t.Errorf("second init changed git config:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
+
+// gitConfigSnapshot returns the repository's local git config verbatim, for
+// comparing a repository against itself across a command.
+func gitConfigSnapshot(t *testing.T, dir string) string {
+	t.Helper()
+	cmd := exec.Command("git", "config", "--local", "--list")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git config --local --list in %s: %v", dir, err)
+	}
+	return string(out)
 }
 
 func TestInit_DriftRepair(t *testing.T) {
@@ -273,6 +534,11 @@ func TestInit_WorkspaceRegistration(t *testing.T) {
 
 func TestInit_SigningKeyGuidance(t *testing.T) {
 	env := setupTestCLIEnv(t)
+	// The author identity has to be configured for Load to get as far as the
+	// signing keys: without it this test asserted the signing remediation
+	// against a repository whose actual complaint was user.name.
+	setGitConfig(t, env.repoDir, "user.name", "Alice")
+	setGitConfig(t, env.repoDir, "user.email", "alice@example.com")
 
 	var stdout, stderr bytes.Buffer
 	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
@@ -290,6 +556,260 @@ func TestInit_SigningKeyGuidance(t *testing.T) {
 	if !strings.Contains(errStr, "git config gpg.ssh.allowedSignersFile") {
 		t.Errorf("stderr does not mention allowedSignersFile: %s", errStr)
 	}
+}
+
+// TestInit_GPGFormatSpellingAgreesWithTheWritePath pins the two halves of the
+// gpg.format check against each other. identity.Load compares the value
+// case-insensitively, the way git does; engine/open.go compared the loaded
+// field against "ssh" exactly. A repository configured gpg.format = SSH
+// therefore passed init — which reported a signing key and exited 0 — and then
+// had no signer at the first write. Reporting clean and failing later is the
+// exact complaint WRIT-94 is about, so the spellings init accepts and the
+// spellings a write accepts have to be the same set.
+func TestInit_GPGFormatSpellingAgreesWithTheWritePath(t *testing.T) {
+	for _, format := range []string{"ssh", "SSH", "Ssh"} {
+		t.Run(format, func(t *testing.T) {
+			env := setupTestCLIEnv(t)
+			setupSigningKey(t, env.repoDir)
+			setGitConfig(t, env.repoDir, "gpg.format", format)
+
+			var stdout, stderr bytes.Buffer
+			if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+				t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
+			}
+			if !strings.Contains(stdout.String(), "Signing key:") {
+				t.Fatalf("init did not report a signing key for gpg.format = %q:\n%s\n%s", format, stdout.String(), stderr.String())
+			}
+
+			commitFile(t, env.repoDir, "README.md", "# Hello", "initial commit")
+
+			stdout.Reset()
+			stderr.Reset()
+			if code := run(context.Background(), []string{
+				"review", "open", "-C", env.repoDir, "-title", "x",
+			}, &stdout, &stderr); code != 0 {
+				t.Fatalf("a signed write refused a repository init reported as configured (gpg.format = %q):\n%s", format, stderr.String())
+			}
+		})
+	}
+}
+
+// TestInit_AuthorIdentityGuidance pins the other half of that split. user.name
+// and user.email are matched by the same "user." prefix as user.signingKey, so
+// they were routed into the SSH signing remediation: a repository whose only
+// problem was a blank address was told its signing key was misconfigured and
+// shown three git config lines, not one of which was user.email.
+func TestInit_AuthorIdentityGuidance(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		key  string
+	}{
+		{name: "user.name", key: "user.name"},
+		{name: "user.email", key: "user.email"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := setupTestCLIEnv(t)
+			setGitConfig(t, env.repoDir, "user.name", "Alice")
+			setGitConfig(t, env.repoDir, "user.email", "alice@example.com")
+			setGitConfig(t, env.repoDir, "writ.personId", "user:alice")
+			setupSigningKey(t, env.repoDir)
+			// Whitespace, not unset: since WRIT-131 these are the same state,
+			// and this is the one the ticket was found in.
+			setGitConfig(t, env.repoDir, tc.key, "   ")
+
+			var stdout, stderr bytes.Buffer
+			if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+				t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
+			}
+
+			got := stderr.String()
+			if !strings.Contains(got, tc.key) {
+				t.Errorf("init did not name the unconfigured key %q:\n%s", tc.key, got)
+			}
+			if !strings.Contains(got, "git config user.name") || !strings.Contains(got, "git config user.email") {
+				t.Errorf("init did not print the remediation for the key it named:\n%s", got)
+			}
+			if strings.Contains(got, "git config gpg.format ssh") || strings.Contains(got, "git config user.signingKey") {
+				t.Errorf("init answered a missing %s with the SSH signing remediation:\n%s", tc.key, got)
+			}
+		})
+	}
+}
+
+// TestInit_NeverAdvisesRunningInit pins the one piece of advice writ init must
+// never print: itself. The remediation is carried by identity.ConfigError and
+// is right from every other command; printed by init it tells the reader to
+// run what they are running, and implies init failed at something it never
+// attempts. The git config lines init prints below each warning are the actual
+// remediation, so the assertions here also check those survived.
+func TestInit_NeverAdvisesRunningInit(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(t *testing.T, repoDir string)
+	}{
+		{
+			name:  "nothing configured at all",
+			setup: func(t *testing.T, repoDir string) {},
+		},
+		{
+			name: "gpg.format set to something writ cannot use",
+			setup: func(t *testing.T, repoDir string) {
+				setGitConfig(t, repoDir, "user.name", "Alice")
+				setGitConfig(t, repoDir, "user.email", "alice@example.com")
+				setGitConfig(t, repoDir, "gpg.format", "openpgp")
+			},
+		},
+		{
+			name: "no person identifier to derive",
+			setup: func(t *testing.T, repoDir string) {
+				setGitConfig(t, repoDir, "user.email", "   ")
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := setupTestCLIEnv(t)
+			tc.setup(t, env.repoDir)
+
+			var stdout, stderr bytes.Buffer
+			if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+				t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
+			}
+
+			out := stdout.String() + stderr.String()
+			if strings.Contains(out, "writ init") {
+				t.Errorf("writ init advised the reader to run writ init:\n%s", out)
+			}
+			if !strings.Contains(out, "git config") {
+				t.Errorf("init dropped the git config remediation entirely:\n%s", out)
+			}
+		})
+	}
+
+	// Registering into a workspace is the one place init may name itself, and
+	// the reason is the reason the advice is banned everywhere else: the
+	// reader must be told something that will actually fix their repository.
+	// The workspace is a second repository. Running writ init here — which is
+	// what the reader is doing — will never configure it, so the message has
+	// to name the repository to run it in.
+	t.Run("workspace registration names the other repo", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setupSigningKey(t, env.repoDir)
+		addRemote(t, env.repoDir, "origin", "https://example.com/repo.git")
+
+		// A workspace repository that is a git repository and nothing more:
+		// writ init has never been run in it, so it has no writer identity
+		// and registration cannot write to it.
+		wsDir := t.TempDir()
+		wsInit := exec.Command("git", "init")
+		wsInit.Dir = wsDir
+		if out, err := wsInit.CombinedOutput(); err != nil {
+			t.Fatalf("git init in workspace dir: %v (%s)", err, out)
+		}
+		setGitConfig(t, env.repoDir, "writ.workspace", wsDir)
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+			t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
+		}
+
+		got := stderr.String()
+		if !strings.Contains(got, "could not register in workspace") {
+			t.Fatalf("init did not report the failed registration:\n%s", got)
+		}
+		if !strings.Contains(got, wsDir) {
+			t.Errorf("the advice does not name the repository to run writ init in:\n%s", got)
+		}
+		// Every mention of writ init must be the one that names the other
+		// repository. A bare "(run 'writ init' to configure)" here sends the
+		// reader back to the command they are running, in the repository that
+		// is already configured.
+		for _, line := range strings.Split(got, "\n") {
+			if strings.Contains(line, "writ init") && !strings.Contains(line, "in the workspace repo "+wsDir) {
+				t.Errorf("init advised running itself without saying where:\n%s", line)
+			}
+		}
+	})
+
+	// The other half of the rule: suppressed for init, kept everywhere else.
+	// A verb that needs a signed write on an unconfigured repo is exactly
+	// where "run 'writ init' to configure" is the right thing to say.
+	t.Run("but another verb still says it", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+
+		// The contract init suppresses is ConfigError's own: the same
+		// repository state, read through the engine, still carries the
+		// remediation. Asserted directly, because no CLI verb renders a
+		// ConfigError today — engine/open.go flattens the ones Load returns
+		// into ErrNoIdentity — so the review open check below passes through
+		// a hardcoded string and would survive Error() dropping the hint.
+		_, loadErr := identity.Load(context.Background(), env.repoDir)
+		if loadErr == nil {
+			t.Fatal("identity.Load succeeded on an unconfigured repo")
+		}
+		var cfgErr *identity.ConfigError
+		if !errors.As(loadErr, &cfgErr) {
+			t.Fatalf("identity.Load error is %T, want *identity.ConfigError", loadErr)
+		}
+		if !strings.Contains(cfgErr.Error(), "run 'writ init' to configure") {
+			t.Errorf("ConfigError.Error dropped the remediation init suppresses: %q", cfgErr.Error())
+		}
+		if strings.Contains(cfgErr.Message(), "writ init") {
+			t.Errorf("ConfigError.Message kept the advice init must not print: %q", cfgErr.Message())
+		}
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{"review", "open", "-C", env.repoDir, "-title", "x"}, &stdout, &stderr); code == 0 {
+			t.Fatalf("review open should refuse on an unconfigured repo; stdout: %s", stdout.String())
+		}
+		if got := stderr.String(); !strings.Contains(got, "run 'writ init' to configure") {
+			t.Errorf("review open dropped the remediation:\n%s", got)
+		}
+	})
+}
+
+// TestInit_UnconfiguredSigningReadsAsUnset is the message half of the same
+// report: a repo with no signing configuration was told its gpg.format was an
+// unsupported format, which reads as writ having found something broken rather
+// than something absent.
+func TestInit_UnconfiguredSigningReadsAsUnset(t *testing.T) {
+	t.Run("unset", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setGitConfig(t, env.repoDir, "user.name", "Alice")
+		setGitConfig(t, env.repoDir, "user.email", "alice@example.com")
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+			t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
+		}
+		got := stderr.String()
+		if !strings.Contains(got, "missing git config \"gpg.format\"") {
+			t.Errorf("init should report gpg.format as missing, got:\n%s", got)
+		}
+		if strings.Contains(got, "unsupported") {
+			t.Errorf("init called an unconfigured gpg.format unsupported:\n%s", got)
+		}
+	})
+
+	t.Run("set to openpgp", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setGitConfig(t, env.repoDir, "user.name", "Alice")
+		setGitConfig(t, env.repoDir, "user.email", "alice@example.com")
+		setGitConfig(t, env.repoDir, "gpg.format", "openpgp")
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+			t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
+		}
+		got := stderr.String()
+		if !strings.Contains(got, "unsupported git config \"gpg.format\"=\"openpgp\"") {
+			t.Errorf("init should quote the configured format back, got:\n%s", got)
+		}
+		if strings.Contains(got, "missing") {
+			t.Errorf("init called a configured gpg.format missing:\n%s", got)
+		}
+	})
 }
 
 func TestInit_E2E_PlainGitFetch(t *testing.T) {
@@ -683,6 +1203,14 @@ func TestInit_PersonID(t *testing.T) {
 		}
 		if !strings.Contains(stderr.String(), "writ.personId") {
 			t.Errorf("init should say which key to set, got stderr:\n%s", stderr.String())
+		}
+		// The ErrMissing arm of ConfigError.Error must carry the wrapped
+		// guidance through rather than short-circuiting on the sentinel. init
+		// derives from git config directly, so it is the one command that
+		// still reaches this arm now that identity.Load rejects a
+		// whitespace-only user.email outright (WRIT-131).
+		if !strings.Contains(stderr.String(), "user:alice") {
+			t.Errorf("init should carry the wrapped example through, got stderr:\n%s", stderr.String())
 		}
 	})
 }
