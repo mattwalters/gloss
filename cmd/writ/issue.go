@@ -264,15 +264,7 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 		if stateVal == "" {
 			stateVal = "open"
 		}
-		author := res.Author.Name
-		if author == "" {
-			author = res.Author.Email
-		} else if res.Author.Email != "" {
-			author = fmt.Sprintf("%s <%s>", res.Author.Name, res.Author.Email)
-		}
-		if author == "" {
-			author = "-"
-		}
+		author := authorDisplay(res.Author.Name, res.Author.Email)
 
 		var assignees string
 		if len(res.Issue.Assignees) > 0 {

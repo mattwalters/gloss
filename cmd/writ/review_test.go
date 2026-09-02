@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1045,6 +1046,35 @@ func TestReviewComment_ResolveAttribution(t *testing.T) {
 		}
 	})
 
+	// WRIT-144, end to end. A writ.personId holding only spaces used to take
+	// the override branch, normalize to nothing, and refuse the whole resolve
+	// with "missing scheme" — on a repository whose user.email derives a
+	// perfectly good identifier. A set key with nothing in it is nothing
+	// configured, so the derivation falls through to the address.
+	t.Run("whitespace_person_id_falls_back_to_email", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setupSigningKey(t, env.repoDir)
+
+		reviewID, commentID := openReviewWithComment(t, env.repoDir)
+
+		setGitConfig(t, env.repoDir, "writ.personId", "   ")
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{
+			"review", "comment", "-C", env.repoDir, commentID, "-resolve",
+		}, &stdout, &stderr); code != 0 {
+			t.Fatalf("review comment -resolve failed with %d; a blank writ.personId must fall back to user.email, stderr: %s", code, stderr.String())
+		}
+
+		resolved, resolvedBy := commentResolution(t, env.repoDir, reviewID, commentID)
+		if !resolved {
+			t.Fatalf("comment is not resolved")
+		}
+		if resolvedBy != "email:alice@example.com" {
+			t.Errorf("resolved_by = %q, want %q", resolvedBy, "email:alice@example.com")
+		}
+	})
+
 	// An unresolve does not carry resolved_by. The field names the person who
 	// resolved the thread, not the person who last changed its state, so
 	// reopening leaves the recorded resolver in place: stale, but true.
@@ -1194,7 +1224,7 @@ func TestReviewComment_ResolveAttribution(t *testing.T) {
 		env := setupTestCLIEnv(t)
 		setupSigningKey(t, env.repoDir)
 
-		_, commentID := openReviewWithComment(t, env.repoDir)
+		reviewID, commentID := openReviewWithComment(t, env.repoDir)
 
 		cmd := exec.Command("git", "config", "--unset", "writ.writerId")
 		cmd.Dir = env.repoDir
@@ -1214,6 +1244,16 @@ func TestReviewComment_ResolveAttribution(t *testing.T) {
 		}
 		if strings.Contains(stderr.String(), "writ.personId") {
 			t.Errorf("error should not name writ.personId when nothing is configured at all, got %q", stderr.String())
+		}
+
+		// The message is the smaller half of what this subtest defends. It
+		// was the test that pinned PR #98's writer.ID == "" guard, and that
+		// guard was there for WRIT-132 — an anonymous resolve op written into
+		// an append-only log that is never rewritten. This branch now refuses
+		// via PersonIDErr instead, so what has to hold is the data, not the
+		// wording: a refused resolve leaves the comment exactly as it was.
+		if resolved, resolvedBy := commentResolution(t, env.repoDir, reviewID, commentID); resolved || resolvedBy != "" {
+			t.Errorf("comment resolution = (%v, %q), want (false, \"\"): a repository with no writer identity must not append an unattributed resolve", resolved, resolvedBy)
 		}
 	})
 }
@@ -1525,6 +1565,13 @@ func TestReviewApprove_Subject(t *testing.T) {
 	// identifier at all: it has no scheme, so writing one would record a bare
 	// identifier that no conforming reader can interpret. Refusing and saying
 	// what to configure is the only honest option left.
+	//
+	// What to configure, since WRIT-143, is the key identity.Load actually
+	// stopped on. Blanking user.email does not merely remove the derivation
+	// input: it fails Load outright, so this repository has no identity and
+	// cannot write at all. The refusal used to answer "configure writ.personId
+	// (for example user:alice) or user.email" — advice half of which does not
+	// work, as no_derivable_person_id_with_person_id below demonstrates.
 	t.Run("no_derivable_person_id", func(t *testing.T) {
 		env := setupTestCLIEnv(t)
 		setGitConfig(t, env.repoDir, "writ.writerId", "cccccccccccccccc")
@@ -1546,27 +1593,69 @@ func TestReviewApprove_Subject(t *testing.T) {
 		if code == 0 {
 			t.Fatalf("review approve should have failed with no derivable person identifier; stdout: %s", stdout.String())
 		}
-		if !strings.Contains(stderr.String(), "writ.personId") {
-			t.Errorf("error should name writ.personId, got %q", stderr.String())
+		if !strings.Contains(stderr.String(), "user.email") {
+			t.Errorf("error should name user.email, the key that is actually blank, got %q", stderr.String())
+		}
+		if strings.Contains(stderr.String(), "writ.personId") {
+			t.Errorf("error offered writ.personId as a fix for a repository it cannot fix, got %q", stderr.String())
 		}
 
 		if subjects := reviewApprovalSubjects(t, env.repoDir, reviewID); len(subjects) != 0 {
 			t.Errorf("approval subjects = %q, want none: the refused write must leave nothing behind", subjects)
 		}
 	})
+
+	// The justification for the assertion above that the refusal must not
+	// name writ.personId: taking that advice does not work. user.email is not
+	// merely the derivation input here — identity.Load requires it, so a
+	// repository without one has no writer identity, and a person identifier
+	// it could name a subject with does not give it one back.
+	t.Run("no_derivable_person_id_with_person_id", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setGitConfig(t, env.repoDir, "writ.writerId", "cccccccccccccccc")
+		setupSigningKey(t, env.repoDir)
+		reviewID := openReviewWithRevision(t, env.repoDir)
+
+		// The fix the old message recommended, applied in full.
+		setGitConfig(t, env.repoDir, "writ.personId", "user:alice")
+		setGitConfig(t, env.repoDir, "user.email", "   ")
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{
+			"review", "approve", "-C", env.repoDir, reviewID,
+		}, &stdout, &stderr)
+		if code == 0 {
+			t.Fatalf("review approve should still have failed: writ.personId does not supply a writer identity; stdout: %s", stdout.String())
+		}
+		if !strings.Contains(stderr.String(), "user.email") {
+			t.Errorf("error should name user.email, the only key left to fix, got %q", stderr.String())
+		}
+
+		if subjects := reviewApprovalSubjects(t, env.repoDir, reviewID); len(subjects) != 0 {
+			t.Errorf("approval subjects = %q, want none", subjects)
+		}
+	})
 }
 
-// TestReviewApprove_PersonIDDiagnosis pins the invalid half of the diagnosis:
-// a user who set writ.personId to something that is not a person identifier
-// must be told the value is wrong, not that nothing is configured — the second
-// sends them to look at a key that is already there.
+// TestReviewApprove_PersonIDDiagnosis pins that `review approve` names the key
+// that is actually at fault. A user who set writ.personId to something that is
+// not a person identifier must be told the value is wrong, not that nothing is
+// configured; a user whose identity did not load at all must be told which key
+// stopped it, not sent to two keys chosen because they are the ones this code
+// path happens to know the names of.
 //
-// It used to pin the difference between that and the missing half. It no
-// longer can. Since WRIT-131 a whitespace-only user.email is not an identity,
-// so Load returns a zero Identity with a nil PersonIDErr, engine/open.go
-// collapses the failure into ErrNoIdentity, and the missing case here takes
-// review approve's generic fallback rather than the PersonIDErr branch. The
-// missing half is pinned where it still runs, in TestInit_PersonID.
+// An earlier revision of this comment recorded the second case as taking
+// `review approve`'s generic "configure writ.personId ... or user.email"
+// fallback, and described that as the expected path. It was not: it is the
+// misdiagnosis WRIT-150 was filed for, and the advice it gave was wrong on its
+// own terms (see TestReviewApprove_Subject/no_derivable_person_id_with_person_id).
+// WRIT-143 gave identity.Load's failures a PersonIDErr to carry, so both cases
+// now reach the same branch and name the same key, and the generic fallback is
+// unreachable from here.
+//
+// DerivePersonID's own missing-configuration arm is not reachable through
+// Load, which requires a usable user.email before it derives anything; it is
+// pinned where it still runs, in TestInit_PersonID.
 func TestReviewApprove_PersonIDDiagnosis(t *testing.T) {
 	t.Run("invalid writ.personId is reported as invalid", func(t *testing.T) {
 		env := setupTestCLIEnv(t)
@@ -1596,7 +1685,7 @@ func TestReviewApprove_PersonIDDiagnosis(t *testing.T) {
 		}
 	})
 
-	t.Run("nothing configured is reported as missing", func(t *testing.T) {
+	t.Run("an identity that did not load names the key that stopped it", func(t *testing.T) {
 		env := setupTestCLIEnv(t)
 		setupSigningKey(t, env.repoDir)
 
@@ -1612,16 +1701,445 @@ func TestReviewApprove_PersonIDDiagnosis(t *testing.T) {
 			"review", "approve", "-C", env.repoDir, reviewID,
 		}, &stdout, &stderr)
 		if code == 0 {
-			t.Fatalf("approve should refuse with nothing to derive from; stdout: %s", stdout.String())
+			t.Fatalf("approve should refuse with no identity; stdout: %s", stdout.String())
 		}
 		got := stderr.String()
-		if !strings.Contains(got, "writ.personId") {
-			t.Errorf("error should name writ.personId, got %q", got)
+		if !strings.Contains(got, "user.email") {
+			t.Errorf("error should name user.email, the key Load stopped on, got %q", got)
 		}
-		// The guidance naming a concrete identifier must reach the reader
-		// whichever arm produces it.
-		if !strings.Contains(got, "user:alice") {
-			t.Errorf("error should carry the example through, got %q", got)
+		if !strings.Contains(got, "writ init") {
+			t.Errorf("error should point at the command that configures it, got %q", got)
+		}
+		if strings.Contains(got, "writ.personId") {
+			t.Errorf("error should not offer writ.personId: it is unset here, and setting it would not make this repository writable; got %q", got)
 		}
 	})
+}
+
+func unsetGitConfig(t *testing.T, dir, key string) {
+	t.Helper()
+	cmd := exec.Command("git", "config", "--unset", key)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git config --unset %s failed: %v (%s)", key, err, string(out))
+	}
+}
+
+// TestReviewIdentityDiagnosis_AgreesAcrossVerbs pins WRIT-150. `review approve`
+// and `review comment -resolve` both need a person identifier for the writer,
+// and both used to arrive at it by different roads: resolve had an ad-hoc
+// writer.ID == "" guard reporting the generic ErrNoIdentity, approve had none
+// and fell through to "configure writ.personId ... or user.email". One
+// repository and one configuration produced two contradictory diagnoses, and
+// on a whitespace-only user.name the second named two keys that were both
+// already correct.
+//
+// Both verbs now read identity.Load's PersonIDErr, so this table asserts three
+// things per case for both: the refusal names the key that is actually at
+// fault, names no key that is not, and names a step that fixes it.
+//
+// The last of those was added after the table's first pass enumerated the
+// broken-key spellings by hand and covered writ.writerId only as unset. Set to
+// whitespace, and set to a value that is not hexadecimal, it reproduced the
+// ticket's own opening complaint one key over — so the shape of a value now
+// gets a row alongside its absence, and "an error was printed" is not enough
+// to pass.
+func TestReviewIdentityDiagnosis_AgreesAcrossVerbs(t *testing.T) {
+	cases := []struct {
+		name string
+		// key is blanked (to value) or unset (value == "") after the
+		// repository is stood up — these configurations cannot open the
+		// review the verbs are run against.
+		key   string
+		value string
+		// wantKey must appear in both verbs' output; unwantedKeys must appear
+		// in neither.
+		wantKey      string
+		unwantedKeys []string
+		// wantShared is the half of the message a user acts on, which both
+		// verbs must carry identically. Defaults to the missing-config
+		// rendering; a malformed value renders as invalid instead.
+		wantShared string
+		// wantRemedy is the substring naming a step that fixes this
+		// configuration. "run 'writ init'" is not it for a value the user
+		// typed: writ init never overwrites one, so the key has to be cleared
+		// first and the message has to say so.
+		//
+		// A substring is all this is. That the step named actually fixes the
+		// repository is a claim about behaviour and is asserted where claims
+		// about behaviour belong — TestReviewIdentityRemedy_IsExecutable runs
+		// the two commands in order and writes afterwards.
+		wantRemedy string
+	}{
+		{
+			// The sharp case from the ticket: writ.personId and user.email are
+			// both valid, and the old approve message sent the user to fix
+			// exactly those two.
+			name:         "user_name_whitespace",
+			key:          "user.name",
+			value:        "   ",
+			wantKey:      "user.name",
+			unwantedKeys: []string{"writ.personId", "user.email"},
+		},
+		{
+			name:         "user_name_unset",
+			key:          "user.name",
+			wantKey:      "user.name",
+			unwantedKeys: []string{"writ.personId", "user.email"},
+		},
+		{
+			name:         "user_email_whitespace",
+			key:          "user.email",
+			value:        "   ",
+			wantKey:      "user.email",
+			unwantedKeys: []string{"writ.personId"},
+		},
+		{
+			name:         "user_email_unset",
+			key:          "user.email",
+			wantKey:      "user.email",
+			unwantedKeys: []string{"writ.personId"},
+		},
+		{
+			// The case WRIT-143 opened with: a clone whose owner never ran
+			// `writ init`. Nothing about the person keys is wrong.
+			name:         "writer_id_unset",
+			key:          "writ.writerId",
+			wantKey:      "writ.writerId",
+			unwantedKeys: []string{"writ.personId", "user.email"},
+		},
+		{
+			// writ.writerId was the one key Load still guarded raw, so this
+			// configuration reinstated WRIT-143's exact shape one key over:
+			// both verbs said `invalid git config "writ.writerId"="   "` with
+			// no remedy at all, while `writ review comment -m` on the same
+			// repository said `run 'writ init'` — which was the working fix,
+			// because init reads a whitespace-only value as absent and mints
+			// over it. Two verbs, one repository, two diagnoses, and the
+			// useful one was the vaguer one.
+			name:         "writer_id_whitespace",
+			key:          "writ.writerId",
+			value:        "   ",
+			wantKey:      "writ.writerId",
+			unwantedKeys: []string{"writ.personId", "user.email"},
+			wantRemedy:   "run 'writ init'",
+		},
+		{
+			// Trimming does not reach this one: "nothexadecimal!" is a value
+			// the user typed, so it is genuinely invalid and ConfigError
+			// appends no general writ init remedy to an ErrInvalid —
+			// correctly, since writ init over this value fails with this same
+			// error instead of replacing it. The remedy that works is to
+			// clear the key first, and the message has to be the thing that
+			// says so. It comes from the code that read writ.writerId out of
+			// git config, not from ParseWriterID, which also parses ref path
+			// segments belonging to other people's writer ids.
+			name:         "writer_id_malformed",
+			key:          "writ.writerId",
+			value:        "nothexadecimal!",
+			wantKey:      "writ.writerId",
+			unwantedKeys: []string{"writ.personId", "user.email"},
+			wantShared:   "identity: invalid git config",
+			wantRemedy:   "unset the key and run 'writ init'",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := setupTestCLIEnv(t)
+			setupSigningKey(t, env.repoDir)
+			// Valid throughout, so that a message naming it is naming
+			// something that is not broken.
+			setGitConfig(t, env.repoDir, "writ.personId", "user:alice")
+
+			reviewID, commentID := openReviewWithComment(t, env.repoDir)
+
+			if tc.value == "" {
+				unsetGitConfig(t, env.repoDir, tc.key)
+			} else {
+				setGitConfig(t, env.repoDir, tc.key, tc.value)
+			}
+
+			outputs := map[string]string{}
+			for verb, args := range map[string][]string{
+				"review approve": {"review", "approve", "-C", env.repoDir, reviewID},
+				"review comment -resolve": {
+					"review", "comment", "-C", env.repoDir, commentID, "-resolve",
+				},
+			} {
+				var stdout, stderr bytes.Buffer
+				if code := run(context.Background(), args, &stdout, &stderr); code == 0 {
+					t.Fatalf("%s should have failed with %s broken; stdout: %s", verb, tc.key, stdout.String())
+				}
+				got := stderr.String()
+				outputs[verb] = got
+
+				if !strings.Contains(got, tc.wantKey) {
+					t.Errorf("%s: error should name %s, the key at fault, got %q", verb, tc.wantKey, got)
+				}
+				for _, unwanted := range tc.unwantedKeys {
+					if strings.Contains(got, unwanted) {
+						t.Errorf("%s: error named %s, which is correctly configured here, got %q", verb, unwanted, got)
+					}
+				}
+				wantRemedy := tc.wantRemedy
+				if wantRemedy == "" {
+					wantRemedy = "run 'writ init'"
+				}
+				if !strings.Contains(got, wantRemedy) {
+					t.Errorf("%s: error should name a step that fixes this configuration (%q), got %q", verb, wantRemedy, got)
+				}
+			}
+
+			// The two verbs prefix their own context but must agree on the
+			// remainder, which is the half a user acts on.
+			shared := tc.wantShared
+			if shared == "" {
+				shared = "identity: missing git config"
+			}
+			for verb, got := range outputs {
+				if !strings.Contains(got, shared) {
+					t.Errorf("%s: error should carry the shared diagnosis %q, got %q", verb, shared, got)
+				}
+			}
+		})
+	}
+}
+
+// writRefs returns every ref under refs/writ/ with its object, one per line,
+// sorted. It is the namespace a write verb would land in, so comparing it
+// before and against after is how a test says "nothing was written" without
+// trusting an exit code.
+func writRefs(t *testing.T, dir string) string {
+	t.Helper()
+	cmd := exec.Command("git", "for-each-ref", "--sort=refname", "--format=%(refname) %(objectname)", "refs/writ/")
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git for-each-ref refs/writ/ failed: %v (%s)", err, string(out))
+	}
+	return string(out)
+}
+
+// TestReviewPaddedWriterID_WritesNoNewNamespace pins the boundary between a
+// writer id and a string that merely trims to one.
+//
+// identity.Load trims writ.writerId before testing it for emptiness, so that a
+// key holding only whitespace reads as unconfigured. Trimming the value it
+// then parses looks like the same change and is not: EnsureWriterID trims only
+// its presence test and parses the raw string, so a padded id would load here
+// and be refused there. git config stores the padding verbatim, and
+// refs/writ/<writer-id>/ is built from the parsed value — so this repository
+// would quietly start writing ops under a namespace that is not its own, while
+// writ init could never run in it again and the remedy it printed would mint a
+// third id. That is the split writ init refuses to cause, arrived at sideways.
+//
+// The assertion is the ref listing, not the message. A message can be right
+// while the refs are wrong.
+func TestReviewPaddedWriterID_WritesNoNewNamespace(t *testing.T) {
+	// Padded, and not this repository's own id: if the padding were accepted
+	// the writes would land under refs/writ/0123456789abcdef/, next to the
+	// device's real chains rather than on them.
+	for _, value := range []string{" 0123456789abcdef ", "0123456789abcdef\n", "\t0123456789abcdef"} {
+		t.Run(fmt.Sprintf("%q", value), func(t *testing.T) {
+			env := setupTestCLIEnv(t)
+			setupSigningKey(t, env.repoDir)
+			reviewID, commentID := openReviewWithComment(t, env.repoDir)
+
+			before := writRefs(t, env.repoDir)
+			if !strings.Contains(before, "refs/writ/") {
+				t.Fatalf("no writ refs to compare against: %q", before)
+			}
+
+			setGitConfig(t, env.repoDir, "writ.writerId", value)
+
+			for verb, args := range map[string][]string{
+				"review comment -m": {
+					"review", "comment", "-C", env.repoDir, reviewID, "-m", "another note",
+				},
+				"review comment -resolve": {
+					"review", "comment", "-C", env.repoDir, commentID, "-resolve",
+				},
+				"review approve": {"review", "approve", "-C", env.repoDir, reviewID},
+			} {
+				var stdout, stderr bytes.Buffer
+				if code := run(context.Background(), args, &stdout, &stderr); code == 0 {
+					t.Errorf("%s succeeded with a padded writ.writerId; stdout: %s", verb, stdout.String())
+				}
+			}
+
+			if after := writRefs(t, env.repoDir); after != before {
+				t.Errorf("refs/writ changed under a padded writ.writerId.\nbefore:\n%s\nafter:\n%s", before, after)
+			}
+			if strings.Contains(writRefs(t, env.repoDir), "0123456789abcdef") {
+				t.Error("a padded writ.writerId opened a second ref namespace: one device's ops must not split across two")
+			}
+
+			// The other half of the harm: a repository that keeps writing is
+			// one writ init can no longer run in. Neither happens, and both
+			// halves have to be checked, because accepting the padding here
+			// is what would have produced both.
+			var stdout, stderr bytes.Buffer
+			if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code == 0 {
+				t.Errorf("writ init accepted a padded writ.writerId; the write verbs above refused it, and the two must agree")
+			}
+		})
+	}
+}
+
+// TestReviewIdentityRemedy_IsExecutable runs the remedy instead of reading it.
+//
+// The table above asserts that a malformed writ.writerId names a step that
+// fixes it, but it asserts that as a substring: nothing there ever ran
+// `git config --unset writ.writerId && writ init`, so "the remedy works" was a
+// claim about wording. It is the kind of claim that stays true right up until
+// the command it names changes behaviour. So do the two steps, in order, and
+// then write.
+func TestReviewIdentityRemedy_IsExecutable(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+	reviewID, commentID := openReviewWithComment(t, env.repoDir)
+
+	setGitConfig(t, env.repoDir, "writ.writerId", "nothexadecimal!")
+
+	var stdout, stderr bytes.Buffer
+	if code := run(context.Background(), []string{
+		"review", "comment", "-C", env.repoDir, commentID, "-resolve",
+	}, &stdout, &stderr); code == 0 {
+		t.Fatalf("review comment -resolve succeeded with a malformed writ.writerId; stdout: %s", stdout.String())
+	}
+	refusal := stderr.String()
+	for _, want := range []string{"unset", "writ init"} {
+		if !strings.Contains(refusal, want) {
+			t.Fatalf("refusal = %q, want it to contain %q", refusal, want)
+		}
+	}
+
+	// Step one of the remedy, exactly as printed. Note that writ init on its
+	// own is not enough — that is the whole reason the message says to unset
+	// first — so assert that too.
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code == 0 {
+		t.Fatal("writ init succeeded over a malformed writ.writerId: the remedy says to unset the key first, and it says so because init never overwrites one")
+	}
+	unsetGitConfig(t, env.repoDir, "writ.writerId")
+
+	// Step two.
+	stdout.Reset()
+	stderr.Reset()
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+		t.Fatalf("writ init failed after unsetting writ.writerId: %d; stderr: %s", code, stderr.String())
+	}
+	minted := getGitConfigAll(t, env.repoDir, "writ.writerId")
+	if len(minted) != 1 || !regexp.MustCompile(`^[0-9a-f]{16}$`).MatchString(minted[0]) {
+		t.Fatalf("writ.writerId after the remedy = %v, want one 16-hex-character id", minted)
+	}
+
+	// And the repository writes again. The verb that refused is the verb that
+	// has to work, and the comment it refused to resolve is still there to
+	// resolve — the remedy mints a new writer id, it does not discard the ops
+	// already written under the old one.
+	stdout.Reset()
+	stderr.Reset()
+	if code := run(context.Background(), []string{
+		"review", "comment", "-C", env.repoDir, commentID, "-resolve",
+	}, &stdout, &stderr); code != 0 {
+		t.Fatalf("review comment -resolve still fails after the remedy: %d; stderr: %s", code, stderr.String())
+	}
+	if resolved, resolvedBy := commentResolution(t, env.repoDir, reviewID, commentID); !resolved || resolvedBy == "" {
+		t.Errorf("comment resolution = (%v, %q), want resolved and attributed", resolved, resolvedBy)
+	}
+}
+
+// TestAuthorDisplayFallbacks pins WRIT-134. The three author columns — review
+// status, review list, issue status — substituted a placeholder on a raw
+// == "" test, so a whitespace-only value passed the guard and was rendered: a
+// blank cell where "-" belongs, or "    <alice@example.com>".
+//
+// It is a unit test because that is where the defect is reachable. Since
+// WRIT-131 identity.Load refuses a whitespace-only user.name, so this client
+// cannot write such an op; the values that still arrive this way come off
+// foreign op commits, which nothing normalizes on the read path. The guard has
+// to be correct on its own terms rather than on the strength of what
+// identity.Load happens to allow through today.
+func TestAuthorDisplayFallbacks(t *testing.T) {
+	cases := []struct {
+		name        string
+		authorName  string
+		email       string
+		wantDisplay string
+		wantColumn  string
+	}{
+		{
+			name:        "both present",
+			authorName:  "Alice",
+			email:       "alice@example.com",
+			wantDisplay: "Alice <alice@example.com>",
+			wantColumn:  "Alice",
+		},
+		{
+			name:        "name only",
+			authorName:  "Alice",
+			wantDisplay: "Alice",
+			wantColumn:  "Alice",
+		},
+		{
+			name:        "email only",
+			email:       "alice@example.com",
+			wantDisplay: "alice@example.com",
+			wantColumn:  "alice@example.com",
+		},
+		{
+			name:        "neither",
+			wantDisplay: "-",
+			wantColumn:  "-",
+		},
+		{
+			// The defect: a blank cell, and a stray leading gap before the
+			// angle brackets.
+			name:        "whitespace-only name with an address",
+			authorName:  "   ",
+			email:       "alice@example.com",
+			wantDisplay: "alice@example.com",
+			wantColumn:  "alice@example.com",
+		},
+		{
+			name:        "whitespace-only name and no address",
+			authorName:  "   ",
+			wantDisplay: "-",
+			wantColumn:  "-",
+		},
+		{
+			name:        "whitespace-only address and no name",
+			email:       "\t\n ",
+			wantDisplay: "-",
+			wantColumn:  "-",
+		},
+		{
+			name:        "both whitespace-only",
+			authorName:  " ",
+			email:       "  ",
+			wantDisplay: "-",
+			wantColumn:  "-",
+		},
+		{
+			// Padding is trimmed rather than carried into the column, so the
+			// rendered value is the one the reader would have typed.
+			name:        "padded values are trimmed, not rejected",
+			authorName:  "  Alice  ",
+			email:       " alice@example.com ",
+			wantDisplay: "Alice <alice@example.com>",
+			wantColumn:  "Alice",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := authorDisplay(tc.authorName, tc.email); got != tc.wantDisplay {
+				t.Errorf("authorDisplay(%q, %q) = %q, want %q", tc.authorName, tc.email, got, tc.wantDisplay)
+			}
+			if got := authorColumn(tc.authorName, tc.email); got != tc.wantColumn {
+				t.Errorf("authorColumn(%q, %q) = %q, want %q", tc.authorName, tc.email, got, tc.wantColumn)
+			}
+		})
+	}
 }

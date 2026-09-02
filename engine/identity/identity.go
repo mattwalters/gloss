@@ -16,12 +16,22 @@ var writerIDRegexp = regexp.MustCompile(`^[0-9a-f]{16}$`)
 type WriterID string
 
 // ParseWriterID parses and validates s as a WriterID matching ^[0-9a-f]{16}$.
+//
+// The rejection says what the value had to look like and stops there. It names
+// no remedy, because this parser has two kinds of caller and they need
+// opposite advice: Load and EnsureWriterID read s out of the local
+// writ.writerId, but engine/dag runs the writer-id segment of a ref path
+// through here, and a malformed segment is usually someone else's id arriving
+// over a fetch. "Unset writ.writerId and re-mint" is the fix for the first and
+// a way to split your own device's ops across two ref namespaces for the
+// second. So the two config callers attach it — see withRemedy and
+// remintRemedy — and this one does not.
 func ParseWriterID(s string) (WriterID, error) {
 	if !writerIDRegexp.MatchString(s) {
 		return "", &ConfigError{
 			Key:     "writ.writerId",
 			Value:   s,
-			Problem: ErrInvalid,
+			Problem: fmt.Errorf("%w: expected 16 lowercase hex characters", ErrInvalid),
 		}
 	}
 	return WriterID(s), nil
@@ -63,8 +73,30 @@ type Identity struct {
 	// writ.personId to something that is not a person identifier" apart from
 	// "you set nothing at all". Reporting the second when the first is true
 	// sends a user to look at a key they already configured.
+	//
+	// A third state joins those two: the identity never loaded, because some
+	// earlier key was missing or invalid. Load fails on that one, but it also
+	// returns an Identity, and callers that keep reading from a repository
+	// they cannot write to still hold it. So every Load failure sets this
+	// field too — an empty PersonID always carries the reason it is empty,
+	// whatever the reason. See loadFailed.
 	PersonIDErr    error
 	AllowedSigners string // gpg.ssh.allowedSignersFile, "" when unset
+}
+
+// loadFailed returns the Identity accompanying a Load failure: empty apart
+// from PersonIDErr, which records why.
+//
+// Load used to return a bare Identity{} here, and a bare Identity{} has
+// PersonID == "" with PersonIDErr == nil — the exact shape of "no
+// writ.personId and no user.email to derive one from". A caller looking at
+// nothing but the Identity could not tell a repository with no person
+// identifier from a repository with no identity at all, so it diagnosed the
+// former: it told a user whose only fault was a missing writ.writerId to go
+// configure writ.personId or user.email, both of which were already correct.
+// Carrying the reason costs one field that was going to be nil anyway.
+func loadFailed(err error) Identity {
+	return Identity{PersonIDErr: err}
 }
 
 // Load reads the current writer's identity out of git config in repoDir.
@@ -76,20 +108,40 @@ type Identity struct {
 func Load(ctx context.Context, repoDir string) (Identity, error) {
 	cfg, err := readGitConfig(ctx, repoDir)
 	if err != nil {
-		return Identity{}, err
+		return loadFailed(err), err
 	}
 
 	// 1. Writer ID: writ.writerId
-	rawWriterID, ok := cfg["writ.writerid"]
-	if !ok || rawWriterID == "" {
-		return Identity{}, &ConfigError{
+	//
+	// The emptiness check trims; the parse does not. Only the guard was wrong.
+	// git config stores a whitespace-only value verbatim, so
+	// `writ.writerId = "   "` used to reach ParseWriterID and be reported as
+	// an invalid writer id — a value nobody typed as an id — while
+	// EnsureWriterID, whose presence test has always trimmed, read the same
+	// key as absent and minted straight over it. A set key with nothing in it
+	// is nothing configured, so it now takes the missing-config path here too,
+	// which names the command that fixes it.
+	//
+	// What the guard must not do is hand the trimmed string on to the parser.
+	// EnsureWriterID trims its presence test and parses the raw value, so
+	// trimming here would make Load accept a padded id that EnsureWriterID
+	// still refuses — and git stores the padding verbatim, so the repository
+	// would write ops under refs/writ/<padded>/ while writ init could never
+	// run in it again. This is a ref-namespace decision, not a message: the
+	// set of strings that name a writer namespace is exactly the set
+	// ParseWriterID accepts, and widening it on one side of the pair splits a
+	// device's ops across two refs. Padding stays invalid, on both sides.
+	if strings.TrimSpace(cfg["writ.writerid"]) == "" {
+		err := &ConfigError{
 			Key:     "writ.writerId",
 			Problem: ErrMissing,
 		}
+		return loadFailed(err), err
 	}
-	writerID, err := ParseWriterID(rawWriterID)
+	writerID, err := ParseWriterID(cfg["writ.writerid"])
 	if err != nil {
-		return Identity{}, err
+		err = withRemedy(err, remintRemedy)
+		return loadFailed(err), err
 	}
 
 	// 2. Author Name: user.name
@@ -106,19 +158,21 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 	// the same key below.
 	name := strings.TrimSpace(cfg["user.name"])
 	if name == "" {
-		return Identity{}, &ConfigError{
+		err := &ConfigError{
 			Key:     "user.name",
 			Problem: ErrMissing,
 		}
+		return loadFailed(err), err
 	}
 
 	// 3. Author Email: user.email
 	email := strings.TrimSpace(cfg["user.email"])
 	if email == "" {
-		return Identity{}, &ConfigError{
+		err := &ConfigError{
 			Key:     "user.email",
 			Problem: ErrMissing,
 		}
+		return loadFailed(err), err
 	}
 
 	// 3b. Person identifier: writ.personId, else email:<normalized user.email>.
@@ -188,10 +242,16 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 	if strings.HasPrefix(rawSigningKey, "key::") {
 		literalKey := strings.TrimSpace(strings.TrimPrefix(rawSigningKey, "key::"))
 		if literalKey == "" {
+			// A remedy, for the same reason writ.writerId gets one: ErrInvalid
+			// takes no initHint, and "invalid configuration" alone leaves a
+			// reader holding a key they can see is set and no idea what is
+			// wrong with it. Here the form is right and the content is
+			// missing, so say which half to supply.
 			return baseIdent, &ConfigError{
 				Key:     "user.signingKey",
 				Value:   rawSigningKey,
 				Problem: ErrInvalid,
+				Remedy:  "put the public key after key::, or set the path to a key file instead",
 			}
 		}
 		signingKey.Value = literalKey

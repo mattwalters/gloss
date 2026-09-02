@@ -18,12 +18,15 @@ var repoIDRegexp = regexp.MustCompile(`^[0-9a-f]{32}$`)
 type RepoID string
 
 // ParseRepoID parses and validates s as a RepoID matching ^[0-9a-f]{32}$.
+//
+// Like ParseWriterID, it says what the value had to look like and names no
+// remedy; the two callers that read writ.repoId out of git config attach one.
 func ParseRepoID(s string) (RepoID, error) {
 	if !repoIDRegexp.MatchString(s) {
 		return "", &ConfigError{
 			Key:     "writ.repoId",
 			Value:   s,
-			Problem: ErrInvalid,
+			Problem: fmt.Errorf("%w: expected 32 lowercase hex characters", ErrInvalid),
 		}
 	}
 	return RepoID(s), nil
@@ -53,7 +56,15 @@ func LoadRepoID(ctx context.Context, repoDir string) (RepoID, error) {
 		return "", nil
 	}
 
-	return ParseRepoID(rawID)
+	// This was a dead end: `writ.repoId = notahexrepoid` failed writ init with
+	// "invalid configuration" and no next step at all — the same defect
+	// WRIT-143 fixed one key over. EnsureRepoID mints only into an absent key,
+	// so the key has to be cleared before init can replace it.
+	id, err := ParseRepoID(rawID)
+	if err != nil {
+		return "", withRemedy(err, remintRemedy)
+	}
+	return id, nil
 }
 
 // EnsureRepoID resolves or mints a RepoID for the repository at repoDir:
@@ -74,7 +85,7 @@ func EnsureRepoID(ctx context.Context, repoDir string) (RepoID, bool, error) {
 	if rawID, ok := cfg["writ.repoid"]; ok && strings.TrimSpace(rawID) != "" {
 		id, err := ParseRepoID(rawID)
 		if err != nil {
-			return "", false, err
+			return "", false, withRemedy(err, remintRemedy)
 		}
 		return id, false, nil
 	}

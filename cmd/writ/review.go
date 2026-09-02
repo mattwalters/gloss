@@ -368,13 +368,6 @@ func runReviewComment(ctx context.Context, defaultDir string, args []string, std
 	var resolvedBy string
 	if opts.resolve {
 		writer := store.Writer()
-		// An identity that failed to load reports an empty writer ID and no
-		// PersonIDErr to explain it, so check that first: naming writ.personId
-		// and user.email to a user who has both set and never ran `writ init`
-		// sends them to look at keys that are already correct.
-		if writer.ID == "" {
-			return renderErr(stderr, writ.ErrNoIdentity)
-		}
 		// The fallback chain ends at the writer's own person identifier —
 		// writ.personId, or email:<user.email> — exactly as it does for
 		// `review approve -subject`. There is no fallback past it: a writer-id
@@ -385,9 +378,20 @@ func runReviewComment(ctx context.Context, defaultDir string, args []string, std
 			// Report why it is empty rather than assuming nothing was set.
 			// Telling a user who configured writ.personId to configure
 			// writ.personId sends them to look at a key that is already there.
+			//
+			// Since WRIT-143 that covers the identity that never loaded too:
+			// PersonIDErr names the key Load stopped on — writ.writerId,
+			// user.name, user.email — so the ad-hoc writer.ID == "" guard that
+			// stood here, which could only say the generic "run 'writ init'",
+			// is gone. The message below it names the actual fix instead.
 			if writer.PersonIDErr != nil {
 				return renderErr(stderr, fmt.Errorf("writ: no resolver identity: %w", writer.PersonIDErr))
 			}
+			// Unreachable while Load holds its invariant that an empty
+			// PersonID carries a non-nil PersonIDErr (pinned by
+			// TestLoad_EmptyPersonIDAlwaysExplained). Kept because the
+			// alternative to a diagnosis here is recording an anonymous
+			// resolve into a log that is never rewritten.
 			return renderErr(stderr, fmt.Errorf("writ: no resolver identity: configure %s (for example %q) or user.email", identity.PersonIDKey, "user:alice"))
 		}
 	}
@@ -535,9 +539,23 @@ func runReviewApprove(ctx context.Context, defaultDir string, args []string, std
 			// Report why it is empty rather than assuming nothing was set.
 			// Telling a user who configured writ.personId to configure
 			// writ.personId sends them to look at a key that is already there.
+			//
+			// Since WRIT-143 the same holds for an identity that never loaded.
+			// This branch used to be skipped for it — a zero Identity carried
+			// no PersonIDErr — so a repository whose only fault was a
+			// whitespace-only user.name fell to the message below and was told
+			// to configure writ.personId or user.email, both already correct
+			// and neither of which would have helped. PersonIDErr now names
+			// the key Load stopped on, and `review comment -resolve` reads the
+			// same field to reach the same diagnosis.
 			if writer.PersonIDErr != nil {
 				return renderErr(stderr, fmt.Errorf("writ: no approval subject: %w", writer.PersonIDErr))
 			}
+			// Unreachable while Load holds its invariant that an empty
+			// PersonID carries a non-nil PersonIDErr (pinned by
+			// TestLoad_EmptyPersonIDAlwaysExplained). Kept because the
+			// alternative to a diagnosis here is recording an anonymous
+			// approval into a log that is never rewritten.
 			return renderErr(stderr, fmt.Errorf("writ: no approval subject: pass -subject, or configure %s (for example %q) or user.email", identity.PersonIDKey, "user:alice"))
 		}
 	}
@@ -809,6 +827,45 @@ func newReviewStatusFlagSet(defaultDir string) (*flag.FlagSet, *reviewStatusOpts
 	return fs, opts
 }
 
+// authorDisplay renders an op's author for a detail view: "Name <email>" when
+// both halves are there, whichever half is there when only one is, and "-"
+// when neither is.
+//
+// Both halves are trimmed before the emptiness tests. A whitespace-only value
+// is a field with nothing in it, and the raw == "" guards this replaced let
+// one through as a display name: the view rendered a blank where "-" belongs,
+// or "    <alice@example.com>". identity.Load trimming what this client writes
+// does not make the guard redundant — these strings come off op commits,
+// including foreign ones, and nothing normalizes them on the read path.
+func authorDisplay(name, email string) string {
+	name = strings.TrimSpace(name)
+	email = strings.TrimSpace(email)
+	switch {
+	case name != "" && email != "":
+		return fmt.Sprintf("%s <%s>", name, email)
+	case name != "":
+		return name
+	case email != "":
+		return email
+	default:
+		return "-"
+	}
+}
+
+// authorColumn renders an op's author as one unadorned table cell: the name,
+// else the address, else "-". `review list` uses it rather than authorDisplay
+// because its output is a fixed-width table and the address would widen every
+// row. Same trimming rule, same reason.
+func authorColumn(name, email string) string {
+	if n := strings.TrimSpace(name); n != "" {
+		return n
+	}
+	if e := strings.TrimSpace(email); e != "" {
+		return e
+	}
+	return "-"
+}
+
 func runReviewStatus(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
 	fs, opts := newReviewStatusFlagSet(defaultDir)
 	fs.SetOutput(stderr)
@@ -904,15 +961,7 @@ func runReviewStatus(ctx context.Context, defaultDir string, args []string, stdo
 		if status == "" {
 			status = "-"
 		}
-		author := res.Author.Name
-		if author == "" {
-			author = res.Author.Email
-		} else if res.Author.Email != "" {
-			author = fmt.Sprintf("%s <%s>", res.Author.Name, res.Author.Email)
-		}
-		if author == "" {
-			author = "-"
-		}
+		author := authorDisplay(res.Author.Name, res.Author.Email)
 
 		var assignees string
 		if len(res.Review.Assignees) > 0 {
@@ -1107,13 +1156,7 @@ func runReviewList(ctx context.Context, defaultDir string, args []string, stdout
 		if status == "" {
 			status = "-"
 		}
-		author := r.Author.Name
-		if author == "" {
-			author = r.Author.Email
-		}
-		if author == "" {
-			author = "-"
-		}
+		author := authorColumn(r.Author.Name, r.Author.Email)
 		updatedAt := r.UpdatedAt.Format("2006-01-02 15:04:05")
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", shortID, status, r.Review.Title, author, updatedAt)
 	}

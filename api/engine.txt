@@ -615,6 +615,7 @@ type ConfigError struct {
 	Key string
 	Value string
 	Problem error
+	Remedy string
 }
 func (*ConfigError) Error() string
 func (*ConfigError) Message() string
