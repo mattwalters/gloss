@@ -160,6 +160,41 @@ forward-compatibility rules (how fold treats an op it cannot interpret)
 are specified in `spec/forward-compatibility.md`; this document fixes only the
 envelope-level constraint.
 
+## Producer validation
+
+A conforming producer MUST NOT sign an op it could have known was
+invalid. Before the op commit is built, the producer MUST verify that:
+
+1. The payload satisfies this document's envelope schema
+   (`spec/schemas/op-envelope.schema.json`).
+2. The payload is byte-canonical per the byte-equality rule above.
+3. The payload satisfies the vocabulary schema for its `object_type`,
+   for **every object type the producer itself emits**. A producer is
+   not required to hold a schema for an object type it never writes; it
+   is required to hold one for every type it does.
+
+Rule 3 is the one this document previously left unstated, and the gap is
+not academic: the reader rules below constrain what an implementation
+accepts, so an implementation that only implemented those could — and
+one did — write ops that its own reader would reject.
+
+The asymmetry with reader validation is deliberate. An op is a signed
+commit in an append-only log: a producer that writes an invalid op
+cannot withdraw it. The op stays in history, is fetched by every clone,
+and is rejected by every strict reader forever, and the best any client
+can do is tombstone it in a local projection. A producer that refuses to
+write one costs its caller an error message. Be maximally strict where
+failure is free.
+
+Rule 3 binds producers only, and "producer" means the act of authoring a
+new op. It does not extend to re-encoding an op read from the log: an
+implementation that decodes an op it fetched and re-serializes it — to
+cache it, relay it, or project it — is acting as a reader there, and
+MUST keep the tolerance defined in
+[`spec/forward-compatibility.md`](forward-compatibility.md). Unknown
+object types, unknown op types, unknown op versions, and unknown fields
+pass through untouched on that path.
+
 ## Reader validation
 
 A conforming reader, given a commit reached via a writ ref, MUST reject

@@ -37,6 +37,15 @@ var (
 	}
 )
 
+// anchorCommit stands in for the code commit an anchor points at. A scenario
+// literal is built before the runner makes any commit, so the real SHA is not
+// available here, and anchor resolution never reads the field — it re-anchors
+// by path, blob and captured context. It still has to be a well-formed OID:
+// spec/schemas/anchor.schema.json requires one, and the producer refuses to
+// sign an op whose body violates its schema. The literal OIDs in the approval
+// bodies below stand in the same way, for `revision`.
+const anchorCommit = "0000000000000000000000000000000000000000"
+
 const initialCalcCode = `package calc
 
 func Add(a, b int) int {
@@ -61,7 +70,7 @@ func TestCanonical(t *testing.T) {
 			"object_id":   "rev-canonical",
 		},
 		"text":   "Consider adding multiplication support as well.",
-		"anchor": scenario.MakeAnchor("", "calc.go", initialCalcCode, 3, 5),
+		"anchor": scenario.MakeAnchor(anchorCommit, "calc.go", initialCalcCode, 3, 5),
 	})
 	if err != nil {
 		t.Fatalf("marshal comment body: %v", err)
@@ -147,7 +156,7 @@ func TestCanonical(t *testing.T) {
 					OpVersion:  1,
 					Body: json.RawMessage(`{
 						"subject": "user:bob",
-						"revision": "rev1",
+						"revision": "1111111111111111111111111111111111111111",
 						"verdict": "approve",
 						"message": "Looks solid"
 					}`),
@@ -305,7 +314,7 @@ func TestSyncOrderPermutation(t *testing.T) {
 			"object_id":   "rev-canonical",
 		},
 		"text":   "Consider adding multiplication support as well.",
-		"anchor": scenario.MakeAnchor("", "calc.go", initialCalcCode, 3, 5),
+		"anchor": scenario.MakeAnchor(anchorCommit, "calc.go", initialCalcCode, 3, 5),
 	})
 	if err != nil {
 		t.Fatalf("marshal comment body: %v", err)
@@ -407,7 +416,7 @@ func TestSyncOrderPermutation(t *testing.T) {
 					OpVersion:  1,
 					Body: json.RawMessage(`{
 						"subject": "user:bob",
-						"revision": "rev1",
+						"revision": "1111111111111111111111111111111111111111",
 						"verdict": "approve",
 						"message": "Looks solid"
 					}`),
@@ -481,7 +490,7 @@ func TestNegativeControl_MissingFetchFails(t *testing.T) {
 			"object_id":   "rev-canonical",
 		},
 		"text":   "Consider adding multiplication support as well.",
-		"anchor": scenario.MakeAnchor("", "calc.go", initialCalcCode, 3, 5),
+		"anchor": scenario.MakeAnchor(anchorCommit, "calc.go", initialCalcCode, 3, 5),
 	})
 	if err != nil {
 		t.Fatalf("marshal comment body: %v", err)
@@ -546,7 +555,7 @@ func TestNegativeControl_MissingFetchFails(t *testing.T) {
 					ObjectType: "review",
 					OpType:     "approval",
 					OpVersion:  1,
-					Body:       json.RawMessage(`{"subject":"user:bob","revision":"rev1","verdict":"approve"}`),
+					Body:       json.RawMessage(`{"subject":"user:bob","revision":"1111111111111111111111111111111111111111","verdict":"approve"}`),
 				},
 			},
 			scenario.Push{Device: bobLaptop},
@@ -601,7 +610,7 @@ func TestNegativeControl_MissingOpFails(t *testing.T) {
 			"object_id":   "rev-canonical",
 		},
 		"text":   "Consider adding multiplication support as well.",
-		"anchor": scenario.MakeAnchor("", "calc.go", initialCalcCode, 3, 5),
+		"anchor": scenario.MakeAnchor(anchorCommit, "calc.go", initialCalcCode, 3, 5),
 	})
 	if err != nil {
 		t.Fatalf("marshal comment body: %v", err)

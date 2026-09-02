@@ -721,3 +721,48 @@ func TestReviewsPersonIDLengthBound(t *testing.T) {
 		t.Errorf("expected the 320-character assignee to round-trip unchanged, got %v", res.Review.Assignees)
 	}
 }
+
+// TestReviewsApproveRejectsUnknownVerdict pins the half of WRIT-129 that the
+// domain layer does not guard. Approve passes Verdict into the body unchecked;
+// the codec's producer-side body validation is what stops a verdict outside the
+// enum from being signed into the log.
+func TestReviewsApproveRejectsUnknownVerdict(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+	headHash := runGitCmd(t, repoDir, "rev-parse", "HEAD")[:40]
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+	reviewID, err := s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Verdict Enum Review",
+		Base:  headHash,
+		Head:  headHash,
+	})
+	if err != nil {
+		t.Fatalf("Create review failed: %v", err)
+	}
+
+	if err := s.Reviews.Approve(ctx, reviewID, writ.Approval{Verdict: "bogus"}); err == nil {
+		t.Fatal("expected Approve to reject a verdict outside the enum, got nil error")
+	}
+
+	// Nothing was written: the review still has no approvals.
+	res, err := s.Query.Review(reviewID)
+	if err != nil {
+		t.Fatalf("Query.Review failed: %v", err)
+	}
+	if len(res.Review.Approvals) != 0 {
+		t.Errorf("expected no approvals after the rejected verdict, got %v", res.Review.Approvals)
+	}
+
+	// Every verdict the spec defines is still accepted.
+	for _, verdict := range []string{"approve", "request-changes", "none"} {
+		if err := s.Reviews.Approve(ctx, reviewID, writ.Approval{Verdict: verdict}); err != nil {
+			t.Errorf("Approve with verdict %q failed: %v", verdict, err)
+		}
+	}
+}

@@ -2,6 +2,7 @@ package codec_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -139,6 +140,7 @@ func TestSignCommit_Integration(t *testing.T) {
 		ObjectType: "review",
 		OpType:     "create",
 		OpVersion:  1,
+		Body:       json.RawMessage(`{"title":"Initial"}`),
 	}
 	author := codec.Identity{
 		Name:  "Alice",

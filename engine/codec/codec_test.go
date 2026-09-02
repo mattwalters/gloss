@@ -41,7 +41,7 @@ func TestBuildCommit(t *testing.T) {
 		ObjectType: "review",
 		OpType:     "create",
 		OpVersion:  1,
-		Body:       json.RawMessage(`{}`),
+		Body:       json.RawMessage(`{"title":"Initial"}`),
 	}
 
 	parents := []string{"parent1", "parent2"}

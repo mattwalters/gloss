@@ -17,7 +17,9 @@ const (
 	RejectSchemaViolation     RejectReason = "schema-violation"
 )
 
-// RejectError is returned when an op commit or payload fails reader validation.
+// RejectError is returned when an op commit or payload fails validation —
+// reader validation of an op that arrived, or producer validation of one about
+// to be signed (spec/op-envelope.md).
 type RejectError struct {
 	Reason RejectReason
 	Err    error

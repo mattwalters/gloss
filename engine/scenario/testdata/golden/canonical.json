@@ -8,7 +8,7 @@
         "approvals": [
           {
             "subject": "user:bob",
-            "revision": "rev1",
+            "revision": "1111111111111111111111111111111111111111",
             "verdict": "approve",
             "message": "Looks solid"
           }
@@ -28,9 +28,9 @@
         "anchor": {
           "new": {
             "blob": "6b2fe1900a822a05d1a7b602b0cd446e19ebfe5d",
-            "commit": "",
+            "commit": "0000000000000000000000000000000000000000",
             "context": {
-              "after": null,
+              "after": [],
               "before": [
                 "package calc",
                 ""
@@ -71,9 +71,9 @@
       "anchor": {
         "new": {
           "blob": "6b2fe1900a822a05d1a7b602b0cd446e19ebfe5d",
-          "commit": "",
+          "commit": "0000000000000000000000000000000000000000",
           "context": {
-            "after": null,
+            "after": [],
             "before": [
               "package calc",
               ""
@@ -96,9 +96,9 @@
         "anchor": {
           "new": {
             "blob": "6b2fe1900a822a05d1a7b602b0cd446e19ebfe5d",
-            "commit": "",
+            "commit": "0000000000000000000000000000000000000000",
             "context": {
-              "after": null,
+              "after": [],
               "before": [
                 "package calc",
                 ""

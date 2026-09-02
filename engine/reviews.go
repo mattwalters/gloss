@@ -15,7 +15,10 @@ type Reviews struct {
 	store *Store
 }
 
-// NewReview specifies parameters for creating a code review.
+// NewReview specifies parameters for creating a code review. Base and Head are
+// commit OIDs, not ref names — spec/review-ops.md defines the revision body as
+// a pair of OIDs, and the producer refuses to sign anything else. Callers
+// holding a ref resolve it first, as the CLI does.
 type NewReview struct {
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`

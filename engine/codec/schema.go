@@ -13,65 +13,80 @@ import (
 // schema in spec/schemas/ declares a $id of prefix + filename.
 const schemaIDPrefix = "https://writ.dev/spec/"
 
-const (
-	envelopeSchemaID    = schemaIDPrefix + "op-envelope.schema.json"
-	identifiersSchemaID = schemaIDPrefix + "identifiers.schema.json"
-	reviewOpsSchemaID   = schemaIDPrefix + "review-ops.schema.json"
-	commentSchemaID     = schemaIDPrefix + "comment.schema.json"
-	anchorSchemaID      = schemaIDPrefix + "anchor.schema.json"
-)
+// envelopeSchemaFile is the payload schema every op satisfies, whatever its
+// object type.
+const envelopeSchemaFile = "op-envelope.schema.json"
+
+// supportSchemaFiles are compiled as resources only: the vocabularies $ref
+// them, but they are not themselves op payload schemas.
+var supportSchemaFiles = []string{
+	"identifiers.schema.json",
+	"anchor.schema.json",
+}
+
+// vocabularySchemaFiles maps an object type to the vocabulary schema that
+// governs ops on it. It is the producer's registry: every object type writ
+// can emit MUST appear here, or ops of that type are signed against nothing.
+//
+// The map is exhaustive over the vocabularies shipped in spec/schemas/, and
+// TestEveryShippedVocabularyIsValidated fails when a schema file is added
+// without an entry — so "writ ships a schema for this type but never wired it
+// up" cannot recur silently. That is what lets a lookup miss below mean one
+// thing only: an object type this implementation has never heard of.
+var vocabularySchemaFiles = map[string]string{
+	"review":  "review-ops.schema.json",
+	"comment": "comment.schema.json",
+	"issue":   "issue-ops.schema.json",
+	"project": "project-ops.schema.json",
+	"cycle":   "cycle-ops.schema.json",
+	"repo":    "repo-ops.schema.json",
+}
 
 type compiledSchemas struct {
-	envelope  *jsonschema.Schema
-	reviewOps *jsonschema.Schema
-	comment   *jsonschema.Schema
+	envelope *jsonschema.Schema
+	vocab    map[string]*jsonschema.Schema
 }
 
 var schemasOnce = sync.OnceValue(func() compiledSchemas {
 	c := jsonschema.NewCompiler()
 
-	schemaFiles := []struct {
-		path string
-		id   string
-	}{
-		{"schemas/op-envelope.schema.json", envelopeSchemaID},
-		{"schemas/identifiers.schema.json", identifiersSchemaID},
-		{"schemas/anchor.schema.json", anchorSchemaID},
-		{"schemas/review-ops.schema.json", reviewOpsSchemaID},
-		{"schemas/comment.schema.json", commentSchemaID},
-	}
-
-	for _, sf := range schemaFiles {
-		raw, err := spec.FS.ReadFile(sf.path)
+	add := func(file string) {
+		raw, err := spec.FS.ReadFile("schemas/" + file)
 		if err != nil {
-			panic(fmt.Sprintf("codec: read schema %s: %v", sf.path, err))
+			panic(fmt.Sprintf("codec: read schema %s: %v", file, err))
 		}
 		doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 		if err != nil {
-			panic(fmt.Sprintf("codec: unmarshal schema %s: %v", sf.path, err))
+			panic(fmt.Sprintf("codec: unmarshal schema %s: %v", file, err))
 		}
-		if err := c.AddResource(sf.id, doc); err != nil {
-			panic(fmt.Sprintf("codec: add schema resource %s: %v", sf.id, err))
+		if err := c.AddResource(schemaIDPrefix+file, doc); err != nil {
+			panic(fmt.Sprintf("codec: add schema resource %s: %v", file, err))
 		}
+	}
+	compile := func(file string) *jsonschema.Schema {
+		sch, err := c.Compile(schemaIDPrefix + file)
+		if err != nil {
+			panic(fmt.Sprintf("codec: compile schema %s: %v", file, err))
+		}
+		return sch
 	}
 
-	envSch, err := c.Compile(envelopeSchemaID)
-	if err != nil {
-		panic(fmt.Sprintf("codec: compile envelope schema: %v", err))
+	add(envelopeSchemaFile)
+	for _, file := range supportSchemaFiles {
+		add(file)
 	}
-	revSch, err := c.Compile(reviewOpsSchemaID)
-	if err != nil {
-		panic(fmt.Sprintf("codec: compile review-ops schema: %v", err))
+	for _, file := range vocabularySchemaFiles {
+		add(file)
 	}
-	comSch, err := c.Compile(commentSchemaID)
-	if err != nil {
-		panic(fmt.Sprintf("codec: compile comment schema: %v", err))
+
+	vocab := make(map[string]*jsonschema.Schema, len(vocabularySchemaFiles))
+	for objectType, file := range vocabularySchemaFiles {
+		vocab[objectType] = compile(file)
 	}
 
 	return compiledSchemas{
-		envelope:  envSch,
-		reviewOps: revSch,
-		comment:   comSch,
+		envelope: compile(envelopeSchemaFile),
+		vocab:    vocab,
 	}
 })
 
@@ -88,38 +103,49 @@ func ValidateEnvelope(raw []byte) error {
 	return nil
 }
 
-// ValidateBody is an opt-in validator that checks an envelope's body against registered
-// vocabulary schemas (review-ops, comment). Unknown object types or op types are ignored
-// and return nil per forward compatibility rules.
+// ValidateBody checks an envelope's payload against the vocabulary schema
+// registered for its object type. This is the producer's obligation from
+// spec/op-envelope.md §Producer validation, and BuildCommit calls it, so no op
+// writ appends is signed without passing through here.
+//
+// An object type with no registered vocabulary passes. That is forward
+// compatibility, not a hole: a type this implementation has never heard of is
+// something a reader must tolerate (spec/forward-compatibility.md) and
+// something writ's own producer never emits — every type it does emit is in
+// vocabularySchemaFiles, which is tested exhaustive over spec/schemas/.
 func ValidateBody(env Envelope) error {
-	schs := schemasOnce()
-	var sch *jsonschema.Schema
-	switch env.ObjectType {
-	case "review":
-		sch = schs.reviewOps
-	case "comment":
-		sch = schs.comment
-	default:
+	sch, ok := schemasOnce().vocab[env.ObjectType]
+	if !ok {
 		return nil
 	}
-
-	var raw []byte
-	if len(env.Raw) > 0 {
-		raw = env.Raw
-	} else {
+	raw := env.Raw
+	if len(raw) == 0 {
 		var err error
 		raw, err = EncodePayload(env)
 		if err != nil {
 			return err
 		}
 	}
+	return validateAgainst(sch, raw)
+}
 
+// validateBody validates payload bytes that are already encoded, so the append
+// path does not canonicalize the same envelope twice.
+func validateBody(objectType string, raw []byte) error {
+	sch, ok := schemasOnce().vocab[objectType]
+	if !ok {
+		return nil
+	}
+	return validateAgainst(sch, raw)
+}
+
+func validateAgainst(sch *jsonschema.Schema, raw []byte) error {
 	inst, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 	if err != nil {
 		return &RejectError{Reason: RejectSchemaViolation, Err: err}
 	}
 	if err := sch.Validate(inst); err != nil {
-		return fmt.Errorf("codec: body validation failed: %w", err)
+		return &RejectError{Reason: RejectSchemaViolation, Err: err}
 	}
 	return nil
 }
