@@ -54,8 +54,10 @@ Planned monorepo layout (see `ARCHITECTURE.md` for the rationale):
 
 ## Workflow
 
-`lerp.toml` is this repo's pipeline: Linear team `WRIT`, lanes
-provisioned as detached git worktrees. Read it before changing how runs
-are queued or what a stage is expected to produce.
+The pipeline is the `dispatch` skill (`.agents/skills/dispatch/`):
+batches of Linear team `WRIT` tickets run by an orchestrating agent
+through implementer, reviewer, and fixer subagents in detached git
+worktrees. Read its `SKILL.md` before changing how runs are queued or
+what a stage is expected to produce.
 
 Build and test commands will be documented here once code exists.

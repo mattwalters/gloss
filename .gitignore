@@ -31,9 +31,6 @@ go.work.sum
 # .idea/
 # .vscode/
 
-# lerp's run records, workspaces and logs
-.lerp/
-
 # VHS demo/cast scratch directory
 .demo/
 
