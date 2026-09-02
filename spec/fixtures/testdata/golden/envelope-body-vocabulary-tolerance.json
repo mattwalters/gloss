@@ -1,0 +1,88 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/alice/review",
+      "commit": "1f7fc93817aecd6605bf58360f3a8f1435de0231"
+    },
+    {
+      "name": "refs/writ/alice/comment",
+      "commit": "3ee3e3b901bdaec8f8a4a5f9cad5dff5f47a162a"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/alice/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "4c92d6cc667605c5d4ae4b831ed7b87954a1ae74",
+          "tree": "f71db510413e52698ef25bb4b19866be8384055a",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: approval review/review-01\n",
+          "signed": true
+        },
+        {
+          "sha": "447d506a643dfc728e77b26c1f3af272ea10a23d",
+          "tree": "e3bf6547d485db10f272823c628feb45c2bbbe15",
+          "parents": [
+            "4c92d6cc667605c5d4ae4b831ed7b87954a1ae74"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: approval review/review-01\n",
+          "signed": true
+        },
+        {
+          "sha": "9f30e7378b4b7304f074178e86c2a3eadc55ea5d",
+          "tree": "ddd2f52242bb95d244e5b90d60106e8ccd8dd1c5",
+          "parents": [
+            "447d506a643dfc728e77b26c1f3af272ea10a23d"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: approval review/review-01\n",
+          "signed": true
+        },
+        {
+          "sha": "b0eeaaff721d1d09a6c032f13ec760be5c37d113",
+          "tree": "964fc6cdc9518e049b8a57397c399a310ca7afc5",
+          "parents": [
+            "9f30e7378b4b7304f074178e86c2a3eadc55ea5d"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:03:00Z",
+          "message": "writ: revision review/review-01\n",
+          "signed": true
+        },
+        {
+          "sha": "1f7fc93817aecd6605bf58360f3a8f1435de0231",
+          "tree": "1dcfd3a05291ef3fbee94b2105c3dc7d4e683d03",
+          "parents": [
+            "b0eeaaff721d1d09a6c032f13ec760be5c37d113"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:04:00Z",
+          "message": "writ: create review/review-02\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/alice/comment",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "3ee3e3b901bdaec8f8a4a5f9cad5dff5f47a162a",
+          "tree": "21dabbf0ac0f5c1455bf5d0faec489b7ee65026c",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:05:00Z",
+          "message": "writ: create comment/comment-01\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

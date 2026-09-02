@@ -1,0 +1,168 @@
+{
+  "ops": [
+    {
+      "ref": "refs/writ/alice/review",
+      "commit": "4c92d6cc667605c5d4ae4b831ed7b87954a1ae74",
+      "parents": [],
+      "author": "Alice Example \u003calice@example.test\u003e",
+      "committer": "Alice Example \u003calice@example.test\u003e",
+      "timestamp": "2026-01-01T00:00:00Z",
+      "tree_entries": [
+        {
+          "name": "op.json",
+          "mode": "0100644",
+          "sha": "a210509767fae14dab8acea375d34fadb647c900"
+        }
+      ],
+      "payload": "{\"body\":{\"revision\":\"0000000000000000000000000000000000000000\",\"verdict\":\"bogus\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"approval\",\"op_version\":1}",
+      "canonical_payload": "{\"body\":{\"revision\":\"0000000000000000000000000000000000000000\",\"verdict\":\"bogus\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"approval\",\"op_version\":1}",
+      "signed": true,
+      "signature_key_fingerprint": "SHA256:wDVIYagWNF4y7O9lMha3+MljfIDuV15tOKMYNG78oeA",
+      "verification_outcome": "valid",
+      "expected": {
+        "disposition": "accept"
+      },
+      "observed": {
+        "disposition": "accept"
+      }
+    },
+    {
+      "ref": "refs/writ/alice/review",
+      "commit": "447d506a643dfc728e77b26c1f3af272ea10a23d",
+      "parents": [
+        "4c92d6cc667605c5d4ae4b831ed7b87954a1ae74"
+      ],
+      "author": "Alice Example \u003calice@example.test\u003e",
+      "committer": "Alice Example \u003calice@example.test\u003e",
+      "timestamp": "2026-01-01T00:01:00Z",
+      "tree_entries": [
+        {
+          "name": "op.json",
+          "mode": "0100644",
+          "sha": "c984929f84246c287a92009f7e1794279fc3d447"
+        }
+      ],
+      "payload": "{\"body\":{\"revision\":\"0000000000000000000000000000000000000000\",\"subject\":\"email:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"approve\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"approval\",\"op_version\":1}",
+      "canonical_payload": "{\"body\":{\"revision\":\"0000000000000000000000000000000000000000\",\"subject\":\"email:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"verdict\":\"approve\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"approval\",\"op_version\":1}",
+      "signed": true,
+      "signature_key_fingerprint": "SHA256:wDVIYagWNF4y7O9lMha3+MljfIDuV15tOKMYNG78oeA",
+      "verification_outcome": "valid",
+      "expected": {
+        "disposition": "accept"
+      },
+      "observed": {
+        "disposition": "accept"
+      }
+    },
+    {
+      "ref": "refs/writ/alice/review",
+      "commit": "9f30e7378b4b7304f074178e86c2a3eadc55ea5d",
+      "parents": [
+        "447d506a643dfc728e77b26c1f3af272ea10a23d"
+      ],
+      "author": "Alice Example \u003calice@example.test\u003e",
+      "committer": "Alice Example \u003calice@example.test\u003e",
+      "timestamp": "2026-01-01T00:02:00Z",
+      "tree_entries": [
+        {
+          "name": "op.json",
+          "mode": "0100644",
+          "sha": "c57f6e8cfa35de79b1f252b10c09812b68ab863d"
+        }
+      ],
+      "payload": "{\"body\":{\"revision\":\"0000000000000000000000000000000000000000\",\"subject\":\"\",\"verdict\":\"approve\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"approval\",\"op_version\":1}",
+      "canonical_payload": "{\"body\":{\"revision\":\"0000000000000000000000000000000000000000\",\"subject\":\"\",\"verdict\":\"approve\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"approval\",\"op_version\":1}",
+      "signed": true,
+      "signature_key_fingerprint": "SHA256:wDVIYagWNF4y7O9lMha3+MljfIDuV15tOKMYNG78oeA",
+      "verification_outcome": "valid",
+      "expected": {
+        "disposition": "accept"
+      },
+      "observed": {
+        "disposition": "accept"
+      }
+    },
+    {
+      "ref": "refs/writ/alice/review",
+      "commit": "b0eeaaff721d1d09a6c032f13ec760be5c37d113",
+      "parents": [
+        "9f30e7378b4b7304f074178e86c2a3eadc55ea5d"
+      ],
+      "author": "Alice Example \u003calice@example.test\u003e",
+      "committer": "Alice Example \u003calice@example.test\u003e",
+      "timestamp": "2026-01-01T00:03:00Z",
+      "tree_entries": [
+        {
+          "name": "op.json",
+          "mode": "0100644",
+          "sha": "0facd08d59abb20f0463433401ab8d043babfead"
+        }
+      ],
+      "payload": "{\"body\":{\"base\":\"main\",\"head\":\"feature/oauth2\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"revision\",\"op_version\":1}",
+      "canonical_payload": "{\"body\":{\"base\":\"main\",\"head\":\"feature/oauth2\"},\"object_id\":\"review-01\",\"object_type\":\"review\",\"op_type\":\"revision\",\"op_version\":1}",
+      "signed": true,
+      "signature_key_fingerprint": "SHA256:wDVIYagWNF4y7O9lMha3+MljfIDuV15tOKMYNG78oeA",
+      "verification_outcome": "valid",
+      "expected": {
+        "disposition": "accept"
+      },
+      "observed": {
+        "disposition": "accept"
+      }
+    },
+    {
+      "ref": "refs/writ/alice/review",
+      "commit": "1f7fc93817aecd6605bf58360f3a8f1435de0231",
+      "parents": [
+        "b0eeaaff721d1d09a6c032f13ec760be5c37d113"
+      ],
+      "author": "Alice Example \u003calice@example.test\u003e",
+      "committer": "Alice Example \u003calice@example.test\u003e",
+      "timestamp": "2026-01-01T00:04:00Z",
+      "tree_entries": [
+        {
+          "name": "op.json",
+          "mode": "0100644",
+          "sha": "6bc6b7a309c81d3f82a84522561729b1e41a4255"
+        }
+      ],
+      "payload": "{\"body\":{\"description\":\"no title, which review-ops requires\"},\"object_id\":\"review-02\",\"object_type\":\"review\",\"op_type\":\"create\",\"op_version\":1}",
+      "canonical_payload": "{\"body\":{\"description\":\"no title, which review-ops requires\"},\"object_id\":\"review-02\",\"object_type\":\"review\",\"op_type\":\"create\",\"op_version\":1}",
+      "signed": true,
+      "signature_key_fingerprint": "SHA256:wDVIYagWNF4y7O9lMha3+MljfIDuV15tOKMYNG78oeA",
+      "verification_outcome": "valid",
+      "expected": {
+        "disposition": "accept"
+      },
+      "observed": {
+        "disposition": "accept"
+      }
+    },
+    {
+      "ref": "refs/writ/alice/comment",
+      "commit": "3ee3e3b901bdaec8f8a4a5f9cad5dff5f47a162a",
+      "parents": [],
+      "author": "Alice Example \u003calice@example.test\u003e",
+      "committer": "Alice Example \u003calice@example.test\u003e",
+      "timestamp": "2026-01-01T00:05:00Z",
+      "tree_entries": [
+        {
+          "name": "op.json",
+          "mode": "0100644",
+          "sha": "5c3731fc6caafab994453de7bbde76a543942c37"
+        }
+      ],
+      "payload": "{\"body\":{\"anchor\":{\"new\":{\"blob\":\"1111111111111111111111111111111111111111\",\"commit\":\"0000000000000000000000000000000000000000\",\"context\":{\"after\":null,\"before\":null,\"lines\":[\"# Test\"]},\"path\":\"README.md\",\"range\":{\"end\":1,\"start\":1}},\"version\":1},\"subject\":{\"object_id\":\"review-01\",\"object_type\":\"review\"},\"text\":\"a comment on the first line of a file\"},\"object_id\":\"comment-01\",\"object_type\":\"comment\",\"op_type\":\"create\",\"op_version\":1}",
+      "canonical_payload": "{\"body\":{\"anchor\":{\"new\":{\"blob\":\"1111111111111111111111111111111111111111\",\"commit\":\"0000000000000000000000000000000000000000\",\"context\":{\"after\":null,\"before\":null,\"lines\":[\"# Test\"]},\"path\":\"README.md\",\"range\":{\"end\":1,\"start\":1}},\"version\":1},\"subject\":{\"object_id\":\"review-01\",\"object_type\":\"review\"},\"text\":\"a comment on the first line of a file\"},\"object_id\":\"comment-01\",\"object_type\":\"comment\",\"op_type\":\"create\",\"op_version\":1}",
+      "signed": true,
+      "signature_key_fingerprint": "SHA256:wDVIYagWNF4y7O9lMha3+MljfIDuV15tOKMYNG78oeA",
+      "verification_outcome": "valid",
+      "expected": {
+        "disposition": "accept"
+      },
+      "observed": {
+        "disposition": "accept"
+      }
+    }
+  ]
+}
