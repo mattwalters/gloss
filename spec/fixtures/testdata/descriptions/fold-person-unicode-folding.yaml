@@ -1,0 +1,151 @@
+name: fold-person-unicode-folding
+description: >
+  Exercise the pinned person-identifier folding algorithm — NFC, Unicode default
+  case folding, NFC — through the fold itself, on the axes ASCII identifiers
+  cannot reach. Two spellings of the same name compose to one assignee; the
+  dotted capital I folds to i plus a combining dot rather than to a bare i; both
+  spellings of sharp s fold together; Cherokee folds up to its uppercase fixed
+  point; and a supplementary starter followed by a combining mark stays a
+  different person from the Latin letter its truncated composition key would
+  have merged it with.
+
+refs:
+  - name: refs/writ/0123456789abcdef/review
+    history:
+      - commits:
+          - id: alice-create
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            op:
+              object_id: r-person-unicode
+              object_type: review
+              op_type: create
+              op_version: 1
+              body:
+                title: "Unicode Person Identifier Folding"
+            expect: accept
+
+          - id: alice-revision
+            parents: [alice-create]
+            author: alice
+            timestamp: 2026-01-01T00:01:00Z
+            op:
+              object_id: r-person-unicode
+              object_type: review
+              op_type: revision
+              op_version: 1
+              body:
+                base: "0000000000000000000000000000000000000001"
+                head: "0000000000000000000000000000000000000002"
+            expect: accept
+
+          # The decomposed and precomposed spellings of the same name are one
+          # assignee, not two. Before NFC was pinned they were two people.
+          - id: alice-assign-composition
+            parents: [alice-revision]
+            author: alice
+            timestamp: 2026-01-01T00:02:00Z
+            op:
+              object_id: r-person-unicode
+              object_type: review
+              op_type: assign
+              op_version: 1
+              body:
+                add: ["user:José", "user:José"]
+            expect: accept
+
+          # The case the algorithm was pinned for, and the two spellings of
+          # sharp s, which full folding unifies and simple folding would not.
+          - id: alice-assign-casefold
+            parents: [alice-assign-composition]
+            author: alice
+            timestamp: 2026-01-01T00:03:00Z
+            op:
+              object_id: r-person-unicode
+              object_type: review
+              op_type: assign
+              op_version: 1
+              body:
+                add: ["user:İ", "user:ẞ", "user:ß"]
+            expect: accept
+
+          # Cherokee folds upward, so the uppercase letter is the fixed point.
+          - id: alice-assign-cherokee
+            parents: [alice-assign-casefold]
+            author: alice
+            timestamp: 2026-01-01T00:04:00Z
+            op:
+              object_id: r-person-unicode
+              object_type: review
+              op_type: assign
+              op_version: 1
+              body:
+                add: ["user:ꭰ", "user:Ꭰ"]
+            expect: accept
+
+          # A supplementary starter and its combining mark are one person; the
+          # Latin capital A with grave is another. A composition key that
+          # truncated the starter to sixteen bits would make them the same.
+          - id: alice-assign-supplementary
+            parents: [alice-assign-cherokee]
+            author: alice
+            timestamp: 2026-01-01T00:05:00Z
+            op:
+              object_id: r-person-unicode
+              object_type: review
+              op_type: assign
+              op_version: 1
+              body:
+                add: ["user:𐁁̀", "user:À"]
+            expect: accept
+
+          # A keyed-lww approval opened under one spelling and updated under
+          # the other must be one key, not two verdicts.
+          - id: alice-approval-decomposed
+            parents: [alice-assign-supplementary]
+            author: alice
+            timestamp: 2026-01-01T00:06:00Z
+            op:
+              object_id: r-person-unicode
+              object_type: review
+              op_type: approval
+              op_version: 1
+              body:
+                revision: "0000000000000000000000000000000000000002"
+                verdict: approve
+                subject: "user:José"
+                message: "Approved under the decomposed spelling"
+            expect: accept
+
+          - id: alice-approval-precomposed
+            parents: [alice-approval-decomposed]
+            author: alice
+            timestamp: 2026-01-01T00:07:00Z
+            op:
+              object_id: r-person-unicode
+              object_type: review
+              op_type: approval
+              op_version: 1
+              body:
+                revision: "0000000000000000000000000000000000000002"
+                verdict: request-changes
+                subject: "user:José"
+                message: "Updated under the precomposed spelling"
+            expect: accept
+
+  - name: refs/writ/fedcba9876543210/review
+    history:
+      - commits:
+          - id: bob-remove-normalized
+            parents: [alice-assign-supplementary]
+            author: bob
+            timestamp: 2026-01-01T00:08:00Z
+            op:
+              object_id: r-person-unicode
+              object_type: review
+              op_type: assign
+              op_version: 1
+              body:
+                remove: ["user:Ꭰ"]
+                add: ["user:İ"]
+            expect: accept

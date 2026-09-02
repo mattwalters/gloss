@@ -1,6 +1,17 @@
 package projection
 
-const schemaVersion = 6
+// schemaVersion invalidates the cache whenever what is stored in it changes
+// meaning, not only when a column does. Projection rows hold *folded* person
+// identifiers and Refresh is incremental, so a rule change leaves rows written
+// under the old rule sitting beside rows written under the new one, while
+// Query.Reviews and Query.Issues normalize their filters with the new rule —
+// and an assignee filter then quietly matches nothing. Bumping is how a
+// normalization change reaches an existing checkout.
+//
+// 7: WRIT-117 pinned the person-identifier folding algorithm to NFC, Unicode
+// default case folding, NFC (spec/identifiers.md). Also covers WRIT-102, which
+// made identifiers scheme-prefixed without bumping.
+const schemaVersion = 7
 
 var projectionTables = []string{
 	"meta",

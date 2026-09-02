@@ -1,0 +1,14 @@
+{
+  "identifier": "user:José",
+  "scheme": "user",
+  "value": "josé",
+  "normalized": "user:josé",
+  "equal_to": [
+    "user:José",
+    "USER:josé",
+    "  user:JOSÉ  "
+  ],
+  "distinct_from": [
+    "user:jose"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "identifier": "user:STRAẞE",
+  "scheme": "user",
+  "value": "strasse",
+  "normalized": "user:strasse",
+  "equal_to": [
+    "user:Straße",
+    "user:strasse"
+  ],
+  "distinct_from": [
+    "user:straße-x"
+  ]
+}

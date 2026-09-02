@@ -14,3 +14,8 @@ var NormalizePerson = normalizePerson
 // a fixture that says "the scheme is email" is checked against the code an
 // independent implementer would read.
 var SplitPerson = splitPerson
+
+// PersonUnicodeVersion exposes the Unicode version the reference fold's copy of
+// the normalization rule is pinned to, so the test binding it to the tables
+// x/text actually compiled in can live beside the drift test.
+const PersonUnicodeVersion = personUnicodeVersion

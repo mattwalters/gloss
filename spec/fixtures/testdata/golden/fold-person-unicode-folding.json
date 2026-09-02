@@ -1,0 +1,123 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/0123456789abcdef/review",
+      "commit": "e2d3aa131311b7359dc35865e29f14c2c8964d14"
+    },
+    {
+      "name": "refs/writ/fedcba9876543210/review",
+      "commit": "fa060464953ad61c9c3630130447f0e0b91c9669"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/0123456789abcdef/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "bfcd698971914f57eca62669290763ead07dcc5c",
+          "tree": "1f0d1125d804d1256417059245242ffffb922ef8",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create review/r-person-unicode\n",
+          "signed": true
+        },
+        {
+          "sha": "8ea065249970b07d5a09596d40c029d526712a5a",
+          "tree": "0cd9dd528a3eac04e8d59eb71a41a96c01014f31",
+          "parents": [
+            "bfcd698971914f57eca62669290763ead07dcc5c"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: revision review/r-person-unicode\n",
+          "signed": true
+        },
+        {
+          "sha": "8a3fd3ad4822e5d98a18caa7506bbfcf9cc1d8fa",
+          "tree": "1eac05fc59582104cd57dae6357553dc1eaf5561",
+          "parents": [
+            "8ea065249970b07d5a09596d40c029d526712a5a"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: assign review/r-person-unicode\n",
+          "signed": true
+        },
+        {
+          "sha": "01353849c3941aeb934dd2707a8251d875b530c2",
+          "tree": "e360995c2199f557efb93a1819a5c0de0766caa2",
+          "parents": [
+            "8a3fd3ad4822e5d98a18caa7506bbfcf9cc1d8fa"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:03:00Z",
+          "message": "writ: assign review/r-person-unicode\n",
+          "signed": true
+        },
+        {
+          "sha": "9588964ad8e34e50197143c1fe1ea3a031d275c1",
+          "tree": "3c365343b504b891296c8c90575200ec96144098",
+          "parents": [
+            "01353849c3941aeb934dd2707a8251d875b530c2"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:04:00Z",
+          "message": "writ: assign review/r-person-unicode\n",
+          "signed": true
+        },
+        {
+          "sha": "49ef6f76d848d1cff135aac8f5376f858c299c03",
+          "tree": "276c0c977a6252b0a0b5f39edcfe521a2b7a2b4d",
+          "parents": [
+            "9588964ad8e34e50197143c1fe1ea3a031d275c1"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:05:00Z",
+          "message": "writ: assign review/r-person-unicode\n",
+          "signed": true
+        },
+        {
+          "sha": "83540f436daf960cf7b9dbc58060d8e2618edc14",
+          "tree": "46bda6a65be18d0cc17c0b45459b91c3b4b97914",
+          "parents": [
+            "49ef6f76d848d1cff135aac8f5376f858c299c03"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:06:00Z",
+          "message": "writ: approval review/r-person-unicode\n",
+          "signed": true
+        },
+        {
+          "sha": "e2d3aa131311b7359dc35865e29f14c2c8964d14",
+          "tree": "75a48287ba86f5cdafd9b5aa7c94423b90de8335",
+          "parents": [
+            "83540f436daf960cf7b9dbc58060d8e2618edc14"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:07:00Z",
+          "message": "writ: approval review/r-person-unicode\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/fedcba9876543210/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "fa060464953ad61c9c3630130447f0e0b91c9669",
+          "tree": "e1fa01b993b0e977d283c94f4d0debcfd6a78e7b",
+          "parents": [
+            "49ef6f76d848d1cff135aac8f5376f858c299c03"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:08:00Z",
+          "message": "writ: assign review/r-person-unicode\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,7 +1,11 @@
 package spec_test
 
 import (
+	"strings"
 	"testing"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/unicode/norm"
 
 	"github.com/writtendev/writ/engine/state"
 	"github.com/writtendev/writ/spec"
@@ -12,6 +16,12 @@ import (
 // case in either half, the empty and all-whitespace strings, non-ASCII case
 // folding, where the split falls when the value carries its own colon, and the
 // colonless strings that are not conforming identifiers at all.
+//
+// Since WRIT-117 it also pins every step of the folding algorithm, because two
+// copies of a three-step rule have far more ways to drift than two copies of
+// strings.ToLower did: composition, the case fold itself, the second
+// composition, and the four x/text behaviours each copy has to work around.
+// The last of those is what this table missed once already — see below.
 var normalizePersonInputs = []string{
 	"",
 	" ",
@@ -46,6 +56,55 @@ var normalizePersonInputs = []string{
 	"ИВАН@ПРИМЕР.РФ",
 	"  日本語  ",
 	"\u00a0NBSP@Example.COM\u00a0",
+	// The folding algorithm, step by step.
+	"user:\u0130",                             // the pinned case fold, on the character that motivated pinning it
+	"user:\u00df",                             // full folding, not simple
+	"user:\u1e9e",                             // the capital, which simple folding would send to U+00DF instead
+	"user:Jos\u0065\u0301",                    // NFC composes a decomposed value
+	"user:Jos\u00e9",                          // and leaves the precomposed spelling alone
+	"user:\u017f\u0301",                       // folding leaves s+U+0301, which the second NFC composes
+	"user:\u13a0",                             // Cherokee uppercase: a fold fixed point x/text toggles
+	"user:\uab70",                             // Cherokee lowercase, which folds up (AB70..ABBF -> 13A0..13EF)
+	"user:\u13f8",                             // and Cherokee's *second* fold range (13F8..13FD -> 13F0..13F5)
+	"user:\U00010041\u0300",                   // a supplementary starter that must not compose with its mark
+	"user:\U00011099\U000110ba",               // a supplementary pair that must
+	"user:\U00011347\U0001133e",               // and one whose second element is a starter
+	"user:\u1100\u1161",                       // Hangul, the composition between two starters
+	"user:\u00e9\U00010041\u0300\u0065\u0301", // a false composition must not cost its neighbours
+	"\u0130:alice",                            // a non-conforming scheme, where the two copies still must agree
+	"\U00010041\u0300@example.com",            // colonless, and past the ASCII fast path
+	// One input per defect the folding implementations work around, mirroring
+	// the list in the nfc doc comment. Every one of these has actually
+	// diverged between the two copies at some point: a hand-written table only
+	// covers the cases somebody thought to write down, and these are the ones
+	// that were paid for.
+	"user:\U00010041\u0300",           // 1: the truncated composition key
+	"user:a" + longMarkRun + "\u0301", // 2: Stream-Safe Text, and the boundary that follows from it
+	"user:\u00e1" + longMarkRun,       // 2 again, from the spelling it has to match
+	"user:\u00c5\u0bd7\u0316\u0301",   // 3: composing across a ccc-0 blocker
+	"user:\u00c5\u0bd7\u0316\u0301\u0316\u0301",
+	"user:a\xff\u0341", // invalid UTF-8, where the two copies took different exits
+}
+
+// longMarkRun is thirty U+0316: one more than x/text will compose before it
+// gives up and inserts U+034F.
+var longMarkRun = strings.Repeat("\u0316", 30)
+
+// TestReffoldPinnedUnicodeVersion binds the reference fold's copy of the rule
+// to the Unicode tables x/text actually compiled in. x/text selects tables by
+// Go build tag rather than by module version, so a toolchain bump would
+// otherwise change the reference implementation's answers — and with them the
+// conformance goldens every other implementation is checked against — with no
+// change to this repository at all.
+func TestReffoldPinnedUnicodeVersion(t *testing.T) {
+	if norm.Version != spec.PersonUnicodeVersion {
+		t.Errorf("x/text/unicode/norm is Unicode %s, but spec/identifiers.md pins %s",
+			norm.Version, spec.PersonUnicodeVersion)
+	}
+	if cases.UnicodeVersion != spec.PersonUnicodeVersion {
+		t.Errorf("x/text/cases is Unicode %s, but spec/identifiers.md pins %s",
+			cases.UnicodeVersion, spec.PersonUnicodeVersion)
+	}
 }
 
 // TestReffoldNormalizePersonMatchesEngine binds the reference fold's local copy
