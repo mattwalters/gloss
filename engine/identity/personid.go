@@ -27,7 +27,20 @@ const PersonIDKey = "writ.personId"
 // once into a signed commit and never rewritten, so the only place to stop a
 // malformed identifier is before the write.
 func DerivePersonID(cfg map[string]string) (string, error) {
-	if raw, ok := cfg["writ.personid"]; ok && raw != "" {
+	// Trim before the emptiness check, exactly as the user.email branch below
+	// does and for the same reason. git config stores a whitespace-only value
+	// verbatim, so a raw != "" guard entered this branch, normalized to the
+	// empty string, failed the check and refused with a malformed-identifier
+	// error — telling a user their identifier was missing its scheme when what
+	// they had typed was nothing at all, and taking down every write path on a
+	// repository whose user.email would have derived a perfectly good
+	// identifier. A set key with nothing in it is nothing configured; the two
+	// keys had disagreed about that.
+	//
+	// Only the guard trims. A value that survives it is normalized from the
+	// raw string, and a value that fails the check is reported raw: the error
+	// quotes what the user typed.
+	if raw := cfg["writ.personid"]; strings.TrimSpace(raw) != "" {
 		norm := person.NormalizePerson(raw)
 		if p := person.Check(norm); p != person.Valid {
 			return "", &ConfigError{

@@ -35,6 +35,29 @@ func TestDerivePersonID(t *testing.T) {
 			cfg:  map[string]string{"writ.personid": "keybase:alice"},
 			want: "keybase:alice",
 		},
+		{
+			// WRIT-144. The override used to be gated on the raw value, so a
+			// key holding only spaces entered the branch, normalized to
+			// nothing, and refused with a malformed-identifier error — telling
+			// a user their identifier had no scheme when they had typed
+			// nothing, and doing it on a repository whose user.email derives
+			// perfectly well. The two keys now agree that a set key with
+			// nothing in it is nothing configured.
+			name: "whitespace-only writ.personId falls back to user.email",
+			cfg: map[string]string{
+				"writ.personid": "   ",
+				"user.email":    "Alice@Example.COM",
+			},
+			want: "email:alice@example.com",
+		},
+		{
+			name: "writ.personId of tabs and newlines falls back too",
+			cfg: map[string]string{
+				"writ.personid": "\t\n ",
+				"user.email":    "alice@example.com",
+			},
+			want: "email:alice@example.com",
+		},
 	}
 
 	for _, tc := range cases {
@@ -90,6 +113,29 @@ func TestDerivePersonIDErrors(t *testing.T) {
 			wantKey: "user.email",
 			wantErr: identity.ErrInvalid,
 		},
+		{
+			// WRIT-144, the other half: with the override blank and nothing to
+			// fall back to, the refusal is about configuration that is
+			// missing, not about an identifier that is malformed. It used to
+			// be ErrInvalid — "your identifier has no scheme" — for a user who
+			// had typed no identifier at all.
+			name: "whitespace-only writ.personId with nothing to fall back to",
+			cfg: map[string]string{
+				"writ.personid": "   ",
+				"user.name":     "Alice",
+			},
+			wantKey: identity.PersonIDKey,
+			wantErr: identity.ErrMissing,
+		},
+		{
+			name: "whitespace-only writ.personId and whitespace-only user.email",
+			cfg: map[string]string{
+				"writ.personid": " ",
+				"user.email":    "   ",
+			},
+			wantKey: identity.PersonIDKey,
+			wantErr: identity.ErrMissing,
+		},
 	}
 
 	for _, tc := range cases {
@@ -126,5 +172,41 @@ func TestDerivePersonIDWhitespaceEmailIsNotSilentlyEmpty(t *testing.T) {
 	}
 	if strings.HasPrefix(got, "email:") {
 		t.Errorf("DerivePersonID = %q, want no identifier at all", got)
+	}
+}
+
+// TestDerivePersonIDInvalidOverrideQuotesRawValue pins the other half of
+// WRIT-144's trim. Only the emptiness guard trims: a value that survives it
+// and then fails the check is still reported exactly as the user typed it,
+// padding included, because an error that quotes something the user cannot
+// find in their config file is an error they cannot act on.
+func TestDerivePersonIDInvalidOverrideQuotesRawValue(t *testing.T) {
+	const raw = "  alice  "
+
+	got, err := identity.DerivePersonID(map[string]string{
+		"writ.personid": raw,
+		// A usable address the trim must not reach for: the override is set to
+		// something real, so it is honoured and refused, not skipped.
+		"user.email": "alice@example.com",
+	})
+	if err == nil {
+		t.Fatalf("DerivePersonID = %q, want an error: %q has no scheme", got, raw)
+	}
+	if got != "" {
+		t.Errorf("DerivePersonID = %q, want nothing alongside the error", got)
+	}
+
+	var cfgErr *identity.ConfigError
+	if !errors.As(err, &cfgErr) {
+		t.Fatalf("error = %v, want a *identity.ConfigError", err)
+	}
+	if !errors.Is(err, identity.ErrInvalid) {
+		t.Errorf("error = %v, want one wrapping ErrInvalid: the value is set and malformed, not absent", err)
+	}
+	if cfgErr.Key != identity.PersonIDKey {
+		t.Errorf("ConfigError.Key = %q, want %q", cfgErr.Key, identity.PersonIDKey)
+	}
+	if cfgErr.Value != raw {
+		t.Errorf("ConfigError.Value = %q, want the raw configured value %q", cfgErr.Value, raw)
 	}
 }

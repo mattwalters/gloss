@@ -63,8 +63,30 @@ type Identity struct {
 	// writ.personId to something that is not a person identifier" apart from
 	// "you set nothing at all". Reporting the second when the first is true
 	// sends a user to look at a key they already configured.
+	//
+	// A third state joins those two: the identity never loaded, because some
+	// earlier key was missing or invalid. Load fails on that one, but it also
+	// returns an Identity, and callers that keep reading from a repository
+	// they cannot write to still hold it. So every Load failure sets this
+	// field too — an empty PersonID always carries the reason it is empty,
+	// whatever the reason. See loadFailed.
 	PersonIDErr    error
 	AllowedSigners string // gpg.ssh.allowedSignersFile, "" when unset
+}
+
+// loadFailed returns the Identity accompanying a Load failure: empty apart
+// from PersonIDErr, which records why.
+//
+// Load used to return a bare Identity{} here, and a bare Identity{} has
+// PersonID == "" with PersonIDErr == nil — the exact shape of "no
+// writ.personId and no user.email to derive one from". A caller looking at
+// nothing but the Identity could not tell a repository with no person
+// identifier from a repository with no identity at all, so it diagnosed the
+// former: it told a user whose only fault was a missing writ.writerId to go
+// configure writ.personId or user.email, both of which were already correct.
+// Carrying the reason costs one field that was going to be nil anyway.
+func loadFailed(err error) Identity {
+	return Identity{PersonIDErr: err}
 }
 
 // Load reads the current writer's identity out of git config in repoDir.
@@ -76,20 +98,21 @@ type Identity struct {
 func Load(ctx context.Context, repoDir string) (Identity, error) {
 	cfg, err := readGitConfig(ctx, repoDir)
 	if err != nil {
-		return Identity{}, err
+		return loadFailed(err), err
 	}
 
 	// 1. Writer ID: writ.writerId
 	rawWriterID, ok := cfg["writ.writerid"]
 	if !ok || rawWriterID == "" {
-		return Identity{}, &ConfigError{
+		err := &ConfigError{
 			Key:     "writ.writerId",
 			Problem: ErrMissing,
 		}
+		return loadFailed(err), err
 	}
 	writerID, err := ParseWriterID(rawWriterID)
 	if err != nil {
-		return Identity{}, err
+		return loadFailed(err), err
 	}
 
 	// 2. Author Name: user.name
@@ -106,19 +129,21 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 	// the same key below.
 	name := strings.TrimSpace(cfg["user.name"])
 	if name == "" {
-		return Identity{}, &ConfigError{
+		err := &ConfigError{
 			Key:     "user.name",
 			Problem: ErrMissing,
 		}
+		return loadFailed(err), err
 	}
 
 	// 3. Author Email: user.email
 	email := strings.TrimSpace(cfg["user.email"])
 	if email == "" {
-		return Identity{}, &ConfigError{
+		err := &ConfigError{
 			Key:     "user.email",
 			Problem: ErrMissing,
 		}
+		return loadFailed(err), err
 	}
 
 	// 3b. Person identifier: writ.personId, else email:<normalized user.email>.

@@ -673,6 +673,227 @@ func TestConfigErrorMessage(t *testing.T) {
 	}
 }
 
+// TestLoad_EmptyPersonIDAlwaysExplained pins WRIT-143's invariant: an Identity
+// whose PersonID is empty always carries a non-nil PersonIDErr saying why, and
+// an Identity whose PersonID is set never carries one.
+//
+// Load used to return a bare Identity{} on each of its early returns, and a
+// bare Identity{} is PersonID == "" with PersonIDErr == nil — the exact shape
+// of "writ.personId is unset and there is no user.email to derive one from".
+// A caller with nothing but the Identity in hand could not tell that apart
+// from "this repository has no identity at all", so it diagnosed the first:
+// `writ review approve` on a clone whose owner never ran `writ init` named
+// writ.personId and user.email, both of which were already correct.
+//
+// The sweep covers every way Load can fail and the way it can succeed, because
+// an invariant with an exception is not one. The unreadable-config path is a
+// separate subtest below, since it is not reached by mutating config.
+func TestLoad_EmptyPersonIDAlwaysExplained(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(t *testing.T, repoDir string)
+		// wantPersonID is the identifier Load must resolve, "" when it cannot.
+		wantPersonID string
+		// wantPersonIDErrKey is the config key PersonIDErr must name; "" means
+		// PersonIDErr must be nil.
+		wantPersonIDErrKey string
+		// wantLoadErrKey is the config key the returned error must name; ""
+		// means Load must succeed.
+		wantLoadErrKey string
+		// samePointer asserts PersonIDErr is the very error Load returned,
+		// which is what makes the two diagnoses impossible to disagree.
+		samePointer bool
+	}{
+		{
+			name:         "valid configuration",
+			mutate:       func(*testing.T, string) {},
+			wantPersonID: "email:alice@example.test",
+		},
+		{
+			name: "writ.writerId unset",
+			mutate: func(t *testing.T, dir string) {
+				unsetGitConfig(t, dir, "writ.writerId")
+			},
+			wantPersonIDErrKey: "writ.writerId",
+			wantLoadErrKey:     "writ.writerId",
+			samePointer:        true,
+		},
+		{
+			name: "writ.writerId malformed",
+			mutate: func(t *testing.T, dir string) {
+				setGitConfig(t, dir, "writ.writerId", "nothexadecimal!!")
+			},
+			wantPersonIDErrKey: "writ.writerId",
+			wantLoadErrKey:     "writ.writerId",
+			samePointer:        true,
+		},
+		{
+			name: "user.name unset",
+			mutate: func(t *testing.T, dir string) {
+				unsetGitConfig(t, dir, "user.name")
+			},
+			wantPersonIDErrKey: "user.name",
+			wantLoadErrKey:     "user.name",
+			samePointer:        true,
+		},
+		{
+			// The sharp one. writ.personId and user.email are untouched and
+			// valid, so any message naming them names something correct.
+			name: "user.name whitespace-only",
+			mutate: func(t *testing.T, dir string) {
+				setGitConfig(t, dir, "user.name", "   ")
+			},
+			wantPersonIDErrKey: "user.name",
+			wantLoadErrKey:     "user.name",
+			samePointer:        true,
+		},
+		{
+			name: "user.email unset",
+			mutate: func(t *testing.T, dir string) {
+				unsetGitConfig(t, dir, "user.email")
+			},
+			wantPersonIDErrKey: "user.email",
+			wantLoadErrKey:     "user.email",
+			samePointer:        true,
+		},
+		{
+			name: "user.email whitespace-only",
+			mutate: func(t *testing.T, dir string) {
+				setGitConfig(t, dir, "user.email", "\t ")
+			},
+			wantPersonIDErrKey: "user.email",
+			wantLoadErrKey:     "user.email",
+			samePointer:        true,
+		},
+		{
+			// The case PersonIDErr was introduced for, and the reason the
+			// invariant cannot simply be "PersonIDErr is nil unless Load
+			// failed": here Load succeeds and PersonIDErr is set.
+			name: "writ.personId set to something that is not a person identifier",
+			mutate: func(t *testing.T, dir string) {
+				setGitConfig(t, dir, "writ.personId", "alice")
+			},
+			wantPersonIDErrKey: identity.PersonIDKey,
+		},
+		{
+			// The converse: Load fails past the person derivation, so the
+			// identifier resolved and PersonIDErr must stay nil. Reporting a
+			// person problem to a user whose signing configuration is what is
+			// wrong is the same defect pointed the other way.
+			name: "gpg.format unset",
+			mutate: func(t *testing.T, dir string) {
+				unsetGitConfig(t, dir, "gpg.format")
+			},
+			wantPersonID:   "email:alice@example.test",
+			wantLoadErrKey: "gpg.format",
+		},
+		{
+			name: "gpg.format unsupported",
+			mutate: func(t *testing.T, dir string) {
+				setGitConfig(t, dir, "gpg.format", "openpgp")
+			},
+			wantPersonID:   "email:alice@example.test",
+			wantLoadErrKey: "gpg.format",
+		},
+		{
+			name: "user.signingKey unset",
+			mutate: func(t *testing.T, dir string) {
+				unsetGitConfig(t, dir, "user.signingKey")
+			},
+			wantPersonID:   "email:alice@example.test",
+			wantLoadErrKey: "user.signingKey",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := setupTestEnv(t)
+			populateValidLocalConfig(t, env.repoDir)
+			tc.mutate(t, env.repoDir)
+
+			id, err := identity.Load(context.Background(), env.repoDir)
+
+			// The invariant itself, asserted before anything specific to the
+			// case: an empty identifier is always explained, and a resolved
+			// one is never accompanied by an explanation of its absence.
+			if id.PersonID == "" && id.PersonIDErr == nil {
+				t.Errorf("PersonID is empty with a nil PersonIDErr: nothing says why (Load error: %v)", err)
+			}
+			if id.PersonID != "" && id.PersonIDErr != nil {
+				t.Errorf("PersonID = %q alongside PersonIDErr = %v: a resolved identifier explains itself", id.PersonID, id.PersonIDErr)
+			}
+
+			if id.PersonID != tc.wantPersonID {
+				t.Errorf("PersonID = %q, want %q", id.PersonID, tc.wantPersonID)
+			}
+
+			if tc.wantPersonIDErrKey == "" {
+				if id.PersonIDErr != nil {
+					t.Errorf("PersonIDErr = %v, want nil", id.PersonIDErr)
+				}
+			} else {
+				var cfgErr *identity.ConfigError
+				if !errors.As(id.PersonIDErr, &cfgErr) {
+					t.Fatalf("PersonIDErr = %v (%T), want a *identity.ConfigError", id.PersonIDErr, id.PersonIDErr)
+				}
+				if cfgErr.Key != tc.wantPersonIDErrKey {
+					t.Errorf("PersonIDErr names %q, want %q: the message must send the user to the key that is actually at fault", cfgErr.Key, tc.wantPersonIDErrKey)
+				}
+			}
+
+			if tc.wantLoadErrKey == "" {
+				if err != nil {
+					t.Fatalf("Load: %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Fatalf("Load succeeded, want a failure naming %q", tc.wantLoadErrKey)
+				}
+				var cfgErr *identity.ConfigError
+				if !errors.As(err, &cfgErr) {
+					t.Fatalf("Load error = %v (%T), want a *identity.ConfigError", err, err)
+				}
+				if cfgErr.Key != tc.wantLoadErrKey {
+					t.Errorf("Load error names %q, want %q", cfgErr.Key, tc.wantLoadErrKey)
+				}
+			}
+
+			if tc.samePointer && id.PersonIDErr != err {
+				t.Errorf("PersonIDErr = %v, want the identical error Load returned (%v)", id.PersonIDErr, err)
+			}
+		})
+	}
+
+	// The remaining failure path: git config could not be read at all. It
+	// carries no ConfigError key of its own, but it must still explain the
+	// empty identifier rather than leave a caller to guess.
+	t.Run("git config unreadable", func(t *testing.T) {
+		requireGit(t)
+		id, err := identity.Load(context.Background(), t.TempDir())
+		if err == nil {
+			t.Fatal("Load on a non-repo directory succeeded, want a failure")
+		}
+		if id.PersonID != "" {
+			t.Errorf("PersonID = %q, want empty", id.PersonID)
+		}
+		if id.PersonIDErr == nil {
+			t.Fatal("PersonID is empty with a nil PersonIDErr: nothing says why")
+		}
+		if id.PersonIDErr != err {
+			t.Errorf("PersonIDErr = %v, want the identical error Load returned (%v)", id.PersonIDErr, err)
+		}
+	})
+}
+
+func unsetGitConfig(t *testing.T, dir, key string) {
+	t.Helper()
+	cmd := exec.Command("git", "config", "--unset", key)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git config --unset %s failed: %v (%s)", key, err, string(out))
+	}
+}
+
 func TestLoad_NonRepoDirectory(t *testing.T) {
 	requireGit(t)
 	nonRepoDir := t.TempDir()
