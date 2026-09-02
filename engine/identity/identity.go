@@ -17,21 +17,21 @@ type WriterID string
 
 // ParseWriterID parses and validates s as a WriterID matching ^[0-9a-f]{16}$.
 //
-// The rejection carries its own remedy because ConfigError does not append one
-// to an ErrInvalid: see initHint. That suppression is right — writ init never
-// overwrites a value the user has already set — but "invalid configuration"
-// on its own leaves a reader with a broken repository and no next step, and
-// this key's next step is not the obvious one. EnsureWriterID mints only into
-// a key it reads as absent, so running writ init over a malformed writer id
-// fails with this very message rather than replacing it. Unset it first and
-// the next run mints. That advice is correct from every emitter, writ init's
-// own output included.
+// The rejection says what the value had to look like and stops there. It names
+// no remedy, because this parser has two kinds of caller and they need
+// opposite advice: Load and EnsureWriterID read s out of the local
+// writ.writerId, but engine/dag runs the writer-id segment of a ref path
+// through here, and a malformed segment is usually someone else's id arriving
+// over a fetch. "Unset writ.writerId and re-mint" is the fix for the first and
+// a way to split your own device's ops across two ref namespaces for the
+// second. So the two config callers attach it — see withRemedy and
+// remintRemedy — and this one does not.
 func ParseWriterID(s string) (WriterID, error) {
 	if !writerIDRegexp.MatchString(s) {
 		return "", &ConfigError{
 			Key:     "writ.writerId",
 			Value:   s,
-			Problem: fmt.Errorf("%w: expected 16 lowercase hex characters; unset the key and run 'writ init' to mint a new one", ErrInvalid),
+			Problem: fmt.Errorf("%w: expected 16 lowercase hex characters", ErrInvalid),
 		}
 	}
 	return WriterID(s), nil
@@ -113,25 +113,34 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 
 	// 1. Writer ID: writ.writerId
 	//
-	// Trimmed before the emptiness check, the way every other key down this
-	// function already is. This was the last one guarded on the raw string,
-	// and the guard disagreed with EnsureWriterID two files over, which has
-	// always trimmed: git config stores a whitespace-only value verbatim, so
-	// `writ.writerId = "   "` reached ParseWriterID and was reported as an
-	// invalid writer id — a value the user never typed as an id — while
-	// `writ init` read the same key as absent and minted straight over it. A
-	// set key with nothing in it is nothing configured, so it takes the
-	// missing-config path, which names the command that fixes it.
-	rawWriterID := strings.TrimSpace(cfg["writ.writerid"])
-	if rawWriterID == "" {
+	// The emptiness check trims; the parse does not. Only the guard was wrong.
+	// git config stores a whitespace-only value verbatim, so
+	// `writ.writerId = "   "` used to reach ParseWriterID and be reported as
+	// an invalid writer id — a value nobody typed as an id — while
+	// EnsureWriterID, whose presence test has always trimmed, read the same
+	// key as absent and minted straight over it. A set key with nothing in it
+	// is nothing configured, so it now takes the missing-config path here too,
+	// which names the command that fixes it.
+	//
+	// What the guard must not do is hand the trimmed string on to the parser.
+	// EnsureWriterID trims its presence test and parses the raw value, so
+	// trimming here would make Load accept a padded id that EnsureWriterID
+	// still refuses — and git stores the padding verbatim, so the repository
+	// would write ops under refs/writ/<padded>/ while writ init could never
+	// run in it again. This is a ref-namespace decision, not a message: the
+	// set of strings that name a writer namespace is exactly the set
+	// ParseWriterID accepts, and widening it on one side of the pair splits a
+	// device's ops across two refs. Padding stays invalid, on both sides.
+	if strings.TrimSpace(cfg["writ.writerid"]) == "" {
 		err := &ConfigError{
 			Key:     "writ.writerId",
 			Problem: ErrMissing,
 		}
 		return loadFailed(err), err
 	}
-	writerID, err := ParseWriterID(rawWriterID)
+	writerID, err := ParseWriterID(cfg["writ.writerid"])
 	if err != nil {
+		err = withRemedy(err, remintRemedy)
 		return loadFailed(err), err
 	}
 
@@ -233,10 +242,16 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 	if strings.HasPrefix(rawSigningKey, "key::") {
 		literalKey := strings.TrimSpace(strings.TrimPrefix(rawSigningKey, "key::"))
 		if literalKey == "" {
+			// A remedy, for the same reason writ.writerId gets one: ErrInvalid
+			// takes no initHint, and "invalid configuration" alone leaves a
+			// reader holding a key they can see is set and no idea what is
+			// wrong with it. Here the form is right and the content is
+			// missing, so say which half to supply.
 			return baseIdent, &ConfigError{
 				Key:     "user.signingKey",
 				Value:   rawSigningKey,
 				Problem: ErrInvalid,
+				Remedy:  "put the public key after key::, or set the path to a key file instead",
 			}
 		}
 		signingKey.Value = literalKey

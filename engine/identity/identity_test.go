@@ -10,6 +10,12 @@ import (
 	"strings"
 	"testing"
 
+	// dag is the consumer that parses a writer id out of a ref path rather
+	// than out of git config, and the reason the config remedy is attached
+	// where the key is read. Importing it here is legal — this is an external
+	// test package, so dag importing identity is not a cycle — and it makes
+	// the layering assertion a real call into the real consumer.
+	"github.com/writtendev/writ/engine/dag"
 	"github.com/writtendev/writ/engine/identity"
 )
 
@@ -222,11 +228,16 @@ func TestLoad_TrimsAuthorPadding(t *testing.T) {
 // sweep asserts which key the error names and both spellings of this failure
 // name writ.writerId. What changed is the problem class, and the problem class
 // is what the user reads: ErrInvalid renders "invalid git config" and, by
-// design, carries no "run 'writ init'" remedy, so a whitespace-only value was
-// reported as a malformed writer id with no way out — while writ init, which
-// has always trimmed this key, would have read it as absent and minted over
-// it. Load and EnsureWriterID disagreeing about whether a key is set is the
-// disagreement WRIT-143 is about, one file apart.
+// design, carries no general "run 'writ init'" remedy, so a whitespace-only
+// value was reported as a malformed writer id — while writ init, whose
+// presence test on this key has always trimmed, read the same key as absent
+// and minted over it. Load and EnsureWriterID disagreeing about whether a key
+// is set is the disagreement WRIT-143 is about, one file apart.
+//
+// Only the presence test. What EnsureWriterID parses has always been the raw
+// string, and TestLoad_PaddedWriterIDStaysInvalid below is the guard on the
+// other end of that: the two functions agree that whitespace is absence and
+// agree that padding is not an id.
 func TestLoad_WhitespaceOnlyWriterID(t *testing.T) {
 	for _, value := range []string{" ", "   ", "\t"} {
 		t.Run(fmt.Sprintf("%q", value), func(t *testing.T) {
@@ -270,23 +281,185 @@ func TestLoad_WhitespaceOnlyWriterID(t *testing.T) {
 	}
 }
 
-// TestParseWriterID_InvalidNamesAWorkingRemedy pins the other half of MAJOR 1's
-// pair. Trimming settles whitespace, but a genuinely malformed value still
-// reports ErrInvalid, and ConfigError appends no remedy to an ErrInvalid — it
-// must not, because writ init never overwrites a value the user has already
-// set. Running writ init over a malformed writer id fails with this very
-// error rather than replacing it, so "run 'writ init'" alone would be advice
-// that does not work. The error has to say to clear the key first.
-func TestParseWriterID_InvalidNamesAWorkingRemedy(t *testing.T) {
-	_, err := identity.ParseWriterID("nothexadecimal!")
-	if err == nil {
-		t.Fatal("ParseWriterID accepted a malformed writer id")
+// TestLoad_PaddedWriterIDStaysInvalid is the guard on the trim above. The
+// emptiness check trims and the parse does not, and the gap between those two
+// is a ref namespace.
+//
+// Trimming the value Load parses would make ` 0123456789abcdef ` a writer id
+// here while EnsureWriterID — which trims only its presence test and parses
+// the raw string — went on refusing it. git stores the padding verbatim, so
+// the repository would keep writing ops under refs/writ/0123456789abcdef/
+// while writ init could never run in it again, and the remedy init printed
+// would mint a second id: one device, two namespaces. Which strings name a
+// writer namespace is one decision, and both functions have to make it the
+// same way.
+func TestLoad_PaddedWriterIDStaysInvalid(t *testing.T) {
+	for _, value := range []string{" 0123456789abcdef ", "0123456789abcdef\n", "\t0123456789abcdef"} {
+		t.Run(fmt.Sprintf("%q", value), func(t *testing.T) {
+			env := setupTestEnv(t)
+			populateValidLocalConfig(t, env.repoDir)
+			setGitConfig(t, env.repoDir, "writ.writerId", value)
+
+			// git keeps the padding, which is the whole reason this matters.
+			cfg, err := identity.ReadGitConfig(context.Background(), env.repoDir)
+			if err != nil {
+				t.Fatalf("ReadGitConfig: %v", err)
+			}
+			if got := cfg["writ.writerid"]; got != value {
+				t.Fatalf("git stored writ.writerId as %q, want %q verbatim", got, value)
+			}
+
+			ident, loadErr := identity.Load(context.Background(), env.repoDir)
+			if loadErr == nil {
+				t.Fatalf("Load accepted a padded writ.writerId as %q: EnsureWriterID refuses it, and the two must agree on what a writer id is", ident.WriterID)
+			}
+			if !errors.Is(loadErr, identity.ErrInvalid) {
+				t.Errorf("Load error = %v, want errors.Is ErrInvalid: padding is a value the user typed, not an absent key", loadErr)
+			}
+
+			// The other side of the pair, in the same repository.
+			_, minted, ensureErr := identity.EnsureWriterID(context.Background(), env.repoDir, nil)
+			if ensureErr == nil {
+				t.Fatalf("EnsureWriterID accepted a padded writ.writerId (minted=%v)", minted)
+			}
+			if !errors.Is(ensureErr, identity.ErrInvalid) {
+				t.Errorf("EnsureWriterID error = %v, want errors.Is ErrInvalid", ensureErr)
+			}
+		})
 	}
-	msg := err.Error()
-	for _, want := range []string{"unset", "writ init"} {
-		if !strings.Contains(msg, want) {
-			t.Errorf("ParseWriterID error = %q, want it to contain %q: an invalid value the user typed needs a remedy the user can apply", msg, want)
+}
+
+// TestWriterIDRemedyIsAttachedWhereTheValueIsRead pins the layer the remedy
+// lives at.
+//
+// An invalid writ.writerId needs a next step: ConfigError appends no
+// "run 'writ init'" to an ErrInvalid, correctly — init never overwrites a
+// value that is already there — so "invalid configuration" on its own leaves
+// a reader with a broken repository and nothing to do about it. The step that
+// works is to clear the key first, because EnsureWriterID mints only into an
+// absent one.
+//
+// That advice cannot live in ParseWriterID, which has a second kind of caller.
+// engine/dag runs the writer-id segment of a ref path through it, and a
+// malformed segment is typically someone else's id arriving over a fetch —
+// telling that reader to unset their own correct writ.writerId and re-mint
+// would split their device's ops across two namespaces, which is the harm
+// this whole change is about. So the parser describes the format, and the two
+// functions that read the value out of git config attach the remedy.
+func TestWriterIDRemedyIsAttachedWhereTheValueIsRead(t *testing.T) {
+	const malformed = "nothexadecimal!"
+
+	t.Run("the parser names the format and no remedy", func(t *testing.T) {
+		_, err := identity.ParseWriterID(malformed)
+		if err == nil {
+			t.Fatal("ParseWriterID accepted a malformed writer id")
 		}
+		msg := err.Error()
+		if !strings.Contains(msg, "expected 16 lowercase hex characters") {
+			t.Errorf("ParseWriterID error = %q, want it to say what the value had to look like", msg)
+		}
+		for _, unwanted := range []string{"unset", "writ init"} {
+			if strings.Contains(msg, unwanted) {
+				t.Errorf("ParseWriterID error = %q, want no %q: this parser also parses ref path segments, where the writer id is someone else's and unsetting your own would split your namespace", msg, unwanted)
+			}
+		}
+	})
+
+	t.Run("a ref parse inherits no config remedy", func(t *testing.T) {
+		// The consumer the paragraph above is about, tested through it. An
+		// external test package may import a package that imports the package
+		// under test, so this is the real call and not a restatement of it.
+		_, err := dag.ParseChainRef("refs/remotes/origin/writ/" + malformed + "/comment")
+		if err == nil {
+			t.Fatal("ParseChainRef accepted a malformed writer-id segment")
+		}
+		for _, unwanted := range []string{"unset", "writ init"} {
+			if strings.Contains(err.Error(), unwanted) {
+				t.Errorf("ParseChainRef error = %q, want no %q: this ref names a remote writer, and the reader's own writ.writerId is fine", err.Error(), unwanted)
+			}
+		}
+	})
+
+	t.Run("the config readers attach it", func(t *testing.T) {
+		env := setupTestEnv(t)
+		populateValidLocalConfig(t, env.repoDir)
+		setGitConfig(t, env.repoDir, "writ.writerId", malformed)
+
+		_, loadErr := identity.Load(context.Background(), env.repoDir)
+		if loadErr == nil {
+			t.Fatal("Load accepted a malformed writ.writerId")
+		}
+		_, _, ensureErr := identity.EnsureWriterID(context.Background(), env.repoDir, nil)
+		if ensureErr == nil {
+			t.Fatal("EnsureWriterID accepted a malformed writ.writerId")
+		}
+		for name, err := range map[string]error{"Load": loadErr, "EnsureWriterID": ensureErr} {
+			for _, want := range []string{"unset", "writ init"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("%s error = %q, want it to contain %q: an invalid value the user typed needs a remedy the user can apply", name, err.Error(), want)
+				}
+			}
+		}
+	})
+}
+
+// TestRepoIDInvalidNamesAWorkingRemedy is the same defect one key over, which
+// the writ.writerId fix left standing: `writ.repoId = notahexrepoid` failed
+// with "invalid configuration" and no next step at all. EnsureRepoID mints
+// only into an absent key, so the remedy is the same one — clear it first —
+// and it belongs at the same layer.
+func TestRepoIDInvalidNamesAWorkingRemedy(t *testing.T) {
+	const malformed = "notahexrepoid"
+
+	_, parseErr := identity.ParseRepoID(malformed)
+	if parseErr == nil {
+		t.Fatal("ParseRepoID accepted a malformed repo id")
+	}
+	if !strings.Contains(parseErr.Error(), "expected 32 lowercase hex characters") {
+		t.Errorf("ParseRepoID error = %q, want it to say what the value had to look like", parseErr.Error())
+	}
+	for _, unwanted := range []string{"unset", "writ init"} {
+		if strings.Contains(parseErr.Error(), unwanted) {
+			t.Errorf("ParseRepoID error = %q, want no %q: the remedy belongs where the key is read", parseErr.Error(), unwanted)
+		}
+	}
+
+	env := setupTestEnv(t)
+	populateValidLocalConfig(t, env.repoDir)
+	setGitConfig(t, env.repoDir, "writ.repoId", malformed)
+
+	_, loadErr := identity.LoadRepoID(context.Background(), env.repoDir)
+	if loadErr == nil {
+		t.Fatal("LoadRepoID accepted a malformed writ.repoId")
+	}
+	_, _, ensureErr := identity.EnsureRepoID(context.Background(), env.repoDir)
+	if ensureErr == nil {
+		t.Fatal("EnsureRepoID accepted a malformed writ.repoId")
+	}
+	for name, err := range map[string]error{"LoadRepoID": loadErr, "EnsureRepoID": ensureErr} {
+		for _, want := range []string{"unset", "writ init"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s error = %q, want it to contain %q", name, err.Error(), want)
+			}
+		}
+	}
+}
+
+// TestLoad_EmptySigningKeyLiteralNamesAWorkingRemedy covers the third
+// ErrInvalid emitter that named nothing. `user.signingKey = key::` is the
+// right form with no content, and "invalid configuration" alone left a reader
+// looking at a key they could see was set.
+func TestLoad_EmptySigningKeyLiteralNamesAWorkingRemedy(t *testing.T) {
+	env := setupTestEnv(t)
+	populateValidLocalConfig(t, env.repoDir)
+	setGitConfig(t, env.repoDir, "user.signingKey", "key::")
+
+	_, err := identity.Load(context.Background(), env.repoDir)
+	if err == nil {
+		t.Fatal("Load accepted user.signingKey = key:: with nothing after it")
+	}
+	if !strings.Contains(err.Error(), "key::") {
+		t.Errorf("Load error = %q, want it to name the form that is missing its content", err.Error())
 	}
 }
 
@@ -677,49 +850,69 @@ func TestLoad_WhitespaceOnlyAllowedSigners(t *testing.T) {
 }
 
 // TestConfigErrorMessage pins the two renderings of a ConfigError. Error
-// carries "(run 'writ init' to configure)", which is correct from every
-// command except one: writ init prints these errors itself, so the advice
-// there is circular and implies init failed at something it never attempts.
-// Message is the same text with that clause dropped and nothing else changed.
+// carries a remediation clause; Message is the same text with that clause
+// dropped and nothing else changed. The clause is dropped for writ init, which
+// prints these errors itself: any advice to run writ init is circular there,
+// and implies init failed at something it never attempts.
+//
+// Message can only strip what it renders, which is why the per-key Remedy is a
+// field rather than something an emitter wraps into Problem. Wrapping it there
+// put "unset the key and run 'writ init' to mint a new one" inside the text
+// Message returns verbatim, so writ init printed advice to run writ init and
+// this test's own contract — "the clause is all that may differ" — quietly
+// stopped holding.
 func TestConfigErrorMessage(t *testing.T) {
 	const hint = " (run 'writ init' to configure)"
 
 	cases := []struct {
-		name     string
-		err      *identity.ConfigError
-		wantHint bool
+		name string
+		err  *identity.ConfigError
+		// wantClause is the parenthesized remediation Error appends and
+		// Message drops. Empty means Error and Message must be identical.
+		wantClause string
 	}{
 		{
-			name:     "missing with a key",
-			err:      &identity.ConfigError{Key: "gpg.format", Problem: identity.ErrMissing},
-			wantHint: true,
+			name:       "missing with a key",
+			err:        &identity.ConfigError{Key: "gpg.format", Problem: identity.ErrMissing},
+			wantClause: hint,
 		},
 		{
-			name:     "missing with wrapped guidance",
-			err:      &identity.ConfigError{Key: "writ.personId", Problem: fmt.Errorf("%w: set it to user:alice", identity.ErrMissing)},
-			wantHint: true,
+			name:       "missing with wrapped guidance",
+			err:        &identity.ConfigError{Key: "writ.personId", Problem: fmt.Errorf("%w: set it to user:alice", identity.ErrMissing)},
+			wantClause: hint,
 		},
 		{
-			name:     "missing with no key at all",
-			err:      &identity.ConfigError{Problem: identity.ErrMissing},
-			wantHint: true,
+			name:       "missing with no key at all",
+			err:        &identity.ConfigError{Problem: identity.ErrMissing},
+			wantClause: hint,
 		},
 		{
-			name:     "unsupported with a value",
-			err:      &identity.ConfigError{Key: "gpg.format", Value: "openpgp", Problem: fmt.Errorf("%w: writ signs with ssh", identity.ErrUnsupportedFormat)},
-			wantHint: true,
+			name:       "unsupported with a value",
+			err:        &identity.ConfigError{Key: "gpg.format", Value: "openpgp", Problem: fmt.Errorf("%w: writ signs with ssh", identity.ErrUnsupportedFormat)},
+			wantClause: hint,
 		},
 		{
-			// Invalid never carried the hint: a wrong value is not fixed by
-			// running init, which does not write signing configuration.
-			name:     "invalid",
-			err:      &identity.ConfigError{Key: "writ.writerId", Value: "nope", Problem: identity.ErrInvalid},
-			wantHint: false,
+			// Invalid never carries the general hint: a wrong value is not
+			// fixed by running init, which never overwrites one.
+			name: "invalid",
+			err:  &identity.ConfigError{Key: "writ.writerId", Value: "nope", Problem: identity.ErrInvalid},
 		},
 		{
-			name:     "some other problem",
-			err:      &identity.ConfigError{Key: "user.name", Problem: errors.New("git exploded")},
-			wantHint: false,
+			// An invalid value with a remedy the emitter knows. It renders in
+			// Error and, because it goes through the same clause mechanism as
+			// the hint, drops out of Message.
+			name: "invalid with a remedy",
+			err: &identity.ConfigError{
+				Key:     "writ.writerId",
+				Value:   "nope",
+				Problem: identity.ErrInvalid,
+				Remedy:  "unset the key and run 'writ init' to mint a new one",
+			},
+			wantClause: " (unset the key and run 'writ init' to mint a new one)",
+		},
+		{
+			name: "some other problem",
+			err:  &identity.ConfigError{Key: "user.name", Problem: errors.New("git exploded")},
 		},
 	}
 
@@ -729,11 +922,11 @@ func TestConfigErrorMessage(t *testing.T) {
 			if strings.Contains(gotMsg, "writ init") {
 				t.Errorf("Message() = %q, want no advice to run writ init", gotMsg)
 			}
-			if tc.wantHint {
-				if !strings.HasSuffix(gotErr, hint) {
-					t.Errorf("Error() = %q, want it to end with %q", gotErr, hint)
+			if tc.wantClause != "" {
+				if !strings.HasSuffix(gotErr, tc.wantClause) {
+					t.Errorf("Error() = %q, want it to end with %q", gotErr, tc.wantClause)
 				}
-				if want := strings.TrimSuffix(gotErr, hint); gotMsg != want {
+				if want := strings.TrimSuffix(gotErr, tc.wantClause); gotMsg != want {
 					t.Errorf("Message() = %q, want %q: the clause is all that may differ", gotMsg, want)
 				}
 				return

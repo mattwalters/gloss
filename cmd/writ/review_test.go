@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1759,10 +1760,15 @@ func TestReviewIdentityDiagnosis_AgreesAcrossVerbs(t *testing.T) {
 		// verbs must carry identically. Defaults to the missing-config
 		// rendering; a malformed value renders as invalid instead.
 		wantShared string
-		// wantRemedy is the substring naming a step that actually fixes this
+		// wantRemedy is the substring naming a step that fixes this
 		// configuration. "run 'writ init'" is not it for a value the user
 		// typed: writ init never overwrites one, so the key has to be cleared
 		// first and the message has to say so.
+		//
+		// A substring is all this is. That the step named actually fixes the
+		// repository is a claim about behaviour and is asserted where claims
+		// about behaviour belong — TestReviewIdentityRemedy_IsExecutable runs
+		// the two commands in order and writes afterwards.
 		wantRemedy string
 	}{
 		{
@@ -1821,10 +1827,13 @@ func TestReviewIdentityDiagnosis_AgreesAcrossVerbs(t *testing.T) {
 		{
 			// Trimming does not reach this one: "nothexadecimal!" is a value
 			// the user typed, so it is genuinely invalid and ConfigError
-			// appends no writ init remedy to an ErrInvalid — correctly, since
-			// writ init over this value fails with this same error instead of
-			// replacing it. The remedy that works is to clear the key first,
-			// and the message has to be the thing that says so.
+			// appends no general writ init remedy to an ErrInvalid —
+			// correctly, since writ init over this value fails with this same
+			// error instead of replacing it. The remedy that works is to
+			// clear the key first, and the message has to be the thing that
+			// says so. It comes from the code that read writ.writerId out of
+			// git config, not from ParseWriterID, which also parses ref path
+			// segments belonging to other people's writer ids.
 			name:         "writer_id_malformed",
 			key:          "writ.writerId",
 			value:        "nothexadecimal!",
@@ -1894,6 +1903,150 @@ func TestReviewIdentityDiagnosis_AgreesAcrossVerbs(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// writRefs returns every ref under refs/writ/ with its object, one per line,
+// sorted. It is the namespace a write verb would land in, so comparing it
+// before and against after is how a test says "nothing was written" without
+// trusting an exit code.
+func writRefs(t *testing.T, dir string) string {
+	t.Helper()
+	cmd := exec.Command("git", "for-each-ref", "--sort=refname", "--format=%(refname) %(objectname)", "refs/writ/")
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git for-each-ref refs/writ/ failed: %v (%s)", err, string(out))
+	}
+	return string(out)
+}
+
+// TestReviewPaddedWriterID_WritesNoNewNamespace pins the boundary between a
+// writer id and a string that merely trims to one.
+//
+// identity.Load trims writ.writerId before testing it for emptiness, so that a
+// key holding only whitespace reads as unconfigured. Trimming the value it
+// then parses looks like the same change and is not: EnsureWriterID trims only
+// its presence test and parses the raw string, so a padded id would load here
+// and be refused there. git config stores the padding verbatim, and
+// refs/writ/<writer-id>/ is built from the parsed value — so this repository
+// would quietly start writing ops under a namespace that is not its own, while
+// writ init could never run in it again and the remedy it printed would mint a
+// third id. That is the split writ init refuses to cause, arrived at sideways.
+//
+// The assertion is the ref listing, not the message. A message can be right
+// while the refs are wrong.
+func TestReviewPaddedWriterID_WritesNoNewNamespace(t *testing.T) {
+	// Padded, and not this repository's own id: if the padding were accepted
+	// the writes would land under refs/writ/0123456789abcdef/, next to the
+	// device's real chains rather than on them.
+	for _, value := range []string{" 0123456789abcdef ", "0123456789abcdef\n", "\t0123456789abcdef"} {
+		t.Run(fmt.Sprintf("%q", value), func(t *testing.T) {
+			env := setupTestCLIEnv(t)
+			setupSigningKey(t, env.repoDir)
+			reviewID, commentID := openReviewWithComment(t, env.repoDir)
+
+			before := writRefs(t, env.repoDir)
+			if !strings.Contains(before, "refs/writ/") {
+				t.Fatalf("no writ refs to compare against: %q", before)
+			}
+
+			setGitConfig(t, env.repoDir, "writ.writerId", value)
+
+			for verb, args := range map[string][]string{
+				"review comment -m": {
+					"review", "comment", "-C", env.repoDir, reviewID, "-m", "another note",
+				},
+				"review comment -resolve": {
+					"review", "comment", "-C", env.repoDir, commentID, "-resolve",
+				},
+				"review approve": {"review", "approve", "-C", env.repoDir, reviewID},
+			} {
+				var stdout, stderr bytes.Buffer
+				if code := run(context.Background(), args, &stdout, &stderr); code == 0 {
+					t.Errorf("%s succeeded with a padded writ.writerId; stdout: %s", verb, stdout.String())
+				}
+			}
+
+			if after := writRefs(t, env.repoDir); after != before {
+				t.Errorf("refs/writ changed under a padded writ.writerId.\nbefore:\n%s\nafter:\n%s", before, after)
+			}
+			if strings.Contains(writRefs(t, env.repoDir), "0123456789abcdef") {
+				t.Error("a padded writ.writerId opened a second ref namespace: one device's ops must not split across two")
+			}
+
+			// The other half of the harm: a repository that keeps writing is
+			// one writ init can no longer run in. Neither happens, and both
+			// halves have to be checked, because accepting the padding here
+			// is what would have produced both.
+			var stdout, stderr bytes.Buffer
+			if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code == 0 {
+				t.Errorf("writ init accepted a padded writ.writerId; the write verbs above refused it, and the two must agree")
+			}
+		})
+	}
+}
+
+// TestReviewIdentityRemedy_IsExecutable runs the remedy instead of reading it.
+//
+// The table above asserts that a malformed writ.writerId names a step that
+// fixes it, but it asserts that as a substring: nothing there ever ran
+// `git config --unset writ.writerId && writ init`, so "the remedy works" was a
+// claim about wording. It is the kind of claim that stays true right up until
+// the command it names changes behaviour. So do the two steps, in order, and
+// then write.
+func TestReviewIdentityRemedy_IsExecutable(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+	reviewID, commentID := openReviewWithComment(t, env.repoDir)
+
+	setGitConfig(t, env.repoDir, "writ.writerId", "nothexadecimal!")
+
+	var stdout, stderr bytes.Buffer
+	if code := run(context.Background(), []string{
+		"review", "comment", "-C", env.repoDir, commentID, "-resolve",
+	}, &stdout, &stderr); code == 0 {
+		t.Fatalf("review comment -resolve succeeded with a malformed writ.writerId; stdout: %s", stdout.String())
+	}
+	refusal := stderr.String()
+	for _, want := range []string{"unset", "writ init"} {
+		if !strings.Contains(refusal, want) {
+			t.Fatalf("refusal = %q, want it to contain %q", refusal, want)
+		}
+	}
+
+	// Step one of the remedy, exactly as printed. Note that writ init on its
+	// own is not enough — that is the whole reason the message says to unset
+	// first — so assert that too.
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code == 0 {
+		t.Fatal("writ init succeeded over a malformed writ.writerId: the remedy says to unset the key first, and it says so because init never overwrites one")
+	}
+	unsetGitConfig(t, env.repoDir, "writ.writerId")
+
+	// Step two.
+	stdout.Reset()
+	stderr.Reset()
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+		t.Fatalf("writ init failed after unsetting writ.writerId: %d; stderr: %s", code, stderr.String())
+	}
+	minted := getGitConfigAll(t, env.repoDir, "writ.writerId")
+	if len(minted) != 1 || !regexp.MustCompile(`^[0-9a-f]{16}$`).MatchString(minted[0]) {
+		t.Fatalf("writ.writerId after the remedy = %v, want one 16-hex-character id", minted)
+	}
+
+	// And the repository writes again. The verb that refused is the verb that
+	// has to work, and the comment it refused to resolve is still there to
+	// resolve — the remedy mints a new writer id, it does not discard the ops
+	// already written under the old one.
+	stdout.Reset()
+	stderr.Reset()
+	if code := run(context.Background(), []string{
+		"review", "comment", "-C", env.repoDir, commentID, "-resolve",
+	}, &stdout, &stderr); code != 0 {
+		t.Fatalf("review comment -resolve still fails after the remedy: %d; stderr: %s", code, stderr.String())
+	}
+	if resolved, resolvedBy := commentResolution(t, env.repoDir, reviewID, commentID); !resolved || resolvedBy == "" {
+		t.Errorf("comment resolution = (%v, %q), want resolved and attributed", resolved, resolvedBy)
 	}
 }
 

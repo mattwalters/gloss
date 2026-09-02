@@ -36,10 +36,16 @@ func EnsureWriterID(ctx context.Context, repoDir string, taken func(WriterID) bo
 		return "", false, err
 	}
 
+	// The presence test trims and the parse does not, which is the pairing
+	// Load uses: a key with nothing but whitespace in it is unconfigured and
+	// gets minted into, and anything else has to parse exactly. Trimming the
+	// parsed value here instead would let a padded id name a ref namespace,
+	// and the two functions would then disagree about which strings are writer
+	// ids.
 	if rawID, ok := cfg["writ.writerid"]; ok && strings.TrimSpace(rawID) != "" {
 		id, err := ParseWriterID(rawID)
 		if err != nil {
-			return "", false, err
+			return "", false, withRemedy(err, remintRemedy)
 		}
 		return id, false, nil
 	}
