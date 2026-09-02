@@ -194,19 +194,10 @@ implementation that validates incoming ops against a published
 vocabulary schema must not thereby break forward compatibility. Rule 4
 is therefore a producer obligation that the schemas do not and should
 not express; a producer satisfies it from its own vocabulary table, not
-by schema validation alone.
-
-> **Known inconsistency.** `spec/schemas/comment.schema.json` does not
-> yet follow the reader-safe construction: it pins `op_version` and an
-> `op_type` enum in an unconditional `allOf`, so it rejects an op the
-> other five vocabularies accept, and rejects what
-> `spec/comments.md` §Forward Compatibility requires readers to
-> tolerate. The corpus records both sides of the disagreement —
-> `spec/testdata/{review-ops,issue-ops,project,cycle,repo}/valid/`
-> carry `unknown-op-type` and future-version vectors, while
-> `spec/testdata/comments/invalid/` carries `invalid-op-type.json` and
-> `invalid-op-version.json`. Resolving it means changing normative
-> fixtures and is tracked as **WRIT-148**.
+by schema validation alone. All six shipped vocabularies are built this
+way, and each of their corpora carries vectors under `valid/` pinning an
+unknown `op_type` and a future `op_version` as instances every one of
+them accepts.
 
 The asymmetry with reader validation is deliberate. An op is a signed
 commit in an append-only log: a producer that writes an invalid op
