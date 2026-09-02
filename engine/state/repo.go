@@ -36,6 +36,8 @@ func FoldRepo(ops []codec.Op) (RepoEntry, error) {
 	remotesSet := make(map[string]bool)
 	isWorkspaceSet := false
 
+	rules := internalRules(RepoRules())
+
 	for _, o := range orderedOps {
 		op := o.Op
 		if op.ObjectType != "repo" || op.OpVersion != 1 {
@@ -61,6 +63,19 @@ func FoldRepo(ops []codec.Op) (RepoEntry, error) {
 			body = make(map[string]any)
 		}
 
+		// A field with a declared rule carrying a value its strategy cannot
+		// consume makes the whole op uninterpretable (spec/fold.md §7.1). It is
+		// quarantined here on exactly the terms the generic driver applies, so
+		// the typed reducer and fold.Fold reject the same operations.
+		if fold.Uninterpretable(op, body, rules) {
+			unknownOps = append(unknownOps, UnknownOp{
+				Commit:    op.ID,
+				OpType:    op.OpType,
+				OpVersion: op.OpVersion,
+			})
+			continue
+		}
+
 		switch op.OpType {
 		case "create":
 			if s, ok := body["slug"].(string); ok {
@@ -79,8 +94,13 @@ func FoldRepo(ops []codec.Op) (RepoEntry, error) {
 			}
 
 		case "add-remote":
-			if r, ok := body["remote"].(string); ok && r != "" {
-				remotesSet[r] = true
+			// `remote` is a set-union field, so it carries a string or an
+			// array of strings (spec/fold.md §5.3) and both shapes fold. The
+			// empty string is not an element (§5.3).
+			for _, r := range stringItems(body["remote"]) {
+				if r != "" {
+					remotesSet[r] = true
+				}
 			}
 
 		default:

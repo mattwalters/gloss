@@ -90,12 +90,6 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 		}
 	}
 
-	// Known op types from field rules
-	knownOps := make(map[string]bool)
-	for _, r := range rules {
-		knownOps[fmt.Sprintf("%s:%d", r.OpType, r.OpVersion)] = true
-	}
-
 	var golden FoldGolden
 
 	opsByObject := enumRes.Ops
@@ -152,7 +146,6 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 
 		var orderOps []spec.OrderOp
 		var mergeOps []spec.MergeOp
-		var unknownOps []FoldUnknownOp
 
 		for _, cop := range codecOps {
 			orderOps = append(orderOps, spec.OrderOp{
@@ -181,16 +174,6 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 				OpVersion: cop.OpVersion,
 				Body:      body,
 			})
-
-			opKey := fmt.Sprintf("%s:%d", cop.OpType, cop.OpVersion)
-			if !knownOps[opKey] {
-				unknownOps = append(unknownOps, FoldUnknownOp{
-					Commit:    cop.ID,
-					Label:     shaToLabel[cop.ID],
-					OpType:    cop.OpType,
-					OpVersion: cop.OpVersion,
-				})
-			}
 		}
 
 		effectiveTimes := spec.EffectiveTimes(orderOps, objID)
@@ -199,9 +182,43 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 			return nil, fmt.Errorf("total order for object %s: %w", objID, err)
 		}
 
-		foldedState, err := spec.Fold(mergeOps, rules)
+		folded, err := spec.Fold(mergeOps, rules)
 		if err != nil {
 			return nil, fmt.Errorf("fold for object %s: %w", objID, err)
+		}
+		foldedState := folded.State
+
+		// The golden's unknown_ops is the fold's own quarantine channel, not a
+		// second guess at it. Two populations reach that channel and
+		// spec/fold.md §7.1 rule 2 puts them in the same one: an op whose
+		// (op_type, op_version) no rule claims (§7), and an op a declared rule
+		// found uninterpretable (§7.1). Deriving the list from the rule table
+		// alone would see only the first, and a fixture repo carrying a
+		// malformed body would emit a golden that omits an op both folds
+		// quarantine — a normatively wrong golden in the artifact that is the
+		// spec.
+		//
+		// The order is the fold's too. spec/reffold.go documents UnknownOps as
+		// carrying the total order $L$, and a golden that re-sorted it by the
+		// fixture's own commit order would record a weaker contract than the
+		// channel actually has: two conforming readers could then disagree
+		// about the sequence and both match the golden.
+		byID := make(map[string]codec.Op, len(codecOps))
+		for _, cop := range codecOps {
+			byID[cop.ID] = cop
+		}
+		var unknownOps []FoldUnknownOp
+		for _, id := range folded.UnknownOps {
+			cop, ok := byID[id]
+			if !ok {
+				return nil, fmt.Errorf("fold quarantined op %s, which is not in the input set for object %s", id, objID)
+			}
+			unknownOps = append(unknownOps, FoldUnknownOp{
+				Commit:    cop.ID,
+				Label:     shaToLabel[cop.ID],
+				OpType:    cop.OpType,
+				OpVersion: cop.OpVersion,
+			})
 		}
 
 		// Cross-check: public writ.Fold produces byte-identical canonical state and total order
@@ -244,6 +261,24 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 			if ref.Commit != totalOrder[i] || ref.TStar != effectiveTimes[ref.Commit] {
 				t.Fatalf("engine TotalOrder[%d] mismatch for %s in %s: got (%s, %d), want (%s, %d)",
 					i, objID, fix.Name, ref.Commit, ref.TStar, totalOrder[i], effectiveTimes[totalOrder[i]])
+			}
+		}
+
+		// The quarantine channel is cross-checked here on the same terms as
+		// State and TotalOrder. It is the third thing fold returns and the one
+		// this fixture family exists to exercise; leaving it out would let the
+		// two implementations disagree about which ops contributed nothing —
+		// and, since a quarantined op contributes no writes, they could reach
+		// identical State by quarantining different operations.
+		if len(engineRes.UnknownOps) != len(folded.UnknownOps) {
+			t.Fatalf("engine quarantined %d ops for %s in %s, spec reference quarantined %d:\n engine: %v\n ref:    %v",
+				len(engineRes.UnknownOps), objID, fix.Name, len(folded.UnknownOps),
+				engineRes.UnknownOps, folded.UnknownOps)
+		}
+		for i, u := range engineRes.UnknownOps {
+			if u.Commit != folded.UnknownOps[i] {
+				t.Fatalf("engine UnknownOps[%d] mismatch for %s in %s: got %s, want %s",
+					i, objID, fix.Name, u.Commit, folded.UnknownOps[i])
 			}
 		}
 
@@ -326,7 +361,7 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 				t.Fatalf("commutativity violation on permutation #%d for object %s: %v", i, objID, err)
 			}
 
-			shuffledJSON, err := canonicaljson.Marshal(mustJSON(t, shuffledFolded))
+			shuffledJSON, err := canonicaljson.Marshal(mustJSON(t, shuffledFolded.State))
 			if err != nil {
 				t.Fatalf("canonicalizing shuffled folded state on permutation #%d: %v", i, err)
 			}

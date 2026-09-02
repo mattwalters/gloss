@@ -1,0 +1,103 @@
+{
+  "name": "uninterpretable-register-strategies",
+  "description": "The register strategies under the same rule: null is uninterpretable for lww, create-once and keyed-lww because it is not a value; a tombstone flag that is not a boolean and a lattice value that is not a string are uninterpretable too. A lattice value that is a string but outside the declared elements is NOT rejected — that is a value from a future vocabulary, which preserve-and-ignore covers",
+  "object_id": "obj-1",
+  "fields": {
+    "title": { "strategy": "lww" },
+    "created_by": { "strategy": "create-once" },
+    "status": {
+      "strategy": "lattice",
+      "lattice": ["pending", "running", "passed"]
+    },
+    "deleted": { "strategy": "tombstone" }
+  },
+  "ops": [
+    {
+      "id": "op-a-good",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "title": "written by a well-formed op",
+        "created_by": "user:alice",
+        "status": "pending"
+      }
+    },
+    {
+      "id": "op-b-lww-null",
+      "parents": ["op-a-good"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "title": null
+      }
+    },
+    {
+      "id": "op-c-create-once-null",
+      "parents": ["op-b-lww-null"],
+      "time": 300,
+      "object_id": "obj-1",
+      "body": {
+        "created_by": null
+      }
+    },
+    {
+      "id": "op-d-lattice-number",
+      "parents": ["op-c-create-once-null"],
+      "time": 400,
+      "object_id": "obj-1",
+      "body": {
+        "status": 5
+      }
+    },
+    {
+      "id": "op-e-lattice-future-value",
+      "parents": ["op-d-lattice-number"],
+      "time": 500,
+      "object_id": "obj-1",
+      "body": {
+        "status": "a-status-from-a-later-vocabulary"
+      }
+    },
+    {
+      "id": "op-f-tombstone-string",
+      "parents": ["op-e-lattice-future-value"],
+      "time": 600,
+      "object_id": "obj-1",
+      "body": {
+        "deleted": "yes"
+      }
+    },
+    {
+      "id": "op-g-lww-number",
+      "parents": ["op-f-tombstone-string"],
+      "time": 700,
+      "object_id": "obj-1",
+      "body": {
+        "title": 42
+      }
+    },
+    {
+      "id": "op-h-good",
+      "parents": ["op-g-lww-number"],
+      "time": 800,
+      "object_id": "obj-1",
+      "body": {
+        "status": "passed",
+        "deleted": true
+      }
+    }
+  ],
+  "expected_state": {
+    "title": 42,
+    "created_by": "user:alice",
+    "status": "passed",
+    "deleted": true
+  },
+  "expected_unknown_ops": [
+    "op-b-lww-null",
+    "op-c-create-once-null",
+    "op-d-lattice-number",
+    "op-f-tombstone-string"
+  ]
+}

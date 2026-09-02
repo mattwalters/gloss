@@ -120,10 +120,14 @@ func (a *setUnionAccumulator) Apply(_ codec.Op, body map[string]any, _ map[strin
 			a.set[item] = true
 		}
 	}
+	// Every item is a string: an op carrying anything else at this field is
+	// uninterpretable and never reaches an accumulator (spec/fold.md §7.1).
 	switch val := raw.(type) {
 	case []any:
 		for _, item := range val {
-			add(fmt.Sprint(item))
+			if s, ok := item.(string); ok {
+				add(s)
+			}
 		}
 	case []string:
 		for _, item := range val {
@@ -131,8 +135,6 @@ func (a *setUnionAccumulator) Apply(_ codec.Op, body map[string]any, _ map[strin
 		}
 	case string:
 		add(val)
-	default:
-		add(fmt.Sprint(val))
 	}
 	return nil
 }
@@ -205,31 +207,17 @@ func (a *setObservedRemoveAccumulator) Apply(op codec.Op, body map[string]any, _
 		return it
 	}
 
-	if slice, ok := addRaw.([]any); ok {
-		for _, it := range slice {
-			if item := normalizeItem(fmt.Sprint(it)); item != "" {
-				a.adds = append(a.adds, orSetAddRecord{opID: op.ID, item: item})
-			}
-		}
-	} else if slice, ok := addRaw.([]string); ok {
-		for _, it := range slice {
-			if item := normalizeItem(it); item != "" {
-				a.adds = append(a.adds, orSetAddRecord{opID: op.ID, item: item})
-			}
+	// Every item is a string; see setUnionAccumulator.Apply. A side holds one
+	// item or an array of them, and orSetItems consumes exactly what
+	// orSetAccepts admitted.
+	for _, it := range orSetItems(addRaw) {
+		if item := normalizeItem(it); item != "" {
+			a.adds = append(a.adds, orSetAddRecord{opID: op.ID, item: item})
 		}
 	}
-
-	if slice, ok := remRaw.([]any); ok {
-		for _, it := range slice {
-			if item := normalizeItem(fmt.Sprint(it)); item != "" {
-				a.removes = append(a.removes, orSetRemoveRecord{opID: op.ID, item: item})
-			}
-		}
-	} else if slice, ok := remRaw.([]string); ok {
-		for _, it := range slice {
-			if item := normalizeItem(it); item != "" {
-				a.removes = append(a.removes, orSetRemoveRecord{opID: op.ID, item: item})
-			}
+	for _, it := range orSetItems(remRaw) {
+		if item := normalizeItem(it); item != "" {
+			a.removes = append(a.removes, orSetRemoveRecord{opID: op.ID, item: item})
 		}
 	}
 	return nil
@@ -284,7 +272,18 @@ func (a *appendAccumulator) Apply(_ codec.Op, body map[string]any, _ map[string]
 }
 
 func (a *appendAccumulator) HasValue() bool { return a.hasAppend }
-func (a *appendAccumulator) Result() (any, error) { return a.list, nil }
+
+// Result returns the appended entries. The initial state of an append field is
+// the empty list, not null (spec/fold.md §5.5), so an op that writes the field
+// with an empty array folds to [] — a written-but-empty list, which is what it
+// says — rather than to a JSON null that no other implementation would produce
+// from the same bytes.
+func (a *appendAccumulator) Result() (any, error) {
+	if a.list == nil {
+		return []any{}, nil
+	}
+	return a.list, nil
+}
 
 // 6. Tombstone
 type tombstoneAccumulator struct {
@@ -362,7 +361,13 @@ func (a *latticeAccumulator) Apply(_ codec.Op, body map[string]any, _ map[string
 	if !ok || raw == nil {
 		return nil
 	}
-	valStr := fmt.Sprint(raw)
+	// The value is a string; see setUnionAccumulator.Apply. A string outside
+	// the declared lattice is ignored rather than rejected: that is a value
+	// from a future vocabulary, which preserve-and-ignore covers.
+	valStr, ok := raw.(string)
+	if !ok {
+		return nil
+	}
 	if rk, ok := a.rankMap[valStr]; ok {
 		if rk > a.currentRank {
 			a.currentRank = rk
@@ -415,18 +420,22 @@ func (a *keyedLWWAccumulator) Apply(op codec.Op, body map[string]any, _ map[stri
 	}
 	key := make([]string, 0, len(a.keyCols))
 	for _, kf := range a.keyCols {
-		if val, ok := body[kf]; ok && val != nil {
-			vStr := fmt.Sprint(val)
-			if kf == "subject" && op.OpType == "approval" {
-				vStr = person.NormalizePerson(vStr)
-			}
-			key = append(key, vStr)
-		} else {
-			key = append(key, "")
+		// Every present key component is a string; see setUnionAccumulator.Apply.
+		// An absent one contributes the empty component.
+		vStr, _ := body[kf].(string)
+		if kf == "subject" && op.OpType == "approval" {
+			vStr = person.NormalizePerson(vStr)
 		}
+		key = append(key, vStr)
 	}
-	keyStr := fmt.Sprintf("%q", key)
-	a.latest[keyStr] = &keyedEntry{key: key, value: val}
+	// The map key groups writes addressing the same register and is never
+	// serialized. It is a JSON array so the encoding is injective over the key
+	// tuple without depending on any one language's rendering of a slice.
+	keyStr, err := json.Marshal(key)
+	if err != nil {
+		return fmt.Errorf("fold: encoding keyed-lww key for field %q: %w", a.field, err)
+	}
+	a.latest[string(keyStr)] = &keyedEntry{key: key, value: val}
 	return nil
 }
 

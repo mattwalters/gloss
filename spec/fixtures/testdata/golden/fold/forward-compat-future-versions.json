@@ -25,16 +25,16 @@
       },
       "unknown_ops": [
         {
-          "commit": "96b61359722a6af55cb69ae70727e74ef1da0da7",
-          "label": "bob-future-version-v3",
-          "op_type": "post",
-          "op_version": 3
-        },
-        {
           "commit": "eafb2d5323ec8ed03657b2e9776e68970e567bcf",
           "label": "bob-multiversion-known-v2",
           "op_type": "post",
           "op_version": 2
+        },
+        {
+          "commit": "96b61359722a6af55cb69ae70727e74ef1da0da7",
+          "label": "bob-future-version-v3",
+          "op_type": "post",
+          "op_version": 3
         }
       ]
     },

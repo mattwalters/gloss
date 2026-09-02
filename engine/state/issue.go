@@ -40,6 +40,8 @@ func FoldIssue(ops []codec.Op) (Issue, error) {
 
 	linksMap := make(map[string]*Link)
 
+	rules := internalRules(IssueRules())
+
 	for _, o := range orderedOps {
 		op := o.Op
 		if op.ObjectType != "issue" || op.OpVersion != 1 {
@@ -59,6 +61,19 @@ func FoldIssue(ops []codec.Op) (Issue, error) {
 		}
 		if body == nil {
 			body = make(map[string]any)
+		}
+
+		// A field with a declared rule carrying a value its strategy cannot
+		// consume makes the whole op uninterpretable (spec/fold.md §7.1). It is
+		// quarantined here on exactly the terms the generic driver applies, so
+		// the typed reducer and fold.Fold reject the same operations.
+		if fold.Uninterpretable(op, body, rules) {
+			unknownOps = append(unknownOps, UnknownOp{
+				Commit:    op.ID,
+				OpType:    op.OpType,
+				OpVersion: op.OpVersion,
+			})
+			continue
 		}
 
 		switch op.OpType {
@@ -83,59 +98,27 @@ func FoldIssue(ops []codec.Op) (Issue, error) {
 
 		case "assign":
 			hasKnownOp = true
-			if addRaw, ok := body["add"].([]any); ok {
-				for _, it := range addRaw {
-					if item := NormalizePerson(fmt.Sprint(it)); item != "" {
-						assignAdds = append(assignAdds, orSetRecord{opID: op.ID, item: item})
-					}
-				}
-			} else if addRaw, ok := body["add"].([]string); ok {
-				for _, it := range addRaw {
-					if item := NormalizePerson(it); item != "" {
-						assignAdds = append(assignAdds, orSetRecord{opID: op.ID, item: item})
-					}
+			for _, it := range stringItems(body["add"]) {
+				if item := NormalizePerson(it); item != "" {
+					assignAdds = append(assignAdds, orSetRecord{opID: op.ID, item: item})
 				}
 			}
-			if remRaw, ok := body["remove"].([]any); ok {
-				for _, it := range remRaw {
-					if item := NormalizePerson(fmt.Sprint(it)); item != "" {
-						assignRemoves = append(assignRemoves, orSetRecord{opID: op.ID, item: item})
-					}
-				}
-			} else if remRaw, ok := body["remove"].([]string); ok {
-				for _, it := range remRaw {
-					if item := NormalizePerson(it); item != "" {
-						assignRemoves = append(assignRemoves, orSetRecord{opID: op.ID, item: item})
-					}
+			for _, it := range stringItems(body["remove"]) {
+				if item := NormalizePerson(it); item != "" {
+					assignRemoves = append(assignRemoves, orSetRecord{opID: op.ID, item: item})
 				}
 			}
 
 		case "label":
 			hasKnownOp = true
-			if addRaw, ok := body["add"].([]any); ok {
-				for _, it := range addRaw {
-					if item := fmt.Sprint(it); item != "" {
-						labelAdds = append(labelAdds, orSetRecord{opID: op.ID, item: item})
-					}
-				}
-			} else if addRaw, ok := body["add"].([]string); ok {
-				for _, it := range addRaw {
-					if it != "" {
-						labelAdds = append(labelAdds, orSetRecord{opID: op.ID, item: it})
-					}
+			for _, it := range stringItems(body["add"]) {
+				if it != "" {
+					labelAdds = append(labelAdds, orSetRecord{opID: op.ID, item: it})
 				}
 			}
-			if remRaw, ok := body["remove"].([]any); ok {
-				for _, it := range remRaw {
-					if item := fmt.Sprint(it); item != "" {
-						labelRemoves = append(labelRemoves, orSetRecord{opID: op.ID, item: item})
-					}
-				}
-			} else if remRaw, ok := body["remove"].([]string); ok {
-				for _, it := range remRaw {
-					if it != "" {
-						labelRemoves = append(labelRemoves, orSetRecord{opID: op.ID, item: it})
-					}
+			for _, it := range stringItems(body["remove"]) {
+				if it != "" {
+					labelRemoves = append(labelRemoves, orSetRecord{opID: op.ID, item: it})
 				}
 			}
 

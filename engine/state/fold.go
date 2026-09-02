@@ -27,12 +27,13 @@ var (
 	ErrMixedObjects = fold.ErrMixedObjects
 )
 
-// Fold executes deterministic fold reduction on an input set of operations
-// against declared field merge rules, returning the resulting ObjectState.
-func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
-	internalRules := make([]fold.Rule, len(rules))
+// internalRules converts the public rule table into the internal one. The
+// typed reducers below share it so that they and the generic driver decide
+// which operations are uninterpretable from the same rules.
+func internalRules(rules []Rule) []fold.Rule {
+	out := make([]fold.Rule, len(rules))
 	for i, r := range rules {
-		internalRules[i] = fold.Rule{
+		out[i] = fold.Rule{
 			OpType:    r.OpType,
 			OpVersion: r.OpVersion,
 			Field:     r.Field,
@@ -41,8 +42,13 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 			Lattice:   r.Lattice,
 		}
 	}
+	return out
+}
 
-	res, err := fold.Fold(ops, internalRules)
+// Fold executes deterministic fold reduction on an input set of operations
+// against declared field merge rules, returning the resulting ObjectState.
+func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
+	res, err := fold.Fold(ops, internalRules(rules))
 	if err != nil {
 		return ObjectState{}, err
 	}
@@ -71,4 +77,36 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 		State:      res.State,
 		UnknownOps: unknownOps,
 	}, nil
+}
+
+// stringItems returns the items a set-valued field carries. Both set strategies
+// consume the same two shapes: a `set-union` field holds a string or an array of
+// strings (spec/fold.md §5.3), and so does each side of an OR-set (§5.4).
+// Anything else made the operation uninterpretable (§7.1) before it reached a
+// reducer, so a non-string here is unreachable and skipped rather than rendered.
+//
+// Every typed reducer shares this with the generic fold's own item helpers so a
+// body shape one consumes cannot be silently dropped by the other. FoldRepo read
+// `remote` with a bare `.(string)` assertion until WRIT-124's round-2 review:
+// `{"remote":["origin","upstream"]}` is accepted by the uninterpretability check
+// and folded by both the generic driver and the reference fold, so nothing
+// quarantined it and the typed reducer alone returned no remotes at all — "skip
+// invents an absence" relocated from the predicate into a reducer, reaching the
+// public API and the SQLite projection.
+func stringItems(raw any) []string {
+	switch v := raw.(type) {
+	case string:
+		return []string{v}
+	case []any:
+		items := make([]string, 0, len(v))
+		for _, it := range v {
+			if s, ok := it.(string); ok {
+				items = append(items, s)
+			}
+		}
+		return items
+	case []string:
+		return v
+	}
+	return nil
 }

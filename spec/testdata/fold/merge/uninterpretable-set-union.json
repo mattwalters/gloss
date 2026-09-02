@@ -1,0 +1,87 @@
+{
+  "name": "uninterpretable-set-union",
+  "description": "A set-union field carrying a number, a boolean, an object, null, or an array holding a non-string element makes the whole operation uninterpretable: it is quarantined, contributes nothing to any field including the well-formed ones it also carries, and every other operation still folds",
+  "object_id": "obj-1",
+  "fields": {
+    "tags": { "strategy": "set-union" },
+    "title": { "strategy": "lww" }
+  },
+  "ops": [
+    {
+      "id": "op-a-good",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "tags": ["alpha"],
+        "title": "written by a well-formed op"
+      }
+    },
+    {
+      "id": "op-b-number",
+      "parents": ["op-a-good"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "tags": 5,
+        "title": "dies with the op that carried it"
+      }
+    },
+    {
+      "id": "op-c-bool",
+      "parents": ["op-b-number"],
+      "time": 300,
+      "object_id": "obj-1",
+      "body": {
+        "tags": true
+      }
+    },
+    {
+      "id": "op-d-object",
+      "parents": ["op-c-bool"],
+      "time": 400,
+      "object_id": "obj-1",
+      "body": {
+        "tags": { "email": "Carol@Example.COM" }
+      }
+    },
+    {
+      "id": "op-e-null",
+      "parents": ["op-d-object"],
+      "time": 500,
+      "object_id": "obj-1",
+      "body": {
+        "tags": null
+      }
+    },
+    {
+      "id": "op-f-mixed-array",
+      "parents": ["op-e-null"],
+      "time": 600,
+      "object_id": "obj-1",
+      "body": {
+        "tags": ["beta", 7]
+      }
+    },
+    {
+      "id": "op-g-good",
+      "parents": ["op-f-mixed-array"],
+      "time": 700,
+      "object_id": "obj-1",
+      "body": {
+        "tags": ["gamma"]
+      }
+    }
+  ],
+  "expected_state": {
+    "tags": ["alpha", "gamma"],
+    "title": "written by a well-formed op"
+  },
+  "expected_unknown_ops": [
+    "op-b-number",
+    "op-c-bool",
+    "op-d-object",
+    "op-e-null",
+    "op-f-mixed-array"
+  ]
+}

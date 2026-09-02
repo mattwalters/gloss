@@ -1,0 +1,94 @@
+{
+  "name": "uninterpretable-keyed-lww",
+  "description": "A keyed-lww key component that is not a string makes the operation uninterpretable. Rejection and not substitution: were a malformed subject to key on the empty component instead, it would address the anonymous register and could overwrite a verdict nobody meant it to touch. Alice's approval is untouched by four malformed writes at her own revision",
+  "object_id": "obj-1",
+  "fields": {
+    "verdict": {
+      "strategy": "keyed-lww",
+      "key": ["subject", "revision"]
+    },
+    "subject": {
+      "strategy": "keyed-lww",
+      "key": ["subject", "revision"]
+    }
+  },
+  "ops": [
+    {
+      "id": "op-a-alice",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "subject": "user:alice",
+        "revision": "r1",
+        "verdict": "approve"
+      }
+    },
+    {
+      "id": "op-b-number",
+      "parents": ["op-a-alice"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "subject": 42,
+        "revision": "r1",
+        "verdict": "request-changes"
+      }
+    },
+    {
+      "id": "op-c-object",
+      "parents": ["op-b-number"],
+      "time": 300,
+      "object_id": "obj-1",
+      "body": {
+        "subject": { "email": "Carol@Example.COM" },
+        "revision": "r1",
+        "verdict": "request-changes"
+      }
+    },
+    {
+      "id": "op-d-array",
+      "parents": ["op-c-object"],
+      "time": 400,
+      "object_id": "obj-1",
+      "body": {
+        "subject": ["user:alice"],
+        "revision": "r1",
+        "verdict": "request-changes"
+      }
+    },
+    {
+      "id": "op-e-null",
+      "parents": ["op-d-array"],
+      "time": 500,
+      "object_id": "obj-1",
+      "body": {
+        "subject": null,
+        "revision": "r1",
+        "verdict": "request-changes"
+      }
+    },
+    {
+      "id": "op-f-bool-revision",
+      "parents": ["op-e-null"],
+      "time": 600,
+      "object_id": "obj-1",
+      "body": {
+        "subject": "user:bob",
+        "revision": true,
+        "verdict": "approve"
+      }
+    }
+  ],
+  "expected_state": {
+    "subject": [{ "key": ["user:alice", "r1"], "value": "user:alice" }],
+    "verdict": [{ "key": ["user:alice", "r1"], "value": "approve" }]
+  },
+  "expected_unknown_ops": [
+    "op-b-number",
+    "op-c-object",
+    "op-d-array",
+    "op-e-null",
+    "op-f-bool-revision"
+  ]
+}

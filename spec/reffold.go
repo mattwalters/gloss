@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -576,14 +577,211 @@ func BuildReachabilityMap(ops []MergeOp, inSet map[string]bool) map[string]map[s
 	return ancestors
 }
 
+// FoldResult is the output of the reference fold: the materialized state, and
+// the operations that contributed nothing to it.
+type FoldResult struct {
+	// State is the folded state, keyed by field name.
+	State map[string]any
+	// UnknownOps lists, in total order, the ids of operations that were
+	// preserved in the DAG and participated in ordering and ancestry but
+	// contributed no field writes: operations matching no declared rule
+	// (spec/fold.md §7) and operations a declared rule found uninterpretable
+	// (spec/fold.md §7.1).
+	UnknownOps []string
+}
+
+// uninterpretable reports whether an operation is uninterpretable because a
+// field carrying a declared merge rule holds a JSON value that is not the
+// shape the field's strategy consumes, per spec/fold.md §7.1.
+//
+// The unit is the operation, not the field. An operation is the unit of
+// signature and of intent, so half-applying one asserts something nobody
+// signed; and one op-level rule is implementable identically in every
+// language, where a per-field fallback needs specifying once per field per
+// strategy.
+//
+// Only a field with a declared rule is inspected: unknown fields and unknown
+// op types keep preserve-and-ignore untouched. The check reads the value at
+// the declared field and, where the strategy consumes a collection, its
+// immediate elements. It never recurses — fold treats structured payloads such
+// as comment anchors as opaque data (spec/fold.md §6), so an anchor whose
+// context collar is null is well formed.
+func uninterpretable(op MergeOp, rules []FieldRule) bool {
+	for _, r := range rules {
+		if !opMatchesRule(op, r) {
+			continue
+		}
+		if !ruleAccepts(r, op.Body) {
+			return true
+		}
+	}
+	return false
+}
+
+// opMatchesRule reports whether rule r governs op. An empty OpType or a zero
+// OpVersion on the rule, or a zero OpVersion on the op, matches anything.
+func opMatchesRule(op MergeOp, r FieldRule) bool {
+	if r.OpType != "" && r.OpType != op.OpType {
+		return false
+	}
+	if r.OpVersion != 0 && op.OpVersion != 0 && r.OpVersion != op.OpVersion {
+		return false
+	}
+	return true
+}
+
+// refOrSetItems returns the items one side of an OR-set body carries. The side
+// holds a string or an array of strings; anything else made the op
+// uninterpretable (spec/fold.md §7.1) before it reached here, so a non-string
+// is unreachable and skipped rather than rendered.
+//
+// This is the reducer half of ruleAccepts's set-observed-remove arm and MUST
+// consume exactly what that accepts. They disagreed once: the predicate took a
+// bare string on a side and the reducer read only arrays, so `{"add": "solo"}`
+// folded to the empty set — the silent drop that "skip invents an absence"
+// names.
+func refOrSetItems(raw any) []string {
+	switch v := raw.(type) {
+	case string:
+		return []string{v}
+	case []any:
+		items := make([]string, 0, len(v))
+		for _, it := range v {
+			if s, ok := it.(string); ok {
+				items = append(items, s)
+			}
+		}
+		return items
+	case []string:
+		return v
+	}
+	return nil
+}
+
+// ruleAccepts reports whether body carries a value rule r's strategy can
+// consume. A field the body does not carry is not a write and is accepted.
+func ruleAccepts(r FieldRule, body map[string]any) bool {
+	// A keyed-lww key component is consumed as a string whether or not the
+	// declared field itself is present in this body: it decides which register
+	// the write addresses.
+	if r.Strategy == "keyed-lww" {
+		for _, kf := range r.Key {
+			if v, present := body[kf]; present && !isRefString(v) {
+				return false
+			}
+		}
+	}
+
+	v, present := body[r.Field]
+	if !present {
+		return true
+	}
+
+	switch r.Strategy {
+	case "lww", "create-once", "keyed-lww":
+		// The value is stored verbatim, so any JSON value round-trips. null is
+		// not a value: it is the absence of one written where a write was
+		// claimed.
+		return v != nil
+	case "append":
+		if v == nil {
+			return false
+		}
+		if slice, ok := v.([]any); ok {
+			for _, item := range slice {
+				if item == nil {
+					return false
+				}
+			}
+		}
+		return true
+	case "set-union":
+		return isRefStringOrStringSlice(v)
+	case "set-observed-remove":
+		// Three body shapes reach this and every vocabulary uses one of them
+		// (spec/fold.md §5.4): nested, where the field holds an object with
+		// `add` and `remove` members; flat, where `add` and `remove` are
+		// themselves the declared fields; and scalar, where the field holds
+		// one item and the op type carries the side. A side holds a string or
+		// an array of strings, as a set-union field does. An absent side is
+		// not a write and is accepted; a side present and holding null is a
+		// write claimed with no value in it, and is rejected — reading it as
+		// absent would make `{"add": null}` and `{}` byte-identical in folded
+		// state.
+		//
+		// In the flat shape the reducer for one declared field also reads the
+		// sibling side out of the same body, so this inspects it too. A
+		// vocabulary normally declares a rule for both `add` and `remove`,
+		// which makes that redundant — but only normally, and a predicate that
+		// skipped a side the reducer goes on to consume is the disagreement
+		// this check exists to prevent.
+		sideOK := func(member any, present bool) bool {
+			return !present || isRefStringOrStringSlice(member)
+		}
+		if obj, ok := v.(map[string]any); ok {
+			for _, side := range []string{"add", "remove"} {
+				member, sidePresent := obj[side]
+				if !sideOK(member, sidePresent) {
+					return false
+				}
+			}
+			return true
+		}
+		if r.Field == "add" || r.Field == "remove" {
+			sibling := "remove"
+			if r.Field == "remove" {
+				sibling = "add"
+			}
+			member, sidePresent := body[sibling]
+			if !sideOK(member, sidePresent) {
+				return false
+			}
+		}
+		return isRefStringOrStringSlice(v)
+	case "tombstone":
+		_, ok := v.(bool)
+		return ok
+	case "lattice":
+		return isRefString(v)
+	}
+	return true
+}
+
+func isRefString(v any) bool {
+	_, ok := v.(string)
+	return ok
+}
+
+// isRefStringSlice reports whether v is an array whose every element is a
+// string. The []string arm exists because a body assembled in Go rather than
+// decoded from JSON can carry one; a decoded body never does.
+func isRefStringSlice(v any) bool {
+	switch slice := v.(type) {
+	case []any:
+		for _, item := range slice {
+			if !isRefString(item) {
+				return false
+			}
+		}
+		return true
+	case []string:
+		return true
+	}
+	return false
+}
+
+func isRefStringOrStringSlice(v any) bool {
+	return isRefString(v) || isRefStringSlice(v)
+}
+
 // Fold is the spec's reference fold reducer. It executes deterministic fold reduction
 // on an input set of operations against the declared catalogue field rules.
 //
 // This is the normative reference reducer used to produce and check golden fold outputs.
 // Engine reducers (WRIT-25/26/27) are independent implementations validated against the same goldens.
-func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
+func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 	if len(ops) == 0 {
-		return make(map[string]any), nil
+		return FoldResult{State: make(map[string]any)}, nil
 	}
 
 	objectID := ops[0].ObjectID
@@ -606,7 +804,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 
 	totalOrder, err := TotalOrder(orderOps, objectID)
 	if err != nil {
-		return nil, fmt.Errorf("spec: ordering ops: %w", err)
+		return FoldResult{}, fmt.Errorf("spec: ordering ops: %w", err)
 	}
 
 	ancestors := BuildReachabilityMap(ops, inSet)
@@ -614,22 +812,40 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 		return ancestors[b][a]
 	}
 
-	// Helper to check if an op matches a rule
-	opMatchesRule := func(op MergeOp, r FieldRule) bool {
-		if r.OpType != "" && r.OpType != op.OpType {
-			return false
+	// Quarantine, in total order, the ops that contribute no field writes: ops
+	// matching no declared rule (spec/fold.md §7) and ops whose body a declared
+	// rule cannot consume (spec/fold.md §7.1). Both remain full members of the
+	// restricted DAG — they are in the total order and in every ancestry
+	// calculation — and neither is an error. One bad op costs that op, never
+	// the object.
+	rejected := make(map[string]bool)
+	var unknownOps []string
+	var reduceOrder []string
+	for _, id := range totalOrder {
+		op := opMap[id]
+		known := false
+		for _, r := range rules {
+			if opMatchesRule(op, r) {
+				known = true
+				break
+			}
 		}
-		if r.OpVersion != 0 && op.OpVersion != 0 && r.OpVersion != op.OpVersion {
-			return false
+		if known && uninterpretable(op, rules) {
+			rejected[id] = true
+			known = false
 		}
-		return true
+		if known {
+			reduceOrder = append(reduceOrder, id)
+		} else {
+			unknownOps = append(unknownOps, id)
+		}
 	}
 
 	// Find all rules that match ops actually present in the input set
 	matchedRulesByField := make(map[string][]FieldRule)
 	for _, r := range rules {
 		for _, op := range ops {
-			if !inSet[op.ID] {
+			if !inSet[op.ID] || rejected[op.ID] {
 				continue
 			}
 			if opMatchesRule(op, r) {
@@ -659,7 +875,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 
 		switch primaryRule.Strategy {
 		case "lww":
-			for _, id := range totalOrder {
+			for _, id := range reduceOrder {
 				op := opMap[id]
 				for _, r := range frs {
 					if opMatchesRule(op, r) {
@@ -674,7 +890,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 			}
 
 		case "create-once":
-			for _, id := range totalOrder {
+			for _, id := range reduceOrder {
 				op := opMap[id]
 				for _, r := range frs {
 					if opMatchesRule(op, r) {
@@ -690,7 +906,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 		case "set-union":
 			unionSet := make(map[string]bool)
 			hasSet := false
-			for _, id := range totalOrder {
+			for _, id := range reduceOrder {
 				op := opMap[id]
 				for _, r := range frs {
 					if opMatchesRule(op, r) {
@@ -702,10 +918,15 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 									unionSet[item] = true
 								}
 							}
+							// Every item is a string: an op carrying anything
+							// else at this field is uninterpretable and never
+							// reaches a reducer (spec/fold.md §7.1).
 							switch val := raw.(type) {
 							case []any:
 								for _, item := range val {
-									add(fmt.Sprint(item))
+									if s, isStr := item.(string); isStr {
+										add(s)
+									}
 								}
 							case []string:
 								for _, item := range val {
@@ -741,7 +962,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 			hasOps := false
 
 			for _, op := range ops {
-				if !inSet[op.ID] {
+				if !inSet[op.ID] || rejected[op.ID] {
 					continue
 				}
 				for _, r := range frs {
@@ -775,30 +996,18 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 								return it
 							}
 
-							if slice, ok := addRaw.([]any); ok {
-								for _, it := range slice {
-									if item := normalizeItem(fmt.Sprint(it)); item != "" {
-										adds = append(adds, addRecord{opID: op.ID, item: item})
-									}
-								}
-							} else if slice, ok := addRaw.([]string); ok {
-								for _, it := range slice {
-									if item := normalizeItem(it); item != "" {
-										adds = append(adds, addRecord{opID: op.ID, item: item})
-									}
+							// Every item is a string; see the set-union arm. A
+							// side holds one item or an array of them, and
+							// refOrSetItems consumes exactly what ruleAccepts
+							// admitted.
+							for _, it := range refOrSetItems(addRaw) {
+								if item := normalizeItem(it); item != "" {
+									adds = append(adds, addRecord{opID: op.ID, item: item})
 								}
 							}
-							if slice, ok := remRaw.([]any); ok {
-								for _, it := range slice {
-									if item := normalizeItem(fmt.Sprint(it)); item != "" {
-										removes = append(removes, removeRecord{opID: op.ID, item: item})
-									}
-								}
-							} else if slice, ok := remRaw.([]string); ok {
-								for _, it := range slice {
-									if item := normalizeItem(it); item != "" {
-										removes = append(removes, removeRecord{opID: op.ID, item: item})
-									}
+							for _, it := range refOrSetItems(remRaw) {
+								if item := normalizeItem(it); item != "" {
+									removes = append(removes, removeRecord{opID: op.ID, item: item})
 								}
 							}
 						}
@@ -831,7 +1040,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 		case "append":
 			var list []any
 			hasAppend := false
-			for _, id := range totalOrder {
+			for _, id := range reduceOrder {
 				op := opMap[id]
 				for _, r := range frs {
 					if opMatchesRule(op, r) {
@@ -847,6 +1056,13 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 				}
 			}
 			if hasAppend {
+				// The initial state of an append field is the empty list, not
+				// null (spec/fold.md §5.5), so an op writing the field with an
+				// empty array folds to [] — a written-but-empty list, which is
+				// what it says.
+				if list == nil {
+					list = []any{}
+				}
 				state[fieldName] = list
 			}
 
@@ -855,7 +1071,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 			var undeletes []string
 			hasTombstone := false
 			for _, op := range ops {
-				if !inSet[op.ID] {
+				if !inSet[op.ID] || rejected[op.ID] {
 					continue
 				}
 				for _, r := range frs {
@@ -897,12 +1113,20 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 			currentRank := -1
 			var currentVal string
 			hasLattice := false
-			for _, id := range totalOrder {
+			for _, id := range reduceOrder {
 				op := opMap[id]
 				for _, r := range frs {
 					if opMatchesRule(op, r) {
 						if raw, present := op.Body[fieldName]; present {
-							valStr := fmt.Sprint(raw)
+							// The value is a string; see the set-union arm. A
+							// string outside the declared lattice is ignored
+							// rather than rejected: that is a value from a
+							// future vocabulary, which preserve-and-ignore
+							// covers.
+							valStr, isStr := raw.(string)
+							if !isStr {
+								continue
+							}
 							if rk, ok := rankMap[valStr]; ok {
 								if rk > currentRank {
 									currentRank = rk
@@ -925,7 +1149,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 			}
 			latest := make(map[string]*keyedEntry)
 			hasKeyed := false
-			for _, id := range totalOrder {
+			for _, id := range reduceOrder {
 				op := opMap[id]
 				for _, rule := range frs {
 					if opMatchesRule(op, rule) {
@@ -944,17 +1168,25 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 						}
 						key := make([]string, 0, len(rule.Key))
 						for _, kf := range rule.Key {
-							if val, ok := op.Body[kf]; ok && val != nil {
-								vStr := fmt.Sprint(val)
-								if kf == "subject" && op.OpType == "approval" {
-									vStr = normalizePerson(vStr)
-								}
-								key = append(key, vStr)
-							} else {
-								key = append(key, "")
+							// Every present key component is a string; see the
+							// set-union arm. An absent one contributes the
+							// empty component.
+							vStr, _ := op.Body[kf].(string)
+							if kf == "subject" && op.OpType == "approval" {
+								vStr = normalizePerson(vStr)
 							}
+							key = append(key, vStr)
 						}
-						latest[fmt.Sprintf("%q", key)] = &keyedEntry{key: key, value: val}
+						// The map key groups writes addressing the same
+						// register and is never serialized. It is a JSON array
+						// so the encoding is injective over the key tuple
+						// without depending on any one language's rendering of
+						// a list.
+						keyBytes, err := json.Marshal(key)
+						if err != nil {
+							return FoldResult{}, fmt.Errorf("spec: encoding keyed-lww key for field %q: %w", fieldName, err)
+						}
+						latest[string(keyBytes)] = &keyedEntry{key: key, value: val}
 					}
 				}
 			}
@@ -982,5 +1214,5 @@ func Fold(ops []MergeOp, rules []FieldRule) (map[string]any, error) {
 		}
 	}
 
-	return state, nil
+	return FoldResult{State: state, UnknownOps: unknownOps}, nil
 }

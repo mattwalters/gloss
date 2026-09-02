@@ -14,6 +14,14 @@ type forwardCompatIndexEntry struct {
 	Disposition string   `json:"disposition"`
 	Rules       []string `json:"rules"`
 	Reason      string   `json:"reason"`
+	// EnvelopeDisposition is what FC-1's type leg alone decides, present only
+	// on instances where it differs from Disposition — that is, where the op's
+	// envelope is interpretable and only its body is not. codec.Profile
+	// classifies envelopes; deciding the body leg needs the vocabulary's merge
+	// rules and a fold, neither of which codec has or should have. So this is
+	// what Classify is measured against, and spec/forward_compat_test.go
+	// measures the full disposition.
+	EnvelopeDisposition string `json:"envelope_disposition,omitempty"`
 }
 
 func loadTestProfile(t *testing.T) codec.Profile {
@@ -75,9 +83,13 @@ func TestForwardCompatOps(t *testing.T) {
 				t.Fatalf("DecodePayload failed on forward-compat op %s: %v", name, err)
 			}
 
+			want := entry.Disposition
+			if entry.EnvelopeDisposition != "" {
+				want = entry.EnvelopeDisposition
+			}
 			disp := profile.Classify(env)
-			if string(disp) != entry.Disposition {
-				t.Errorf("disposition mismatch for %s: got %q, want %q (reason: %s)", name, disp, entry.Disposition, entry.Reason)
+			if string(disp) != want {
+				t.Errorf("envelope disposition mismatch for %s: got %q, want %q (reason: %s)", name, disp, want, entry.Reason)
 			}
 
 			// Unknown-field preservation (FC-2, FC-3, FC-11)

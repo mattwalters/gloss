@@ -4,17 +4,20 @@
     {
       "object_type": "review",
       "op_type": "create",
-      "versions": [1]
+      "versions": [1],
+      "vocabulary": "review-ops"
     },
     {
       "object_type": "review",
       "op_type": "close",
-      "versions": [1]
+      "versions": [1],
+      "vocabulary": "review-ops"
     },
     {
       "object_type": "comment",
       "op_type": "post",
-      "versions": [1, 2]
+      "versions": [1, 2],
+      "vocabulary": "comments"
     }
   ]
 }

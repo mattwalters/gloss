@@ -34,6 +34,8 @@ func FoldCycle(ops []codec.Op) (Cycle, error) {
 	var issueAdds []orSetRecord
 	var issueRemoves []orSetRecord
 
+	rules := internalRules(CycleRules())
+
 	for _, o := range orderedOps {
 		op := o.Op
 		if op.ObjectType != "cycle" || op.OpVersion != 1 {
@@ -53,6 +55,19 @@ func FoldCycle(ops []codec.Op) (Cycle, error) {
 		}
 		if body == nil {
 			body = make(map[string]any)
+		}
+
+		// A field with a declared rule carrying a value its strategy cannot
+		// consume makes the whole op uninterpretable (spec/fold.md §7.1). It is
+		// quarantined here on exactly the terms the generic driver applies, so
+		// the typed reducer and fold.Fold reject the same operations.
+		if fold.Uninterpretable(op, body, rules) {
+			unknownOps = append(unknownOps, UnknownOp{
+				Commit:    op.ID,
+				OpType:    op.OpType,
+				OpVersion: op.OpVersion,
+			})
+			continue
 		}
 
 		switch op.OpType {

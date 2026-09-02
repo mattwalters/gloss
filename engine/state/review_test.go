@@ -856,3 +856,72 @@ func TestFoldReviewPersonNormalization(t *testing.T) {
 	}
 }
 
+
+// TestFoldReviewOrSetBodyShapes pins the typed reducer against the generic
+// fold on the OR-set body shapes spec/fold.md §5.4 declares for the flat shape,
+// which is the one review `label` and `assign` operations actually use.
+//
+// Two of these were disagreements. A side holding a bare string is one item,
+// and the reducers read only arrays, so `{"add": "solo"}` was accepted by the
+// uninterpretability check and then folded to nothing — the silent drop §7.1's
+// rationale rejects. And a side that is present holding `null` is a write
+// claimed with no value in it: it is uninterpretable, not an absent side, or
+// `{"add": null}` and `{}` would fold identically.
+func TestFoldReviewOrSetBodyShapes(t *testing.T) {
+	labelOp := func(id, parent, body string, when int64) codec.Op {
+		op := codec.Op{
+			Envelope: codec.Envelope{
+				ObjectID:   "r-shapes",
+				ObjectType: "review",
+				OpType:     "label",
+				OpVersion:  1,
+				Body:       json.RawMessage(body),
+			},
+			ID:     id,
+			Author: codec.Identity{When: time.Unix(when, 0).UTC()},
+		}
+		if parent != "" {
+			op.Parents = []string{parent}
+		}
+		return op
+	}
+
+	ops := []codec.Op{
+		labelOp("l1", "", `{"add":["urgent","triage"]}`, 100),
+		labelOp("l2", "l1", `{"add":"solo"}`, 200),
+		labelOp("l3", "l2", `{"add":null}`, 300),
+		labelOp("l4", "l3", `{"add":["never"],"remove":["triage",7]}`, 400),
+		labelOp("l5", "l4", `{"add":["kept"],"remove":["urgent"]}`, 500),
+	}
+
+	review, err := s.FoldReview(ops)
+	if err != nil {
+		t.Fatalf("FoldReview: %v", err)
+	}
+
+	// l2's bare string is one item. l3 and l4 are uninterpretable, so l4's
+	// well-formed `never` dies with the operation and its malformed remove of
+	// `triage` removes nothing.
+	want := []string{"kept", "solo", "triage"}
+	if !reflect.DeepEqual(review.Labels, want) {
+		t.Errorf("Labels = %v, want %v", review.Labels, want)
+	}
+
+	wantQuarantined := []string{"l3", "l4"}
+	var got []string
+	for _, u := range review.UnknownOps {
+		got = append(got, u.Commit)
+	}
+	if !reflect.DeepEqual(got, wantQuarantined) {
+		t.Errorf("quarantined = %v, want %v", got, wantQuarantined)
+	}
+
+	// The generic fold must reach the same set through the same rules.
+	generic, err := s.Fold(ops, s.ReviewRules())
+	if err != nil {
+		t.Fatalf("Fold: %v", err)
+	}
+	if !reflect.DeepEqual(generic.State["add"], want) {
+		t.Errorf("generic add = %v, want %v", generic.State["add"], want)
+	}
+}

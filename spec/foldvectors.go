@@ -64,6 +64,10 @@ type MergeVector struct {
 	Fields        map[string]StrategyConfig `json:"fields"`
 	Ops           []MergeOp                 `json:"ops"`
 	ExpectedState map[string]any            `json:"expected_state"`
+	// ExpectedUnknownOps lists, in total order, the ids of ops the fold must
+	// quarantine rather than reduce (spec/fold.md §7, §7.1). Omitted where no
+	// op in the vector is quarantined.
+	ExpectedUnknownOps []string `json:"expected_unknown_ops,omitempty"`
 }
 
 // OrderVectors loads all ordering test vectors from testdata/fold/order/
@@ -223,6 +227,12 @@ func MergeVectors() ([]MergeVector, error) {
 				Time:     op.Time,
 				ObjectID: op.ObjectID,
 			})
+		}
+
+		for _, id := range vec.ExpectedUnknownOps {
+			if !opMap[id] {
+				return nil, fmt.Errorf("spec: merge vector %q expected_unknown_ops names unknown op id %q", vec.Name, id)
+			}
 		}
 
 		// Acyclicity check in restricted DAG

@@ -43,6 +43,17 @@
     ],
     "reason": "nested unknown structures inside body are preserved and ignored; op remains interpretable"
   },
+  "uninterpretable-body.json": {
+    "disposition": "opaque",
+    "envelope_disposition": "interpretable",
+    "rules": [
+      "FC-1",
+      "FC-4",
+      "FC-12",
+      "FC-15"
+    ],
+    "reason": "review/create op_version 1 is implemented by the reader profile and the envelope is valid, but 'title' carries a declared lww rule and holds null, which no strategy can consume (spec/fold.md 7.1); the op is uninterpretable, not malformed, and the whole op is rejected rather than the one field"
+  },
   "unknown-body-field.json": {
     "disposition": "interpretable",
     "rules": [

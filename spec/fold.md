@@ -164,7 +164,7 @@ overwrites $A$.
 ## 5. Per-field merge strategies catalogue
 
 To prevent implicit or undefined merge behavior, Writ establishes a
-**closed catalogue** of 7 per-field merge strategies.
+**closed catalogue** of 8 per-field merge strategies.
 
 ### The "no implicit behavior" requirement
 
@@ -201,20 +201,28 @@ strategy requires a spec amendment.
 - **Initial state:** `null` / unset (or schema default).
 - **Reduction:** As operations are consumed in total order $L$, if an operation's `body` specifies a value for the field, that value replaces the current state.
 - **Result:** The value written by the latest operation in $L$ that specified the field.
+- **The value is stored verbatim,** so any JSON type reproduces byte-for-byte through canonical encoding and this strategy imposes no type constraint of its own. A field whose value is `null` makes the whole operation uninterpretable per §7.1: `null` is not a value written, it is a write claimed with no value in it.
 
 #### 2. `create-once`
 - **Initial state:** `null` / unset.
-- **Reduction:** As operations are consumed in total order $L$, if the field is currently unset and an operation's `body` specifies a non-null value, the field is set to that value. Subsequent operations that specify a value for this field have no effect.
+- **Reduction:** As operations are consumed in total order $L$, if the field is currently unset and an operation's `body` specifies a value, the field is set to that value. Subsequent operations that specify a value for this field have no effect.
 - **Result:** The value set by the earliest operation in $L$ that specified the field.
+- **The value is stored verbatim,** as in `lww` (§5.1), and a field whose value is `null` makes the whole operation uninterpretable per §7.1. An earlier revision of this section instead had a `null` write pass over the field silently; the field-level skip it described is what §7.1 replaces.
 
 #### 3. `set-union`
 - **Initial state:** Empty set $\emptyset$.
 - **Reduction:** Any operation specifying one or more elements adds them to the set.
-- **Empty elements are dropped:** An element whose value, after any normalization the field declares (`spec/identifiers.md` §Person identifiers), is the empty string MUST NOT enter the set. This rule applies to **every** item-valued field regardless of its op type, not only to person-valued fields: an empty label, an empty remote URL, and an empty assignee are equally meaningless, and reducers MUST agree on discarding them. Producers are already forbidden from emitting such elements by the vocabulary schemas; the rule exists so that a non-conforming or future writer emitting an empty-string element cannot make two conforming readers disagree. That guarantee is scoped to empty-string elements and extends no further: this specification does not yet pin how a reducer coerces an element whose JSON value is not a string (a number, a boolean, an object) or a field whose value is `null`, and implementations are known to differ there (WRIT-126). Dropping governs materialized state only and does not weaken the preserve-and-ignore rule (`spec/forward-compatibility.md`): the operation carrying the element remains in the DAG, reachable, replicated, and byte-for-byte intact.
+- **Empty elements are dropped:** An element whose value, after any normalization the field declares (`spec/identifiers.md` §Person identifiers), is the empty string MUST NOT enter the set. This rule applies to **every** item-valued field regardless of its op type, not only to person-valued fields: an empty label, an empty remote URL, and an empty assignee are equally meaningless, and reducers MUST agree on discarding them. Producers are already forbidden from emitting such elements by the vocabulary schemas; the rule exists so that a non-conforming or future writer emitting an empty-string element cannot make two conforming readers disagree. Dropping governs materialized state only and does not weaken the preserve-and-ignore rule (`spec/forward-compatibility.md`): the operation carrying the element remains in the DAG, reachable, replicated, and byte-for-byte intact.
+- **Elements are strings.** An element whose JSON value is not a string, or a field whose value is neither a string nor an array of strings, makes the whole operation uninterpretable per §7.1. `null` is such a value, at the field or as an element.
 - **Result:** The mathematical set union of all added elements. In serialized state, elements are emitted in canonical sorted order (UTF-16 code unit order for strings, ascending numerical order for numbers). An operation whose elements are all dropped still counts as a write of the field: the field is present in the generic folded state map with the empty set as its value. Typed domain serializations MAY omit an empty collection rather than emitting it.
 
 #### 4. `set-observed-remove` (Add-Wins OR-Set)
 - **Initial state:** Empty set $\emptyset$.
+- **Body shapes.** A field declaring this strategy has two sides, an add side and a remove side, and a body carries them in one of three shapes. Every vocabulary in this specification uses one of the three, and a conforming reader MUST accept all three, because §7.1 is not computable from a strategy whose body shapes are not stated:
+  - **Nested** — the declared field holds an object whose `add` and `remove` members are the two sides. Either member MAY be absent.
+  - **Flat** — `add` and `remove` are themselves declared fields of the op, each carrying its own side. This is the shape review and issue `assign` and `label` operations use. Either field MAY be absent. The two are one operation on one set, so both sides are read together and both are subject to §7.1: an operation whose `remove` side is malformed is uninterpretable even where a reader reaches it by way of the `add` field.
+  - **Scalar** — the declared field carries one side's items directly and the operation's `op_type` says which side, as project and cycle `add-issue` and `remove-issue` do.
+- **A side holds a string or an array of strings,** exactly as a `set-union` field does (§5.3): a single item needs no array around it. A side the body does not carry is not a write of that side and has no effect.
 - **Mechanism:**
   - An add operation $a \in S$ adds an element $x$.
   - A remove operation $r \in S$ removes an element $x$ and targets all add operations of $x$ in its causal past ($a \prec r$).
@@ -222,15 +230,18 @@ strategy requires a spec amendment.
     $$\text{present}(x) \iff \exists a \in S \text{ s.t. } \text{adds}(a, x) \land (\forall r \in S \text{ s.t. } \text{removes}(r, x), a \not\prec r)$$
 - **Concurrency behavior:** If an addition $a$ and removal $r$ of the same element $x$ are concurrent ($a \parallel r$), the addition wins and $x$ is present in the folded set.
 - **Empty elements are dropped:** As in `set-union` (§5.3), an element whose value, after any normalization the field declares, is the empty string MUST NOT enter either the add side or the remove side of the OR-set. This rule applies to **every** item-valued field regardless of its op type — `label` items are dropped on the same terms as `assign` items, even though only the latter are normalized before the test.
+- **Elements are strings.** As in `set-union` (§5.3), an element that is not a string — `null` included — makes the whole operation uninterpretable per §7.1, on the add side and the remove side alike, in all three body shapes. A side that is present and is neither a string nor an array of strings does so too, and a side whose value is `null` is such a side: an explicitly written side holding no value is a write claimed with no value in it, which is what §7.1 says `null` is. Reading it as an absent side instead would make `{"add": null}` and `{}` fold identically, which is exactly the objection §7.1 raises against skipping. A rejected remove removes nothing: an element it named stays present unless some other operation removes it.
 - **Result:** Present elements emitted in canonical sorted order. An operation whose elements are all dropped still counts as a write of the field: the field is present in the generic folded state map with the empty set as its value. Typed domain serializations MAY omit an empty collection rather than emitting it.
 
 #### 5. `append`
 - **Initial state:** Empty list `[]`.
 - **Reduction:** When an operation in total order $L$ appends an entry (or entries), the entry is added to the tail of the list.
-- **Result:** Entries ordered strictly by the position in $L$ of their producing operations. If a single operation produces multiple entries, their relative order within that operation is preserved.
+- **Result:** Entries ordered strictly by the position in $L$ of their producing operations. If a single operation produces multiple entries, their relative order within that operation is preserved. An operation that writes the field with an empty array appends nothing, but it is still a write: the field is present in the generic folded state map with the empty list `[]` as its value, which is the strategy's initial state. It MUST NOT fold to `null`.
+- **Entries are values.** An entry is stored verbatim, so an entry of any JSON type reproduces byte-for-byte through canonical encoding and no type constraint applies. `null` is the exception, because it is not a value but the absence of one: a field whose value is `null`, or an array holding a `null` entry, makes the whole operation uninterpretable per §7.1.
 
 #### 6. `tombstone` (Deletion and edit interleavings)
 - **Initial state:** `deleted = false`.
+- **The flag is a boolean.** Where an operation carries the declared tombstone field, its value MUST be `true` or `false`. Any other JSON type — `null` included — makes the whole operation uninterpretable per §7.1. An operation that carries no such field is unaffected: whether it deletes is then read from its op type, as below.
 - **Semantics:**
   - A delete operation marks the entity as `deleted = true`.
   - An undelete operation marks the entity as `deleted = false`.
@@ -244,6 +255,7 @@ strategy requires a spec amendment.
 - **Initial state:** The bottom element $\bot$ of the declared semilattice.
 - **Semantics:** The field's allowed values form a bounded join-semilattice $(V, \sqcup, \le)$ with partial order $\le$ and join operation $\sqcup$.
 - **Reduction:** When an operation writes value $v \in V$, the new state is $\text{state} \sqcup v$.
+- **The value is a string.** A value of any other JSON type — `null` included — makes the whole operation uninterpretable per §7.1. A value that *is* a string but is not a declared element of $V$ is a different case and MUST NOT be rejected: it is a status from a later version of the vocabulary, which the preserve-and-ignore rule covers. It leaves the state unchanged.
 - **Result:** Because $\sqcup$ is associative, commutative, and idempotent, concurrent transitions $u \parallel v$ reconcile deterministically to $v_u \sqcup v_v$ regardless of arrival or topological order.
 
 #### 8. `keyed-lww` (Keyed Last-Writer-Wins registers)
@@ -251,7 +263,9 @@ strategy requires a spec amendment.
 - **Key:** A field declaring this strategy MUST also declare a non-empty, ordered list of body fields forming its key $k$. Two operations address the same register if and only if their key tuples are equal, compared component-wise over canonical values.
 - **Reduction:** As operations are consumed in total order $L$, an operation writing the field replaces the value stored at its own key $k$ and leaves every other key untouched — that is, `lww` applied independently within each key.
 - **Result:** For each key, the value written by the latest operation in $L$ bearing that key. Entries are serialized as a list of `{key, value}` records ordered by their key tuples, compared component-wise.
-- **Normalization:** Where a body field carries a person identifier, the normalization of `spec/identifiers.md` applies to the **stored value** exactly as it applies to the key component derived from it. A reducer MUST NOT normalize a person identifier for keying and then store it verbatim: where `approval.subject` is a string, the folded entry's key component and its value are the same normalized string. A non-string `subject` is schema-invalid against `person-id` (`spec/schemas/identifiers.schema.json`) and folds verbatim.
+- **Key components are strings.** Every declared key component an operation carries MUST be a string. One that is a number, a boolean, an object, an array or `null` makes the whole operation uninterpretable per §7.1. A key component the body omits entirely is a different case and is not rejected: it contributes the empty component, as before. A value the strategy stores is under the register rule below, not this one.
+- **Normalization:** Where a body field carries a person identifier, the normalization of `spec/identifiers.md` applies to the **stored value** exactly as it applies to the key component derived from it. A reducer MUST NOT normalize a person identifier for keying and then store it verbatim: where `approval.subject` is a string, the folded entry's key component and its value are the same normalized string. A non-string `subject` is schema-invalid against `person-id` (`spec/schemas/identifiers.schema.json`) and, being a key component, makes its operation uninterpretable.
+- **Registers hold values.** A value stored at a key is stored verbatim, so any JSON type reproduces byte-for-byte; `null` does not, and makes the operation uninterpretable per §7.1.
 - **Why this is not `lww` or a set:** Registers scoped to a key — one vote per (voter, revision), one status per (revision, check name) — need a later write under one key to leave the others alone. Plain `lww` would collapse them to a single register; a set has no notion of a value being replaced.
 
 ## 6. Anchors and external references
@@ -267,6 +281,103 @@ forward compatibility rules (WRIT-15):
 - An operation carrying an unknown `op_type` or unrecognized fields MUST NOT cause fold to error or abort.
 - Unknown operations remain full members of the restricted DAG: they participate in $t^*$ calculation and the total order $L$, maintaining causal relationships for any descendant operations.
 - An unknown operation contributes no field writes to recognized fields.
+
+### 7.1 Uninterpretable operations
+
+A field with a declared merge rule can arrive carrying a JSON value its
+strategy cannot consume: a `set-union` field holding a number, a `keyed-lww`
+key component holding an object, an `append` field holding `null`. Bodies are
+not validated on the fold path — a conforming producer validates before
+signing (`spec/op-envelope.md` §Producer validation), but fold reads whatever
+is in the log, including operations written by a foreign or buggy client, and
+what is in the log is permanent.
+
+**The rule.** An operation is **uninterpretable** if any field of its body that
+carries a declared merge rule holds a value the field's strategy cannot
+consume, as each strategy states in §5. A conforming reader MUST:
+
+1. **Reject the whole operation, not the offending field.** An uninterpretable
+   operation contributes no field writes at all — not to the malformed field
+   and not to the well-formed fields it also carries.
+2. **Quarantine it, not fail.** It is reported through the same channel as an
+   operation with an unknown `op_type` (§7), as the opaque record
+   `spec/forward-compatibility.md` `FC-5` specifies. That rule is the single
+   definition of what the record carries; this section widens the population
+   that flows through the channel and does not restate its contents. Rejection
+   MUST NOT be an error return from fold: every other operation materializes
+   normally. One bad operation costs that operation, never the object.
+3. **Preserve it.** As in §7, an uninterpretable operation remains a full
+   member of the restricted DAG — it participates in $t^*$, in the total order
+   $L$ and in every ancestry test — and it remains in the DAG byte-for-byte
+   intact.
+
+**`null` is named as its own case** and is treated identically to a value of
+the wrong type, wherever a strategy consumes a value: at the field, as an
+element of a collection the strategy consumes, and at a named side of a
+collection that has sides — an OR-set `add` or `remove` that is present and
+holds `null` (§5.4). It is not a value; it is a write claimed with no value in
+it. A side the body does not carry at all is a different case and is not a
+write: absent is absent, and `{"add": null}` is not the same claim as `{}`.
+
+**Scope.** This rule reaches only fields that have a declared merge rule. It
+does **not** touch forward compatibility:
+
+- Unknown `op_type` values and unknown `op_version` values keep §7 unchanged.
+- Unrecognized **fields** keep preserve-and-ignore unchanged. A body carrying a
+  field this vocabulary version does not define is not uninterpretable; the
+  field is ignored and the operation folds.
+- It does not recurse. The check reads the value at the declared field and,
+  where the strategy consumes a collection, that collection's immediate
+  elements. Structured payloads a strategy stores verbatim — a comment anchor,
+  for instance — are opaque to fold (§6), so an anchor whose captured context
+  is `null` inside is well formed.
+- It does not enforce vocabulary schema types. Where a strategy stores a value
+  verbatim, any JSON type but `null` is accepted, because a verbatim value
+  reproduces byte-for-byte through canonical encoding (§8) in any
+  implementation. A `title` carrying a number is schema-invalid and a producer
+  MUST NOT write one, but a reader folds it to that number rather than
+  rejecting it: the fold catalogue declares strategies, not types, and the
+  vocabulary schemas are the one place types are declared.
+
+#### Why rejection, and not coercion or skipping
+
+Recorded because the alternatives are the obvious ones and both are worse
+(WRIT-124, WRIT-126).
+
+**Not coercion.** Coercing a malformed value to a string launders malformed
+data into data that looks legitimate. Once `{"email":"carol@example.com"}`
+becomes a person identifier by stringification, that string *is* a person: it
+enters assignee sets, an approval keys on it, later operations reference it,
+and nothing downstream can tell it was ever malformed. For a format whose
+product is attribution and tamper-evidence, manufacturing an approver who never
+signed anything is the worst failure available — and, unlike rejection, it is
+irreversible, because the fabricated value is entangled with real references by
+the time anyone notices. Coercion is also where implementations diverge in
+practice: a reducer that reached for its language's generic value-to-string
+conversion emitted `map[email:carol@example.com]` and `<nil>` into folded
+state, which no implementation in another language reproduces.
+
+**Not skipping.** Skipping is a quieter coercion: coercion invents a value,
+skipping invents an absence. "Approve on behalf of X" silently becomes "approve
+anonymously" — a different claim, attributed to someone who asserted the first
+one. And because `keyed-lww` substitutes the empty component for an absent key
+component, a skipped subject would key the operation on the anonymous register,
+where it can overwrite a verdict it was never addressed to. Skipping also makes
+*malformed* and *absent* byte-identical in folded state, which is unfalsifiable
+in a signed log.
+
+**Why the operation and not the field.** An operation is the unit of signature
+and of intent; half-applying one asserts something nobody signed. Writ's
+operations are small and single-purpose, so little good data rides along with
+the bad. And operation-level is one rule, implementable identically in every
+language, where a field-level fallback needs specifying once per field per
+strategy — which is the surface that produced these divergences in the first
+place.
+
+**Cost.** A reader loses the operation, and gains a quarantine record naming
+the commit — which leads to the raw operation and to its signer. With a
+conforming producer this only ever discards operations from foreign or buggy
+clients.
 
 ## 8. State serialization order
 
