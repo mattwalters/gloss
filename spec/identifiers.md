@@ -357,6 +357,9 @@ the consequence of the one that does.
 - **Producers MUST** emit normalized, scheme-prefixed person identifiers when
   writing operation payloads, and MUST reject — never truncate, never repair —
   an identifier that violates the grammar or the bounds.
+- **Producers MUST NOT** write a `writer-id` where a `person-id` is expected,
+  nor derive one from the other
+  (§[Relationship to `writer-id`](#relationship-to-writer-id)).
 - **Readers and Reducers MUST** normalize person identifiers upon reading op
   payloads prior to evaluating set membership, keyed lookups, deduplication,
   or projection indices.
