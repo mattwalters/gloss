@@ -152,6 +152,13 @@ blob. These rules define that derivation exactly:
 A stored line therefore never contains LF and never exceeds 1000 code
 points — the schema enforces both.
 
+Note the enforcement asymmetry: line bounds are enforced by producers through
+**truncation** (`decodeAndTruncateLine`), unlike `person-id` and `reference` in
+[`identifiers.md`](identifiers.md) which are enforced by **rejection** (a
+truncated identifier or reference points to a different entity or nothing). A
+stored anchor instance carrying a line exceeding 1000 code points violates the
+schema and is rejected by schema validation.
+
 ## Context capture
 
 `context` captures the anchored content itself and a small collar around

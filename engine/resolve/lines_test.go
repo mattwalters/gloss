@@ -69,6 +69,11 @@ func TestSplitLines(t *testing.T) {
 			input:    []byte(strings.Repeat("a", 1005)),
 			expected: []string{strings.Repeat("a", 1000)},
 		},
+		{
+			name:     "1000 rune truncation supplementary characters",
+			input:    []byte(strings.Repeat("𠀀", 1005) + "\n"),
+			expected: []string{strings.Repeat("𠀀", 1000)},
+		},
 	}
 
 	for _, tt := range tests {

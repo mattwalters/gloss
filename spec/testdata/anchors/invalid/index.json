@@ -31,6 +31,14 @@
     "kind": "invariant",
     "reason": "range.end must be >= range.start"
   },
+  "line-over-limit-multibyte.json": {
+    "kind": "schema",
+    "reason": "stored line is 1001 code points (2002 bytes), over the 1000-code-point bound: the bound counts code points, not octets"
+  },
+  "line-over-limit-supplementary.json": {
+    "kind": "schema",
+    "reason": "stored line is 1001 code points (2002 UTF-16 code units, 4004 bytes), over the bound: the bound counts code points, not UTF-16 code units and not octets"
+  },
   "line-too-long.json": {
     "kind": "schema",
     "reason": "stored lines are truncated to 1000 code points before storage"

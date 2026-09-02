@@ -2,6 +2,7 @@ package spec_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -9,10 +10,11 @@ import (
 	"github.com/writtendev/writ/spec"
 )
 
-// The length bounds in identifiers.schema.json are JSON Schema maxLength
-// keywords, which count Unicode code points. Bytes and UTF-16 code units are
-// the two units an implementation reaches for by accident instead: Go's len,
-// Rust's String::len and Python's len(bytes) count octets; JavaScript's
+// The length bounds in the schemas (identifiers.schema.json,
+// anchor.schema.json) are JSON Schema maxLength keywords, which count Unicode
+// code points. Bytes and UTF-16 code units are the two units an
+// implementation reaches for by accident instead: Go's len, Rust's
+// String::len and Python's len(bytes) count octets; JavaScript's
 // String.prototype.length and Java's String.length() count UTF-16 code units.
 //
 // Prose cannot stop any of that. AGENTS.md is explicit that "the spec is the
@@ -42,12 +44,12 @@ var lengthUnits = []struct {
 	{"UTF-16 code units", func(s string) int { return len(utf16.Encode([]rune(s))) }},
 }
 
-// schemaMaxLength reads a $defs entry's maxLength out of
-// schemas/identifiers.schema.json, so this test cannot drift from the number
-// the schema actually declares.
-func schemaMaxLength(t *testing.T, def string) int {
+// schemaMaxLength reads a $defs entry's maxLength out of the given schema
+// file, so this test cannot drift from the number the schema actually
+// declares.
+func schemaMaxLength(t *testing.T, schemaFile, def string) int {
 	t.Helper()
-	raw, err := spec.FS.ReadFile("schemas/identifiers.schema.json")
+	raw, err := spec.FS.ReadFile(schemaFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,14 +59,14 @@ func schemaMaxLength(t *testing.T, def string) int {
 		} `json:"$defs"`
 	}
 	if err := json.Unmarshal(raw, &doc); err != nil {
-		t.Fatalf("decoding identifiers schema: %v", err)
+		t.Fatalf("decoding %s: %v", schemaFile, err)
 	}
 	d, ok := doc.Defs[def]
 	if !ok {
-		t.Fatalf("identifiers schema has no $defs/%s", def)
+		t.Fatalf("%s has no $defs/%s", schemaFile, def)
 	}
 	if d.MaxLength == nil {
-		t.Fatalf("$defs/%s declares no maxLength", def)
+		t.Fatalf("$defs/%s declares no maxLength in %s", def, schemaFile)
 	}
 	return *d.MaxLength
 }
@@ -132,7 +134,7 @@ func checkUnitsAreDistinguishable(t *testing.T, bound int, vectors map[string]st
 // TestPersonIDLengthUnitIsCodePoints pins the unit of person-id's maxLength
 // against the persons corpus.
 func TestPersonIDLengthUnitIsCodePoints(t *testing.T) {
-	bound := schemaMaxLength(t, "person-id")
+	bound := schemaMaxLength(t, "schemas/identifiers.schema.json", "person-id")
 	vectors := corpusStrings(t, "testdata/persons/valid", func(raw []byte) (string, bool) {
 		var v personVector
 		if err := json.Unmarshal(raw, &v); err != nil {
@@ -145,11 +147,11 @@ func TestPersonIDLengthUnitIsCodePoints(t *testing.T) {
 	checkUnitsAreDistinguishable(t, bound, vectors)
 }
 
-// TestReferenceLengthUnitIsCodePoints does the same for reference, the one
-// other bounded string whose pattern admits non-ASCII and so is the only
-// other place the unit is observable at all.
+// TestReferenceLengthUnitIsCodePoints does the same for reference, one of
+// the three bounded strings (person-id, reference, anchor line) whose pattern
+// admits non-ASCII and so where the unit is observable.
 func TestReferenceLengthUnitIsCodePoints(t *testing.T) {
-	bound := schemaMaxLength(t, "reference")
+	bound := schemaMaxLength(t, "schemas/identifiers.schema.json", "reference")
 	vectors := corpusStrings(t, "testdata/references/valid", func(raw []byte) (string, bool) {
 		var v struct {
 			Reference string `json:"reference"`
@@ -159,5 +161,55 @@ func TestReferenceLengthUnitIsCodePoints(t *testing.T) {
 		}
 		return v.Reference, v.Reference != ""
 	})
+	checkUnitsAreDistinguishable(t, bound, vectors)
+}
+
+// TestAnchorLineLengthUnitIsCodePoints does the same for anchor context lines,
+// traversing before, lines, and after across old and new sides of valid anchor
+// vectors.
+func TestAnchorLineLengthUnitIsCodePoints(t *testing.T) {
+	bound := schemaMaxLength(t, "schemas/anchor.schema.json", "line")
+	type anchorSide struct {
+		Context *struct {
+			Before []string `json:"before"`
+			Lines  []string `json:"lines"`
+			After  []string `json:"after"`
+		} `json:"context"`
+	}
+	type anchorVector struct {
+		Old *anchorSide `json:"old"`
+		New *anchorSide `json:"new"`
+	}
+
+	vectors := make(map[string]string)
+	for _, name := range readDirNames(t, "testdata/anchors/valid") {
+		raw, err := spec.FS.ReadFile("testdata/anchors/valid/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var v anchorVector
+		if err := json.Unmarshal(raw, &v); err != nil {
+			t.Fatalf("decoding %s: %v", name, err)
+		}
+		collectSide := func(sideName string, side *anchorSide) {
+			if side == nil || side.Context == nil {
+				return
+			}
+			collectList := func(listName string, list []string) {
+				for i, s := range list {
+					key := fmt.Sprintf("%s:%s.%s[%d]", name, sideName, listName, i)
+					vectors[key] = s
+				}
+			}
+			collectList("before", side.Context.Before)
+			collectList("lines", side.Context.Lines)
+			collectList("after", side.Context.After)
+		}
+		collectSide("old", v.Old)
+		collectSide("new", v.New)
+	}
+	if len(vectors) == 0 {
+		t.Fatal("testdata/anchors/valid yielded no context lines")
+	}
 	checkUnitsAreDistinguishable(t, bound, vectors)
 }
