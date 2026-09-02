@@ -118,6 +118,89 @@ func TestInit_ValidatesRepositoryBeforeWriting(t *testing.T) {
 	}
 }
 
+// TestInit_RefusesARepositoryItCannotResolve is the WRIT-95 scenario itself:
+// a first run that mints both IDs and then dies. gitdir.Resolve used to be
+// called under an `err == nil` guard that dropped its error on the floor, so a
+// repository writ could not resolve carried on through both config writes and
+// failed at the very end, inside sync.Open's second Resolve of the same
+// repository — identity persisted, no refspec, exit 1. Resolving once, up
+// front, and treating the failure as fatal is what makes that unreachable.
+//
+// The injector is git's own worktree/gitdir split: GIT_DIR and GIT_WORK_TREE
+// pointed at different directories give a work tree with no .git in it or
+// above it. git rev-parse --show-toplevel answers happily, git config writes
+// to GIT_DIR, and gitdir.Resolve — which walks the filesystem rather than
+// asking git — finds nothing.
+func TestInit_RefusesARepositoryItCannotResolve(t *testing.T) {
+	requireGit(t)
+
+	// Resolved, because git answers with the real path and macOS hands out
+	// temp directories under a symlinked /var.
+	tempDir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatalf("resolving the temp dir: %v", err)
+	}
+	globalCfgPath := filepath.Join(tempDir, "global_gitconfig")
+	if err := os.WriteFile(globalCfgPath, []byte(""), 0600); err != nil {
+		t.Fatalf("writing empty global config: %v", err)
+	}
+	gitDir := filepath.Join(tempDir, "gitdir.git")
+	workTree := filepath.Join(tempDir, "worktree")
+	if err := os.Mkdir(workTree, 0755); err != nil {
+		t.Fatalf("creating work tree: %v", err)
+	}
+	initCmd := exec.Command("git", "init", "--bare", gitDir)
+	if out, err := initCmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init --bare: %v (%s)", err, out)
+	}
+
+	t.Setenv("GIT_CONFIG_GLOBAL", globalCfgPath)
+	t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_DIR", gitDir)
+	t.Setenv("GIT_WORK_TREE", workTree)
+
+	// A remote, so that the old ordering reaches the second Resolve inside
+	// sync.Open and fails there — which is the whole shape of the bug: the
+	// run dies after both writes, at the step that should have been first.
+	addRemote(t, workTree, "origin", "https://example.com/repo.git")
+
+	// The premise: git itself is perfectly happy here, so init gets past the
+	// rev-parse and reaches the open with a repoRoot writ cannot resolve.
+	topLevel := exec.Command("git", "rev-parse", "--show-toplevel")
+	topLevel.Dir = workTree
+	if out, err := topLevel.Output(); err != nil {
+		t.Fatalf("git rev-parse --show-toplevel: %v", err)
+	} else if got := strings.TrimSpace(string(out)); got != workTree {
+		t.Fatalf("git reported toplevel %q, want %q — the test's premise does not hold", got, workTree)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if code := run(context.Background(), []string{"init", "-C", workTree}, &stdout, &stderr); code != 1 {
+		t.Fatalf("init exited with %d, want 1; stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "not a git repository") {
+		t.Errorf("stderr does not say why the repository was refused:\n%s", stderr.String())
+	}
+
+	// Nothing may have been written. Under the old ordering both of these
+	// held a freshly minted ID by the time the run failed.
+	if got := getGitConfigAll(t, workTree, "writ.writerId"); len(got) != 0 {
+		t.Errorf("writ.writerId = %v, want nothing written by a run that could not resolve the repo", got)
+	}
+	if got := getGitConfigAll(t, workTree, "writ.repoId"); len(got) != 0 {
+		t.Errorf("writ.repoId = %v, want nothing written by a run that could not resolve the repo", got)
+	}
+	for _, entry := range getGitConfigAll(t, workTree, "remote.origin.fetch") {
+		if strings.Contains(entry, "writ") {
+			t.Errorf("writ fetch refspec %q was written by a failed run", entry)
+		}
+	}
+	if strings.Contains(stdout.String(), "minted") {
+		t.Errorf("init reported minting an ID it never persisted:\n%s", stdout.String())
+	}
+}
+
 // TestInit_PartialFailureIsReportedAndRecovers covers the failure that cannot
 // be hoisted ahead of the writes: the refspec write itself. git config has no
 // transaction, so the repository really is left half-configured — identity in
