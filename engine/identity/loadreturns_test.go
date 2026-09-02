@@ -34,7 +34,12 @@ import (
 //     would turn an accepted shape into a bare Identity{}, and baseIdent
 //     reassigned after DerivePersonID would do the same.
 //   - baseIdent is assigned once, from a composite literal that sets
-//     PersonIDErr.
+//     PersonIDErr, and none of its fields is assigned afterwards. The
+//     literal is the whole of what the return check trusts, and a field
+//     assignment is not a rebinding: `baseIdent.PersonIDErr = nil` on the
+//     line after the literal left the assignment count at one, satisfied
+//     the composite-literal requirement, and blanked the field anyway. So
+//     the check looks past *ast.Ident on the left-hand side.
 //   - No return hands back loadFailed(nil): the argument is the reason, and
 //     nil for it reproduces the exact defect — PersonID "" with PersonIDErr
 //     nil — through an expression this check would otherwise accept.
@@ -84,6 +89,19 @@ func TestLoadReturnsCarryTheReason(t *testing.T) {
 	// is built once, from DerivePersonID's output.
 	baseIdentAssignments := 0
 	checkBinding := func(lhs ast.Expr, rhs ast.Expr) {
+		// A field assignment is not a rebinding, and checking only
+		// *ast.Ident missed it entirely: baseIdent stayed assigned once,
+		// from the composite literal this test demands, while the next line
+		// set the field back to nil. The return check accepts baseIdent by
+		// name on the strength of that literal, so nothing may edit what the
+		// literal produced.
+		if root, sel := rootIdent(lhs); sel != nil {
+			if root != nil && root.Name == "baseIdent" {
+				t.Errorf("%s: Load assigns to baseIdent.%s — the return check accepts baseIdent by name because of the composite literal it is built from, and an assignment to one of its fields is invisible to that (WRIT-143)",
+					fset.Position(sel.Pos()), sel.Sel.Name)
+			}
+			return
+		}
 		name, ok := lhs.(*ast.Ident)
 		if !ok {
 			return
@@ -201,6 +219,28 @@ func TestLoadReturnsCarryTheReason(t *testing.T) {
 	}
 	if baseIdentAssignments != 1 {
 		t.Errorf("Load assigns baseIdent %d times, want exactly 1: the return check accepts the identifier, so a later reassignment would go unseen", baseIdentAssignments)
+	}
+}
+
+// rootIdent peels an assignment target down to the identifier it is rooted at,
+// returning that identifier and the outermost selector when there was one:
+// baseIdent.PersonIDErr gives (baseIdent, .PersonIDErr), and a bare baseIdent
+// gives (baseIdent, nil). Either may be nil for a target rooted at something
+// that is not an identifier, which this check has nothing to say about.
+func rootIdent(e ast.Expr) (*ast.Ident, *ast.SelectorExpr) {
+	outer, ok := e.(*ast.SelectorExpr)
+	if !ok {
+		return nil, nil
+	}
+	for {
+		switch x := e.(type) {
+		case *ast.SelectorExpr:
+			e = x.X
+		case *ast.Ident:
+			return x, outer
+		default:
+			return nil, outer
+		}
 	}
 }
 

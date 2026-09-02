@@ -449,7 +449,20 @@ func TestRepoIDInvalidNamesAWorkingRemedy(t *testing.T) {
 // ErrInvalid emitter that named nothing. `user.signingKey = key::` is the
 // right form with no content, and "invalid configuration" alone left a reader
 // looking at a key they could see was set.
+//
+// It asserts the remedy text, not just the key:: substring. The substring is
+// ConfigError.Value, which this error prints whether or not a Remedy is set:
+// deleting the Remedy left this test green under a name that promised it read
+// one. The repoId counterpart next door reads its remedy, and so does this.
+//
+// The Message half is writ init's. init renders identity configuration through
+// ConfigError.Message and prints the git config lines to run underneath, so a
+// Remedy has to be stripped there for exactly the reason initHint is — and
+// that keeps init's key:: warning byte-identical to what it printed before
+// this field existed.
 func TestLoad_EmptySigningKeyLiteralNamesAWorkingRemedy(t *testing.T) {
+	const remedy = "put the public key after key::, or set the path to a key file instead"
+
 	env := setupTestEnv(t)
 	populateValidLocalConfig(t, env.repoDir)
 	setGitConfig(t, env.repoDir, "user.signingKey", "key::")
@@ -460,6 +473,23 @@ func TestLoad_EmptySigningKeyLiteralNamesAWorkingRemedy(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "key::") {
 		t.Errorf("Load error = %q, want it to name the form that is missing its content", err.Error())
+	}
+
+	var cfgErr *identity.ConfigError
+	if !errors.As(err, &cfgErr) {
+		t.Fatalf("Load error = %v (%T), want a *identity.ConfigError", err, err)
+	}
+	if cfgErr.Remedy != remedy {
+		t.Errorf("Remedy = %q, want %q: this arm is an ErrInvalid, which takes no initHint, so the Remedy is the only next step the error carries", cfgErr.Remedy, remedy)
+	}
+	if !strings.Contains(err.Error(), remedy) {
+		t.Errorf("Load error = %q, want it to say which half of the form to supply", err.Error())
+	}
+	if strings.Contains(err.Error(), "writ init") {
+		t.Errorf("Load error = %q, want no \"writ init\": init never writes user.signingKey for anyone, so naming it is advice that does not work", err.Error())
+	}
+	if got := cfgErr.Message(); strings.Contains(got, remedy) {
+		t.Errorf("Message() = %q, want the remedy stripped: writ init prints the signing-key configuration lines itself", got)
 	}
 }
 
@@ -965,6 +995,13 @@ func TestConfigErrorMessage(t *testing.T) {
 // TestLoadReturnsCarryTheReason is the guard against the next omission — it
 // reads Load's returns out of the AST rather than trusting a list — and a new
 // return in Load wants a row here as well as a shape that test accepts.
+//
+// Reaching every return is necessary and was not sufficient. The five rows
+// that return baseIdent all resolved a PersonID, so nothing here observed a
+// baseIdent whose PersonIDErr was the only thing explaining an empty
+// identifier, and `baseIdent.PersonIDErr = nil` after the literal passed. The
+// writ.personId-unresolvable-and-gpg.format-unset row below is that pairing;
+// the AST check grew a left-hand-side arm for the same mutation.
 func TestLoad_EmptyPersonIDAlwaysExplained(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -1051,6 +1088,22 @@ func TestLoad_EmptyPersonIDAlwaysExplained(t *testing.T) {
 				setGitConfig(t, dir, "writ.personId", "alice")
 			},
 			wantPersonIDErrKey: identity.PersonIDKey,
+		},
+		{
+			// Both halves of the invariant at once, and the row this table
+			// was missing: Load fails past the person derivation, so it
+			// returns baseIdent, and the identifier did not resolve, so
+			// baseIdent is the value carrying the reason. Every other
+			// baseIdent row resolves a PersonID, which is what let
+			// `baseIdent.PersonIDErr = nil` — one line after the literal —
+			// break the invariant with this whole table green.
+			name: "writ.personId unresolvable and gpg.format unset",
+			mutate: func(t *testing.T, dir string) {
+				setGitConfig(t, dir, "writ.personId", "alice")
+				unsetGitConfig(t, dir, "gpg.format")
+			},
+			wantPersonIDErrKey: identity.PersonIDKey,
+			wantLoadErrKey:     "gpg.format",
 		},
 		{
 			// The converse: Load fails past the person derivation, so the

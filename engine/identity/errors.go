@@ -55,13 +55,14 @@ type ConfigError struct {
 // offending value and only the user can retype it — "run 'writ init'" on its
 // own would be a remedy that does not work.
 //
-// An ErrInvalid that has a working next step names it in Remedy instead. Two
-// do today, both set where the key is read rather than where it is parsed:
-// writ.writerId and writ.repoId say to unset the key first, because init mints
-// only into an absent one. The user.signingKey key:: arm says what the form
-// needs. DerivePersonID's two arms carry person.Check's diagnosis in Problem
-// and no Remedy — what is wrong with the identifier is the whole of what there
-// is to say, and only the user knows what they meant to type.
+// An ErrInvalid that has a working next step names it in Remedy instead. Three
+// do today, all three set where the key is read rather than where it is
+// parsed: writ.writerId and writ.repoId say to unset the key first, because
+// init mints only into an absent one, and the user.signingKey key:: arm — set
+// in Load, at the read — says what the form needs. DerivePersonID's two arms
+// carry person.Check's diagnosis in Problem and no Remedy — what is wrong with
+// the identifier is the whole of what there is to say, and only the user knows
+// what they meant to type.
 const initHint = " (run 'writ init' to configure)"
 
 // remintRemedy is the next step for a writ.writerId or writ.repoId that does
