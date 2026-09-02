@@ -1122,20 +1122,28 @@ func TestReviewComment_ResolveAttribution(t *testing.T) {
 		}
 	})
 
-	// With nothing to derive a person identifier from, the chain ends. It does
-	// not end at the writer ID: that has no scheme, so writing one would record
-	// a bare identifier no conforming reader can interpret. Refusing and saying
-	// what to configure is the only honest option left — the same ruling
+	// With no person identifier to be had, the chain ends. It does not end at
+	// the writer ID: that has no scheme, so writing one would record a bare
+	// identifier no conforming reader can interpret. Refusing and saying what
+	// to configure is the only honest option left — the same ruling
 	// `review approve` follows.
+	//
+	// The state is driven with a writ.personId writ cannot use, not with a
+	// blank user.email. Since WRIT-131 a whitespace-only user.email is not an
+	// identity at all: identity.Load returns a zero Identity, so that
+	// repository is the no_writer_identity case below rather than this one,
+	// and it is refused one guard earlier. An unusable writ.personId is now
+	// the only way to hold a valid writer identity and still have nothing to
+	// attribute a resolve to, so it is what keeps this branch covered.
 	t.Run("no_derivable_person_id", func(t *testing.T) {
 		env := setupTestCLIEnv(t)
 		setupSigningKey(t, env.repoDir)
 
 		reviewID, commentID := openReviewWithComment(t, env.repoDir)
 
-		// Set the whitespace email after the repo is stood up: setupSigningKey
-		// probes user.email, and review open needs a usable identity.
-		setGitConfig(t, env.repoDir, "user.email", "   ")
+		// Set it after the repo is stood up: review open needs a usable
+		// identity to create the comment being resolved here.
+		setGitConfig(t, env.repoDir, "writ.personId", "alice")
 
 		var stdout, stderr bytes.Buffer
 		code := run(context.Background(), []string{
@@ -1147,6 +1155,12 @@ func TestReviewComment_ResolveAttribution(t *testing.T) {
 		}
 		if !strings.Contains(stderr.String(), "writ.personId") {
 			t.Errorf("error should name writ.personId, got %q", stderr.String())
+		}
+		// The value is configured, so the diagnosis must say it is wrong
+		// rather than absent: telling a user to set a key they already set
+		// sends them to look at something that is already there.
+		if !strings.Contains(stderr.String(), "alice") {
+			t.Errorf("error should quote the offending value, got %q", stderr.String())
 		}
 
 		if resolved, resolvedBy := commentResolution(t, env.repoDir, reviewID, commentID); resolved || resolvedBy != "" {
