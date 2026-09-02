@@ -248,7 +248,7 @@ func TestCommentsResolveWorkflow(t *testing.T) {
 	// 3. Resolve thread
 	if err := s.Comments.Resolve(ctx, commentID, writ.CommentResolve{
 		Resolved:   true,
-		ResolvedBy: "  Alice@Example.COM  ",
+		ResolvedBy: "  Email:Alice@Example.COM  ",
 	}); err != nil {
 		t.Fatalf("Resolve failed: %v", err)
 	}
@@ -264,8 +264,8 @@ func TestCommentsResolveWorkflow(t *testing.T) {
 	if !comments[0].Comment.IsResolved() {
 		t.Errorf("expected comment to be resolved")
 	}
-	if comments[0].Comment.ResolvedBy != "alice@example.com" {
-		t.Errorf("expected comment resolved_by 'alice@example.com', got %q", comments[0].Comment.ResolvedBy)
+	if comments[0].Comment.ResolvedBy != "email:alice@example.com" {
+		t.Errorf("expected comment resolved_by 'email:alice@example.com', got %q", comments[0].Comment.ResolvedBy)
 	}
 
 	// 4. Post reply after resolve - verify thread root remains resolved
@@ -422,24 +422,31 @@ func TestCommentsResolveWhitespaceResolvedByOmitsKey(t *testing.T) {
 }
 
 // personIDAtLimit and personIDOverLimit bracket the person identifier length
-// bound declared by spec/schemas/identifiers.schema.json (maxLength: 320): an
-// email-shaped identifier exactly at the limit, and one a single character over.
+// bound declared by spec/schemas/identifiers.schema.json: an email-shaped
+// *value* exactly at the 320-code-point limit, and one a single character over.
+// The bound is on the value, not the whole identifier, so the at-limit
+// identifier is 326 characters overall — inside the derived 353 whole-string
+// bound, which is the arithmetic a reader of the schema has to be able to redo.
 func personIDAtLimit(t *testing.T) string {
 	t.Helper()
-	s := strings.Repeat("a", 64) + "@" + strings.Repeat("b", 251) + ".com"
-	if len(s) != 320 {
-		t.Fatalf("test setup: at-limit identifier is %d characters, want 320", len(s))
+	value := strings.Repeat("a", 64) + "@" + strings.Repeat("b", 251) + ".com"
+	if len(value) != 320 {
+		t.Fatalf("test setup: at-limit value is %d characters, want 320", len(value))
+	}
+	s := "email:" + value
+	if len(s) != 326 {
+		t.Fatalf("test setup: at-limit identifier is %d characters, want 326", len(s))
 	}
 	return s
 }
 
 func personIDOverLimit(t *testing.T) string {
 	t.Helper()
-	s := strings.Repeat("a", 64) + "@" + strings.Repeat("b", 252) + ".com"
-	if len(s) != 321 {
-		t.Fatalf("test setup: over-limit identifier is %d characters, want 321", len(s))
+	value := strings.Repeat("a", 64) + "@" + strings.Repeat("b", 252) + ".com"
+	if len(value) != 321 {
+		t.Fatalf("test setup: over-limit value is %d characters, want 321", len(value))
 	}
-	return s
+	return "email:" + value
 }
 
 // TestCommentsResolvePersonIDLengthBound is the upper-bound counterpart to
@@ -482,7 +489,7 @@ func TestCommentsResolvePersonIDLengthBound(t *testing.T) {
 		Resolved:   true,
 		ResolvedBy: atLimit,
 	}); err != nil {
-		t.Fatalf("Resolve with a 320-character identifier failed: %v", err)
+		t.Fatalf("Resolve with a 320-code-point value failed: %v", err)
 	}
 
 	// One character over, and the write is refused.
@@ -495,7 +502,7 @@ func TestCommentsResolvePersonIDLengthBound(t *testing.T) {
 		ResolvedBy: overLimit,
 	})
 	if err == nil {
-		t.Fatal("expected Resolve to reject a 321-character identifier, got nil error")
+		t.Fatal("expected Resolve to reject a 321-code-point value, got nil error")
 	}
 	if !strings.Contains(err.Error(), "resolved_by") || !strings.Contains(err.Error(), "320") {
 		t.Errorf("expected an error naming resolved_by and the 320-character limit, got %q", err)
@@ -530,7 +537,7 @@ func TestCommentsResolvePersonIDLengthBound(t *testing.T) {
 		}
 		found = true
 		if c.Comment.ResolvedBy != atLimit {
-			t.Errorf("expected the 320-character identifier to round-trip unchanged, got %d characters", len(c.Comment.ResolvedBy))
+			t.Errorf("expected the 320-code-point value to round-trip unchanged, got %d characters", len(c.Comment.ResolvedBy))
 		}
 	}
 	if !found {
@@ -567,12 +574,14 @@ func TestCommentsResolvePersonIDBoundCountsCodePoints(t *testing.T) {
 		t.Fatalf("Create review failed: %v", err)
 	}
 
-	atLimit := strings.Repeat("é", 320)
-	overLimit := strings.Repeat("é", 321)
-	if len(atLimit) != 640 || len(overLimit) != 642 {
-		t.Fatalf("test setup: identifiers are %d and %d bytes, want 640 and 642 — a byte-counting guard must see both as over-length",
-			len(atLimit), len(overLimit))
+	atLimitValue := strings.Repeat("é", 320)
+	overLimitValue := strings.Repeat("é", 321)
+	if len(atLimitValue) != 640 || len(overLimitValue) != 642 {
+		t.Fatalf("test setup: values are %d and %d bytes, want 640 and 642 — a byte-counting guard must see both as over-length",
+			len(atLimitValue), len(overLimitValue))
 	}
+	atLimit := "email:" + atLimitValue
+	overLimit := "email:" + overLimitValue
 
 	// 320 code points is at the bound and accepted, however many bytes that is.
 	acceptedID, err := s.Reviews.Comment(ctx, reviewID, writ.NewComment{Text: "At the bound"})

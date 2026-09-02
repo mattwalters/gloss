@@ -10,22 +10,22 @@
           "t_star": 1767225600
         },
         {
-          "commit": "75d2899628577ac09437f1676322df5782518189",
+          "commit": "481fd2be9206c4fbdc89976b3761cd4613128715",
           "label": "alice-app-r1",
           "t_star": 1767225660
         },
         {
-          "commit": "2a47a411536c13b228f6ce3859846d61bc602326",
+          "commit": "61c1354a2dee62be57a23de2698fe5740413f45a",
           "label": "bob-app-r1",
           "t_star": 1767225690
         },
         {
-          "commit": "9b8e0e64e4d30dfda7ae369f15ad36eba29929da",
+          "commit": "94f6ac92f8b7c9a6c79a1fba053c381e141721fb",
           "label": "bob-app-r2",
           "t_star": 1767225720
         },
         {
-          "commit": "3f5a99043e2dfcca767d5d8385dac5833351dbee",
+          "commit": "6db07687b2805b65f9baa9bab9fa44aa9f21d7e9",
           "label": "alice-retract-r1",
           "t_star": 1767225780
         }
@@ -34,94 +34,94 @@
         "message": [
           {
             "key": [
-              "alice",
-              "1111111111111111111111111111111111111111"
-            ],
-            "value": "Alice retracts verdict on r1"
-          },
-          {
-            "key": [
-              "bob",
+              "email:bob@example.com",
               "1111111111111111111111111111111111111111"
             ],
             "value": "Bob requests changes on r1"
           },
           {
             "key": [
-              "bob",
+              "email:bob@example.com",
               "2222222222222222222222222222222222222222"
             ],
             "value": "Bob approves r2"
+          },
+          {
+            "key": [
+              "user:alice",
+              "1111111111111111111111111111111111111111"
+            ],
+            "value": "Alice retracts verdict on r1"
           }
         ],
         "revision": [
           {
             "key": [
-              "alice",
+              "email:bob@example.com",
               "1111111111111111111111111111111111111111"
             ],
             "value": "1111111111111111111111111111111111111111"
           },
           {
             "key": [
-              "bob",
-              "1111111111111111111111111111111111111111"
-            ],
-            "value": "1111111111111111111111111111111111111111"
-          },
-          {
-            "key": [
-              "bob",
+              "email:bob@example.com",
               "2222222222222222222222222222222222222222"
             ],
             "value": "2222222222222222222222222222222222222222"
+          },
+          {
+            "key": [
+              "user:alice",
+              "1111111111111111111111111111111111111111"
+            ],
+            "value": "1111111111111111111111111111111111111111"
           }
         ],
         "subject": [
           {
             "key": [
-              "alice",
+              "email:bob@example.com",
               "1111111111111111111111111111111111111111"
             ],
-            "value": "alice"
+            "value": "email:bob@example.com"
           },
           {
             "key": [
-              "bob",
-              "1111111111111111111111111111111111111111"
-            ],
-            "value": "bob"
-          },
-          {
-            "key": [
-              "bob",
+              "email:bob@example.com",
               "2222222222222222222222222222222222222222"
             ],
-            "value": "bob"
+            "value": "email:bob@example.com"
+          },
+          {
+            "key": [
+              "user:alice",
+              "1111111111111111111111111111111111111111"
+            ],
+            "value": "user:alice"
           }
         ],
         "title": "Approval Race Review",
         "verdict": [
           {
             "key": [
-              "alice",
-              "1111111111111111111111111111111111111111"
-            ],
-            "value": "none"
-          },
-          {
-            "key": [
-              "bob",
+              "email:bob@example.com",
               "1111111111111111111111111111111111111111"
             ],
             "value": "request-changes"
           },
           {
             "key": [
-              "bob",
+              "email:bob@example.com",
               "2222222222222222222222222222222222222222"
             ],
             "value": "approve"
+          },
+          {
+            "key": [
+              "user:alice",
+              "1111111111111111111111111111111111111111"
+            ],
+            "value": "none"
           }
         ]
       }

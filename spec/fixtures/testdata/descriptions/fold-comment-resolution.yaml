@@ -36,7 +36,7 @@ refs:
               op_version: 1
               body:
                 resolved: true
-                resolved_by: alice
+                resolved_by: user:alice
             expect: accept
 
           - id: alice-unres-root-create
@@ -66,7 +66,7 @@ refs:
               op_version: 1
               body:
                 resolved: true
-                resolved_by: alice
+                resolved_by: user:alice
             expect: accept
 
           - id: alice-unres-root-unresolve
@@ -109,7 +109,7 @@ refs:
               op_version: 1
               body:
                 resolved: true
-                resolved_by: alice
+                resolved_by: user:alice
             expect: accept
 
           - id: alice-norm-root-create
@@ -139,7 +139,7 @@ refs:
               op_version: 1
               body:
                 resolved: true
-                resolved_by: "  Alice@Example.COM  "
+                resolved_by: "  Email:Alice@Example.COM  "
             expect: accept
 
   - name: refs/writ/fedcba9876543210/comment

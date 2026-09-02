@@ -254,21 +254,30 @@ func TestInvalidReferenceVectors(t *testing.T) {
 }
 
 func TestPersonIdentifierNormalization(t *testing.T) {
-	// Normalization rule: norm(s) = lowercase(trim_whitespace(s))
+	// Normalization rule (spec/identifiers.md §Normalization rules): trim the
+	// identifier, split at the FIRST colon, lowercase the scheme, trim and
+	// case-fold the value.
 	// Comparison rule: equal(A, B) <=> norm(A) == norm(B)
 	cases := []struct {
 		a     string
 		b     string
 		equal bool
 	}{
-		{"alice@example.com", "alice@example.com", true},
-		{"Alice@Example.COM", "alice@example.com", true},
-		{"  alice@example.com  ", "alice@example.com", true},
-		{"\t\n Alice@Example.COM \r\n", "alice@example.com", true},
-		{"alice@example.com", "bob@example.com", false},
-		{"alice@example.com", "alice@sub.example.com", false},
-		{"dev+1@example.com", "dev+1@example.com", true},
-		{"DEV+1@EXAMPLE.COM", "dev+1@example.com", true},
+		{"email:alice@example.com", "email:alice@example.com", true},
+		{"Email:Alice@Example.COM", "email:alice@example.com", true},
+		{"  email:alice@example.com  ", "email:alice@example.com", true},
+		{"\t\n EMAIL:Alice@Example.COM \r\n", "email:alice@example.com", true},
+		{"email:alice@example.com", "email:bob@example.com", false},
+		{"email:alice@example.com", "email:alice@sub.example.com", false},
+		{"email:dev+1@example.com", "email:dev+1@example.com", true},
+		{"EMAIL:DEV+1@EXAMPLE.COM", "email:dev+1@example.com", true},
+		// Schemes never unify, however obvious the human identity.
+		{"email:alice@example.com", "user:alice", false},
+		{"user:alice", "keybase:alice", false},
+		// An unknown scheme compares byte-wise like any other.
+		{"KeyBase:Alice", "keybase:alice", true},
+		// The value's own colon belongs to the value.
+		{`email:"a:b"@example.com`, `email:"a:b"@example.com`, true},
 	}
 
 	// Deliberately spelled out here rather than calling any implementation:
@@ -277,7 +286,12 @@ func TestPersonIdentifierNormalization(t *testing.T) {
 	// TestReffoldNormalizePersonMatchesEngine is the test that binds the
 	// implementations to each other.
 	norm := func(s string) string {
-		return strings.ToLower(strings.TrimSpace(s))
+		s = strings.TrimSpace(s)
+		i := strings.Index(s, ":")
+		if i < 0 {
+			return strings.ToLower(s)
+		}
+		return strings.ToLower(s[:i]) + ":" + strings.ToLower(strings.TrimSpace(s[i+1:]))
 	}
 
 	for _, tc := range cases {
@@ -291,22 +305,34 @@ func TestPersonIdentifierNormalization(t *testing.T) {
 	}
 }
 
-func TestPersonIdentifierSchema(t *testing.T) {
-	sch := compileIdentifiersSchema(t)
+// personVector is one case from testdata/persons/valid. scheme and value are
+// the halves of the *normalized* identifier: the bound and the grammar apply
+// after normalization, so that is the form the vector describes.
+type personVector struct {
+	Identifier   string   `json:"identifier"`
+	Scheme       string   `json:"scheme"`
+	Value        string   `json:"value"`
+	Normalized   string   `json:"normalized"`
+	EqualTo      []string `json:"equal_to,omitempty"`
+	DistinctFrom []string `json:"distinct_from,omitempty"`
+}
 
-	// Test $defs/person-id via a test document referencing it
+// compilePersonIDSchema compiles a wrapper document whose single "person"
+// property is the shared person-id definition, which is the only way to reach
+// a $def with this validator.
+func compilePersonIDSchema(t *testing.T) *jsonschema.Schema {
+	t.Helper()
 	c := jsonschema.NewCompiler()
-	testDoc := map[string]any{
+	wrapper := map[string]any{
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
 		"type":    "object",
 		"properties": map[string]any{
 			"person": map[string]any{
-				"$ref": "https://writ.dev/spec/identifiers.schema.json#/$defs/person-id",
+				"$ref": identifiersSchemaID + "#/$defs/person-id",
 			},
 		},
 		"required": []any{"person"},
 	}
-
 	rawIdent, err := spec.FS.ReadFile("schemas/identifiers.schema.json")
 	if err != nil {
 		t.Fatal(err)
@@ -318,56 +344,211 @@ func TestPersonIdentifierSchema(t *testing.T) {
 	if err := c.AddResource(identifiersSchemaID, identDoc); err != nil {
 		t.Fatal(err)
 	}
-	if err := c.AddResource("https://writ.dev/test/person-wrapper.schema.json", testDoc); err != nil {
+	if err := c.AddResource("https://writ.dev/test/person-wrapper.schema.json", wrapper); err != nil {
 		t.Fatal(err)
 	}
 	compiled, err := c.Compile("https://writ.dev/test/person-wrapper.schema.json")
 	if err != nil {
 		t.Fatalf("compiling person wrapper schema: %v", err)
 	}
+	return compiled
+}
 
-	// The RFC 5321 ceiling exactly: 64-octet local part, "@", 255-octet domain.
-	atLimit := strings.Repeat("a", 64) + "@" + strings.Repeat("b", 251) + ".com"
-	if len(atLimit) != 320 {
-		t.Fatalf("test setup: atLimit is %d characters, want 320", len(atLimit))
+func personSchemaAccepts(sch *jsonschema.Schema, id string) error {
+	return sch.Validate(map[string]any{"person": id})
+}
+
+// TestValidPersonVectors drives every testdata/persons/valid vector through the
+// reference implementation's own split and normalization — the code an
+// independent implementer reads — and through the shared person-id schema.
+func TestValidPersonVectors(t *testing.T) {
+	sch := compilePersonIDSchema(t)
+	for _, name := range readDirNames(t, "testdata/persons/valid") {
+		t.Run(name, func(t *testing.T) {
+			raw, err := spec.FS.ReadFile("testdata/persons/valid/" + name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var vec personVector
+			if err := json.Unmarshal(raw, &vec); err != nil {
+				t.Fatalf("decoding vector: %v", err)
+			}
+
+			norm := spec.NormalizePerson(vec.Identifier)
+			if norm != vec.Normalized {
+				t.Errorf("norm(%q) = %q, want %q", vec.Identifier, norm, vec.Normalized)
+			}
+
+			scheme, value, ok := spec.SplitPerson(norm)
+			if !ok {
+				t.Fatalf("splitPerson(%q) reported no scheme", norm)
+			}
+			if scheme != vec.Scheme {
+				t.Errorf("scheme of %q = %q, want %q", norm, scheme, vec.Scheme)
+			}
+			if value != vec.Value {
+				t.Errorf("value of %q = %q, want %q", norm, value, vec.Value)
+			}
+
+			if err := personSchemaAccepts(sch, vec.Normalized); err != nil {
+				t.Errorf("schema rejected the normalized identifier: %v", err)
+			}
+
+			for _, other := range vec.EqualTo {
+				if got := spec.NormalizePerson(other); got != norm {
+					t.Errorf("%q should denote the same person as %q, but normalizes to %q", other, vec.Identifier, got)
+				}
+			}
+			for _, other := range vec.DistinctFrom {
+				if got := spec.NormalizePerson(other); got == norm {
+					t.Errorf("%q must not denote the same person as %q, but both normalize to %q", other, vec.Identifier, got)
+				}
+			}
+		})
 	}
-	overLimit := strings.Repeat("a", 64) + "@" + strings.Repeat("b", 252) + ".com"
-	if len(overLimit) != 321 {
-		t.Fatalf("test setup: overLimit is %d characters, want 321", len(overLimit))
+}
+
+// TestInvalidPersonVectors checks that the shared person-id schema rejects
+// every testdata/persons/invalid vector, and that index.json accounts for each
+// one — a rejection nobody wrote a reason for is a rejection nobody checked.
+func TestInvalidPersonVectors(t *testing.T) {
+	sch := compilePersonIDSchema(t)
+
+	rawIndex, err := spec.FS.ReadFile("testdata/persons/invalid/index.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var index map[string]struct {
+		Reason string `json:"reason"`
+	}
+	if err := json.Unmarshal(rawIndex, &index); err != nil {
+		t.Fatalf("decoding index.json: %v", err)
+	}
+
+	files := make(map[string]bool)
+	for _, name := range readDirNames(t, "testdata/persons/invalid") {
+		if name != "index.json" {
+			files[name] = true
+		}
+	}
+	for name := range index {
+		if !files[name] {
+			t.Errorf("index.json lists %s but the file does not exist", name)
+		}
+	}
+
+	for name := range files {
+		entry, ok := index[name]
+		if !ok {
+			t.Errorf("%s has no index.json entry recording its expected rejection", name)
+			continue
+		}
+		t.Run(name, func(t *testing.T) {
+			raw, err := spec.FS.ReadFile("testdata/persons/invalid/" + name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var vec personVector
+			if err := json.Unmarshal(raw, &vec); err != nil {
+				t.Fatalf("decoding vector: %v", err)
+			}
+			if err := personSchemaAccepts(sch, vec.Identifier); err == nil {
+				t.Errorf("schema accepted %q; expected rejection: %s", vec.Identifier, entry.Reason)
+			}
+		})
+	}
+}
+
+// TestPersonIDBoundRejectsRatherThanTruncates pins the difference between the
+// two ways a length cap can be implemented. A validator that truncated to the
+// bound would accept the over-long identifier and silently make it equal to a
+// shorter one; that collapse is the attack the spec's first normative rule
+// exists to stop, so the observable behaviour has to be a refusal.
+func TestPersonIDBoundRejectsRatherThanTruncates(t *testing.T) {
+	sch := compilePersonIDSchema(t)
+
+	atLimit := "email:" + strings.Repeat("a", 320)
+	overLimit := "email:" + strings.Repeat("a", 321)
+	truncated := overLimit[:len(atLimit)]
+
+	if err := personSchemaAccepts(sch, atLimit); err != nil {
+		t.Fatalf("a 320-code-point value must validate: %v", err)
+	}
+	if err := personSchemaAccepts(sch, overLimit); err == nil {
+		t.Fatal("a 321-code-point value must be refused")
+	}
+	// The truncation an implementation might be tempted to perform is a
+	// different, already-taken identifier. Nothing may map the one onto the
+	// other.
+	if truncated != atLimit {
+		t.Fatalf("test setup: truncating overLimit should reproduce atLimit")
+	}
+	if spec.NormalizePerson(overLimit) == atLimit {
+		t.Error("normalization truncated an over-long identifier onto a shorter one")
+	}
+}
+
+func TestPersonIdentifierSchema(t *testing.T) {
+	compiled := compilePersonIDSchema(t)
+
+	// The RFC 5321 ceiling exactly as the *value*: 64-octet local part, "@",
+	// 255-octet domain. The bound applies to the value, so the whole identifier
+	// is 326 characters here — inside the derived 353 whole-string bound.
+	atLimitValue := strings.Repeat("a", 64) + "@" + strings.Repeat("b", 251) + ".com"
+	if len(atLimitValue) != 320 {
+		t.Fatalf("test setup: atLimitValue is %d characters, want 320", len(atLimitValue))
+	}
+	overLimitValue := strings.Repeat("a", 64) + "@" + strings.Repeat("b", 252) + ".com"
+	if len(overLimitValue) != 321 {
+		t.Fatalf("test setup: overLimitValue is %d characters, want 321", len(overLimitValue))
 	}
 
 	// maxLength counts code points, not bytes, and the engine guard counts them
 	// the same way. The ASCII pair above cannot show the difference — there
 	// bytes and code points coincide — so bracket the bound again with a
-	// multi-byte identifier, where 320 characters are 640 bytes.
+	// multi-byte value, where 320 characters are 640 bytes.
 	atLimitMultiByte := strings.Repeat("é", 320)
 	overLimitMultiByte := strings.Repeat("é", 321)
 	if n := utf8.RuneCountInString(atLimitMultiByte); n != 320 || len(atLimitMultiByte) != 640 {
 		t.Fatalf("test setup: atLimitMultiByte is %d characters / %d bytes, want 320 / 640", n, len(atLimitMultiByte))
 	}
 
+	atLimitScheme := strings.Repeat("a", 32)
+
 	validCases := []string{
-		"alice@example.com",
-		"bob.builder+test@example.co.uk",
-		"ci-bot@internal.domain",
-		"  alice@example.com  ",
-		atLimit,
-		atLimitMultiByte,
+		"email:alice@example.com",
+		"email:bob.builder+test@example.co.uk",
+		"user:alice",
+		"user:ci",
+		"keybase:alice", // an unrecognized scheme is still well formed
+		`email:"a:b"@example.com`,
+		"x+ci.bot-2:alice",
+		atLimitScheme + ":alice",
+		"email:" + atLimitValue,
+		"email:" + atLimitMultiByte,
 	}
 	for _, v := range validCases {
-		inst := map[string]any{"person": v}
-		if err := compiled.Validate(inst); err != nil {
+		if err := personSchemaAccepts(compiled, v); err != nil {
 			t.Errorf("expected person %q to be valid, got %v", v, err)
 		}
 	}
 
 	invalidCases := []any{
-		"",                 // minLength: 1
-		overLimit,          // maxLength: 320
-		overLimitMultiByte, // maxLength: 320, counted in code points
-		12345,              // not a string
-		nil,                // null
-		[]any{},            // array
+		"",                                 // no scheme, no value
+		"alice@example.com",                // bare: no scheme
+		"alice",                            // bare handle
+		":alice",                           // empty scheme
+		"user:",                            // empty value
+		"Email:alice@example.com",          // scheme is not lowercase
+		"2fa:alice",                        // scheme must start with [a-z]
+		"my_scheme:alice",                  // underscore is outside the scheme charset
+		strings.Repeat("a", 33) + ":alice", // scheme over 32 characters
+		"email:" + overLimitValue,          // value over 320 code points
+		"email:" + overLimitMultiByte,      // value over 320 code points, counted in code points
+		"  email:alice@example.com  ",      // an op body carries the normalized form
+		12345,                              // not a string
+		nil,                                // null
+		[]any{},                            // array
 	}
 	for _, inv := range invalidCases {
 		inst := map[string]any{"person": inv}
@@ -375,15 +556,13 @@ func TestPersonIdentifierSchema(t *testing.T) {
 			t.Errorf("expected person %v to be invalid, but schema accepted it", inv)
 		}
 	}
-
-	_ = sch
 }
 
 func TestWriterIDVsPersonID(t *testing.T) {
 	// Writer ID: 16 lowercase hex characters (device-scoped namespace under refs/writ/<writer-id>/)
-	// Person ID: collaborative actor identity (email address)
+	// Person ID: collaborative actor identity, scheme ":" value
 	writerID := "0123456789abcdef"
-	personID := "alice@example.com"
+	personID := "email:alice@example.com"
 
 	isHex16 := func(s string) bool {
 		if len(s) != 16 {

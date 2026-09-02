@@ -5,9 +5,9 @@
       "review": {
         "title": "Review Assignment Test",
         "assignees": [
-          "alice",
-          "charlie",
-          "david"
+          "user:alice",
+          "user:charlie",
+          "user:david"
         ]
       }
     }

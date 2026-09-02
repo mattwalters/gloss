@@ -37,8 +37,8 @@ func setupSeededDB(t *testing.T) *projection.DB {
 		"rev-1", "Fix 100% CPU in loop_worker", "Resolves high CPU usage during batching", "open", "", "")
 	execSQL(t, rawDB, "INSERT INTO review_revisions (review_object_id, revision_index, base, head) VALUES (?, ?, ?, ?)",
 		"rev-1", 0, "base-1", "head-1")
-	execSQL(t, rawDB, "INSERT INTO review_assignees (review_object_id, assignee) VALUES (?, ?)", "rev-1", "alice")
-	execSQL(t, rawDB, "INSERT INTO review_assignees (review_object_id, assignee) VALUES (?, ?)", "rev-1", "bob")
+	execSQL(t, rawDB, "INSERT INTO review_assignees (review_object_id, assignee) VALUES (?, ?)", "rev-1", "user:alice")
+	execSQL(t, rawDB, "INSERT INTO review_assignees (review_object_id, assignee) VALUES (?, ?)", "rev-1", "user:bob")
 	execSQL(t, rawDB, "INSERT INTO review_labels (review_object_id, label) VALUES (?, ?)", "rev-1", "area/engine")
 	execSQL(t, rawDB, "INSERT INTO review_labels (review_object_id, label) VALUES (?, ?)", "rev-1", "needs-docs")
 	execSQL(t, rawDB, "INSERT INTO review_links (review_object_id, target, target_type, relation) VALUES (?, ?, ?, ?)",
@@ -48,7 +48,7 @@ func setupSeededDB(t *testing.T) *projection.DB {
 
 	execSQL(t, rawDB, "INSERT INTO reviews (object_id, title, description, status, merge_commit, reason) VALUES (?, ?, ?, ?, ?, ?)",
 		"rev-2", "Add feature foo_bar", "Implements foo_bar integration", "merged", "merge-sha-2", "")
-	execSQL(t, rawDB, "INSERT INTO review_assignees (review_object_id, assignee) VALUES (?, ?)", "rev-2", "bob")
+	execSQL(t, rawDB, "INSERT INTO review_assignees (review_object_id, assignee) VALUES (?, ?)", "rev-2", "user:bob")
 	execSQL(t, rawDB, "INSERT INTO review_labels (review_object_id, label) VALUES (?, ?)", "rev-2", "area/engine")
 	execSQL(t, rawDB, "INSERT INTO reviews (object_id, title, description, status, merge_commit, reason) VALUES (?, ?, ?, ?, ?, ?)",
 		"rev-3", "Refactor storage layer", "Clean up legacy drivers", "closed", "", "abandoned")
@@ -56,8 +56,8 @@ func setupSeededDB(t *testing.T) *projection.DB {
 	// Insert issues
 	execSQL(t, rawDB, "INSERT INTO issues (object_id, title, description, state, reason) VALUES (?, ?, ?, ?, ?)",
 		"iss-1", "Memory leak in 100% workload", "Under 100% load, buffer_pool grows unbounded", "open", "")
-	execSQL(t, rawDB, "INSERT INTO issue_assignees (issue_object_id, assignee) VALUES (?, ?)", "iss-1", "alice")
-	execSQL(t, rawDB, "INSERT INTO issue_assignees (issue_object_id, assignee) VALUES (?, ?)", "iss-1", "bob")
+	execSQL(t, rawDB, "INSERT INTO issue_assignees (issue_object_id, assignee) VALUES (?, ?)", "iss-1", "user:alice")
+	execSQL(t, rawDB, "INSERT INTO issue_assignees (issue_object_id, assignee) VALUES (?, ?)", "iss-1", "user:bob")
 	execSQL(t, rawDB, "INSERT INTO issue_labels (issue_object_id, label) VALUES (?, ?)", "iss-1", "bug")
 	execSQL(t, rawDB, "INSERT INTO issue_labels (issue_object_id, label) VALUES (?, ?)", "iss-1", "perf")
 	execSQL(t, rawDB, "INSERT INTO issue_links (issue_object_id, target, target_type, relation) VALUES (?, ?, ?, ?)",
@@ -65,7 +65,7 @@ func setupSeededDB(t *testing.T) *projection.DB {
 
 	execSQL(t, rawDB, "INSERT INTO issues (object_id, title, description, state, reason) VALUES (?, ?, ?, ?, ?)",
 		"iss-2", "Support foo_bar in CLI", "CLI flag --foo_bar should be supported", "in_progress", "")
-	execSQL(t, rawDB, "INSERT INTO issue_assignees (issue_object_id, assignee) VALUES (?, ?)", "iss-2", "bob")
+	execSQL(t, rawDB, "INSERT INTO issue_assignees (issue_object_id, assignee) VALUES (?, ?)", "iss-2", "user:bob")
 	execSQL(t, rawDB, "INSERT INTO issue_labels (issue_object_id, label) VALUES (?, ?)", "iss-2", "feature")
 
 	execSQL(t, rawDB, "INSERT INTO issues (object_id, title, description, state, reason) VALUES (?, ?, ?, ?, ?)",
@@ -172,12 +172,12 @@ func TestReviewsFilter(t *testing.T) {
 		},
 		{
 			name:    "filter by single assignee",
-			filter:  projection.ReviewFilter{Assignee: []string{"alice"}},
+			filter:  projection.ReviewFilter{Assignee: []string{"user:alice"}},
 			wantIDs: []string{"rev-1"},
 		},
 		{
 			name:    "filter by assignee matching multiple reviews",
-			filter:  projection.ReviewFilter{Assignee: []string{"bob"}},
+			filter:  projection.ReviewFilter{Assignee: []string{"user:bob"}},
 			wantIDs: []string{"rev-1", "rev-2"},
 		},
 		{
@@ -248,12 +248,12 @@ func TestIssuesFilter(t *testing.T) {
 		},
 		{
 			name:    "filter by single assignee",
-			filter:  projection.IssueFilter{Assignee: []string{"alice"}},
+			filter:  projection.IssueFilter{Assignee: []string{"user:alice"}},
 			wantIDs: []string{"iss-1"},
 		},
 		{
 			name:    "filter by assignee matching multiple issues",
-			filter:  projection.IssueFilter{Assignee: []string{"bob"}},
+			filter:  projection.IssueFilter{Assignee: []string{"user:bob"}},
 			wantIDs: []string{"iss-1", "iss-2"},
 		},
 		{
@@ -275,7 +275,7 @@ func TestIssuesFilter(t *testing.T) {
 			name: "combined filter: state + label + assignee",
 			filter: projection.IssueFilter{
 				State:    []string{"open"},
-				Assignee: []string{"alice"},
+				Assignee: []string{"user:alice"},
 				Label:    []string{"bug"},
 			},
 			wantIDs: []string{"iss-1"},

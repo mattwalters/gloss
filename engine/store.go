@@ -19,6 +19,16 @@ type Writer struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Email string `json:"email"`
+	// PersonID is this writer's person identifier per spec/identifiers.md:
+	// writ.personId when configured, otherwise email:<normalized user.email>.
+	// ID partitions the git refspace; PersonID names the collaborative actor,
+	// and the two are never interchangeable — a writer-id has no scheme.
+	PersonID string `json:"person_id,omitempty"`
+	// PersonIDErr says why PersonID is empty, and is nil when it is not.
+	// Callers that need a person identifier report this rather than inventing
+	// their own diagnosis: "writ.personId is not a person identifier" and
+	// "nothing to derive one from" are different problems with different fixes.
+	PersonIDErr error `json:"-"`
 }
 
 // Signer is an alias for codec.Signer.
@@ -176,9 +186,11 @@ func (s *Store) Writer() Writer {
 		return Writer{}
 	}
 	return Writer{
-		ID:    string(s.identity.WriterID),
-		Name:  s.identity.Author.Name,
-		Email: s.identity.Author.Email,
+		ID:          string(s.identity.WriterID),
+		Name:        s.identity.Author.Name,
+		Email:       s.identity.Author.Email,
+		PersonID:    s.identity.PersonID,
+		PersonIDErr: s.identity.PersonIDErr,
 	}
 }
 

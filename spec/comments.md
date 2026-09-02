@@ -189,7 +189,7 @@ A `resolve` op records or updates the resolution state of a comment thread.
   "op_version": 1,
   "body": {
     "resolved": true,
-    "resolved_by": "alice@example.com"
+    "resolved_by": "email:alice@example.com"
   }
 }
 ```
@@ -200,10 +200,12 @@ A `resolve` op records or updates the resolution state of a comment thread.
   - `true`: marks the thread as resolved.
   - `false`: marks the thread as unresolved (reopened).
 - `resolved_by` (person identifier per [`spec/identifiers.md`](identifiers.md), optional) —
-  person identifier (email address) on whose behalf the resolution is recorded.
-  Normalized (lowercase, trimmed whitespace) and bounded (`minLength: 1`,
-  `maxLength: 320`) per [`spec/identifiers.md`](identifiers.md).
-  `resolved_by` is optional even when `resolved` is `true`.
+  scheme-prefixed person identifier (`email:alice@example.com`, `user:alice`) on
+  whose behalf the resolution is recorded. Normalized (scheme lowercased; value
+  trimmed and case-folded) and bounded (a scheme of at most 32 characters, a
+  value of at most 320 code points) per
+  [`spec/identifiers.md`](identifiers.md). A bare, colonless identifier is not a
+  person identifier. `resolved_by` is optional even when `resolved` is `true`.
 
 #### Target & Threading Invariants
 

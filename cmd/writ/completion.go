@@ -451,8 +451,8 @@ _writ_issue() {
                 assign)
                     _arguments -s -S \
                         '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
-                        '*-add[Add assignee email or ID]:assignee:' \
-                        '*-remove[Remove assignee email or ID]:assignee:' \
+                        '*-add[Add assignee, a scheme:value person identifier]:assignee:' \
+                        '*-remove[Remove assignee, a scheme:value person identifier]:assignee:' \
                         '(-h -help --help)'{-h,-help,--help}'[Show help]' \
                         '1:issue ID:'
                     ;;
@@ -543,8 +543,8 @@ _writ_review() {
                 assign)
                     _arguments -s -S \
                         '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
-                        '*-add[Add assignee email or ID]:assignee:' \
-                        '*-remove[Remove assignee email or ID]:assignee:' \
+                        '*-add[Add assignee, a scheme:value person identifier]:assignee:' \
+                        '*-remove[Remove assignee, a scheme:value person identifier]:assignee:' \
                         '(-h -help --help)'{-h,-help,--help}'[Show help]' \
                         '1:review ID:'
                     ;;

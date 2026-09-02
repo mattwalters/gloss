@@ -3,6 +3,7 @@ package identity
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 var (
@@ -25,8 +26,22 @@ type ConfigError struct {
 
 func (e *ConfigError) Error() string {
 	if errors.Is(e.Problem, ErrMissing) {
+		// Carry e.Problem's detail through, the way the ErrInvalid and
+		// ErrUnsupportedFormat arms below already do. Short-circuiting on the
+		// sentinel discarded whatever the caller wrapped into it, which made
+		// guidance like "set writ.personId (for example user:alice)"
+		// unreachable at exactly the moment a user needed it.
+		detail := strings.TrimSpace(strings.TrimPrefix(e.Problem.Error(), ErrMissing.Error()))
+		detail = strings.TrimPrefix(detail, ":")
+		detail = strings.TrimSpace(detail)
 		if e.Key != "" {
+			if detail != "" {
+				return fmt.Sprintf("identity: missing git config %q: %s (run 'writ init' to configure)", e.Key, detail)
+			}
 			return fmt.Sprintf("identity: missing git config %q (run 'writ init' to configure)", e.Key)
+		}
+		if detail != "" {
+			return fmt.Sprintf("identity: missing git configuration: %s (run 'writ init' to configure)", detail)
 		}
 		return "identity: missing git configuration (run 'writ init' to configure)"
 	}

@@ -55,10 +55,11 @@ into fields of the `review` object rather than standalone collaborative objects.
 - **`assign` and `label` are add-wins OR-sets (`set-observed-remove`):**
   Concurrent assignment or labelling on one device and removal on another is
   reconciled via `set-observed-remove` (WRIT-12, `spec/fold.md`). Additions win
-  over concurrent removals. Assignee values are person identifiers
-  ([`spec/identifiers.md`](identifiers.md) §Person identifiers), normalized
-  (lowercase, trimmed whitespace) prior to set evaluation; labels are opaque
-  non-empty strings.
+  over concurrent removals. Assignee values are scheme-prefixed person
+  identifiers ([`spec/identifiers.md`](identifiers.md) §Person identifiers),
+  normalized (scheme lowercased; value trimmed and case-folded) prior to set
+  evaluation; schemes never unify, so `user:alice` and `email:alice@example.com`
+  are two members. Labels are opaque non-empty strings.
 - **Link directionality: single-sided with derived inverse:**
   Links are declared single-sided on the object being authored (e.g. a review
   links to an issue with `relation: "fixes"`). This design avoids multi-repo
@@ -259,8 +260,8 @@ Adds or removes assignees (requested reviewers) for the review.
   "op_type": "assign",
   "op_version": 1,
   "body": {
-    "add": ["alice@example.com", "bob@example.com"],
-    "remove": ["charlie@example.com"]
+    "add": ["email:alice@example.com", "user:bob"],
+    "remove": ["email:charlie@example.com"]
   }
 }
 ```
@@ -271,9 +272,11 @@ Adds or removes assignees (requested reviewers) for the review.
 At least one of `add` or `remove` MUST be present and contain at least one item.
 An empty `{}` body or empty arrays (`"add": []`) are invalid.
 
-Assignees are normalized (leading/trailing whitespace trimmed, lowercase) per
+Assignees are normalized (the identifier trimmed and split at its first colon,
+the scheme lowercased, the value trimmed and case-folded) per
 [`spec/identifiers.md`](identifiers.md) before set membership and deduplication are
-evaluated. Byte-exact equality after normalisation determines element identity.
+evaluated. Byte-exact equality after normalisation determines element identity,
+and the scheme is part of what is compared.
 
 ### 6. `approval`
 
@@ -289,7 +292,7 @@ specific revision head.
   "body": {
     "revision": "89abcdef0123456789abcdef0123456789abcdef",
     "verdict": "approve",
-    "subject": "alice@example.com",
+    "subject": "email:alice@example.com",
     "message": "Looks great, approved!"
   }
 }

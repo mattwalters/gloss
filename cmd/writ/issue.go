@@ -343,8 +343,8 @@ func newIssueAssignFlagSet(defaultDir string) (*flag.FlagSet, *issueAssignOpts) 
 	fs := flag.NewFlagSet("issue assign", flag.ContinueOnError)
 	opts := &issueAssignOpts{}
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.Var(&opts.add, "add", "Add assignee `<a>` email or ID (repeatable)")
-	fs.Var(&opts.remove, "remove", "Remove assignee `<a>` email or ID (repeatable)")
+	fs.Var(&opts.add, "add", "Add assignee `<a>`, a scheme:value person identifier (repeatable)")
+	fs.Var(&opts.remove, "remove", "Remove assignee `<a>`, a scheme:value person identifier (repeatable)")
 	fs.Usage = func() {
 		renderUsage(fs.Output(), []string{"issue", "assign"}, issueAssignCmd)
 	}
@@ -421,7 +421,7 @@ func newIssueListFlagSet(defaultDir string) (*flag.FlagSet, *issueListOpts) {
 	opts := &issueListOpts{}
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
 	fs.Var(&opts.states, "state", "Filter by issue state `<s>` (repeatable)")
-	fs.Var(&opts.assignees, "assignee", "Filter by assignee `<a>` name or email (repeatable)")
+	fs.Var(&opts.assignees, "assignee", "Filter by assignee `<a>`, a scheme:value person identifier (repeatable)")
 	fs.Var(&opts.labels, "label", "Filter by label `<l>` (repeatable)")
 	fs.Var(&opts.authors, "author", "Filter by author `<a>` name or email (repeatable)")
 	fs.StringVar(&opts.text, "text", "", "Filter by text `<q>` match in title or description")

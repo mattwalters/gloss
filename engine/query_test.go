@@ -47,7 +47,7 @@ func TestQueryFullSuite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create i1: %v", err)
 	}
-	if err := s.Issues.Assign(ctx, i1, []string{"alice"}, nil); err != nil {
+	if err := s.Issues.Assign(ctx, i1, []string{"user:alice"}, nil); err != nil {
 		t.Fatalf("Assign i1: %v", err)
 	}
 	if err := s.Issues.Label(ctx, i1, []string{"frontend"}, nil); err != nil {
@@ -64,7 +64,7 @@ func TestQueryFullSuite(t *testing.T) {
 	if err := s.Issues.SetState(ctx, i2, writ.IssueState{State: "closed", Reason: "fixed"}); err != nil {
 		t.Fatalf("SetState i2: %v", err)
 	}
-	if err := s.Issues.Assign(ctx, i2, []string{"bob"}, nil); err != nil {
+	if err := s.Issues.Assign(ctx, i2, []string{"user:bob"}, nil); err != nil {
 		t.Fatalf("Assign i2: %v", err)
 	}
 
@@ -180,7 +180,7 @@ func TestQueryFullSuite(t *testing.T) {
 		t.Fatalf("Query.GroupIssues by assignee: %v", err)
 	}
 	if len(assigneeGroups) != 2 {
-		t.Errorf("expected 2 assignee groups (alice, bob), got %d", len(assigneeGroups))
+		t.Errorf("expected 2 assignee groups (user:alice, user:bob), got %d", len(assigneeGroups))
 	}
 }
 

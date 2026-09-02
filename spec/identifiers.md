@@ -104,11 +104,13 @@ Two alternative identification schemes were considered and rejected:
 
 ## Person identifiers (`person-id`)
 
-A collaborative actor in Writ (a human author, reviewer, assignee, or bot) is
-identified in operation payloads using a **person identifier**.
+A collaborative actor in Writ (a human author, reviewer, assignee, or a
+non-human writer such as CI) is identified in operation payloads using a
+**person identifier**.
 
 ```jsonc
-"alice@example.com"
+"email:alice@example.com"
+"user:alice"
 ```
 
 Person identifiers appear in op payloads across the SDLC vocabulary:
@@ -117,54 +119,199 @@ Person identifiers appear in op payloads across the SDLC vocabulary:
 - **Approval and dismissal subjects** on reviews ([`spec/review-ops.md`](review-ops.md) §6 `approval`)
 - **Thread resolvers** (`resolved_by`) on comments ([`spec/comments.md`](comments.md) §5 `resolve`)
 
+This section supersedes the earlier bare-email person identifier format
+(WRIT-99): a conforming identifier now always carries a scheme.
+
+### A label, not a credential
+
+A person identifier proves nothing and is not meant to. Attribution in Writ is
+established cryptographically, by the signature on the op commit
+([`spec/op-envelope.md`](op-envelope.md)): who *wrote* an op is answered by the
+commit, not by anything inside the payload. A person identifier answers a
+different question — who an op *refers to*: who is assigned, whose approval
+this is, who resolved this thread. Any writer can name any person; the
+signature is what records who made that claim.
+
+That is why the format needs exactly one property, and only that one:
+
+> **Two independent implementations MUST agree on whether two person
+> identifiers denote the same person.**
+
+Equality, not identity. Everything below exists to make that agreement
+mechanical — a grammar, a split rule, a normalization, and a comparison —
+and nothing below attempts to establish who anyone actually is.
+
 ### Format
 
-The canonical person identifier format is an **email address** (e.g.
-`alice@example.com`, `bot@ci.writ.dev`).
+A person identifier is a scheme and a value, separated by a colon:
 
-Email addresses match git author identities (`user.email`), git commit signatures,
-and forge export formats (GitHub, GitLab, Gerrit).
+```text
+person-id = scheme ":" value
+```
 
-### Length bound
+| Field | Grammar | Bound | Meaning |
+| --- | --- | --- | --- |
+| `scheme` | `[a-z][a-z0-9+.-]*` | at most 32 characters | Names the namespace the value belongs to. |
+| `value` | any non-empty string | at most 320 code points | Opaque to Writ within its scheme. |
 
-A person identifier is **1–320 characters**, counted as Unicode code points
-to match JSON Schema `maxLength`: non-empty after normalization (see below),
-and no longer than 320.
+Two schemes are defined:
 
-The bound exists to cap storage, not to check conformance. Op bodies are
-written into signed, immutable commits in an append-only log: an unbounded
-string field is stored once per op and never reclaimed, so a multi-megabyte
-identifier is permanent repository weight. Bounding it in the shared
-`person-id` definition bounds every person field uniformly — assignees,
-approval and dismissal subjects, and comment `resolved_by`.
+| Scheme | Value | Example |
+| --- | --- | --- |
+| `email` | A single email address. | `email:alice@example.com` |
+| `user` | An opaque handle, scoped to the workspace. | `user:alice` |
 
-320 is the figure because it is the ceiling an RFC 5321 email address can
-reach — a 64-octet local part, `@`, and a 255-octet domain — and an email
-address is `person-id`'s stated format. Note the unit shift: RFC 5321 counts
-octets, `maxLength` counts code points. They coincide for the ASCII addresses
-the format targets, which is what makes the derivation sound; a non-ASCII
-identifier at 320 code points may occupy up to 1280 UTF-8 bytes. This is a
-**resource bound, not an RFC 5321 conformance check**: Writ does not parse
-email addresses, and length is the only shape constraint the schema applies
-to a person identifier.
+Writ does not parse either value. An `email:` value is not validated against
+RFC 5321 and a `user:` value has no assigned meaning beyond the workspace that
+mints it; both are compared, never interpreted.
 
-The bound applies to the string as it appears in the op body, which
-producers MUST already have normalized.
+**Non-human writers use the same schemes.** A CI writer is `user:ci`, not a
+fictional mailbox such as `bot@ci.writ.dev`. Inventing an address for an actor
+that has none produces an identifier that looks routable and is not, and it
+puts a domain nobody controls into a permanent record. `user:` exists exactly
+so that an actor without an email address does not need one.
+
+### Parsing: split on the first colon
+
+An implementation MUST split a person identifier at its **first** colon: the
+scheme is everything before it, the value is everything after it.
+
+The first colon and not "a colon", because a value may legally contain one. An
+email address may carry a colon inside a quoted local part, so:
+
+```text
+email:"a:b"@example.com   →   scheme "email", value "\"a:b\"@example.com"
+```
+
+Splitting on the last colon, or rejecting an identifier with more than one,
+gives a different answer for that address — and a visibly wrong one: a
+last-colon split reads the scheme as `email:"a`, which is outside the scheme
+charset, so a conforming identifier is refused. Both spellings agree on every
+ASCII example and disagree only on a rare input, which is the shape of defect
+that surfaces years later as an unreproducible report. Fixture:
+[`testdata/persons/valid/first-colon-quoted-local-part.json`](testdata/persons/valid/first-colon-quoted-local-part.json).
+
+### Equality is per-scheme, and schemes never unify
+
+Two person identifiers denote the same person if and only if their normalized
+forms are byte-equal. Because the scheme is part of the normalized form, this
+means:
+
+> `email:alice@example.com` and `user:alice` are **different identifiers,
+> permanently**, even where every human involved knows they are the same
+> person.
+
+Unifying identities across schemes is a client or registry concern
+(§[Identity mapping out of scope](#identity-mapping-out-of-scope)), never the
+format's. The moment the format gets clever about aliasing — a rule that
+`user:alice` and `email:alice@example.com` are the same when some registry says
+so — two conforming implementations begin disagreeing about the one property
+the format has to deliver, because they will not have the same registry.
+
+The accepted cost is visible: a person assigned under both schemes appears
+twice in an assignee set. That is the honest rendering of what the ops say, and
+a client is free to present them as one person. The fold is not.
+
+**Unknown schemes** are preserved and compared byte-wise, exactly like known
+ones, and are never merged with a known scheme. This is the same rule as
+unknown-op tolerance ([`spec/forward-compatibility.md`](forward-compatibility.md)):
+a reader that does not recognize `keybase:` still folds it correctly, because
+folding a person identifier never requires understanding it.
+
+### A bare identifier is invalid
+
+A colonless string is **not** a person identifier. There is no bare form, no
+legacy alias for the pre-WRIT-102 bare-email format, and no implicit scheme:
+a reader MUST NOT read `alice@example.com` as `email:alice@example.com`.
+
+The consequence is stated rather than papered over. Combined with the op-level
+reject for malformed bodies (WRIT-124/126), an op already written with a bare
+identifier becomes uninterpretable once that lands and is quarantined into
+`unknown_ops` ([`spec/fold.md`](fold.md) §7). Nothing is destroyed — the op
+stays in the log, signed and readable, and any future rule can pick it back up
+— but folded state loses those assignees and approval subjects. That is
+accepted: an implicit scheme would mean guessing which person a bare string
+meant, and a guess that is wrong is worse than a value that is absent.
+
+### Length bounds
+
+| What | Bound |
+| --- | --- |
+| `scheme` | `[a-z][a-z0-9+.-]*`, at most **32** characters |
+| `value` | at most **320** code points, counted **after normalization** |
+| whole `person-id` | derived: **353** (32 + 1 + 320) |
+
+The whole-identifier bound is derived, not independent. It is stated so that a
+validator seeing only the flat string — a JSON Schema `maxLength`, a database
+column — has a number, and so that nobody has to derive it twice and get it
+wrong once.
+
+One value bound across all schemes, deliberately. A per-scheme bound is a
+second number for two implementations to disagree about, and the bound's job
+does not vary by scheme.
+
+Three rules carry normative weight:
+
+1. **Reject, never truncate — at any layer.** A producer, a validator, a
+   projection, and a client all MUST reject an over-long identifier rather
+   than shorten it. Truncation collapses two distinct identifiers into one:
+   an attacker who registers a long identifier whose truncation equals a
+   victim's becomes the same person as the victim for assignment, approval
+   keying and set membership. That is attribution confusion with a direct
+   attack path, which a length cap is not worth.
+2. **The bound applies to the normalized value.** Normalization changes
+   length — NFC composition shrinks, NFD expands, full case folding expands
+   (`ß` → `ss`). Checking the raw input validates a string that is then
+   discarded, and two conforming readers checking at different points would
+   disagree about the same identifier. An identifier that crosses the bound
+   only *before* normalization is valid.
+3. **This is a resource bound, not an RFC 5321 conformance check.** Op bodies
+   are written into signed, immutable commits in an append-only log: an
+   unbounded string is stored once per op and never reclaimed, so a
+   multi-megabyte identifier is permanent repository weight. The bound stops
+   that and does nothing else. Writ does not parse email addresses and MUST
+   NOT be read as implying that it does. This is what makes code points an
+   honest unit: JSON Schema `maxLength` counts code points where RFC 5321's
+   320 counts octets, so a 320-code-point CJK value occupies roughly 960
+   bytes. Immaterial for a bound whose job is stopping megabytes — and
+   preferable to claiming an octet-exact conformance Writ never performs.
+
+The number 320 is inherited from the ceiling an RFC 5321 address can reach (a
+64-octet local part, `@`, and a 255-octet domain). It is a starting point that
+happens to be roomy, not a conformance claim, and it applies to `user:` values
+that have nothing to do with email.
 
 ### Normalization rules
 
 To guarantee deterministic comparison, portable queries, and interoperability
-across independent implementations, person identifiers MUST be normalized:
+across independent implementations, person identifiers MUST be normalized.
+Normalization is **structural**: it treats the two halves separately.
 
-1. **Whitespace trimming:** All leading and trailing whitespace characters
-   (ASCII space `\x20`, tab `\t`, newline `\n`, carriage return `\r`, and
-   Unicode whitespace) MUST be removed.
-2. **Case folding:** All characters MUST be converted to lowercase ASCII
-   (`a-z`).
-3. **Non-empty:** After trimming, the normalized string MUST contain at least
-   one character.
+0. **The identifier as a whole:** leading and trailing whitespace removed,
+   *then* split at the first colon. Whitespace around the identifier is
+   therefore not part of the scheme.
+1. **Scheme:** lowercased. Whitespace inside or after a scheme is not removed,
+   because the scheme charset has no whitespace in it: `email :alice@x` has no
+   valid scheme and is not a person identifier.
+2. **Value:** leading and trailing whitespace removed, then case-folded.
+3. **Non-empty:** after normalization, both the scheme and the value MUST
+   contain at least one character.
 
-$$\text{norm}(s) = \text{lowercase}(\text{trim\_whitespace}(s))$$
+$$\text{norm}(s) = \text{lowercase}(\text{scheme}(s)) \mathbin{\|} \text{":"} \mathbin{\|} \text{casefold}(\text{trim\_whitespace}(\text{value}(s)))$$
+
+> **The exact case-folding algorithm is deliberately deferred to WRIT-117.**
+> That work pins Unicode normalization (NFC) and a named case fold, and the
+> fold may legitimately differ per scheme — an `email:` value folding per
+> RFC 5321 and IDNA, a `user:` value per PRECIS
+> ([RFC 8265](https://www.rfc-editor.org/rfc/rfc8265) `UsernameCaseMapped`).
+> Until it lands, both halves fold with ASCII-plus-Unicode simple lowercasing,
+> and an implementation MUST NOT depend on that choice being final. Pinning an
+> algorithm over the flat string here and rewriting it once the string splits
+> in two is the sequencing error this order exists to avoid.
+
+The bound in §[Length bounds](#length-bounds) applies to the value **after**
+this step. The identifier as it appears in the op body is the normalized form,
+which producers MUST already have written.
 
 ### Comparison and equality
 
@@ -174,23 +321,81 @@ normalized byte representations are equal:
 $$\text{equal}(A, B) \iff \text{norm}(A) == \text{norm}(B)$$
 
 For example:
-- `"  Alice@Example.COM  "` normalizes to `"alice@example.com"`.
-- `"alice@example.com"` and `"  ALICE@EXAMPLE.COM  "` compare as equal.
+- `"  Email:Alice@Example.COM  "` normalizes to `"email:alice@example.com"`.
+- `"email:alice@example.com"` and `"  EMAIL:ALICE@EXAMPLE.COM  "` compare as
+  equal.
+- `"email:alice@example.com"` and `"user:alice"` do **not** compare as equal.
 - Deduplication, set membership tests in add-wins OR-sets (`set-observed-remove`),
   and keyed LWW lookups (`keyed-lww`) operate on the normalized string.
 
+### Writing a third party's identifier
+
+Assignment writes somebody else's identifier. When Alice assigns Bob, it is
+**Bob's** identifier that Alice puts into the op — and that op is a signed
+commit in an append-only log that is pushed to a remote and cloned by everyone
+with read access. Under the `email:` scheme, that is Bob's email address in an
+unretractable public record.
+
+Two properties make this worth stating plainly rather than burying:
+
+- **`delete` is a projection tombstone, not erasure.** Removing an assignee, or
+  deleting a comment, folds to state that hides the value; the op that carries
+  it stays in git history exactly as written and travels with every clone.
+  There is no operation in this format that removes data from the log.
+- **The writer is not the subject.** The person whose address is published is
+  usually not the person who decided to publish it, and cannot withdraw it.
+
+The mitigation is `user:`. A workspace that does not want member email
+addresses in its published op log uses opaque handles — `user:alice` — and
+keeps the handle-to-person mapping wherever it keeps its other member data,
+outside the format. Writ takes no position on which scheme a workspace should
+use; it provides one that does not require publishing an address, and names
+the consequence of the one that does.
+
 ### Producer and reader conformance
 
-- **Producers MUST** emit normalized person identifiers (trimmed, lowercase)
-  when writing operation payloads.
+- **Producers MUST** emit normalized, scheme-prefixed person identifiers when
+  writing operation payloads, and MUST reject — never truncate, never repair —
+  an identifier that violates the grammar or the bounds.
 - **Readers and Reducers MUST** normalize person identifiers upon reading op
   payloads prior to evaluating set membership, keyed lookups, deduplication,
   or projection indices.
+- **Readers MUST NOT** unify identifiers across schemes, and MUST preserve and
+  compare byte-wise the identifiers whose schemes they do not recognize.
 - **Reducers MUST** carry the normalized form into the OR-set members and
   `keyed-lww` entries they fold, not merely into the comparison that selects
   them. Where a `keyed-lww` key component is derived from a person identifier,
   the value stored under that key reads back normalized as well: normalizing an
   identifier for keying and then storing the payload verbatim is non-conforming.
+
+**What the schema can and cannot say.** The `person-id` definition in
+[`schemas/identifiers.schema.json`](schemas/identifiers.schema.json) enforces
+the grammar and the bounds — the scheme's charset and 32-character cap, a
+non-empty value, and the derived 353 `maxLength`. It cannot enforce
+normalization of the *value*, because the value is opaque within its scheme and
+a whitespace-trimming rule is not expressible in a pattern that must also admit
+quoted local parts. `"email: alice@example.com"` is therefore a shape the schema
+accepts and a conforming producer never writes. Schema validation is a
+necessary check, not a sufficient one; §[Normalization rules](#normalization-rules)
+is the rest of the obligation.
+
+### Conformance vectors
+
+The normative cases live in [`testdata/persons/`](testdata/persons):
+`valid/` vectors carry the identifier, the scheme and value it splits into, its
+normalized form, and identifiers it must and must not compare equal to;
+`invalid/` vectors carry an identifier the grammar or the bounds reject, with
+`invalid/index.json` recording why. Between them they pin first-colon parsing
+with a quoted local part, cross-scheme non-equality, case and whitespace
+normalization, unknown-scheme preservation, a maximal-length value and one code
+point more, a value that crosses the bound only *before* normalization, and an
+over-long scheme.
+
+Fold-level behaviour is pinned separately, by
+[`fixtures/testdata/descriptions/fold-person-schemes.yaml`](fixtures/testdata/descriptions/fold-person-schemes.yaml)
+(schemes never unify; an unknown scheme folds like any other) and
+[`fold-person-normalization.yaml`](fixtures/testdata/descriptions/fold-person-normalization.yaml)
+(denormalized identifiers fold to one member).
 
 ### Relationship to `writer-id`
 
@@ -200,19 +405,29 @@ identities:
 | Concept | Format | Scope | Purpose |
 | --- | --- | --- | --- |
 | **`writer-id`** | 16 lowercase hex characters (`^[0-9a-f]{16}$`) | Device-scoped `(user, device)` | Git ref namespace (`refs/writ/<writer-id>/`) for append-only concurrent writes without locking. |
-| **`person-id`** | Email address string (normalized lowercase, trimmed) | Workspace-global collaborative actor | Collaborative actor identity (assignee, reviewer, voter) across multiple devices and repositories. |
+| **`person-id`** | `scheme ":" value`, normalized | Workspace-global collaborative actor | Collaborative actor identity (assignee, reviewer, voter) across multiple devices and repositories. |
 
-A single person (e.g. `alice@example.com`) may author ops from multiple machines
-and devices, each with its own distinct `writer-id` (e.g. laptop `4d8a23b35dd50102`
-and desktop `0123456789abcdef`). The `writer-id` partitions the git refspace; the
-`person-id` identifies the collaborative actor.
+A single person (e.g. `email:alice@example.com`) may author ops from multiple
+machines and devices, each with its own distinct `writer-id` (e.g. laptop
+`4d8a23b35dd50102` and desktop `0123456789abcdef`). The `writer-id` partitions
+the git refspace; the `person-id` identifies the collaborative actor. A
+`writer-id` is never a person identifier: it has no scheme, and substituting
+one would be a bare identifier, which is invalid.
+
+Writ clients derive the local person identifier from git configuration:
+`writ.personId` when set, otherwise `email:` followed by the normalized
+`user.email`. A client that can derive neither MUST report that rather than
+inventing an identifier.
 
 ### Identity mapping out of scope
 
 Mapping cryptographic signing keys (SSH/GPG) or person email addresses to
 central directory identities (such as LDAP, SSO, or corporate IAM) is
 **deliberately out of scope** for the open format and specification
-(ARCHITECTURE.md §Known-hard list, "identity mapping").
+(ARCHITECTURE.md §Known-hard list, "identity mapping"). So is mapping one
+scheme's identifier to another's: a registry that knows `user:alice` is
+`email:alice@example.com` is a legitimate thing for a client or a coordination
+service to hold, and is not part of the format.
 
 Writ's open format records what was declared in op payloads and verifies
 tamper-evident commit signatures; organizational authority and identity verification

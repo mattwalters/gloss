@@ -1,0 +1,13 @@
+{
+  "identifier": "\t\n  EMAIL:Alice@Example.COM  \r\n",
+  "scheme": "email",
+  "value": "alice@example.com",
+  "normalized": "email:alice@example.com",
+  "equal_to": [
+    "email:alice@example.com",
+    "  Email:ALICE@example.com  "
+  ],
+  "distinct_from": [
+    "user:alice"
+  ]
+}

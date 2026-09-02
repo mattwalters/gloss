@@ -131,8 +131,8 @@ var issueAssignCmd = &command{
 		{Name: "remove", Repeatable: true},
 	},
 	Examples: []string{
-		"writ issue assign 01J8ABC -add alice@example.com",
-		"writ issue assign 01J8ABC -remove bob@example.com",
+		"writ issue assign 01J8ABC -add email:alice@example.com",
+		"writ issue assign 01J8ABC -remove user:bob",
 	},
 }
 
@@ -155,7 +155,7 @@ var issueListCmd = &command{
 	Examples: []string{
 		"writ issue list",
 		"writ issue list -state open",
-		"writ issue list -assignee alice@example.com --json",
+		"writ issue list -assignee email:alice@example.com --json",
 	},
 }
 
@@ -255,6 +255,7 @@ var reviewApproveCmd = &command{
 	Examples: []string{
 		"writ review approve 01J8ABC",
 		`writ review approve 01J8ABC -verdict request-changes -m "Please fix tests"`,
+		"writ review approve 01J8ABC -subject user:alice",
 	},
 }
 
@@ -269,8 +270,8 @@ var reviewAssignCmd = &command{
 		{Name: "remove", Repeatable: true},
 	},
 	Examples: []string{
-		"writ review assign 01J8ABC -add alice@example.com",
-		"writ review assign 01J8ABC -remove bob@example.com",
+		"writ review assign 01J8ABC -add email:alice@example.com",
+		"writ review assign 01J8ABC -remove user:bob",
 	},
 }
 
@@ -345,7 +346,7 @@ var reviewListCmd = &command{
 	Examples: []string{
 		"writ review list",
 		"writ review list -status open",
-		"writ review list -assignee alice@example.com",
+		"writ review list -assignee email:alice@example.com",
 		"writ review list -label area/engine",
 		"writ review list -status open -status draft --json",
 	},

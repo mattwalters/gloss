@@ -1,0 +1,10 @@
+{
+  "identifier": "email:alice@example.com",
+  "scheme": "email",
+  "value": "alice@example.com",
+  "normalized": "email:alice@example.com",
+  "distinct_from": [
+    "user:alice",
+    "email:alice@sub.example.com"
+  ]
+}

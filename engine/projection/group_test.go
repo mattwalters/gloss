@@ -54,15 +54,15 @@ func TestGroupIssuesByAssignee(t *testing.T) {
 	}
 
 	// Seeded issues:
-	// iss-1: assignees [alice, bob]
-	// iss-2: assignees [bob]
+	// iss-1: assignees [user:alice, user:bob]
+	// iss-2: assignees [user:bob]
 	// iss-3: assignees [] (unassigned)
 	// iss-4: assignees [] (unassigned)
 	//
 	// Expected groups:
 	// "" (unassigned): iss-3, iss-4 (count 2)
-	// "alice": iss-1 (count 1)
-	// "bob": iss-1, iss-2 (count 2)
+	// "user:alice": iss-1 (count 1)
+	// "user:bob": iss-1, iss-2 (count 2)
 
 	if len(groups) != 3 {
 		t.Fatalf("expected 3 groups, got %d", len(groups))
@@ -77,17 +77,17 @@ func TestGroupIssuesByAssignee(t *testing.T) {
 		t.Errorf("expected unassigned issues [iss-3, iss-4], got %v", unassignedIDs)
 	}
 
-	// Group "alice"
-	if groups[1].Key != "alice" || groups[1].Count != 1 {
-		t.Errorf("group 1: expected 'alice' (1), got %q (%d)", groups[1].Key, groups[1].Count)
+	// Group "user:alice"
+	if groups[1].Key != "user:alice" || groups[1].Count != 1 {
+		t.Errorf("group 1: expected 'user:alice' (1), got %q (%d)", groups[1].Key, groups[1].Count)
 	}
 	if groups[1].Issues[0].ObjectID != "iss-1" {
 		t.Errorf("expected alice's issue to be iss-1, got %s", groups[1].Issues[0].ObjectID)
 	}
 
-	// Group "bob"
-	if groups[2].Key != "bob" || groups[2].Count != 2 {
-		t.Errorf("group 2: expected 'bob' (2), got %q (%d)", groups[2].Key, groups[2].Count)
+	// Group "user:bob"
+	if groups[2].Key != "user:bob" || groups[2].Count != 2 {
+		t.Errorf("group 2: expected 'user:bob' (2), got %q (%d)", groups[2].Key, groups[2].Count)
 	}
 	bobIDs := []string{groups[2].Issues[0].ObjectID, groups[2].Issues[1].ObjectID}
 	if bobIDs[0] != "iss-1" || bobIDs[1] != "iss-2" {
@@ -107,15 +107,15 @@ func TestGroupIssuesWithFilter(t *testing.T) {
 		t.Fatalf("GroupIssues with filter: %v", err)
 	}
 
-	// iss-1 is assigned to alice and bob
-	// Expected groups: "alice" (1), "bob" (1)
+	// iss-1 is assigned to user:alice and user:bob
+	// Expected groups: "user:alice" (1), "user:bob" (1)
 	if len(groups) != 2 {
 		t.Fatalf("expected 2 groups for bug label, got %d", len(groups))
 	}
-	if groups[0].Key != "alice" || groups[0].Count != 1 || groups[0].Issues[0].ObjectID != "iss-1" {
+	if groups[0].Key != "user:alice" || groups[0].Count != 1 || groups[0].Issues[0].ObjectID != "iss-1" {
 		t.Errorf("unexpected alice group: %+v", groups[0])
 	}
-	if groups[1].Key != "bob" || groups[1].Count != 1 || groups[1].Issues[0].ObjectID != "iss-1" {
+	if groups[1].Key != "user:bob" || groups[1].Count != 1 || groups[1].Issues[0].ObjectID != "iss-1" {
 		t.Errorf("unexpected bob group: %+v", groups[1])
 	}
 }

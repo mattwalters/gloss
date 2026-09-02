@@ -1,0 +1,35 @@
+{
+  "bare-email.json": {
+    "reason": "a bare, colonless identifier is not a person identifier: there is no implicit scheme and no legacy alias for the pre-WRIT-102 format"
+  },
+  "bare-handle.json": {
+    "reason": "a bare handle carries no scheme"
+  },
+  "empty-scheme.json": {
+    "reason": "scheme must match [a-z][a-z0-9+.-]* and so cannot be empty"
+  },
+  "empty-value.json": {
+    "reason": "value must be at least one character"
+  },
+  "empty.json": {
+    "reason": "empty string"
+  },
+  "scheme-leading-digit.json": {
+    "reason": "scheme must begin with [a-z]"
+  },
+  "scheme-over-limit.json": {
+    "reason": "scheme is 33 characters, over the 32-character bound"
+  },
+  "scheme-underscore.json": {
+    "reason": "underscore is outside the scheme charset [a-z0-9+.-]"
+  },
+  "scheme-uppercase.json": {
+    "reason": "scheme charset is [a-z][a-z0-9+.-]*; an op body carries the normalized form, whose scheme is lowercased"
+  },
+  "value-over-limit-multibyte.json": {
+    "reason": "value is 321 code points (642 bytes), over the bound: the bound counts code points, not octets"
+  },
+  "value-over-limit.json": {
+    "reason": "value is 321 code points, over the 320-code-point bound; rejected, never truncated"
+  }
+}

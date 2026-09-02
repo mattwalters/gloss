@@ -18,8 +18,8 @@
     {
       "body": {
         "add": [
-          "bob",
-          "charlie"
+          "user:bob",
+          "user:charlie"
         ]
       },
       "object_id": "r-gh-101",

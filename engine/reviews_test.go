@@ -379,7 +379,7 @@ func TestReviewsValidationAndNotFound(t *testing.T) {
 	if err := s.Comments.Resolve(ctx, missingID, writ.CommentResolve{Resolved: true}); !errors.Is(err, writ.ErrNotFound) {
 		t.Errorf("expected ErrNotFound for Resolve on missing comment, got %v", err)
 	}
-	if err := s.Reviews.Assign(ctx, missingID, []string{"alice"}, nil); !errors.Is(err, writ.ErrNotFound) {
+	if err := s.Reviews.Assign(ctx, missingID, []string{"user:alice"}, nil); !errors.Is(err, writ.ErrNotFound) {
 		t.Errorf("expected ErrNotFound for Assign on missing review, got %v", err)
 	}
 	if err := s.Reviews.Label(ctx, missingID, []string{"bug"}, nil); !errors.Is(err, writ.ErrNotFound) {
@@ -408,8 +408,8 @@ func TestReviewsAssign(t *testing.T) {
 		t.Fatalf("Create review failed: %v", err)
 	}
 
-	// 2. Assign alice and bob
-	if err := s.Reviews.Assign(ctx, reviewID, []string{"alice", "bob"}, nil); err != nil {
+	// 2. Assign alice and bob, one under each scheme
+	if err := s.Reviews.Assign(ctx, reviewID, []string{"user:alice", "email:bob@example.com"}, nil); err != nil {
 		t.Fatalf("Assign failed: %v", err)
 	}
 
@@ -417,12 +417,12 @@ func TestReviewsAssign(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Query.Review failed: %v", err)
 	}
-	if !reflect.DeepEqual(res.Review.Assignees, []string{"alice", "bob"}) {
-		t.Fatalf("expected assignees [alice, bob], got %v", res.Review.Assignees)
+	if !reflect.DeepEqual(res.Review.Assignees, []string{"email:bob@example.com", "user:alice"}) {
+		t.Fatalf("expected assignees [email:bob@example.com, user:alice], got %v", res.Review.Assignees)
 	}
 
 	// 3. Remove bob, add charlie
-	if err := s.Reviews.Assign(ctx, reviewID, []string{"charlie"}, []string{"bob"}); err != nil {
+	if err := s.Reviews.Assign(ctx, reviewID, []string{"user:charlie"}, []string{"email:bob@example.com"}); err != nil {
 		t.Fatalf("Assign update failed: %v", err)
 	}
 
@@ -430,13 +430,13 @@ func TestReviewsAssign(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Query.Review failed: %v", err)
 	}
-	if !reflect.DeepEqual(res.Review.Assignees, []string{"alice", "charlie"}) {
-		t.Fatalf("expected assignees [alice, charlie], got %v", res.Review.Assignees)
+	if !reflect.DeepEqual(res.Review.Assignees, []string{"user:alice", "user:charlie"}) {
+		t.Fatalf("expected assignees [user:alice, user:charlie], got %v", res.Review.Assignees)
 	}
 
 	// 4. Query reviews with Assignee filter
 	aliceReviews, err := s.Query.Reviews(writ.ReviewFilter{
-		Assignee: []string{"alice"},
+		Assignee: []string{"user:alice"},
 	})
 	if err != nil {
 		t.Fatalf("Query.Reviews with assignee filter failed: %v", err)
@@ -446,7 +446,7 @@ func TestReviewsAssign(t *testing.T) {
 	}
 
 	bobReviews, err := s.Query.Reviews(writ.ReviewFilter{
-		Assignee: []string{"bob"},
+		Assignee: []string{"email:bob@example.com"},
 	})
 	if err != nil {
 		t.Fatalf("Query.Reviews with bob filter failed: %v", err)
@@ -609,7 +609,7 @@ func TestReviewsApproveSubjectNormalization(t *testing.T) {
 
 	// A padded subject is normalized before it is written.
 	if err := s.Reviews.Approve(ctx, reviewID, writ.Approval{
-		Subject: "  Alice  ",
+		Subject: "  User:Alice  ",
 		Verdict: "request-changes",
 	}); err != nil {
 		t.Fatalf("Approve with padded subject failed: %v", err)
@@ -638,7 +638,7 @@ func TestReviewsApproveSubjectNormalization(t *testing.T) {
 		switch {
 		case !ok:
 			omitted++
-		case subject == "alice":
+		case subject == "user:alice":
 			named++
 		default:
 			t.Errorf("unexpected approval subject %v in body %+v", subject, body)

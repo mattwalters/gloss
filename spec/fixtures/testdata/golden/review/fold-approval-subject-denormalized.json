@@ -12,13 +12,13 @@
         ],
         "approvals": [
           {
-            "subject": "carol@example.com",
+            "subject": "email:carol@example.com",
             "revision": "0000000000000000000000000000000000000002",
             "verdict": "request-changes",
             "message": "Same Carol, denormalized subject, later write wins"
           },
           {
-            "subject": "dave@example.com",
+            "subject": "email:dave@example.com",
             "revision": "0000000000000000000000000000000000000002",
             "verdict": "approve",
             "message": "Dave's only write is denormalized"

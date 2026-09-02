@@ -7,7 +7,7 @@
         "description": "Empty elements must not enter set-valued folds",
         "state": "open",
         "assignees": [
-          "alice@example.test"
+          "email:alice@example.test"
         ],
         "labels": [
           "bug"

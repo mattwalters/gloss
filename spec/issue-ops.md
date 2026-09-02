@@ -43,10 +43,11 @@ workspace.
 - **`assign` and `label` are add-wins OR-sets (`set-observed-remove`):**
   Concurrent assignment or labeling on one device and removal on another is
   reconciled via `set-observed-remove` (WRIT-12, `spec/fold.md`). Additions
-  win over concurrent removals. Assignee values are person identifiers
-  ([`spec/identifiers.md`](identifiers.md) §Person identifiers), normalized
-  (lowercase, trimmed whitespace) prior to set evaluation; labels are opaque
-  non-empty strings.
+  win over concurrent removals. Assignee values are scheme-prefixed person
+  identifiers ([`spec/identifiers.md`](identifiers.md) §Person identifiers),
+  normalized (scheme lowercased; value trimmed and case-folded) prior to set
+  evaluation; schemes never unify, so `user:alice` and `email:alice@example.com`
+  are two members. Labels are opaque non-empty strings.
 - **`link` mirrors `approval`:** A link records an association between the
   issue and another collaborative object (such as a code review or companion
   issue). It uses `keyed-lww` keyed by `target`. Emitting a `link` op with
@@ -178,8 +179,8 @@ Adds or removes assignees for the issue.
   "op_type": "assign",
   "op_version": 1,
   "body": {
-    "add": ["alice@example.com", "bob@example.com"],
-    "remove": ["charlie@example.com"]
+    "add": ["email:alice@example.com", "user:bob"],
+    "remove": ["email:charlie@example.com"]
   }
 }
 ```

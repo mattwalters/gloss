@@ -139,5 +139,15 @@
     "file": "link-malformed-ref-whitespace.json",
     "rejects": "schema",
     "reason": "reference must not contain whitespace"
+  },
+  {
+    "file": "assign-bare-person.json",
+    "rejects": "schema",
+    "reason": "assign add items must carry a scheme; a bare, colonless identifier is not a person identifier"
+  },
+  {
+    "file": "approval-overlong-scheme-subject.json",
+    "rejects": "schema",
+    "reason": "approval subject scheme must be at most 32 characters"
   }
 ]

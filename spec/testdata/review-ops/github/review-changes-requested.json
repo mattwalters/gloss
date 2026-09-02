@@ -17,7 +17,7 @@
       "body": {
         "message": "Please add unit tests",
         "revision": "2222222222222222222222222222222222222222",
-        "subject": "bob",
+        "subject": "user:bob",
         "verdict": "request-changes"
       },
       "object_id": "r-gh-101",

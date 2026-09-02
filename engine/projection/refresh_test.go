@@ -205,7 +205,7 @@ func TestNewWriterNamespaceDetected(t *testing.T) {
 
 	// Writer B appends approval on rev-multi
 	envB := makeReviewEnv("rev-multi", "approval", 1, map[string]any{
-		"subject":  "writerb@example.com",
+		"subject":  "email:writerb@example.com",
 		"revision": "0000000000000000000000000000000000000001",
 		"verdict":  "approved",
 		"message":  "Looks great!",
@@ -225,7 +225,7 @@ func TestNewWriterNamespaceDetected(t *testing.T) {
 	}
 
 	var verdict string
-	err = db.DB().QueryRow("SELECT verdict FROM approvals WHERE review_object_id = 'rev-multi' AND subject = 'writerb@example.com'").Scan(&verdict)
+	err = db.DB().QueryRow("SELECT verdict FROM approvals WHERE review_object_id = 'rev-multi' AND subject = 'email:writerb@example.com'").Scan(&verdict)
 	if err != nil {
 		t.Fatalf("query approval failed: %v", err)
 	}

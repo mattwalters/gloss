@@ -30,7 +30,7 @@ refs:
               op_type: assign
               op_version: 1
               body:
-                add: ["alice", "bob"]
+                add: ["user:alice", "email:bob@example.com"]
             expect: accept
 
           - id: alice-reassign
@@ -43,8 +43,8 @@ refs:
               op_type: assign
               op_version: 1
               body:
-                remove: ["bob"]
-                add: ["charlie"]
+                remove: ["email:bob@example.com"]
+                add: ["user:charlie"]
             expect: accept
 
   - name: refs/writ/fedcba9876543210/review
@@ -60,6 +60,6 @@ refs:
               op_type: assign
               op_version: 1
               body:
-                remove: ["charlie"]
-                add: ["david"]
+                remove: ["user:charlie"]
+                add: ["user:david"]
             expect: accept

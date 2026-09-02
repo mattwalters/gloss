@@ -134,14 +134,14 @@ Add or remove issue assignees.
 #### Flags
 
 - `-C <dir>`: Run as if writ was started in <dir>
-- `-add <a>`: Add assignee <a> email or ID (repeatable)
-- `-remove <a>`: Remove assignee <a> email or ID (repeatable)
+- `-add <a>`: Add assignee <a>, a scheme:value person identifier (repeatable)
+- `-remove <a>`: Remove assignee <a>, a scheme:value person identifier (repeatable)
 
 #### Examples
 
 ```bash
-writ issue assign 01J8ABC -add alice@example.com
-writ issue assign 01J8ABC -remove bob@example.com
+writ issue assign 01J8ABC -add email:alice@example.com
+writ issue assign 01J8ABC -remove user:bob
 ```
 
 ### `writ issue list`
@@ -162,7 +162,7 @@ List issues.
 
 - `-C <dir>`: Run as if writ was started in <dir>
 - `-state <s>`: Filter by issue state <s> (repeatable)
-- `-assignee <a>`: Filter by assignee <a> name or email (repeatable)
+- `-assignee <a>`: Filter by assignee <a>, a scheme:value person identifier (repeatable)
 - `-label <l>`: Filter by label <l> (repeatable)
 - `-author <a>`: Filter by author <a> name or email (repeatable)
 - `-text <q>`: Filter by text <q> match in title or description
@@ -175,7 +175,7 @@ List issues.
 ```bash
 writ issue list
 writ issue list -state open
-writ issue list -assignee alice@example.com --json
+writ issue list -assignee email:alice@example.com --json
 ```
 
 ### `writ issue link`
@@ -288,13 +288,14 @@ Record a review verdict.
 - `-verdict approve|request-changes|none`: Verdict approve|request-changes|none (default: approve)
 - `-revision <ref>`: Revision commit ref or SHA <ref> (defaults to latest head)
 - `-m <msg>`: Verdict message <msg>
-- `-subject <s>`: Subject identity <s> (defaults to writer email or writer ID)
+- `-subject <s>`: Subject person identifier <s>, scheme:value (defaults to writ.personId, else email:<user.email>)
 
 #### Examples
 
 ```bash
 writ review approve 01J8ABC
 writ review approve 01J8ABC -verdict request-changes -m "Please fix tests"
+writ review approve 01J8ABC -subject user:alice
 ```
 
 ### `writ review assign`
@@ -314,14 +315,14 @@ Add or remove review assignees (requested reviewers).
 #### Flags
 
 - `-C <dir>`: Run as if writ was started in <dir>
-- `-add <a>`: Add assignee <a> email or ID (repeatable)
-- `-remove <a>`: Remove assignee <a> email or ID (repeatable)
+- `-add <a>`: Add assignee <a>, a scheme:value person identifier (repeatable)
+- `-remove <a>`: Remove assignee <a>, a scheme:value person identifier (repeatable)
 
 #### Examples
 
 ```bash
-writ review assign 01J8ABC -add alice@example.com
-writ review assign 01J8ABC -remove bob@example.com
+writ review assign 01J8ABC -add email:alice@example.com
+writ review assign 01J8ABC -remove user:bob
 ```
 
 ### `writ review label`
@@ -430,7 +431,7 @@ List code reviews.
 
 - `-C <dir>`: Run as if writ was started in <dir>
 - `-status <s>`: Filter by review status <s> (repeatable)
-- `-assignee <a>`: Filter by assignee <a> name or email (repeatable)
+- `-assignee <a>`: Filter by assignee <a>, a scheme:value person identifier (repeatable)
 - `-label <l>`: Filter by label <l> (repeatable)
 - `-author <a>`: Filter by author <a> name or email (repeatable)
 - `-text <q>`: Filter by text <q> match in title or description
@@ -443,7 +444,7 @@ List code reviews.
 ```bash
 writ review list
 writ review list -status open
-writ review list -assignee alice@example.com
+writ review list -assignee email:alice@example.com
 writ review list -label area/engine
 writ review list -status open -status draft --json
 ```

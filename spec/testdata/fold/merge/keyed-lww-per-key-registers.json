@@ -11,35 +11,35 @@
       "parents": [],
       "time": 100,
       "object_id": "obj-1",
-      "body": { "subject": "alice", "revision": "r1", "verdict": "approve" }
+      "body": { "subject": "user:alice", "revision": "r1", "verdict": "approve" }
     },
     {
       "id": "op-a",
       "parents": ["op-root"],
       "time": 200,
       "object_id": "obj-1",
-      "body": { "subject": "bob", "revision": "r1", "verdict": "request-changes" }
+      "body": { "subject": "user:bob", "revision": "r1", "verdict": "request-changes" }
     },
     {
       "id": "op-b",
       "parents": ["op-root"],
       "time": 300,
       "object_id": "obj-1",
-      "body": { "subject": "alice", "revision": "r1", "verdict": "none" }
+      "body": { "subject": "user:alice", "revision": "r1", "verdict": "none" }
     },
     {
       "id": "op-c",
       "parents": ["op-root"],
       "time": 250,
       "object_id": "obj-1",
-      "body": { "subject": "alice", "revision": "r2", "verdict": "approve" }
+      "body": { "subject": "user:alice", "revision": "r2", "verdict": "approve" }
     }
   ],
   "expected_state": {
     "verdict": [
-      { "key": ["alice", "r1"], "value": "none" },
-      { "key": ["alice", "r2"], "value": "approve" },
-      { "key": ["bob", "r1"], "value": "request-changes" }
+      { "key": ["user:alice", "r1"], "value": "none" },
+      { "key": ["user:alice", "r2"], "value": "approve" },
+      { "key": ["user:bob", "r1"], "value": "request-changes" }
     ]
   }
 }

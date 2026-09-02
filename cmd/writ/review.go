@@ -11,6 +11,7 @@ import (
 
 	"github.com/writtendev/writ/cmd/writ/internal/wire"
 	"github.com/writtendev/writ/engine"
+	"github.com/writtendev/writ/engine/identity"
 	"github.com/writtendev/writ/engine/state"
 )
 
@@ -411,7 +412,7 @@ func newReviewApproveFlagSet(defaultDir string) (*flag.FlagSet, *reviewApproveOp
 	fs.StringVar(&opts.verdict, "verdict", "approve", "Verdict `approve|request-changes|none` (default: approve)")
 	fs.StringVar(&opts.revision, "revision", "", "Revision commit ref or SHA `<ref>` (defaults to latest head)")
 	fs.StringVar(&opts.message, "m", "", "Verdict message `<msg>`")
-	fs.StringVar(&opts.subject, "subject", "", "Subject identity `<s>` (defaults to writer email or writer ID)")
+	fs.StringVar(&opts.subject, "subject", "", "Subject person identifier `<s>`, scheme:value (defaults to writ.personId, else email:<user.email>)")
 	fs.Usage = func() {
 		renderUsage(fs.Output(), []string{"review", "approve"}, reviewApproveCmd)
 	}
@@ -480,10 +481,20 @@ func runReviewApprove(ctx context.Context, defaultDir string, args []string, std
 	// skip the writer fallback, and record a silently anonymous approval.
 	subject := state.NormalizePerson(opts.subject)
 	if subject == "" {
+		// The fallback is the writer's own person identifier — writ.personId,
+		// or email:<user.email>. There is no fallback past that: a writer-id
+		// carries no scheme, so substituting one would write a bare identifier,
+		// which is not a person identifier at all.
 		writer := store.Writer()
-		subject = state.NormalizePerson(writer.Email)
+		subject = writer.PersonID
 		if subject == "" {
-			subject = writer.ID
+			// Report why it is empty rather than assuming nothing was set.
+			// Telling a user who configured writ.personId to configure
+			// writ.personId sends them to look at a key that is already there.
+			if writer.PersonIDErr != nil {
+				return renderErr(stderr, fmt.Errorf("writ: no approval subject: %w", writer.PersonIDErr))
+			}
+			return renderErr(stderr, fmt.Errorf("writ: no approval subject: pass -subject, or configure %s (for example %q) or user.email", identity.PersonIDKey, "user:alice"))
 		}
 	}
 
@@ -510,8 +521,8 @@ func newReviewAssignFlagSet(defaultDir string) (*flag.FlagSet, *reviewAssignOpts
 	fs := flag.NewFlagSet("review assign", flag.ContinueOnError)
 	opts := &reviewAssignOpts{}
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
-	fs.Var(&opts.add, "add", "Add assignee `<a>` email or ID (repeatable)")
-	fs.Var(&opts.remove, "remove", "Remove assignee `<a>` email or ID (repeatable)")
+	fs.Var(&opts.add, "add", "Add assignee `<a>`, a scheme:value person identifier (repeatable)")
+	fs.Var(&opts.remove, "remove", "Remove assignee `<a>`, a scheme:value person identifier (repeatable)")
 	fs.Usage = func() {
 		renderUsage(fs.Output(), []string{"review", "assign"}, reviewAssignCmd)
 	}
@@ -961,7 +972,7 @@ func newReviewListFlagSet(defaultDir string) (*flag.FlagSet, *reviewListOpts) {
 	opts := &reviewListOpts{}
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
 	fs.Var(&opts.statuses, "status", "Filter by review status `<s>` (repeatable)")
-	fs.Var(&opts.assignees, "assignee", "Filter by assignee `<a>` name or email (repeatable)")
+	fs.Var(&opts.assignees, "assignee", "Filter by assignee `<a>`, a scheme:value person identifier (repeatable)")
 	fs.Var(&opts.labels, "label", "Filter by label `<l>` (repeatable)")
 	fs.Var(&opts.authors, "author", "Filter by author `<a>` name or email (repeatable)")
 	fs.StringVar(&opts.text, "text", "", "Filter by text `<q>` match in title or description")

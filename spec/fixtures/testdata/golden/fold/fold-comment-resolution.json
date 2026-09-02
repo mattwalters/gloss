@@ -5,19 +5,19 @@
       "object_type": "comment",
       "total_order": [
         {
-          "commit": "873c74250b6367399093538c8bae1846f04cc622",
+          "commit": "490577277766f59d1de761b69037842b6987aec2",
           "label": "alice-norm-root-create",
           "t_star": 1767226020
         },
         {
-          "commit": "9ee6f4fd947a4d01db1026d47c444ed92782db3a",
+          "commit": "ae863e9d42f61f157b9eb5df6c7106fbdf4f2170",
           "label": "alice-norm-root-resolve",
           "t_star": 1767226080
         }
       ],
       "state": {
         "resolved": true,
-        "resolved_by": "alice@example.com",
+        "resolved_by": "email:alice@example.com",
         "subject": {
           "object_id": "r-7f3a",
           "object_type": "review"
@@ -30,24 +30,24 @@
       "object_type": "comment",
       "total_order": [
         {
-          "commit": "07098377de67cde02ebab2bc998139ef29f017a9",
+          "commit": "3eacc91e78dda2127c98bee2eaf55ef77762804a",
           "label": "alice-race-root-create",
           "t_star": 1767225900
         },
         {
-          "commit": "d42d9603b6ca2edafcd0bba5b5872a0a3489f893",
+          "commit": "47caac322e1d9644143a477b51ccd389342eec37",
           "label": "alice-race-root-resolve",
           "t_star": 1767225960
         },
         {
-          "commit": "35938f0fc59e9d2aaf771d7af42a89a7cd78b759",
+          "commit": "16b4373dd5128d02fcee316071ee78feefc72728",
           "label": "bob-race-root-unresolve",
           "t_star": 1767225990
         }
       ],
       "state": {
         "resolved": false,
-        "resolved_by": "alice",
+        "resolved_by": "user:alice",
         "subject": {
           "object_id": "r-7f3a",
           "object_type": "review"
@@ -65,14 +65,14 @@
           "t_star": 1767225600
         },
         {
-          "commit": "160dc16ef34b03dc8471bd9b622aa582a7554617",
+          "commit": "682d6507e5d8cf02a7935f1dd8b35a38aba735cd",
           "label": "alice-res-root-resolve",
           "t_star": 1767225660
         }
       ],
       "state": {
         "resolved": true,
-        "resolved_by": "alice",
+        "resolved_by": "user:alice",
         "subject": {
           "object_id": "r-7f3a",
           "object_type": "review"
@@ -85,24 +85,24 @@
       "object_type": "comment",
       "total_order": [
         {
-          "commit": "e2d0e9a2f8426903c7190e9504f19d50f18b9710",
+          "commit": "4f5d40b180adeb77d562b8d10c02ea2c4eda50e9",
           "label": "alice-unres-root-create",
           "t_star": 1767225720
         },
         {
-          "commit": "66021668cb8d41fe92bde1b4d10e9e35562ab022",
+          "commit": "5442ee84a898d7dfbccdbdbec96f80554f40293f",
           "label": "alice-unres-root-resolve",
           "t_star": 1767225780
         },
         {
-          "commit": "225aa30fa21f0d9015d4313f5498912e5cba3f97",
+          "commit": "592daeae92fc657d9f7c416500f8411f504e1fba",
           "label": "alice-unres-root-unresolve",
           "t_star": 1767225840
         }
       ],
       "state": {
         "resolved": false,
-        "resolved_by": "alice",
+        "resolved_by": "user:alice",
         "subject": {
           "object_id": "r-7f3a",
           "object_type": "review"

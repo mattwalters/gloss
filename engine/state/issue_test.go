@@ -201,7 +201,7 @@ func TestFoldIssueAssigneesORSetCausalAndConcurrent(t *testing.T) {
 			ObjectType: "issue",
 			OpType:     "assign",
 			OpVersion:  1,
-			Body:       json.RawMessage(`{"add":["alice","bob"]}`),
+			Body:       json.RawMessage(`{"add":["user:alice","user:bob"]}`),
 		},
 		ID: "op1",
 		Author: codec.Identity{
@@ -217,7 +217,7 @@ func TestFoldIssueAssigneesORSetCausalAndConcurrent(t *testing.T) {
 			ObjectType: "issue",
 			OpType:     "assign",
 			OpVersion:  1,
-			Body:       json.RawMessage(`{"remove":["bob"]}`),
+			Body:       json.RawMessage(`{"remove":["user:bob"]}`),
 		},
 		ID:      "op2",
 		Parents: []string{"op1"},
@@ -235,7 +235,7 @@ func TestFoldIssueAssigneesORSetCausalAndConcurrent(t *testing.T) {
 			ObjectType: "issue",
 			OpType:     "assign",
 			OpVersion:  1,
-			Body:       json.RawMessage(`{"remove":["charlie"]}`),
+			Body:       json.RawMessage(`{"remove":["user:charlie"]}`),
 		},
 		ID:      "op3",
 		Parents: []string{"op2"},
@@ -252,7 +252,7 @@ func TestFoldIssueAssigneesORSetCausalAndConcurrent(t *testing.T) {
 			ObjectType: "issue",
 			OpType:     "assign",
 			OpVersion:  1,
-			Body:       json.RawMessage(`{"add":["charlie"]}`),
+			Body:       json.RawMessage(`{"add":["user:charlie"]}`),
 		},
 		ID:      "op4",
 		Parents: []string{"op2"},
@@ -268,7 +268,7 @@ func TestFoldIssueAssigneesORSetCausalAndConcurrent(t *testing.T) {
 	}
 
 	// Present assignees should be alice and charlie (bob causally removed, charlie concurrent add wins)
-	expectedAssignees := []string{"alice", "charlie"}
+	expectedAssignees := []string{"user:alice", "user:charlie"}
 	if !reflect.DeepEqual(state.Assignees, expectedAssignees) {
 		t.Errorf("assignees mismatch: got %v, want %v", state.Assignees, expectedAssignees)
 	}
@@ -629,8 +629,9 @@ func TestFoldIssueAgreement(t *testing.T) {
 func TestFoldIssuePersonNormalization(t *testing.T) {
 	now := time.Unix(100, 0).UTC()
 
-	// 1. Assign with whitespace and mixed case: "  Alice@Example.COM  ", "Bob@Example.Com"
-	// 2. Remove with lowercase: "alice@example.com", add " Charlie@Example.COM "
+	// 1. Assign with whitespace and mixed case in both halves:
+	//    "  Email:Alice@Example.COM  ", "EMAIL:Bob@Example.Com"
+	// 2. Remove normalized: "email:alice@example.com", add " email:Charlie@Example.COM "
 	ops := []codec.Op{
 		{
 			ID: "op1",
@@ -651,7 +652,7 @@ func TestFoldIssuePersonNormalization(t *testing.T) {
 				ObjectType: "issue",
 				OpType:     "assign",
 				OpVersion:  1,
-				Body:       json.RawMessage(`{"add":["  Alice@Example.COM  ", "Bob@Example.Com"]}`),
+				Body:       json.RawMessage(`{"add":["  Email:Alice@Example.COM  ", "EMAIL:Bob@Example.Com"]}`),
 			},
 			Author: codec.Identity{Email: "alice@example.com", When: now.Add(time.Minute)},
 		},
@@ -663,7 +664,7 @@ func TestFoldIssuePersonNormalization(t *testing.T) {
 				ObjectType: "issue",
 				OpType:     "assign",
 				OpVersion:  1,
-				Body:       json.RawMessage(`{"remove":["alice@example.com"],"add":[" Charlie@Example.COM "]}`),
+				Body:       json.RawMessage(`{"remove":["email:alice@example.com"],"add":[" email:Charlie@Example.COM "]}`),
 			},
 			Author: codec.Identity{Email: "alice@example.com", When: now.Add(2 * time.Minute)},
 		},
@@ -675,7 +676,7 @@ func TestFoldIssuePersonNormalization(t *testing.T) {
 	}
 
 	// Assignees: alice removed, bob and charlie present (lowercase, sorted)
-	wantAssignees := []string{"bob@example.com", "charlie@example.com"}
+	wantAssignees := []string{"email:bob@example.com", "email:charlie@example.com"}
 	if !reflect.DeepEqual(state.Assignees, wantAssignees) {
 		t.Errorf("Assignees = %v, want %v", state.Assignees, wantAssignees)
 	}

@@ -19,22 +19,22 @@
         ],
         "approvals": [
           {
-            "subject": "alice",
-            "revision": "1111111111111111111111111111111111111111",
-            "verdict": "approve",
-            "message": "Alice approves r1"
-          },
-          {
-            "subject": "bob",
+            "subject": "email:bob@example.com",
             "revision": "1111111111111111111111111111111111111111",
             "verdict": "request-changes",
             "message": "Bob requests changes on r1"
           },
           {
-            "subject": "bob",
+            "subject": "email:bob@example.com",
             "revision": "2222222222222222222222222222222222222222",
             "verdict": "approve",
             "message": "Bob approves r2"
+          },
+          {
+            "subject": "user:alice",
+            "revision": "1111111111111111111111111111111111111111",
+            "verdict": "approve",
+            "message": "Alice approves r1"
           }
         ],
         "ci_statuses": [

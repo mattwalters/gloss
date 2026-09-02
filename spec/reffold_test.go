@@ -9,11 +9,31 @@ import (
 
 // normalizePersonInputs pins the axes where two spellings of the rule could
 // plausibly disagree: leading and trailing whitespace of several kinds, mixed
-// case, the empty and all-whitespace strings, and non-ASCII case folding.
+// case in either half, the empty and all-whitespace strings, non-ASCII case
+// folding, where the split falls when the value carries its own colon, and the
+// colonless strings that are not conforming identifiers at all.
 var normalizePersonInputs = []string{
 	"",
 	" ",
 	"\t\r\n",
+	":",
+	"email:",
+	":alice@example.com",
+	"email:alice@example.com",
+	"Email:Alice@Example.COM",
+	"  email:alice@example.com  ",
+	"\t\n EMAIL:Alice@Example.COM \r\n",
+	"email:  Alice@Example.COM  ",
+	"EMAIL:DEV+1@EXAMPLE.COM",
+	"user:alice",
+	"USER:Alice",
+	"keybase:Alice",
+	`email:"a:b"@example.com`,
+	`EMAIL:"A:B"@Example.COM`,
+	"email:a:b:c",
+	"email:ÉLODIE@Example.COM",
+	// Colonless: not conforming identifiers, but both copies of the rule must
+	// still agree on what they fold to.
 	"alice@example.com",
 	"Alice@Example.COM",
 	"  alice@example.com  ",

@@ -42,9 +42,22 @@ type SigningKey struct {
 // Identity represents the resolved writer identity and signing-key configuration
 // for the local repository.
 type Identity struct {
-	WriterID       WriterID
-	Author         Author
-	Key            SigningKey
+	WriterID WriterID
+	Author   Author
+	Key      SigningKey
+	// PersonID is the local writer's person identifier per
+	// spec/identifiers.md: writ.personId when set, otherwise
+	// email:<normalized user.email>. It is the collaborative actor this
+	// writer refers to itself as, and is unrelated to WriterID, which
+	// partitions the git refspace.
+	PersonID string
+	// PersonIDErr records why PersonID is empty, and is nil when it is not.
+	// Load does not fail on it — reads need no person identifier — so it is
+	// carried here for the write paths, which must be able to tell "you set
+	// writ.personId to something that is not a person identifier" apart from
+	// "you set nothing at all". Reporting the second when the first is true
+	// sends a user to look at a key they already configured.
+	PersonIDErr    error
 	AllowedSigners string // gpg.ssh.allowedSignersFile, "" when unset
 }
 
@@ -91,12 +104,24 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 		}
 	}
 
+	// 3b. Person identifier: writ.personId, else email:<normalized user.email>.
+	// A configuration that yields no conforming identifier is not fatal here:
+	// reading a repository does not need one, and failing Load would take the
+	// whole store down over a field only the write paths use. The write paths
+	// refuse instead — but they refuse with PersonIDErr, not with a guess, so
+	// a misconfigured writ.personId is reported as misconfigured rather than
+	// as absent. Discarding this error is how a user who did set the key gets
+	// told to set it.
+	personID, personIDErr := DerivePersonID(cfg)
+
 	baseIdent := Identity{
 		WriterID: writerID,
 		Author: Author{
 			Name:  name,
 			Email: email,
 		},
+		PersonID:    personID,
+		PersonIDErr: personIDErr,
 	}
 
 	// 4. GPG Format: gpg.format (must be ssh)
@@ -151,6 +176,8 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 			Name:  name,
 			Email: email,
 		},
+		PersonID:       personID,
+		PersonIDErr:    personIDErr,
 		Key:            signingKey,
 		AllowedSigners: allowedSigners,
 	}, nil

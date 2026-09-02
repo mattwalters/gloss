@@ -92,12 +92,12 @@ func TestIssue_RoundTrip_SingleRepo(t *testing.T) {
 		t.Errorf("status output missing Assignees: -: %s", statusOut)
 	}
 
-	// 4. writ issue assign <id> -add alice@example.com
+	// 4. writ issue assign <id> -add email:alice@example.com
 	stdout.Reset()
 	stderr.Reset()
 	code = run(context.Background(), []string{
 		"issue", "assign", "-C", env.repoDir,
-		issueID, "-add", "alice@example.com",
+		issueID, "-add", "email:alice@example.com",
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("issue assign failed with %d; stderr: %s", code, stderr.String())
@@ -110,16 +110,16 @@ func TestIssue_RoundTrip_SingleRepo(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("issue status after assign failed with %d; stderr: %s", code, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "Assignees:   alice@example.com") {
-		t.Errorf("status output missing Assignees: alice@example.com: %s", stdout.String())
+	if !strings.Contains(stdout.String(), "Assignees:   email:alice@example.com") {
+		t.Errorf("status output missing Assignees: email:alice@example.com: %s", stdout.String())
 	}
 
-	// 5. writ issue assign -remove alice@example.com -add bob@example.com
+	// 5. writ issue assign -remove email:alice@example.com -add user:bob
 	stdout.Reset()
 	stderr.Reset()
 	code = run(context.Background(), []string{
 		"issue", "assign", "-C", env.repoDir,
-		issueID, "-remove", "alice@example.com", "-add", "bob@example.com",
+		issueID, "-remove", "email:alice@example.com", "-add", "user:bob",
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("issue reassign failed with %d; stderr: %s", code, stderr.String())
@@ -131,8 +131,8 @@ func TestIssue_RoundTrip_SingleRepo(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("issue status after reassign failed: %s", stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "Assignees:   bob@example.com") {
-		t.Errorf("status output missing Assignees: bob@example.com: %s", stdout.String())
+	if !strings.Contains(stdout.String(), "Assignees:   user:bob") {
+		t.Errorf("status output missing Assignees: user:bob: %s", stdout.String())
 	}
 
 	// 6. writ issue status <id> closed -reason not_planned

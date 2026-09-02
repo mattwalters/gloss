@@ -10,30 +10,30 @@
           "t_star": 1767225600
         },
         {
-          "commit": "612866f32a988f2080b04b9da1a6abfdc0ef9828",
+          "commit": "af6fd9b6663f5515971dced641bf584ad5d76b3f",
           "label": "alice-assign-initial",
           "t_star": 1767225660
         },
         {
-          "commit": "f0ea3efba18569aaa0ba38e5e70bb992cae9808f",
+          "commit": "9376607136fbc2efd1a14c0c6c1961b954ea178e",
           "label": "bob-concurrent-assign",
           "t_star": 1767225720
         },
         {
-          "commit": "306fde0f90660e23730167a81657f8e157cdbedb",
+          "commit": "c7b7bb226b8befaafba79ffc49c66786e07dc525",
           "label": "alice-reassign",
           "t_star": 1767225780
         }
       ],
       "state": {
         "add": [
-          "alice",
-          "charlie",
-          "david"
+          "user:alice",
+          "user:charlie",
+          "user:david"
         ],
         "remove": [
-          "charlie",
-          "david"
+          "user:charlie",
+          "user:david"
         ],
         "title": "Review Assignment Test"
       }

@@ -61,7 +61,7 @@ refs:
               body:
                 revision: "1111111111111111111111111111111111111111"
                 verdict: "approve"
-                subject: "alice"
+                subject: "user:alice"
                 message: "Alice approves r1"
             expect: accept
 
@@ -113,7 +113,7 @@ refs:
               body:
                 revision: "1111111111111111111111111111111111111111"
                 verdict: "request-changes"
-                subject: "bob"
+                subject: "email:bob@example.com"
                 message: "Bob requests changes on r1"
             expect: accept
 
@@ -129,7 +129,7 @@ refs:
               body:
                 revision: "2222222222222222222222222222222222222222"
                 verdict: "approve"
-                subject: "bob"
+                subject: "email:bob@example.com"
                 message: "Bob approves r2"
             expect: accept
 

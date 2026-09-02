@@ -125,7 +125,7 @@ func seedBenchDB(tb testing.TB, db *projection.DB) {
 	defer lblStmt.Close()
 
 	issueStates := []string{"open", "in_progress", "closed"}
-	assignees := []string{"alice", "bob", "charlie"}
+	assignees := []string{"user:alice", "user:bob", "user:charlie"}
 	labels := []string{"bug", "feature", "docs"}
 
 	for i := 0; i < benchNumIssues; i++ {
@@ -186,7 +186,7 @@ func BenchmarkIssuesListWithFilter(b *testing.B) {
 
 	filter := projection.IssueFilter{
 		State:    []string{"open"},
-		Assignee: []string{"alice"},
+		Assignee: []string{"user:alice"},
 		Limit:    50,
 	}
 
@@ -282,7 +282,7 @@ func TestQueryPerformanceBudget(t *testing.T) {
 	t.Run("IssuesListFilterBudget", func(t *testing.T) {
 		filter := projection.IssueFilter{
 			State:    []string{"open"},
-			Assignee: []string{"alice"},
+			Assignee: []string{"user:alice"},
 			Limit:    50,
 		}
 		_, _ = db.Issues(filter)
