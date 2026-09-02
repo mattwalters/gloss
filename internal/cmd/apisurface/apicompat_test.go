@@ -88,6 +88,25 @@ func TestFilterKeepsWholePackageChanges(t *testing.T) {
 			want: "",
 		},
 		{
+			// apidiff formats interface implementation changes using the
+			// module-relative path for the target interface. A non-engine
+			// subject implementing or no longer implementing an engine
+			// interface must not be classified as an engine change.
+			name: "non-engine subject implementing or breaking an engine interface is dropped",
+			report: "Incompatible changes:\n" +
+				"- ./spec/fixtures.X: no longer implements ./engine/codec.Signer\n" +
+				"Compatible changes:\n" +
+				"- ./spec/fixtures.X: implements ./engine/codec.Signer\n",
+			want: "",
+		},
+		{
+			name: "engine subject no longer implementing an interface is kept",
+			report: "Incompatible changes:\n" +
+				"- ./engine/codec.MySigner: no longer implements io.Closer\n",
+			want: "Incompatible changes:\n" +
+				"- ./engine/codec.MySigner: no longer implements io.Closer\n",
+		},
+		{
 			name:   "nothing to report",
 			report: "",
 			want:   "",

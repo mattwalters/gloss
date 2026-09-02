@@ -114,7 +114,7 @@ api-compat: ## Report the engine API changes since BASE; fail on an unacknowledg
 	  printf 'api-compat: no engine API change since %s.\n' "$$short"; \
 	fi; \
 	grep -q '^Incompatible changes:' "$$tmp/engine.txt" || exit 0; \
-	if [ -n "$$(git diff --name-only "$$base" HEAD -- CHANGELOG.md)" ]; then \
+	if [ -n "$$(git diff --name-only "$$base" -- CHANGELOG.md)" ]; then \
 	  printf '\napi-compat: breaking, and acknowledged in CHANGELOG.md.\n'; \
 	  exit 0; \
 	fi; \
