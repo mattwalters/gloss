@@ -36,19 +36,47 @@ the op into one of three mutually exclusive categories:
    time with an explicit error. Malformed ops MUST NOT enter the DAG and MUST NOT
    be folded into domain state.
 
-2. **Interpretable:** The op is a valid envelope whose `(object_type, op_type, op_version)`
-   triple is implemented by the reader. The reader decodes the op's `body` and
-   folds its effects into domain state according to the op type's normative specification.
+   **This class is envelope-level only.** Every test above is applied to the
+   commit and to `op.json` as a whole, before any op type's body is read. An op
+   whose envelope satisfies all of them is not in this class no matter what its
+   `body` turns out to contain — a body a reader cannot consume is category 3
+   below, and category 3 ops MUST enter the DAG. The word "malformed" is used
+   in `spec/fold.md` §7.1 of such a body; it does not put the op here.
 
-3. **Valid-but-uninterpretable (Opaque):** The op is a valid envelope whose
-   `object_type` is unknown to the reader, whose `op_type` is unknown under a known
-   `object_type`, or whose `op_version` is greater than the highest version the
-   reader implements.
+2. **Interpretable:** The op is a valid envelope whose `(object_type, op_type, op_version)`
+   triple is implemented by the reader, **and** whose `body` the reader's merge
+   strategies can consume. The reader decodes the op's `body` and folds its
+   effects into domain state according to the op type's normative specification.
+   An op whose triple is implemented but whose body fails the test in category 3
+   is not in this class and MUST NOT be folded.
+
+3. **Valid-but-uninterpretable (Opaque):** The op is a valid envelope that the
+   reader cannot interpret, for either of two reasons:
+
+   - **The type is unknown.** Its `object_type` is unknown to the reader, its
+     `op_type` is unknown under a known `object_type`, or its `op_version` is
+     greater than the highest version the reader implements.
+   - **The body cannot be consumed.** Its `(object_type, op_type, op_version)`
+     triple *is* implemented, but a field of its `body` carrying a declared merge
+     rule holds a JSON value that field's strategy cannot consume — a `set-union`
+     field holding a number, a `keyed-lww` key component holding an object, any
+     such field holding `null`. `spec/fold.md` §7.1 defines this test, states it
+     once per strategy in §5, and is normative for it. The disposition is the one
+     stated here: the op is uninterpretable, not malformed.
+
+   The two reasons are one category because they have one disposition. A reader
+   that treats the second as category 1 destroys data it was required to keep;
+   a reader that treats it as category 2 folds values whose rendering no other
+   implementation reproduces, which is the defect §7.1 exists to close.
 
    **Unknown is not invalid.** An uninterpretable op is a valid, well-formed
    operation. It MUST remain in the DAG, stay reachable, be synchronized to peers,
    and be preserved byte-for-byte. A reader MUST NOT reject or discard an op simply
-   because its type or version is uninterpretable.
+   because its type, version, or body is uninterpretable.
+
+   Rejection is at op granularity in both cases: an uninterpretable op contributes
+   no field writes at all, not even from the fields a reader could have read.
+   `spec/fold.md` §7.1 records why.
 
 ## Unknown fields (per-field tolerance)
 
@@ -97,6 +125,18 @@ No fields from `body` are exposed in the opaque record. Surfacing opaque ops
 makes the presence of newer-client modifications observable in user interfaces
 (e.g., displaying "3 operations from a newer version of Writ") and verifiable in
 conformance goldens, without guessing at payload semantics.
+
+Both populations of category 3 are surfaced through this one channel: an op with
+an unknown type and an op whose body a strategy cannot consume are reported the
+same way, because a reader's user can act on either only by looking at the raw
+op. Widening the category widens what flows through the record; it does not
+change the record.
+
+> Implementation note, not normative. The Go engine's opaque record
+> (`writ.UnknownOp`) carries `op_id`, `op_type` and `op_version` but not
+> `object_type`, so it does not yet satisfy `FC-5`. That gap predates §7.1 and
+> is not introduced by it, but §7.1 widens the set of ops flowing through the
+> record, so it is recorded here rather than left implicit.
 
 ### Stale vs. corrupt state
 
@@ -173,7 +213,7 @@ MUST NOT:
 
 | Rule ID | Statement | Subsystem |
 | --- | --- | --- |
-| `FC-1` | An op envelope satisfying reader validation with an unknown `object_type`, unknown `op_type`, or unimplemented `op_version` MUST be treated as valid-but-uninterpretable and retained in the DAG. | Reader / DAG |
+| `FC-1` | An op envelope satisfying reader validation MUST be treated as valid-but-uninterpretable and retained in the DAG when the reader cannot interpret it — because its `object_type` is unknown, its `op_type` is unknown, its `op_version` is unimplemented, **or** its `(object_type, op_type, op_version)` triple is implemented but a field of its `body` carrying a declared merge rule holds a value that field's strategy cannot consume (`spec/fold.md` §7.1). In neither case may it be treated as malformed, and in neither case may it be folded field-by-field. | Reader / DAG |
 | `FC-2` | Unknown top-level fields in `op.json` MUST be preserved byte-for-byte and ignored by readers. | Codec / Envelope |
 | `FC-3` | Unknown fields inside `body` (including arbitrarily nested objects and arrays) MUST be preserved byte-for-byte and ignored by readers. | Codec / Payload |
 | `FC-4` | Uninterpretable ops MUST NOT alter or perturb the folded value of any field understood by the reader. | Fold |
@@ -196,4 +236,12 @@ repository-level conformance test suite for rules `FC-1` through `FC-5` and `FC-
 through `FC-15`. Multi-writer git DAGs containing unknown op types, future op versions,
 and unrecognized fields are executed against the reader capability profile and
 verified for byte-for-byte preservation and field isolation.
+
+That family covers the unknown-type half of `FC-1`. The other half — a known op
+whose body a strategy cannot consume — is pinned by the `uninterpretable-*`
+merge vectors under `spec/testdata/fold/merge/`, which assert both the folded
+state and the quarantine list, against the reference fold and the engine alike.
+It is not in the repository-level family because those fixtures are built by
+Writ's own producer, which validates bodies before signing
+(`spec/op-envelope.md` §Producer validation) and so cannot emit one.
 

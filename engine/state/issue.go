@@ -98,75 +98,27 @@ func FoldIssue(ops []codec.Op) (Issue, error) {
 
 		case "assign":
 			hasKnownOp = true
-			if addRaw, ok := body["add"].([]any); ok {
-				for _, it := range addRaw {
-					s, isStr := it.(string)
-					if !isStr {
-						continue
-					}
-					if item := NormalizePerson(s); item != "" {
-						assignAdds = append(assignAdds, orSetRecord{opID: op.ID, item: item})
-					}
-				}
-			} else if addRaw, ok := body["add"].([]string); ok {
-				for _, it := range addRaw {
-					if item := NormalizePerson(it); item != "" {
-						assignAdds = append(assignAdds, orSetRecord{opID: op.ID, item: item})
-					}
+			for _, it := range orSetItems(body["add"]) {
+				if item := NormalizePerson(it); item != "" {
+					assignAdds = append(assignAdds, orSetRecord{opID: op.ID, item: item})
 				}
 			}
-			if remRaw, ok := body["remove"].([]any); ok {
-				for _, it := range remRaw {
-					s, isStr := it.(string)
-					if !isStr {
-						continue
-					}
-					if item := NormalizePerson(s); item != "" {
-						assignRemoves = append(assignRemoves, orSetRecord{opID: op.ID, item: item})
-					}
-				}
-			} else if remRaw, ok := body["remove"].([]string); ok {
-				for _, it := range remRaw {
-					if item := NormalizePerson(it); item != "" {
-						assignRemoves = append(assignRemoves, orSetRecord{opID: op.ID, item: item})
-					}
+			for _, it := range orSetItems(body["remove"]) {
+				if item := NormalizePerson(it); item != "" {
+					assignRemoves = append(assignRemoves, orSetRecord{opID: op.ID, item: item})
 				}
 			}
 
 		case "label":
 			hasKnownOp = true
-			if addRaw, ok := body["add"].([]any); ok {
-				for _, it := range addRaw {
-					item, isStr := it.(string)
-					if !isStr {
-						continue
-					}
-					if item != "" {
-						labelAdds = append(labelAdds, orSetRecord{opID: op.ID, item: item})
-					}
-				}
-			} else if addRaw, ok := body["add"].([]string); ok {
-				for _, it := range addRaw {
-					if it != "" {
-						labelAdds = append(labelAdds, orSetRecord{opID: op.ID, item: it})
-					}
+			for _, it := range orSetItems(body["add"]) {
+				if it != "" {
+					labelAdds = append(labelAdds, orSetRecord{opID: op.ID, item: it})
 				}
 			}
-			if remRaw, ok := body["remove"].([]any); ok {
-				for _, it := range remRaw {
-					item, isStr := it.(string)
-					if !isStr {
-						continue
-					}
-					if item != "" {
-						labelRemoves = append(labelRemoves, orSetRecord{opID: op.ID, item: item})
-					}
-				}
-			} else if remRaw, ok := body["remove"].([]string); ok {
-				for _, it := range remRaw {
-					if it != "" {
-						labelRemoves = append(labelRemoves, orSetRecord{opID: op.ID, item: it})
-					}
+			for _, it := range orSetItems(body["remove"]) {
+				if it != "" {
+					labelRemoves = append(labelRemoves, orSetRecord{opID: op.ID, item: it})
 				}
 			}
 

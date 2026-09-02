@@ -1,6 +1,6 @@
 {
   "name": "uninterpretable-set-observed-remove",
-  "description": "An OR-set item that is not a string makes the operation uninterpretable, on the add side and the remove side alike. A null item is the sharpest case: rendered rather than rejected it becomes a member of the set — an assignee nobody named — and a rejected remove leaves the element it named present, because a remove that cannot be read removes nothing",
+  "description": "An OR-set item that is not a string makes the operation uninterpretable, on the add side and the remove side alike. A null item is the sharpest case: rendered rather than rejected it becomes a member of the set — an assignee nobody named — and a rejected remove leaves the element it named present, because a remove that cannot be read removes nothing. This is the nested body shape (§5.4). A side holds a string or an array of strings, so a bare string is one item; a side that is present and holds null is not an absent side but a write with no value in it, and is rejected like any other null",
   "object_id": "obj-1",
   "fields": {
     "labels": { "strategy": "set-observed-remove" }
@@ -68,16 +68,35 @@
       "body": {
         "labels": { "add": ["kept"], "remove": ["urgent"] }
       }
+    },
+    {
+      "id": "op-h-scalar-side",
+      "parents": ["op-g-good-remove"],
+      "time": 800,
+      "object_id": "obj-1",
+      "body": {
+        "labels": { "add": "solo" }
+      }
+    },
+    {
+      "id": "op-i-null-side",
+      "parents": ["op-h-scalar-side"],
+      "time": 900,
+      "object_id": "obj-1",
+      "body": {
+        "labels": { "add": null }
+      }
     }
   ],
   "expected_state": {
-    "labels": ["kept", "triage"]
+    "labels": ["kept", "solo", "triage"]
   },
   "expected_unknown_ops": [
     "op-b-number",
     "op-c-object",
     "op-d-null-item",
     "op-e-non-array",
-    "op-f-bad-remove"
+    "op-f-bad-remove",
+    "op-i-null-side"
   ]
 }

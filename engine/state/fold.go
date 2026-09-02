@@ -78,3 +78,28 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 		UnknownOps: unknownOps,
 	}, nil
 }
+
+// orSetItems returns the items one side of an OR-set body carries. The side
+// holds a string or an array of strings (spec/fold.md §5.4); anything else made
+// the operation uninterpretable (§7.1) before it reached a reducer, so a
+// non-string here is unreachable and skipped rather than rendered.
+//
+// The typed reducers share this with the generic fold's own orSetItems so a
+// body shape one consumes cannot be silently dropped by the other.
+func orSetItems(raw any) []string {
+	switch v := raw.(type) {
+	case string:
+		return []string{v}
+	case []any:
+		items := make([]string, 0, len(v))
+		for _, it := range v {
+			if s, ok := it.(string); ok {
+				items = append(items, s)
+			}
+		}
+		return items
+	case []string:
+		return v
+	}
+	return nil
+}

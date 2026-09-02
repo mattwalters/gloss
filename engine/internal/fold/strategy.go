@@ -207,40 +207,17 @@ func (a *setObservedRemoveAccumulator) Apply(op codec.Op, body map[string]any, _
 		return it
 	}
 
-	// Every item is a string; see setUnionAccumulator.Apply.
-	if slice, ok := addRaw.([]any); ok {
-		for _, it := range slice {
-			s, isStr := it.(string)
-			if !isStr {
-				continue
-			}
-			if item := normalizeItem(s); item != "" {
-				a.adds = append(a.adds, orSetAddRecord{opID: op.ID, item: item})
-			}
-		}
-	} else if slice, ok := addRaw.([]string); ok {
-		for _, it := range slice {
-			if item := normalizeItem(it); item != "" {
-				a.adds = append(a.adds, orSetAddRecord{opID: op.ID, item: item})
-			}
+	// Every item is a string; see setUnionAccumulator.Apply. A side holds one
+	// item or an array of them, and orSetItems consumes exactly what
+	// orSetAccepts admitted.
+	for _, it := range orSetItems(addRaw) {
+		if item := normalizeItem(it); item != "" {
+			a.adds = append(a.adds, orSetAddRecord{opID: op.ID, item: item})
 		}
 	}
-
-	if slice, ok := remRaw.([]any); ok {
-		for _, it := range slice {
-			s, isStr := it.(string)
-			if !isStr {
-				continue
-			}
-			if item := normalizeItem(s); item != "" {
-				a.removes = append(a.removes, orSetRemoveRecord{opID: op.ID, item: item})
-			}
-		}
-	} else if slice, ok := remRaw.([]string); ok {
-		for _, it := range slice {
-			if item := normalizeItem(it); item != "" {
-				a.removes = append(a.removes, orSetRemoveRecord{opID: op.ID, item: item})
-			}
+	for _, it := range orSetItems(remRaw) {
+		if item := normalizeItem(it); item != "" {
+			a.removes = append(a.removes, orSetRemoveRecord{opID: op.ID, item: item})
 		}
 	}
 	return nil

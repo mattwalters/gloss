@@ -218,6 +218,11 @@ strategy requires a spec amendment.
 
 #### 4. `set-observed-remove` (Add-Wins OR-Set)
 - **Initial state:** Empty set $\emptyset$.
+- **Body shapes.** A field declaring this strategy has two sides, an add side and a remove side, and a body carries them in one of three shapes. Every vocabulary in this specification uses one of the three, and a conforming reader MUST accept all three, because §7.1 is not computable from a strategy whose body shapes are not stated:
+  - **Nested** — the declared field holds an object whose `add` and `remove` members are the two sides. Either member MAY be absent.
+  - **Flat** — `add` and `remove` are themselves declared fields of the op, each carrying its own side. This is the shape review and issue `assign` and `label` operations use. Either field MAY be absent. The two are one operation on one set, so both sides are read together and both are subject to §7.1: an operation whose `remove` side is malformed is uninterpretable even where a reader reaches it by way of the `add` field.
+  - **Scalar** — the declared field carries one side's items directly and the operation's `op_type` says which side, as project and cycle `add-issue` and `remove-issue` do.
+- **A side holds a string or an array of strings,** exactly as a `set-union` field does (§5.3): a single item needs no array around it. A side the body does not carry is not a write of that side and has no effect.
 - **Mechanism:**
   - An add operation $a \in S$ adds an element $x$.
   - A remove operation $r \in S$ removes an element $x$ and targets all add operations of $x$ in its causal past ($a \prec r$).
@@ -225,7 +230,7 @@ strategy requires a spec amendment.
     $$\text{present}(x) \iff \exists a \in S \text{ s.t. } \text{adds}(a, x) \land (\forall r \in S \text{ s.t. } \text{removes}(r, x), a \not\prec r)$$
 - **Concurrency behavior:** If an addition $a$ and removal $r$ of the same element $x$ are concurrent ($a \parallel r$), the addition wins and $x$ is present in the folded set.
 - **Empty elements are dropped:** As in `set-union` (§5.3), an element whose value, after any normalization the field declares, is the empty string MUST NOT enter either the add side or the remove side of the OR-set. This rule applies to **every** item-valued field regardless of its op type — `label` items are dropped on the same terms as `assign` items, even though only the latter are normalized before the test.
-- **Elements are strings.** As in `set-union` (§5.3), an element that is not a string — `null` included — makes the whole operation uninterpretable per §7.1, on the add side and the remove side alike. A rejected remove removes nothing: an element it named stays present unless some other operation removes it.
+- **Elements are strings.** As in `set-union` (§5.3), an element that is not a string — `null` included — makes the whole operation uninterpretable per §7.1, on the add side and the remove side alike, in all three body shapes. A side that is present and is neither a string nor an array of strings does so too, and a side whose value is `null` is such a side: an explicitly written side holding no value is a write claimed with no value in it, which is what §7.1 says `null` is. Reading it as an absent side instead would make `{"add": null}` and `{}` fold identically, which is exactly the objection §7.1 raises against skipping. A rejected remove removes nothing: an element it named stays present unless some other operation removes it.
 - **Result:** Present elements emitted in canonical sorted order. An operation whose elements are all dropped still counts as a write of the field: the field is present in the generic folded state map with the empty set as its value. Typed domain serializations MAY omit an empty collection rather than emitting it.
 
 #### 5. `append`
@@ -277,7 +282,7 @@ forward compatibility rules (WRIT-15):
 - Unknown operations remain full members of the restricted DAG: they participate in $t^*$ calculation and the total order $L$, maintaining causal relationships for any descendant operations.
 - An unknown operation contributes no field writes to recognized fields.
 
-## 7.1 Uninterpretable operations
+### 7.1 Uninterpretable operations
 
 A field with a declared merge rule can arrive carrying a JSON value its
 strategy cannot consume: a `set-union` field holding a number, a `keyed-lww`
@@ -305,9 +310,12 @@ consume, as each strategy states in §5. A conforming reader MUST:
    intact.
 
 **`null` is named as its own case** and is treated identically to a value of
-the wrong type, wherever a strategy consumes a value: at the field, and as an
-element of a collection the strategy consumes. It is not a value; it is a write
-claimed with no value in it.
+the wrong type, wherever a strategy consumes a value: at the field, as an
+element of a collection the strategy consumes, and at a named side of a
+collection that has sides — an OR-set `add` or `remove` that is present and
+holds `null` (§5.4). It is not a value; it is a write claimed with no value in
+it. A side the body does not carry at all is a different case and is not a
+write: absent is absent, and `{"add": null}` is not the same claim as `{}`.
 
 **Scope.** This rule reaches only fields that have a declared merge rule. It
 does **not** touch forward compatibility:
@@ -329,7 +337,7 @@ does **not** touch forward compatibility:
   rejecting it: the fold catalogue declares strategies, not types, and the
   vocabulary schemas are the one place types are declared.
 
-### Why rejection, and not coercion or skipping
+#### Why rejection, and not coercion or skipping
 
 Recorded because the alternatives are the obvious ones and both are worse
 (WRIT-124, WRIT-126).

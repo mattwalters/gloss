@@ -72,7 +72,7 @@ func ruleAccepts(r Rule, body map[string]any) bool {
 	case "set-union":
 		return isStringOrStringSlice(v)
 	case "set-observed-remove":
-		return orSetAccepts(v)
+		return orSetAccepts(r.Field, v, body)
 	case "tombstone":
 		_, ok := v.(bool)
 		return ok
@@ -102,31 +102,81 @@ func appendAccepts(v any) bool {
 	return true
 }
 
-// orSetAccepts reports whether v carries OR-set items. Three shapes reach
-// this, and every vocabulary in the spec uses one of them:
+// orSetAccepts reports whether v carries OR-set items. Three body shapes reach
+// this, and every vocabulary in the spec uses one of them (spec/fold.md §5.4):
 //
 //   - nested, where the declared field holds an object with `add` and `remove`
-//     members (each an array of items);
+//     members;
 //   - flat, where `add` and `remove` are themselves the declared fields
 //     (review and issue assignees and labels);
 //   - scalar, where the declared field holds one item and the op type carries
 //     which side it lands on (project and cycle `issue`).
 //
-// The items are strings in all three.
-func orSetAccepts(v any) bool {
+// A side holds a string or an array of strings, exactly as a set-union field
+// does. An absent side is not a write and is accepted; a side that is present
+// and holds null is not — it is a write claimed with no value in it, which
+// §7.1 rejects wherever a strategy consumes a value. Reading it as an absent
+// side instead would make `{"add": null}` and `{}` byte-identical in folded
+// state, which is the objection §7.1 raises against skipping.
+//
+// In the flat shape the reducer for one declared field also reads the sibling
+// side out of the same body, so this inspects it too. A vocabulary normally
+// declares a rule for both `add` and `remove`, which makes the sibling check
+// redundant — but only normally, and a predicate that skipped a side the
+// reducer goes on to consume is the disagreement this file exists to prevent.
+func orSetAccepts(field string, v any, body map[string]any) bool {
+	sideOK := func(member any, present bool) bool {
+		return !present || isStringOrStringSlice(member)
+	}
+
 	if obj, ok := v.(map[string]any); ok {
 		for _, side := range []string{"add", "remove"} {
 			member, present := obj[side]
-			if !present || member == nil {
-				continue
-			}
-			if !isStringSlice(member) {
+			if !sideOK(member, present) {
 				return false
 			}
 		}
 		return true
 	}
+
+	if field == "add" || field == "remove" {
+		sibling := "remove"
+		if field == "remove" {
+			sibling = "add"
+		}
+		member, present := body[sibling]
+		if !sideOK(member, present) {
+			return false
+		}
+	}
 	return isStringOrStringSlice(v)
+}
+
+// orSetItems returns the items one side of an OR-set body carries. The side
+// holds a string or an array of strings; anything else made the op
+// uninterpretable (§7.1) before it reached a reducer, so a non-string here is
+// unreachable and skipped rather than rendered.
+//
+// This is the reducer half of orSetAccepts and MUST consume exactly what that
+// accepts. They disagreed once: the predicate took a bare string on a side and
+// the reducer read only arrays, so `{"add": "solo"}` folded to the empty set —
+// the silent drop that "skip invents an absence" names.
+func orSetItems(raw any) []string {
+	switch v := raw.(type) {
+	case string:
+		return []string{v}
+	case []any:
+		items := make([]string, 0, len(v))
+		for _, it := range v {
+			if s, ok := it.(string); ok {
+				items = append(items, s)
+			}
+		}
+		return items
+	case []string:
+		return v
+	}
+	return nil
 }
 
 func isString(v any) bool {
@@ -135,8 +185,10 @@ func isString(v any) bool {
 }
 
 // isStringSlice reports whether v is an array whose every element is a string.
-// The []string arm exists because a body assembled in Go rather than decoded
-// from JSON can carry one; a decoded body never does.
+// The []string arm exists for parity with the reducers, which carry one of
+// their own: a body decoded from JSON never holds a []string, but a body
+// assembled in Go can, and a predicate that rejected what a reducer would have
+// consumed is the disagreement this file exists to prevent.
 func isStringSlice(v any) bool {
 	switch slice := v.(type) {
 	case []any:

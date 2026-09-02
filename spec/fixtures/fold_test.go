@@ -90,12 +90,6 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 		}
 	}
 
-	// Known op types from field rules
-	knownOps := make(map[string]bool)
-	for _, r := range rules {
-		knownOps[fmt.Sprintf("%s:%d", r.OpType, r.OpVersion)] = true
-	}
-
 	var golden FoldGolden
 
 	opsByObject := enumRes.Ops
@@ -152,7 +146,6 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 
 		var orderOps []spec.OrderOp
 		var mergeOps []spec.MergeOp
-		var unknownOps []FoldUnknownOp
 
 		for _, cop := range codecOps {
 			orderOps = append(orderOps, spec.OrderOp{
@@ -181,16 +174,6 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 				OpVersion: cop.OpVersion,
 				Body:      body,
 			})
-
-			opKey := fmt.Sprintf("%s:%d", cop.OpType, cop.OpVersion)
-			if !knownOps[opKey] {
-				unknownOps = append(unknownOps, FoldUnknownOp{
-					Commit:    cop.ID,
-					Label:     shaToLabel[cop.ID],
-					OpType:    cop.OpType,
-					OpVersion: cop.OpVersion,
-				})
-			}
 		}
 
 		effectiveTimes := spec.EffectiveTimes(orderOps, objID)
@@ -204,6 +187,33 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 			return nil, fmt.Errorf("fold for object %s: %w", objID, err)
 		}
 		foldedState := folded.State
+
+		// The golden's unknown_ops is the fold's own quarantine channel, not a
+		// second guess at it. Two populations reach that channel and
+		// spec/fold.md §7.1 rule 2 puts them in the same one: an op whose
+		// (op_type, op_version) no rule claims (§7), and an op a declared rule
+		// found uninterpretable (§7.1). Deriving the list from the rule table
+		// alone would see only the first, and a fixture repo carrying a
+		// malformed body would emit a golden that omits an op both folds
+		// quarantine — a normatively wrong golden in the artifact that is the
+		// spec. Ordering stays the fixture's own commit order rather than the
+		// total order, which is what these goldens already record.
+		quarantined := make(map[string]bool, len(folded.UnknownOps))
+		for _, id := range folded.UnknownOps {
+			quarantined[id] = true
+		}
+		var unknownOps []FoldUnknownOp
+		for _, cop := range codecOps {
+			if !quarantined[cop.ID] {
+				continue
+			}
+			unknownOps = append(unknownOps, FoldUnknownOp{
+				Commit:    cop.ID,
+				Label:     shaToLabel[cop.ID],
+				OpType:    cop.OpType,
+				OpVersion: cop.OpVersion,
+			})
+		}
 
 		// Cross-check: public writ.Fold produces byte-identical canonical state and total order
 		var writRules []writ.Rule

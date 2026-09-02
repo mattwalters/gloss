@@ -608,10 +608,7 @@ type FoldResult struct {
 // context collar is null is well formed.
 func uninterpretable(op MergeOp, rules []FieldRule) bool {
 	for _, r := range rules {
-		if r.OpType != "" && r.OpType != op.OpType {
-			continue
-		}
-		if r.OpVersion != 0 && op.OpVersion != 0 && r.OpVersion != op.OpVersion {
+		if !opMatchesRule(op, r) {
 			continue
 		}
 		if !ruleAccepts(r, op.Body) {
@@ -619,6 +616,46 @@ func uninterpretable(op MergeOp, rules []FieldRule) bool {
 		}
 	}
 	return false
+}
+
+// opMatchesRule reports whether rule r governs op. An empty OpType or a zero
+// OpVersion on the rule, or a zero OpVersion on the op, matches anything.
+func opMatchesRule(op MergeOp, r FieldRule) bool {
+	if r.OpType != "" && r.OpType != op.OpType {
+		return false
+	}
+	if r.OpVersion != 0 && op.OpVersion != 0 && r.OpVersion != op.OpVersion {
+		return false
+	}
+	return true
+}
+
+// refOrSetItems returns the items one side of an OR-set body carries. The side
+// holds a string or an array of strings; anything else made the op
+// uninterpretable (spec/fold.md §7.1) before it reached here, so a non-string
+// is unreachable and skipped rather than rendered.
+//
+// This is the reducer half of ruleAccepts's set-observed-remove arm and MUST
+// consume exactly what that accepts. They disagreed once: the predicate took a
+// bare string on a side and the reducer read only arrays, so `{"add": "solo"}`
+// folded to the empty set — the silent drop that "skip invents an absence"
+// names.
+func refOrSetItems(raw any) []string {
+	switch v := raw.(type) {
+	case string:
+		return []string{v}
+	case []any:
+		items := make([]string, 0, len(v))
+		for _, it := range v {
+			if s, ok := it.(string); ok {
+				items = append(items, s)
+			}
+		}
+		return items
+	case []string:
+		return v
+	}
+	return nil
 }
 
 // ruleAccepts reports whether body carries a value rule r's strategy can
@@ -661,17 +698,44 @@ func ruleAccepts(r FieldRule, body map[string]any) bool {
 	case "set-union":
 		return isRefStringOrStringSlice(v)
 	case "set-observed-remove":
+		// Three body shapes reach this and every vocabulary uses one of them
+		// (spec/fold.md §5.4): nested, where the field holds an object with
+		// `add` and `remove` members; flat, where `add` and `remove` are
+		// themselves the declared fields; and scalar, where the field holds
+		// one item and the op type carries the side. A side holds a string or
+		// an array of strings, as a set-union field does. An absent side is
+		// not a write and is accepted; a side present and holding null is a
+		// write claimed with no value in it, and is rejected — reading it as
+		// absent would make `{"add": null}` and `{}` byte-identical in folded
+		// state.
+		//
+		// In the flat shape the reducer for one declared field also reads the
+		// sibling side out of the same body, so this inspects it too. A
+		// vocabulary normally declares a rule for both `add` and `remove`,
+		// which makes that redundant — but only normally, and a predicate that
+		// skipped a side the reducer goes on to consume is the disagreement
+		// this check exists to prevent.
+		sideOK := func(member any, present bool) bool {
+			return !present || isRefStringOrStringSlice(member)
+		}
 		if obj, ok := v.(map[string]any); ok {
 			for _, side := range []string{"add", "remove"} {
 				member, sidePresent := obj[side]
-				if !sidePresent || member == nil {
-					continue
-				}
-				if !isRefStringSlice(member) {
+				if !sideOK(member, sidePresent) {
 					return false
 				}
 			}
 			return true
+		}
+		if r.Field == "add" || r.Field == "remove" {
+			sibling := "remove"
+			if r.Field == "remove" {
+				sibling = "add"
+			}
+			member, sidePresent := body[sibling]
+			if !sideOK(member, sidePresent) {
+				return false
+			}
 		}
 		return isRefStringOrStringSlice(v)
 	case "tombstone":
@@ -746,17 +810,6 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 	ancestors := BuildReachabilityMap(ops, inSet)
 	isAncestor := func(a, b string) bool {
 		return ancestors[b][a]
-	}
-
-	// Helper to check if an op matches a rule
-	opMatchesRule := func(op MergeOp, r FieldRule) bool {
-		if r.OpType != "" && r.OpType != op.OpType {
-			return false
-		}
-		if r.OpVersion != 0 && op.OpVersion != 0 && r.OpVersion != op.OpVersion {
-			return false
-		}
-		return true
 	}
 
 	// Quarantine, in total order, the ops that contribute no field writes: ops
@@ -943,39 +996,18 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 								return it
 							}
 
-							// Every item is a string; see the set-union arm.
-							if slice, ok := addRaw.([]any); ok {
-								for _, it := range slice {
-									s, isStr := it.(string)
-									if !isStr {
-										continue
-									}
-									if item := normalizeItem(s); item != "" {
-										adds = append(adds, addRecord{opID: op.ID, item: item})
-									}
-								}
-							} else if slice, ok := addRaw.([]string); ok {
-								for _, it := range slice {
-									if item := normalizeItem(it); item != "" {
-										adds = append(adds, addRecord{opID: op.ID, item: item})
-									}
+							// Every item is a string; see the set-union arm. A
+							// side holds one item or an array of them, and
+							// refOrSetItems consumes exactly what ruleAccepts
+							// admitted.
+							for _, it := range refOrSetItems(addRaw) {
+								if item := normalizeItem(it); item != "" {
+									adds = append(adds, addRecord{opID: op.ID, item: item})
 								}
 							}
-							if slice, ok := remRaw.([]any); ok {
-								for _, it := range slice {
-									s, isStr := it.(string)
-									if !isStr {
-										continue
-									}
-									if item := normalizeItem(s); item != "" {
-										removes = append(removes, removeRecord{opID: op.ID, item: item})
-									}
-								}
-							} else if slice, ok := remRaw.([]string); ok {
-								for _, it := range slice {
-									if item := normalizeItem(it); item != "" {
-										removes = append(removes, removeRecord{opID: op.ID, item: item})
-									}
+							for _, it := range refOrSetItems(remRaw) {
+								if item := normalizeItem(it); item != "" {
+									removes = append(removes, removeRecord{opID: op.ID, item: item})
 								}
 							}
 						}
