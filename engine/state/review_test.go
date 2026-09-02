@@ -892,6 +892,7 @@ func TestFoldReviewOrSetBodyShapes(t *testing.T) {
 		labelOp("l3", "l2", `{"add":null}`, 300),
 		labelOp("l4", "l3", `{"add":["never"],"remove":["triage",7]}`, 400),
 		labelOp("l5", "l4", `{"add":["kept"],"remove":["urgent"]}`, 500),
+		labelOp("l6-remove-only", "l5", `{"remove":["solo"]}`, 600),
 	}
 
 	review, err := s.FoldReview(ops)
@@ -901,8 +902,8 @@ func TestFoldReviewOrSetBodyShapes(t *testing.T) {
 
 	// l2's bare string is one item. l3 and l4 are uninterpretable, so l4's
 	// well-formed `never` dies with the operation and its malformed remove of
-	// `triage` removes nothing.
-	want := []string{"kept", "solo", "triage"}
+	// `triage` removes nothing. l6-remove-only causally removes `solo`.
+	want := []string{"kept", "triage"}
 	if !reflect.DeepEqual(review.Labels, want) {
 		t.Errorf("Labels = %v, want %v", review.Labels, want)
 	}
@@ -917,6 +918,50 @@ func TestFoldReviewOrSetBodyShapes(t *testing.T) {
 	}
 
 	// The generic fold must reach the same set through the same rules.
+	generic, err := s.Fold(ops, s.ReviewRules())
+	if err != nil {
+		t.Fatalf("Fold: %v", err)
+	}
+	if !reflect.DeepEqual(generic.State["add"], want) {
+		t.Errorf("generic add = %v, want %v", generic.State["add"], want)
+	}
+}
+
+func TestFoldReviewNestedShapeAtFlatField(t *testing.T) {
+	labelOp := func(id, parent, body string, when int64) codec.Op {
+		op := codec.Op{
+			Envelope: codec.Envelope{
+				ObjectID:   "r-nested",
+				ObjectType: "review",
+				OpType:     "label",
+				OpVersion:  1,
+				Body:       json.RawMessage(body),
+			},
+			ID:     id,
+			Author: codec.Identity{When: time.Unix(when, 0).UTC()},
+		}
+		if parent != "" {
+			op.Parents = []string{parent}
+		}
+		return op
+	}
+
+	ops := []codec.Op{
+		labelOp("l1", "", `{"add":{"add":["feature","urgent"],"remove":[]}}`, 100),
+		labelOp("l2", "l1", `{"add":{"remove":["urgent"]}}`, 200),
+		labelOp("l3", "l2", `{"remove":{"add":["bug"],"remove":["feature"]}}`, 300),
+	}
+
+	review, err := s.FoldReview(ops)
+	if err != nil {
+		t.Fatalf("FoldReview: %v", err)
+	}
+
+	want := []string{"bug"}
+	if !reflect.DeepEqual(review.Labels, want) {
+		t.Errorf("Labels = %v, want %v", review.Labels, want)
+	}
+
 	generic, err := s.Fold(ops, s.ReviewRules())
 	if err != nil {
 		t.Fatalf("Fold: %v", err)

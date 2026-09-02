@@ -49,7 +49,6 @@
         "add": [
           "email:alice@example.com",
           "keybase:alice",
-          "user:alice",
           "user:ci",
           "user:dana"
         ],
@@ -82,7 +81,12 @@
             "value": "Bob under the user scheme"
           }
         ],
-        "remove": [],
+        "remove": [
+          "email:alice@example.com",
+          "keybase:alice",
+          "user:ci",
+          "user:dana"
+        ],
         "revision": [
           {
             "key": [

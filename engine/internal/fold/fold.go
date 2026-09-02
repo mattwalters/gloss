@@ -136,7 +136,17 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 			}
 			if opMatchesRule(o.Op, r) {
 				bm := bodyMap[o.Op.ID]
+				hasWrite := false
 				if _, present := bm[r.Field]; present || o.Op.OpType == "delete" || o.Op.OpType == "undelete" {
+					hasWrite = true
+				} else if r.Strategy == "set-observed-remove" {
+					if r.Field == "add" && bm["remove"] != nil {
+						hasWrite = true
+					} else if r.Field == "remove" && bm["add"] != nil {
+						hasWrite = true
+					}
+				}
+				if hasWrite {
 					matchedRulesByField[r.Field] = append(matchedRulesByField[r.Field], r)
 					break
 				}

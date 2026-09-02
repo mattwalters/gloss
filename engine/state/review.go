@@ -106,24 +106,26 @@ func FoldReview(ops []codec.Op) (Review, error) {
 			}
 
 		case "assign":
-			for _, it := range stringItems(body["add"]) {
+			adds, removes := extractOrSetItems(body, "add", "remove")
+			for _, it := range adds {
 				if item := NormalizePerson(it); item != "" {
 					assignAdds = append(assignAdds, orSetRecord{opID: op.ID, item: item})
 				}
 			}
-			for _, it := range stringItems(body["remove"]) {
+			for _, it := range removes {
 				if item := NormalizePerson(it); item != "" {
 					assignRemoves = append(assignRemoves, orSetRecord{opID: op.ID, item: item})
 				}
 			}
 
 		case "label":
-			for _, it := range stringItems(body["add"]) {
+			adds, removes := extractOrSetItems(body, "add", "remove")
+			for _, it := range adds {
 				if it != "" {
 					labelAdds = append(labelAdds, orSetRecord{opID: op.ID, item: it})
 				}
 			}
-			for _, it := range stringItems(body["remove"]) {
+			for _, it := range removes {
 				if it != "" {
 					labelRemoves = append(labelRemoves, orSetRecord{opID: op.ID, item: it})
 				}

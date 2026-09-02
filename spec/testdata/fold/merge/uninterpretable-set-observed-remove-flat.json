@@ -1,6 +1,6 @@
 {
   "name": "uninterpretable-set-observed-remove-flat",
-  "description": "The same rule on the flat body shape (§5.4), where `add` and `remove` are themselves the declared fields rather than members of an object under one. This is the shape review and issue `assign` and `label` operations actually use, and the one four of the five hand-written reducers implement, so it is the path that ships. A side holds a string or an array of strings: a bare string is one item, and a side that is present and holds null is a write claimed with no value in it and is rejected. Every operation here carries the declared field, because a side the body does not carry is not a write of that side. Two things about this vector are deliberate departures from the shipped configuration, and both avoid WRIT-153 rather than blessing it: it declares a rule for `add` only, where every shipped vocabulary declares `add` and `remove`; and no operation is remove-only. Written the natural way, a remove-only operation would fold to a state that contradicts the typed reducers — the generic driver gives each declared field its own accumulator, so the `add` accumulator never observes a remove-only operation and the add survives a causally later removal. A vector written that way would record that bug as normative in the artifact that is the spec, so this one does not reach it. WRIT-153 fixes the bug and widens this vector",
+  "description": "The same rule on the flat body shape (§5.4), where `add` and `remove` are themselves the declared fields rather than members of an object under one. This is the shape review and issue `assign` and `label` operations actually use. A side holds a string or an array of strings: a bare string is one item, and a side that is present and holds null is a write claimed with no value in it and is rejected. Remove-only operations apply removals to additions carried by causally preceding operations",
   "object_id": "obj-1",
   "fields": {
     "add": { "strategy": "set-observed-remove" }
@@ -70,10 +70,19 @@
         "add": ["kept"],
         "remove": ["urgent"]
       }
+    },
+    {
+      "id": "op-h-remove-only",
+      "parents": ["op-g-good-remove"],
+      "time": 800,
+      "object_id": "obj-1",
+      "body": {
+        "remove": ["solo"]
+      }
     }
   ],
   "expected_state": {
-    "add": ["kept", "solo", "triage"]
+    "add": ["kept", "triage"]
   },
   "expected_unknown_ops": [
     "op-c-number-item",

@@ -370,6 +370,42 @@ func TestFoldProjectAgreement(t *testing.T) {
 			},
 			Author: codec.Identity{Email: "alice@example.com", When: now.Add(2 * time.Minute)},
 		},
+		{
+			ID:      "iss1",
+			Parents: []string{"s1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "p-agree",
+				ObjectType: "project",
+				OpType:     "add-issue",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"issue":"ISSUE-1"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(3 * time.Minute)},
+		},
+		{
+			ID:      "iss2",
+			Parents: []string{"iss1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "p-agree",
+				ObjectType: "project",
+				OpType:     "add-issue",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"issue":"ISSUE-2"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(4 * time.Minute)},
+		},
+		{
+			ID:      "iss3",
+			Parents: []string{"iss2"},
+			Envelope: codec.Envelope{
+				ObjectID:   "p-agree",
+				ObjectType: "project",
+				OpType:     "remove-issue",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"issue":"ISSUE-1"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(5 * time.Minute)},
+		},
 	}
 
 	projectState, err := s.FoldProject(ops)
@@ -393,5 +429,68 @@ func TestFoldProjectAgreement(t *testing.T) {
 	}
 	if projectState.Reason != objectState.State["reason"] {
 		t.Errorf("reason mismatch: got %q, want %v", projectState.Reason, objectState.State["reason"])
+	}
+	if !reflect.DeepEqual(projectState.Issues, objectState.State["issue"]) {
+		t.Errorf("issues mismatch: got %v, want %v", projectState.Issues, objectState.State["issue"])
+	}
+}
+
+func TestFoldProjectScalarAndNestedMembership(t *testing.T) {
+	now := time.Unix(100, 0).UTC()
+
+	ops := []codec.Op{
+		{
+			ID: "op1",
+			Envelope: codec.Envelope{
+				ObjectID:   "p-mem",
+				ObjectType: "project",
+				OpType:     "add-issue",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"issue":["ISSUE-1","ISSUE-2"]}`),
+			},
+			Author: codec.Identity{When: now},
+		},
+		{
+			ID:      "op2",
+			Parents: []string{"op1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "p-mem",
+				ObjectType: "project",
+				OpType:     "remove-issue",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"issue":"ISSUE-1"}`),
+			},
+			Author: codec.Identity{When: now.Add(time.Minute)},
+		},
+		{
+			ID:      "op3",
+			Parents: []string{"op2"},
+			Envelope: codec.Envelope{
+				ObjectID:   "p-mem",
+				ObjectType: "project",
+				OpType:     "add-issue",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"issue":{"add":["ISSUE-3"],"remove":["ISSUE-2"]}}`),
+			},
+			Author: codec.Identity{When: now.Add(2 * time.Minute)},
+		},
+	}
+
+	projectState, err := s.FoldProject(ops)
+	if err != nil {
+		t.Fatalf("FoldProject failed: %v", err)
+	}
+
+	objectState, err := s.Fold(ops, s.ProjectRules())
+	if err != nil {
+		t.Fatalf("Fold failed: %v", err)
+	}
+
+	wantIssues := []string{"ISSUE-3"}
+	if !reflect.DeepEqual(projectState.Issues, wantIssues) {
+		t.Errorf("FoldProject issues = %v, want %v", projectState.Issues, wantIssues)
+	}
+	if !reflect.DeepEqual(objectState.State["issue"], wantIssues) {
+		t.Errorf("Fold generic issue = %v, want %v", objectState.State["issue"], wantIssues)
 	}
 }

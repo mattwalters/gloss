@@ -220,8 +220,8 @@ strategy requires a spec amendment.
 - **Initial state:** Empty set $\emptyset$.
 - **Body shapes.** A field declaring this strategy has two sides, an add side and a remove side, and a body carries them in one of three shapes. Every vocabulary in this specification uses one of the three, and a conforming reader MUST accept all three, because §7.1 is not computable from a strategy whose body shapes are not stated:
   - **Nested** — the declared field holds an object whose `add` and `remove` members are the two sides. Either member MAY be absent.
-  - **Flat** — `add` and `remove` are themselves declared fields of the op, each carrying its own side. This is the shape review and issue `assign` and `label` operations use. Either field MAY be absent. The two are one operation on one set, so both sides are read together and both are subject to §7.1: an operation whose `remove` side is malformed is uninterpretable even where a reader reaches it by way of the `add` field.
-  - **Scalar** — the declared field carries one side's items directly and the operation's `op_type` says which side, as project and cycle `add-issue` and `remove-issue` do.
+  - **Flat** — `add` and `remove` are themselves declared fields of the op, each carrying its own side. This is the shape review and issue `assign` and `label` operations use. Either field MAY be absent. The two are one operation on one set, so both sides are read together and both are subject to §7.1: an operation whose `remove` side is malformed is uninterpretable even where a reader reaches it by way of the `add` field. A reader MUST apply removals to additions carried by other operations even when the removal op carries no `add` field, and MUST accept the nested shape present at a flat-declared field.
+  - **Scalar** — the declared field carries one side's items directly and the operation's `op_type` says which side (an `add-*` or `add` op type maps to the add side, and a `remove-*` or `remove` op type maps to the remove side), as project and cycle `add-issue` and `remove-issue` do.
 - **A side holds a string or an array of strings,** exactly as a `set-union` field does (§5.3): a single item needs no array around it. A side the body does not carry is not a write of that side and has no effect.
 - **Mechanism:**
   - An add operation $a \in S$ adds an element $x$.
@@ -255,7 +255,7 @@ strategy requires a spec amendment.
 - **Initial state:** The bottom element $\bot$ of the declared semilattice.
 - **Semantics:** The field's allowed values form a bounded join-semilattice $(V, \sqcup, \le)$ with partial order $\le$ and join operation $\sqcup$.
 - **Reduction:** When an operation writes value $v \in V$, the new state is $\text{state} \sqcup v$.
-- **The value is a string.** A value of any other JSON type — `null` included — makes the whole operation uninterpretable per §7.1. A value that *is* a string but is not a declared element of $V$ is a different case and MUST NOT be rejected: it is a status from a later version of the vocabulary, which the preserve-and-ignore rule covers. It leaves the state unchanged.
+- **The value is a string.** A value of any other JSON type — `null` included — makes the whole operation uninterpretable per §7.1. A value that *is* a string but is not a declared element of $V$ is a different case and MUST NOT be rejected: it is a status from a later version of the vocabulary, which the forward-compatibility preserve-and-ignore rule (`spec/forward-compatibility.md` FC-1) covers. It leaves the lattice state unchanged without quarantining the operation, so that sibling field updates carried in the same operation materialize normally.
 - **Result:** Because $\sqcup$ is associative, commutative, and idempotent, concurrent transitions $u \parallel v$ reconcile deterministically to $v_u \sqcup v_v$ regardless of arrival or topological order.
 
 #### 8. `keyed-lww` (Keyed Last-Writer-Wins registers)

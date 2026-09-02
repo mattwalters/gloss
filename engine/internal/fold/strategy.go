@@ -180,14 +180,23 @@ func (a *setObservedRemoveAccumulator) Apply(op codec.Op, body map[string]any, _
 	if bodyMap, ok := body[a.field].(map[string]any); ok {
 		addRaw = bodyMap["add"]
 		remRaw = bodyMap["remove"]
+	} else if a.field == "add" || a.field == "remove" {
+		if m, ok := body["add"].(map[string]any); ok {
+			addRaw = m["add"]
+			remRaw = m["remove"]
+		} else if m, ok := body["remove"].(map[string]any); ok {
+			addRaw = m["add"]
+			remRaw = m["remove"]
+		} else {
+			addRaw = body["add"]
+			remRaw = body["remove"]
+		}
 	} else {
 		if raw, ok := body[a.field]; ok && raw != nil {
-			if a.field == "add" {
+			if (len(op.OpType) >= 4 && op.OpType[:4] == "add-") || op.OpType == "add" {
 				addRaw = raw
-				remRaw = body["remove"]
-			} else if a.field == "remove" {
+			} else if (len(op.OpType) >= 7 && op.OpType[:7] == "remove-") || op.OpType == "remove" {
 				remRaw = raw
-				addRaw = body["add"]
 			}
 		}
 	}
