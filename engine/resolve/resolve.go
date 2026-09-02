@@ -18,6 +18,31 @@ type Context struct {
 	After   []string `json:"after"`
 }
 
+// MarshalJSON serializes Context with before, lines and after always present as
+// JSON arrays.
+//
+// spec/schemas/anchor.schema.json requires all three as arrays, and a nil Go
+// slice marshals to null, which is not one. The absent collar is ordinary, not
+// exceptional: a comment on the first line of a file has nothing before it and
+// a comment on the last line has nothing after it, and both are built with the
+// zero value for those fields. Normalizing here rather than at each of the
+// callers is the domain-layer transform the producer check depends on — the
+// codec judges the bytes, it cannot fix them.
+func (c Context) MarshalJSON() ([]byte, error) {
+	type alias Context
+	a := alias(c)
+	if a.Before == nil {
+		a.Before = []string{}
+	}
+	if a.Lines == nil {
+		a.Lines = []string{}
+	}
+	if a.After == nil {
+		a.After = []string{}
+	}
+	return json.Marshal(a)
+}
+
 // SideAnchor describes the position in a specific commit's tree (old or new side).
 type SideAnchor struct {
 	Commit  string                     `json:"commit"`

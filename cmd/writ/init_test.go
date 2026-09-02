@@ -337,7 +337,7 @@ func TestInit_E2E_PlainGitFetch(t *testing.T) {
 		t.Fatalf("dag.Open clone A: %v", err)
 	}
 
-	bodyBytes, _ := json.Marshal(map[string]any{"action": "create"})
+	bodyBytes, _ := json.Marshal(map[string]any{"title": "Initial"})
 	envOp := codec.Envelope{
 		ObjectID:   "rev-1234567890abcdef",
 		ObjectType: "review",

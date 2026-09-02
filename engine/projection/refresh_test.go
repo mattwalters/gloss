@@ -207,7 +207,7 @@ func TestNewWriterNamespaceDetected(t *testing.T) {
 	envB := makeReviewEnv("rev-multi", "approval", 1, map[string]any{
 		"subject":  "email:writerb@example.com",
 		"revision": "0000000000000000000000000000000000000001",
-		"verdict":  "approved",
+		"verdict":  "approve",
 		"message":  "Looks great!",
 	})
 	_, err = storeB.Append(ctx, envB, nil)
@@ -229,8 +229,8 @@ func TestNewWriterNamespaceDetected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query approval failed: %v", err)
 	}
-	if verdict != "approved" {
-		t.Fatalf("expected verdict 'approved', got %q", verdict)
+	if verdict != "approve" {
+		t.Fatalf("expected verdict 'approve', got %q", verdict)
 	}
 
 	// Verify equal to cold rebuild

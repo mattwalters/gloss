@@ -99,3 +99,47 @@ func TestConformanceVectors(t *testing.T) {
 		})
 	}
 }
+
+// TestContextMarshalsAbsentCollarAsArray pins the domain-layer transform that
+// keeps an edge-of-file anchor writable. anchor.schema.json requires before,
+// lines and after as arrays; a nil Go slice marshals to null, and the fields
+// carry no omitempty, so the zero value has to serialize as an empty array
+// rather than null. A comment on the first or last line of a file is the
+// ordinary way to reach it.
+func TestContextMarshalsAbsentCollarAsArray(t *testing.T) {
+	raw, err := json.Marshal(resolve.Context{Lines: []string{"only line"}})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	want := `{"before":[],"lines":["only line"],"after":[]}`
+	if string(raw) != want {
+		t.Errorf("got %s, want %s", raw, want)
+	}
+
+	// Round-tripping keeps the same shape.
+	var back resolve.Context
+	if err := json.Unmarshal(raw, &back); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	again, err := json.Marshal(back)
+	if err != nil {
+		t.Fatalf("re-marshal: %v", err)
+	}
+	if string(again) != want {
+		t.Errorf("round trip got %s, want %s", again, want)
+	}
+
+	// A populated collar is untouched, omitted included.
+	full, err := json.Marshal(resolve.Context{
+		Before:  []string{"a"},
+		Lines:   []string{"b"},
+		Omitted: 2,
+		After:   []string{"c"},
+	})
+	if err != nil {
+		t.Fatalf("marshal populated: %v", err)
+	}
+	if wantFull := `{"before":["a"],"lines":["b"],"omitted":2,"after":["c"]}`; string(full) != wantFull {
+		t.Errorf("got %s, want %s", full, wantFull)
+	}
+}

@@ -16,11 +16,12 @@
 //	}
 //	defer store.Close()
 //
-//	// Create a code review
+//	// Create a code review. Base and Head are commit OIDs, not ref names —
+//	// resolve refs before calling (git rev-parse, or go-git's ResolveRevision).
 //	reviewID, err := store.Reviews.Create(ctx, writ.NewReview{
 //	    Title: "Add OAuth2 authentication provider",
-//	    Base:  "main",
-//	    Head:  "feature/oauth2",
+//	    Base:  "e83c5163316f89bfbde7d9ab23ca2e25604af290",
+//	    Head:  "1f7a7a472abf3dd9643fd615f6da379c4acb3e3a",
 //	})
 //
 //	// Query reviews
