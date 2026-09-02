@@ -64,7 +64,8 @@ var normalizePersonInputs = []string{
 	"user:Jos\u00e9",                          // and leaves the precomposed spelling alone
 	"user:\u017f\u0301",                       // folding leaves s+U+0301, which the second NFC composes
 	"user:\u13a0",                             // Cherokee uppercase: a fold fixed point x/text toggles
-	"user:\uab70",                             // Cherokee lowercase, which folds up
+	"user:\uab70",                             // Cherokee lowercase, which folds up (AB70..ABBF -> 13A0..13EF)
+	"user:\u13f8",                             // and Cherokee's *second* fold range (13F8..13FD -> 13F0..13F5)
 	"user:\U00010041\u0300",                   // a supplementary starter that must not compose with its mark
 	"user:\U00011099\U000110ba",               // a supplementary pair that must
 	"user:\U00011347\U0001133e",               // and one whose second element is a starter
