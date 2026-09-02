@@ -250,7 +250,7 @@ One value bound across all schemes, deliberately. A per-scheme bound is a
 second number for two implementations to disagree about, and the bound's job
 does not vary by scheme.
 
-Three rules carry normative weight:
+Four rules carry normative weight:
 
 1. **Reject, never truncate — at any layer.** A producer, a validator, a
    projection, and a client all MUST reject an over-long identifier rather
@@ -275,6 +275,30 @@ Three rules carry normative weight:
    320 counts octets, so a 320-code-point CJK value occupies roughly 960
    bytes. Immaterial for a bound whose job is stopping megabytes — and
    preferable to claiming an octet-exact conformance Writ never performs.
+
+4. **The unit is Unicode code points — not octets, and not UTF-16 code
+   units.** All three coincide on ASCII, which is why nearly every identifier
+   in practice cannot tell them apart, and why an implementation reaching for
+   its language's default length is not obviously wrong until someone with a
+   non-ASCII identifier arrives. Go's `len`, Rust's `String::len` and Python's
+   `len` over `bytes` count octets; JavaScript's `String.prototype.length` and
+   Java's `String.length()` count UTF-16 code units. Neither is the unit here.
+   A conforming implementation MUST count code points, which is what JSON
+   Schema `maxLength` counts.
+
+   This is fixture-enforced rather than left to the prose, because prose
+   cannot fail a build. Three at-limit vectors bracket the bound in the three
+   units — [`value-at-limit.json`](testdata/persons/valid/value-at-limit.json)
+   (ASCII), [`value-at-limit-multibyte.json`](testdata/persons/valid/value-at-limit-multibyte.json)
+   (320 code points, 640 octets) and
+   [`value-at-limit-supplementary.json`](testdata/persons/valid/value-at-limit-supplementary.json)
+   (320 code points, 640 UTF-16 code units) — with an over-limit companion for
+   each under [`testdata/persons/invalid/`](testdata/persons/invalid/). An
+   implementation counting octets rejects the second; one counting UTF-16 code
+   units rejects the third; either way it fails the corpus. `TestPersonIDLengthUnitIsCodePoints`
+   computes those witnesses from the corpus rather than naming them, so
+   deleting the last vector that separates a unit fails the suite instead of
+   quietly reopening the hole.
 
 The number 320 is inherited from the ceiling an RFC 5321 address can reach (a
 64-octet local part, `@`, and a 255-octet domain). It is a starting point that
@@ -586,6 +610,31 @@ reference = [ repo-id "#" ] object-id
    use string comparison of IDs and references as deterministic tiebreakers.
 4. **No interior whitespace:** References MUST NOT contain whitespace, control
    characters, or multiple `#` characters.
+
+### Length bound
+
+A reference string is at most **513 code points**. The number has been in
+[`identifiers.schema.json`](schemas/identifiers.schema.json) since WRIT-16 and
+is written down here for the first time; it is a resource bound on a string
+stored permanently in an append-only log, exactly as the person-identifier
+bound is, and it is likewise enforced **by rejection, never by truncation** —
+a truncated reference points at a different object, or at nothing.
+
+The unit is code points, and the distinction is observable here rather than
+theoretical: `reference`'s pattern is `^([0-9a-f]{32}#)?[^#\s]+$`, whose
+second half admits non-ASCII. Most bounded strings in the schemas are paired
+with an ASCII-only pattern, which makes the units indistinguishable and the
+question moot; `person-id`, `reference` and the anchor schema's `line` (WRIT-154)
+are the three that are not. The bound is bracketed at 512 / 513 / 514 in all
+three units under [`testdata/references/`](testdata/references/), and
+`TestReferenceLengthUnitIsCodePoints` computes the witness that separates each
+unit from the corpus itself.
+
+Producers do not carry a second copy of this number. `codec.BuildCommit`, the
+only constructor of an op commit, validates every body against its vocabulary
+schema (WRIT-129), and the schemas `$ref` this definition — so a producer that
+tried to write an over-long `target` is refused before the commit exists, by
+the same 513 the fixtures enforce.
 
 ### Short forms and presentation
 

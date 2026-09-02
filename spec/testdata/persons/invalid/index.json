@@ -29,6 +29,9 @@
   "value-over-limit-multibyte.json": {
     "reason": "value is 321 code points (642 bytes), over the bound: the bound counts code points, not octets"
   },
+  "value-over-limit-supplementary.json": {
+    "reason": "value is 321 code points (642 UTF-16 code units, 1284 bytes), over the bound: the bound counts code points, not UTF-16 code units and not octets"
+  },
   "value-over-limit.json": {
     "reason": "value is 321 code points, over the 320-code-point bound; rejected, never truncated"
   }

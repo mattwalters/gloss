@@ -31,6 +31,18 @@
     "kind": "schema",
     "reason": "repo designator must contain only hexadecimal digits"
   },
+  "over-limit-multibyte.json": {
+    "kind": "schema",
+    "reason": "reference is 514 code points (1028 bytes), over the 513-code-point bound: the bound counts code points, not octets"
+  },
+  "over-limit-supplementary.json": {
+    "kind": "schema",
+    "reason": "reference is 514 code points (1028 UTF-16 code units, 2056 bytes), over the bound: the bound counts code points, not UTF-16 code units and not octets"
+  },
+  "over-limit.json": {
+    "kind": "schema",
+    "reason": "reference is 514 code points, over the 513-code-point bound; rejected, never truncated"
+  },
   "short-repo-id.json": {
     "kind": "schema",
     "reason": "repo designator must be exactly 32 hexadecimal characters"

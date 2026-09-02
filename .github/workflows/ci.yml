@@ -99,6 +99,33 @@ jobs:
           go-version: "1.25"
       - run: make cli-docs-check
 
+  # Person identifiers carry a scheme (WRIT-102). The migration that
+  # introduced that rule missed instances twice — once by converting spec/ and
+  # stopping, once by a careful review that found six of eight — and both
+  # times a mechanical, field-scoped scan was what found the rest. This is
+  # that scan, run against every commit.
+  #
+  # The field list is derived from spec/schemas/, not written down here, so a
+  # new person position in a schema is checked the moment it exists.
+  # `-list` prints what it derived; that is cheap and worth having in the log
+  # beside a failure.
+  #
+  # It also runs inside `go test ./...` (personscan's TestTreeIsClean), so the
+  # rule bites locally rather than only here. This job exists so the failure
+  # names itself in the checks list instead of arriving as one test among
+  # hundreds.
+  person-scan:
+    name: person-scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - run: go run ./internal/cmd/personscan -list
+      - run: go run ./internal/cmd/personscan .
+
 
   lint:
     name: lint

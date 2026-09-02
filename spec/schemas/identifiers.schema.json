@@ -20,7 +20,7 @@
       "minLength": 3,
       "maxLength": 353,
       "pattern": "^[a-z][a-z0-9+.-]{0,31}:[\\s\\S]{1,320}$",
-      "description": "Person identifier: scheme \":\" value, split on the FIRST colon (an email value may carry a colon in a quoted local part), per spec/identifiers.md. The scheme matches [a-z][a-z0-9+.-]* and is at most 32 characters; the value is 1 to 320 code points. There is no bare, colonless form and no implicit scheme. maxLength 353 is derived (32 + 1 + 320) and stated so a validator seeing only the flat string has a number. The bounds are a resource cap, not an RFC 5321 conformance check: Writ does not parse email addresses, and length is the only shape constraint applied to the value. Bounds are enforced by rejection, never truncation. The value bound applies to the normalized value, which producers MUST have written."
+      "description": "Person identifier: scheme \":\" value, split on the FIRST colon (an email value may carry a colon in a quoted local part), per spec/identifiers.md. The scheme matches [a-z][a-z0-9+.-]* and is at most 32 characters; the value is 1 to 320 code points. There is no bare, colonless form and no implicit scheme. maxLength 353 is derived (32 + 1 + 320) and stated so a validator seeing only the flat string has a number. The bounds are a resource cap, not an RFC 5321 conformance check: Writ does not parse email addresses, and length is the only shape constraint applied to the value. Bounds are enforced by rejection, never truncation. The value bound applies to the normalized value, which producers MUST have written. The unit is Unicode code points, not octets and not UTF-16 code units; the corpus brackets the bound in all three under spec/testdata/persons/."
     },
     "object-id": {
       "type": "string",
@@ -37,7 +37,7 @@
       "minLength": 1,
       "maxLength": 513,
       "pattern": "^([0-9a-f]{32}#)?[^#\\s]+$",
-      "description": "Reference string: optional 32-hex repo-id followed by #, followed by an object-id (canonical 32-hex or envelope-legal opaque ASCII without #)."
+      "description": "Reference string: optional 32-hex repo-id followed by #, followed by an object-id (canonical 32-hex or envelope-legal opaque ASCII without #). maxLength 513 counts code points, not octets and not UTF-16 code units; the pattern's second half admits non-ASCII, so the three units disagree here and the bound is bracketed in all of them under spec/testdata/references/. Enforced by rejection, never truncation: a truncated reference points at a different object. Normative text: spec/identifiers.md §Length bound."
     },
     "canonical-reference": {
       "type": "string",
