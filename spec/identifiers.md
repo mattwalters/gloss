@@ -364,6 +364,16 @@ person" depend on parsing a value this format promises never to interpret
 accepted cost is that an `email:` value is not folded the way an SMTP server
 would fold it. Writ does not deliver mail; it compares strings.
 
+**Stream-Safe Text is not applied.** $\text{NFC}$ above is Normalization Form C
+and nothing else. Implementations MUST NOT insert U+034F COMBINING GRAPHEME
+JOINER, and MUST NOT stop composing, because a value carries a long run of
+combining marks. This is called out because it is a live interoperability trap
+rather than a hypothetical: normalization libraries that implement UAX #15
+Stream-Safe Text apply it by default, and a value with more than 30 consecutive
+non-starters — comfortably inside the 320-code-point bound — then folds to
+different bytes in different implementations, which is the one thing this
+format may not do.
+
 This document does not restrict which characters a value may contain. Control
 characters, bidirectional overrides and zero-width characters are an open
 question, deliberately separate from how a value is folded.

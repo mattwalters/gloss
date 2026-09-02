@@ -31,6 +31,12 @@ import (
 //     calling os would still mean an import here that this list rejects, and
 //     person's own source imports strings, unicode/utf8 and the two x/text
 //     packages and nothing else. Keep it that way.
+//   - For scale: fold's own closure already contained os, net *and os/exec*
+//     before any of this, through engine/codec and golang.org/x/crypto/ssh.
+//     person was the stdlib-only entry on this list; fold's closure was never
+//     stdlib-only, and this change is not where that was lost. What the list
+//     buys is that reaching any of it still takes an import that shows up
+//     here.
 //
 // fold's own import list is unchanged by all of this: it reaches the rule
 // through person, exactly as before.

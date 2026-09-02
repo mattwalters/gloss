@@ -18,3 +18,12 @@ var (
 // TestDifferentialCatchesTheDefects can show the guard is load-bearing rather
 // than decorative.
 func CaseFoldRaw(s string) string { return foldCaser.String(s) }
+
+// ComposeSegment exposes the hand-written composition path so
+// TestComposePathMatchesLibrary can check it against x/text everywhere x/text
+// is trustworthy — which is every input the exhaustive differential covers.
+func ComposeSegment(seg string) string { return compose(decompose(seg)) }
+
+// SegmentLen exposes the boundary rule so the Hangul and long-run cases can be
+// asserted directly rather than inferred from the folded output.
+func SegmentLen(s string) int { return segmentLen(s) }

@@ -202,12 +202,13 @@ func hasCherokeeFoldedRune(s string) bool {
 // composition fails it. Checking the invariant rather than the symptom also
 // catches any other composition defect, present or future.
 //
-// The check is per segment, split at the normalization boundaries x/text
-// itself reports, so a single bad pair cannot discard the legitimate
-// compositions around it and no composing pair is ever split — Hangul jamo,
-// Kaithi U+11099 U+110BA and Grantha U+11347 U+1133E all stay whole. A
-// segment that fails falls back to its decomposed form, which is canonical,
-// so two spellings of the same value still normalize alike.
+// The check is per normalization segment, so a bad pair in one segment cannot
+// discard the compositions in the segments around it, and no composing pair is
+// ever split — Hangul jamo, Kaithi U+11099 U+110BA and Grantha U+11347 U+1133E
+// all stay whole. See segmentLen for where a segment ends and why that is not
+// the boundary x/text's NextBoundary reports. A segment that fails falls back
+// to its decomposed form, which is canonical, so two spellings of the same
+// value still normalize alike.
 //
 // The guard cannot block a legitimate composition: of the 1088 canonical
 // composing pairs in Unicode 15.0.0 no two share a truncated key, so a pair
@@ -216,23 +217,176 @@ func nfc(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
 	for len(s) > 0 {
-		n := norm.NFC.NextBoundaryInString(s, true)
-		if n <= 0 || n > len(s) {
-			n = len(s)
-		}
+		n := segmentLen(s)
 		b.WriteString(nfcSegment(s[:n]))
 		s = s[n:]
 	}
 	return b.String()
 }
 
-func nfcSegment(seg string) string {
-	out := norm.NFC.String(seg)
-	if norm.NFD.String(out) == norm.NFD.String(seg) {
-		return out
+// segmentLen returns the byte length of the leading normalization segment of
+// s: its first rune, plus every following rune that cannot begin a segment of
+// its own.
+//
+// The rule is Properties.BoundaryBefore — ccc == 0 and does not combine
+// backwards — applied rune by rune. That is the definition of a position
+// nothing can compose across, so cutting there cannot separate a composing
+// pair. It is deliberately not norm.NextBoundaryInString, which is a
+// *stream-safe* boundary: that loop is driven by streamSafe.next and cuts
+// after 30 consecutive non-starters, mid-segment, so a mark past the cut can
+// no longer reach the starter before it. x/text carries a TODO at
+// unicode/norm/normalize.go saying the two are not the same thing.
+//
+// The difference is reachable well inside the 320-code-point bound and splits
+// one person into two: "a" followed by thirty U+0316 and then U+0301 must fold
+// to the same value as U+00E1 followed by thirty U+0316, and under a
+// stream-safe cut it does not. TestLengthAxisDifferentialAgainstCPython covers
+// the whole axis.
+//
+// Combining backwards, and not merely being a non-starter, is what keeps
+// Hangul whole: V (U+1161..U+1175) and T (U+11A8..U+11C2) have ccc == 0 and
+// compose onto the syllable before them, as do spacing marks such as Grantha
+// U+1133E and Tamil U+0BBE. All of them report BoundaryBefore false and stay
+// with their base.
+func segmentLen(s string) int {
+	for i := 0; i < len(s); {
+		p := norm.NFC.PropertiesString(s[i:])
+		if i > 0 && p.BoundaryBefore() {
+			return i
+		}
+		n := p.Size()
+		if n <= 0 {
+			// Invalid UTF-8. Advance a byte so this cannot loop; a person
+			// identifier is not required to be well formed for the fold to
+			// terminate on it.
+			n = 1
+		}
+		i += n
 	}
-	return norm.NFD.String(seg)
+	return len(s)
 }
+
+// nfcSegment composes one normalization segment.
+//
+// It does not ask x/text to normalize the segment. Three separate defects make
+// that answer untrustworthy, and only the first is one the round-trip guard
+// can see:
+//
+//   - Over-composition. The packed 32-bit key composes pairs that are not
+//     compositions (see nfc). NFD(NFC(x)) != NFD(x) catches this.
+//   - Stream-Safe Text. Past maxNonStarters consecutive non-starters, every
+//     x/text entry point — String, Bytes, Iter — inserts U+034F and stops
+//     composing. NFD inserts the same joiner, so the guard is blind: it is
+//     present on both sides of the comparison.
+//   - Composing across a blocker. NFC of U+00C5 U+0BD7 U+0316 U+0301 returns
+//     U+01FA U+0BD7 U+0316: the acute composed onto the base across a ccc-0
+//     mark that blocks it, and was then dropped from the output. CPython
+//     returns the input unchanged. The guard sees this one only because a
+//     code point went missing, and falling back to NFD then loses the ring
+//     that legitimately composes.
+//
+// So the composition is done here, over a canonically ordered decomposition,
+// with x/text asked only the questions it answers correctly: what a single
+// rune decomposes to, what a code point's combining class is, and whether one
+// specific pair composes. Those three are swept exhaustively against CPython.
+func nfcSegment(seg string) string {
+	if !utf8.ValidString(seg) {
+		// Not a conforming identifier at all. Return the bytes untouched
+		// rather than route them through a decoder that would replace them:
+		// normalization is not where malformed input is decided, and identity
+		// is at least deterministic and lossless.
+		return seg
+	}
+	return compose(decompose(seg))
+}
+
+// decompose returns seg in canonical decomposition, canonically ordered.
+//
+// Decomposition is applied one rune at a time because it is context-free —
+// NFD(xy) is NFD(x) followed by NFD(y), reordered — and because no single
+// rune's decomposition is long enough to reach the stream-safe limit, so
+// x/text answers each one correctly even where it cannot answer for the whole
+// segment.
+func decompose(seg string) []rune {
+	var out []rune
+	for _, r := range seg {
+		out = append(out, []rune(norm.NFD.String(string(r)))...)
+	}
+	canonicalOrder(out)
+	return out
+}
+
+// canonicalOrder sorts non-starters by canonical combining class, stably, in
+// place: UAX #15's Canonical Ordering Algorithm. Runes with ccc 0 are fixed
+// points and nothing moves across them.
+func canonicalOrder(rs []rune) {
+	for i := 1; i < len(rs); i++ {
+		c := ccc(rs[i])
+		if c == 0 {
+			continue
+		}
+		for j := i; j > 0 && ccc(rs[j-1]) > c; j-- {
+			rs[j-1], rs[j] = rs[j], rs[j-1]
+		}
+	}
+}
+
+// compose applies UAX #15's Canonical Composition Algorithm to a canonically
+// ordered decomposition. Every Unicode fact it needs — the combining classes,
+// and whether a given pair composes — comes from x/text; nothing here is a
+// table this repository has to keep current.
+func compose(rs []rune) string {
+	if len(rs) == 0 {
+		return ""
+	}
+	out := make([]rune, 0, len(rs))
+	out = append(out, rs[0])
+	// A segment that opens on a non-starter has no starter to compose onto.
+	composable := ccc(rs[0]) == 0
+	// UAX #15 D115: c is blocked from the base when *any* character already
+	// retained between them has ccc 0, or a class at least as high as c's.
+	// Looking only at the last one is not enough — canonical ordering leaves
+	// ccc-0 marks where they are, so a retained blocker can end up behind a
+	// later mark of lower class and would otherwise be forgotten.
+	blockedAll := false
+	maxRetained := -1
+	for _, c := range rs[1:] {
+		cc := int(ccc(c))
+		blocked := blockedAll || maxRetained >= cc
+		if composable && !blocked {
+			if p, ok := combine(out[0], c); ok {
+				out[0] = p
+				continue
+			}
+		}
+		out = append(out, c)
+		if cc == 0 {
+			blockedAll = true
+		} else if cc > maxRetained {
+			maxRetained = cc
+		}
+	}
+	return string(out)
+}
+
+// combine reports the primary composite of a and b, if there is one. It asks
+// x/text, on a two-rune string that cannot reach the stream-safe limit, and
+// applies the same round-trip guard as nfcSegment so a composition invented by
+// the truncated key is refused here too.
+func combine(a, b rune) (rune, bool) {
+	in := string([]rune{a, b})
+	out := norm.NFC.String(in)
+	if norm.NFD.String(out) != norm.NFD.String(in) {
+		return 0, false
+	}
+	rs := []rune(out)
+	if len(rs) == 1 {
+		return rs[0], true
+	}
+	return 0, false
+}
+
+func ccc(r rune) uint8 { return norm.NFC.PropertiesString(string(r)).CCC() }
 
 // Problem names the ways a string can fail to be a conforming person
 // identifier. It is an enumeration rather than an error so that this package

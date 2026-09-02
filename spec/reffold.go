@@ -148,28 +148,154 @@ func personHasCherokee(s string) bool {
 // NFD is trie-driven, does not use the packed key, and is unaffected, so
 // NFD(NFC(x)) == NFD(x) independently verifies that the composed form is
 // canonically equivalent to the input; a false composition fails it. The check
-// runs per normalization segment so one bad pair cannot discard the
-// compositions around it, and a failing segment falls back to its decomposed
-// form, which is canonical. No two of the 1088 canonical composing pairs in
-// Unicode 15.0.0 share a truncated key, so the guard can never block a
-// legitimate composition.
+// runs per normalization segment (see personSegmentLen) so a bad pair in one
+// segment cannot discard the compositions in the segments around it, and a
+// failing segment falls back to its decomposed form, which is canonical. No
+// two of the 1088 canonical composing pairs in Unicode 15.0.0 share a
+// truncated key, so the guard can never block a legitimate composition.
 func personNFC(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
 	for len(s) > 0 {
-		n := norm.NFC.NextBoundaryInString(s, true)
-		if n <= 0 || n > len(s) {
-			n = len(s)
-		}
-		seg := s[:n]
-		out := norm.NFC.String(seg)
-		if norm.NFD.String(out) != norm.NFD.String(seg) {
-			out = norm.NFD.String(seg)
-		}
-		b.WriteString(out)
+		n := personSegmentLen(s)
+		b.WriteString(personNFCSegment(s[:n]))
 		s = s[n:]
 	}
 	return b.String()
+}
+
+// personMaxNonStarters is the Stream-Safe Text limit x/text enforces
+// unconditionally, through String, Bytes and Iter alike. At this many
+// consecutive non-starters it inserts U+034F, which has ccc 0 and blocks every
+// composition after it. NFD inserts the same joiner in the same place, so the
+// round-trip guard cannot see this one — it is present on both sides of the
+// comparison. Below the limit the library is correct; above it, x/text cannot
+// express NFC at all and the segment is composed here.
+const personMaxNonStarters = 30
+
+func personNFCSegment(seg string) string {
+	if !utf8.ValidString(seg) {
+		return norm.NFC.String(seg)
+	}
+	d := personDecompose(seg)
+	// Everything after a segment's first rune is attached to it, so len(d)-1
+	// bounds the non-starters x/text will count. Counting attached runes and
+	// not runes with ccc != 0 matters because x/text counts marks that combine
+	// backwards with ccc 0 — Tamil U+0BD7, Hangul V and T.
+	if len(d)-1 < personMaxNonStarters {
+		out := norm.NFC.String(seg)
+		if norm.NFD.String(out) == norm.NFD.String(seg) {
+			return out
+		}
+		return norm.NFD.String(seg)
+	}
+	return personCompose(d)
+}
+
+// personDecompose returns seg canonically decomposed and canonically ordered.
+// Decomposition runs one rune at a time because it is context-free and because
+// no single rune's decomposition reaches the stream-safe limit, so x/text
+// answers each one correctly even where it cannot answer for the segment.
+func personDecompose(seg string) []rune {
+	var out []rune
+	for _, r := range seg {
+		out = append(out, []rune(norm.NFD.String(string(r)))...)
+	}
+	personCanonicalOrder(out)
+	return out
+}
+
+// personCanonicalOrder is UAX #15's Canonical Ordering Algorithm: a stable
+// sort of non-starters by combining class, with ccc 0 as fixed points.
+func personCanonicalOrder(rs []rune) {
+	for i := 1; i < len(rs); i++ {
+		c := personCCC(rs[i])
+		if c == 0 {
+			continue
+		}
+		for j := i; j > 0 && personCCC(rs[j-1]) > c; j-- {
+			rs[j-1], rs[j] = rs[j], rs[j-1]
+		}
+	}
+}
+
+// personCompose is UAX #15's Canonical Composition Algorithm over a
+// canonically ordered decomposition. Every Unicode fact it needs — combining
+// classes, and whether a pair composes — comes from x/text.
+func personCompose(rs []rune) string {
+	if len(rs) == 0 {
+		return ""
+	}
+	out := make([]rune, 0, len(rs))
+	out = append(out, rs[0])
+	composable := personCCC(rs[0]) == 0
+	// UAX #15 D115: c is blocked from the base when *any* retained character
+	// between them has ccc 0, or a class at least as high as c's. Tracking
+	// only the last one loses a ccc-0 blocker that ends up behind a later
+	// mark of lower class.
+	blockedAll := false
+	maxRetained := -1
+	for _, c := range rs[1:] {
+		cc := int(personCCC(c))
+		blocked := blockedAll || maxRetained >= cc
+		if composable && !blocked {
+			if p, ok := personCombine(out[0], c); ok {
+				out[0] = p
+				continue
+			}
+		}
+		out = append(out, c)
+		if cc == 0 {
+			blockedAll = true
+		} else if cc > maxRetained {
+			maxRetained = cc
+		}
+	}
+	return string(out)
+}
+
+// personCombine reports the primary composite of a and b if there is one,
+// asking x/text on a two-rune string that cannot reach the stream-safe limit
+// and applying the same round-trip guard, so a composition invented by the
+// truncated key is refused here too.
+func personCombine(a, b rune) (rune, bool) {
+	in := string([]rune{a, b})
+	out := norm.NFC.String(in)
+	if norm.NFD.String(out) != norm.NFD.String(in) {
+		return 0, false
+	}
+	rs := []rune(out)
+	if len(rs) == 1 {
+		return rs[0], true
+	}
+	return 0, false
+}
+
+func personCCC(r rune) uint8 { return norm.NFC.PropertiesString(string(r)).CCC() }
+
+// personSegmentLen returns the byte length of the leading normalization
+// segment of s: its first rune plus every following rune that cannot begin a
+// segment of its own, where "cannot" is Properties.BoundaryBefore — ccc == 0
+// and does not combine backwards.
+//
+// Deliberately not norm.NextBoundaryInString, which reports a *stream-safe*
+// boundary and cuts after 30 consecutive non-starters, mid-segment, so a mark
+// past the cut can no longer compose with the starter before it. Combining
+// backwards rather than merely being a non-starter is what keeps Hangul V and
+// T, Grantha U+1133E and Tamil U+0BBE attached to the base they compose onto.
+func personSegmentLen(s string) int {
+	for i := 0; i < len(s); {
+		p := norm.NFC.PropertiesString(s[i:])
+		if i > 0 && p.BoundaryBefore() {
+			return i
+		}
+		n := p.Size()
+		if n <= 0 {
+			n = 1
+		}
+		i += n
+	}
+	return len(s)
 }
 
 // EffectiveTimes computes the causality-monotone effective timestamp

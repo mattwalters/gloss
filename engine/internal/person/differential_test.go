@@ -38,6 +38,10 @@ sys.stdout.write('\n'.join(out))
 // Unicode version, every canonical composition, and every truncated-key
 // impostor pair, and requires CPython to agree on all of them.
 //
+// This sweep is exhaustive over the *repertoire*, not over input length: no
+// input here is longer than two code points. Length is a separate axis with
+// its own defects, and length_test.go is where it is covered.
+//
 // Inputs are restricted to what Unicode 15.0.0 had assigned, because the host
 // CPython is generally a later version: for characters assigned in the pinned
 // version, Unicode's stability policies make composition and case folding
@@ -134,10 +138,15 @@ func TestDifferentialAgainstCPython(t *testing.T) {
 	}
 }
 
-// TestDifferentialCatchesTheDefects is the differential's own test. A
-// reference that agrees with everything proves nothing, so run the raw x/text
-// pipeline — the one without the Cherokee fixed points and without the
-// composition guard — past the same reference and require it to disagree.
+// TestDifferentialCatchesTheDefects is the differential's own test: a sweep
+// that agrees with everything proves nothing. It runs the raw x/text pipeline
+// — no Cherokee fixed points, no composition of its own — past CPython and
+// requires CPython to reject it.
+//
+// Comparing the naive pipeline against FoldValue would be the weaker test:
+// two implementations that broke the same way would agree, and the comparison
+// would pass. The reference is the independent one, so the reference is what
+// this compares against.
 func TestDifferentialCatchesTheDefects(t *testing.T) {
 	naive := func(s string) string {
 		return norm.NFC.String(person.CaseFoldRaw(norm.NFC.String(s)))
@@ -146,15 +155,64 @@ func TestDifferentialCatchesTheDefects(t *testing.T) {
 		in  string
 		why string
 	}{
-		{"Ꭰ", "Cherokee fold toggle"},
-		{"\U00010041̀", "truncated composition key"},
+		{"\u13a0", "Cherokee fold toggle"},
+		{"\U00010041\u0300", "truncated composition key"},
+		{"a" + strings.Repeat("\u0316", 30) + "\u0301", "stream-safe boundary and U+034F insertion"},
+		{"\u00c5\u0bd7\u0316\u0301", "composition across a blocker"},
 	}
-	for _, tc := range cases {
-		if naive(tc.in) == person.FoldValue(tc.in) {
-			t.Errorf("the unguarded pipeline agrees with the guarded one on %U (%s); "+
-				"the guard is not being exercised", []rune(tc.in), tc.why)
+	inputs := make([]string, len(cases))
+	for i, tc := range cases {
+		inputs[i] = tc.in
+	}
+	want := referenceFold(t, inputs)
+
+	for i, tc := range cases {
+		if got := person.FoldValue(tc.in); got != want[i] {
+			t.Errorf("FoldValue(%U) = %U, reference says %U — the guarded path is wrong for %s",
+				[]rune(tc.in), []rune(got), []rune(want[i]), tc.why)
+		}
+		if naive(tc.in) == want[i] {
+			t.Errorf("the raw x/text pipeline already agrees with the reference on %U (%s); "+
+				"this case no longer demonstrates anything", []rune(tc.in), tc.why)
 		}
 	}
+}
+
+// referenceFold folds each input with CPython and returns the answers in
+// order. Skips the test when python3 is unavailable.
+func referenceFold(t *testing.T, inputs []string) []string {
+	t.Helper()
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 not available; the differential reference cannot be run")
+	}
+	encoded := make([]string, len(inputs))
+	for i, in := range inputs {
+		var hex []string
+		for _, r := range in {
+			hex = append(hex, strconv.FormatInt(int64(r), 16))
+		}
+		encoded[i] = strings.Join(hex, " ")
+	}
+	cmd := exec.Command(python, "-c", reference)
+	cmd.Stdin = strings.NewReader(strings.Join(encoded, "\n"))
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("running the reference implementation: %v", err)
+	}
+	lines := strings.Split(string(out), "\n")
+	if len(lines) != len(inputs) {
+		t.Fatalf("reference returned %d lines for %d inputs", len(lines), len(inputs))
+	}
+	got := make([]string, len(lines))
+	for i, line := range lines {
+		d, err := decodeHexRunes(line)
+		if err != nil {
+			t.Fatalf("decoding reference output: %v", err)
+		}
+		got[i] = d
+	}
+	return got
 }
 
 func decodeHexRunes(s string) (string, error) {
