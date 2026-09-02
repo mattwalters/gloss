@@ -215,6 +215,81 @@ func TestLoad_TrimsAuthorPadding(t *testing.T) {
 	}
 }
 
+// TestLoad_WhitespaceOnlyWriterID pins the same guard on writ.writerId, which
+// was the last key in Load still tested raw.
+//
+// It is a test of its own rather than a row in the sweep above, because the
+// sweep asserts which key the error names and both spellings of this failure
+// name writ.writerId. What changed is the problem class, and the problem class
+// is what the user reads: ErrInvalid renders "invalid git config" and, by
+// design, carries no "run 'writ init'" remedy, so a whitespace-only value was
+// reported as a malformed writer id with no way out — while writ init, which
+// has always trimmed this key, would have read it as absent and minted over
+// it. Load and EnsureWriterID disagreeing about whether a key is set is the
+// disagreement WRIT-143 is about, one file apart.
+func TestLoad_WhitespaceOnlyWriterID(t *testing.T) {
+	for _, value := range []string{" ", "   ", "\t"} {
+		t.Run(fmt.Sprintf("%q", value), func(t *testing.T) {
+			env := setupTestEnv(t)
+			populateValidLocalConfig(t, env.repoDir)
+			setGitConfig(t, env.repoDir, "writ.writerId", value)
+
+			// The value really did survive the round trip through git;
+			// otherwise this test would pass for the wrong reason.
+			cfg, err := identity.ReadGitConfig(context.Background(), env.repoDir)
+			if err != nil {
+				t.Fatalf("ReadGitConfig: %v", err)
+			}
+			if got := cfg["writ.writerid"]; got != value {
+				t.Fatalf("git stored writ.writerId as %q, want %q verbatim", got, value)
+			}
+
+			_, err = identity.Load(context.Background(), env.repoDir)
+			if err == nil {
+				t.Fatal("Load accepted a whitespace-only writ.writerId")
+			}
+			if !errors.Is(err, identity.ErrMissing) {
+				t.Errorf("Load error = %v, want errors.Is ErrMissing: a set key with nothing in it is nothing configured", err)
+			}
+			if errors.Is(err, identity.ErrInvalid) {
+				t.Errorf("Load error = %v, want ErrMissing rather than ErrInvalid: nobody typed whitespace as a writer id", err)
+			}
+			var cfgErr *identity.ConfigError
+			if !errors.As(err, &cfgErr) {
+				t.Fatalf("Load error is %T, want *identity.ConfigError", err)
+			}
+			if cfgErr.Key != "writ.writerId" {
+				t.Errorf("cfgErr.Key = %q, want %q", cfgErr.Key, "writ.writerId")
+			}
+			// The remedy the ErrMissing arm appends is the one that works:
+			// writ init reads this key as absent and mints into it.
+			if !strings.Contains(err.Error(), "run 'writ init'") {
+				t.Errorf("Load error = %q, want the writ init remedy", err.Error())
+			}
+		})
+	}
+}
+
+// TestParseWriterID_InvalidNamesAWorkingRemedy pins the other half of MAJOR 1's
+// pair. Trimming settles whitespace, but a genuinely malformed value still
+// reports ErrInvalid, and ConfigError appends no remedy to an ErrInvalid — it
+// must not, because writ init never overwrites a value the user has already
+// set. Running writ init over a malformed writer id fails with this very
+// error rather than replacing it, so "run 'writ init'" alone would be advice
+// that does not work. The error has to say to clear the key first.
+func TestParseWriterID_InvalidNamesAWorkingRemedy(t *testing.T) {
+	_, err := identity.ParseWriterID("nothexadecimal!")
+	if err == nil {
+		t.Fatal("ParseWriterID accepted a malformed writer id")
+	}
+	msg := err.Error()
+	for _, want := range []string{"unset", "writ init"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("ParseWriterID error = %q, want it to contain %q: an invalid value the user typed needs a remedy the user can apply", msg, want)
+		}
+	}
+}
+
 func TestLoad_WriterIDPrecedence(t *testing.T) {
 	t.Run("local_only", func(t *testing.T) {
 		env := setupTestEnv(t)
@@ -685,9 +760,18 @@ func TestConfigErrorMessage(t *testing.T) {
 // `writ review approve` on a clone whose owner never ran `writ init` named
 // writ.personId and user.email, both of which were already correct.
 //
-// The sweep covers every way Load can fail and the way it can succeed, because
-// an invariant with an exception is not one. The unreadable-config path is a
-// separate subtest below, since it is not reached by mutating config.
+// The sweep aims at every one of Load's ten returns — nine failures and the
+// success — because an invariant with an exception is not one. The
+// unreadable-config path is a separate subtest below, since it is not reached
+// by mutating config.
+//
+// It aims by hand, though, and hand-enumeration is the blind spot that put the
+// defect in Load in the first place. This table shipped one case short: nothing
+// reached the key:: empty-literal return, so that return could have been
+// mutated to `return Identity{}, ...` with the suite still green.
+// TestLoadReturnsCarryTheReason is the guard against the next omission — it
+// reads Load's returns out of the AST rather than trusting a list — and a new
+// return in Load wants a row here as well as a shape that test accepts.
 func TestLoad_EmptyPersonIDAlwaysExplained(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -802,6 +886,43 @@ func TestLoad_EmptyPersonIDAlwaysExplained(t *testing.T) {
 			},
 			wantPersonID:   "email:alice@example.test",
 			wantLoadErrKey: "user.signingKey",
+		},
+		{
+			// The tenth return, and the one this sweep was a case short of:
+			// the key:: form with nothing after the prefix. It is a separate
+			// branch from the unset row above — that one is guarded on the
+			// whole value, this one on what survives the prefix — and it was
+			// the only return in Load no case reached. Mutating it to
+			// `return Identity{}, ...` broke the invariant with the whole
+			// suite still green, which is the exact shape of the defect
+			// WRIT-143 is about, in the test that is supposed to catch it.
+			name: "user.signingKey key:: with an empty literal",
+			mutate: func(t *testing.T, dir string) {
+				setGitConfig(t, dir, "user.signingKey", "key::")
+			},
+			wantPersonID:   "email:alice@example.test",
+			wantLoadErrKey: "user.signingKey",
+		},
+		{
+			name: "user.signingKey key:: with a whitespace-only literal",
+			mutate: func(t *testing.T, dir string) {
+				setGitConfig(t, dir, "user.signingKey", "key::   ")
+			},
+			wantPersonID:   "email:alice@example.test",
+			wantLoadErrKey: "user.signingKey",
+		},
+		{
+			// writ.writerId set to whitespace. Until this change it fell
+			// through to ParseWriterID, so it reached the malformed return
+			// above rather than the missing one — a different return, a
+			// different message and, at the CLI, a different remedy.
+			name: "writ.writerId whitespace-only",
+			mutate: func(t *testing.T, dir string) {
+				setGitConfig(t, dir, "writ.writerId", "   ")
+			},
+			wantPersonIDErrKey: "writ.writerId",
+			wantLoadErrKey:     "writ.writerId",
+			samePointer:        true,
 		},
 	}
 

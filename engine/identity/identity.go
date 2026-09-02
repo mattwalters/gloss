@@ -16,12 +16,22 @@ var writerIDRegexp = regexp.MustCompile(`^[0-9a-f]{16}$`)
 type WriterID string
 
 // ParseWriterID parses and validates s as a WriterID matching ^[0-9a-f]{16}$.
+//
+// The rejection carries its own remedy because ConfigError does not append one
+// to an ErrInvalid: see initHint. That suppression is right — writ init never
+// overwrites a value the user has already set — but "invalid configuration"
+// on its own leaves a reader with a broken repository and no next step, and
+// this key's next step is not the obvious one. EnsureWriterID mints only into
+// a key it reads as absent, so running writ init over a malformed writer id
+// fails with this very message rather than replacing it. Unset it first and
+// the next run mints. That advice is correct from every emitter, writ init's
+// own output included.
 func ParseWriterID(s string) (WriterID, error) {
 	if !writerIDRegexp.MatchString(s) {
 		return "", &ConfigError{
 			Key:     "writ.writerId",
 			Value:   s,
-			Problem: ErrInvalid,
+			Problem: fmt.Errorf("%w: expected 16 lowercase hex characters; unset the key and run 'writ init' to mint a new one", ErrInvalid),
 		}
 	}
 	return WriterID(s), nil
@@ -102,8 +112,18 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 	}
 
 	// 1. Writer ID: writ.writerId
-	rawWriterID, ok := cfg["writ.writerid"]
-	if !ok || rawWriterID == "" {
+	//
+	// Trimmed before the emptiness check, the way every other key down this
+	// function already is. This was the last one guarded on the raw string,
+	// and the guard disagreed with EnsureWriterID two files over, which has
+	// always trimmed: git config stores a whitespace-only value verbatim, so
+	// `writ.writerId = "   "` reached ParseWriterID and was reported as an
+	// invalid writer id — a value the user never typed as an id — while
+	// `writ init` read the same key as absent and minted straight over it. A
+	// set key with nothing in it is nothing configured, so it takes the
+	// missing-config path, which names the command that fixes it.
+	rawWriterID := strings.TrimSpace(cfg["writ.writerid"])
+	if rawWriterID == "" {
 		err := &ConfigError{
 			Key:     "writ.writerId",
 			Problem: ErrMissing,

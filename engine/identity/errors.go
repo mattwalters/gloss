@@ -31,6 +31,16 @@ type ConfigError struct {
 // something it never attempts — writ does not write signing configuration for
 // anyone; it prints the git config lines and expects the user to run them.
 // Message renders the same text without this clause for that caller.
+//
+// ErrInvalid is the third problem and does not get it, deliberately. writ init
+// never overwrites a value that is already there: EnsureWriterID reuses a
+// writ.writerId it can parse and mints only into an absent one, and init reads
+// writ.personId without ever writing it. So for every key that reports
+// ErrInvalid the user typed the offending value and only the user can retype
+// it — "run 'writ init'" would be a remedy that does not work. Naming a remedy
+// that does is then the emitter's job, wrapped into Problem the way the
+// ErrInvalid arm below already renders: ParseWriterID says to unset the key
+// first, and DerivePersonID carries what person.Check found wrong.
 const initHint = " (run 'writ init' to configure)"
 
 func (e *ConfigError) Error() string {

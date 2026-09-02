@@ -1223,7 +1223,7 @@ func TestReviewComment_ResolveAttribution(t *testing.T) {
 		env := setupTestCLIEnv(t)
 		setupSigningKey(t, env.repoDir)
 
-		_, commentID := openReviewWithComment(t, env.repoDir)
+		reviewID, commentID := openReviewWithComment(t, env.repoDir)
 
 		cmd := exec.Command("git", "config", "--unset", "writ.writerId")
 		cmd.Dir = env.repoDir
@@ -1243,6 +1243,16 @@ func TestReviewComment_ResolveAttribution(t *testing.T) {
 		}
 		if strings.Contains(stderr.String(), "writ.personId") {
 			t.Errorf("error should not name writ.personId when nothing is configured at all, got %q", stderr.String())
+		}
+
+		// The message is the smaller half of what this subtest defends. It
+		// was the test that pinned PR #98's writer.ID == "" guard, and that
+		// guard was there for WRIT-132 — an anonymous resolve op written into
+		// an append-only log that is never rewritten. This branch now refuses
+		// via PersonIDErr instead, so what has to hold is the data, not the
+		// wording: a refused resolve leaves the comment exactly as it was.
+		if resolved, resolvedBy := commentResolution(t, env.repoDir, reviewID, commentID); resolved || resolvedBy != "" {
+			t.Errorf("comment resolution = (%v, %q), want (false, \"\"): a repository with no writer identity must not append an unattributed resolve", resolved, resolvedBy)
 		}
 	})
 }
@@ -1723,9 +1733,16 @@ func unsetGitConfig(t *testing.T, dir, key string) {
 // on a whitespace-only user.name the second named two keys that were both
 // already correct.
 //
-// Both verbs now read identity.Load's PersonIDErr, so this table asserts one
-// thing per case for both: the refusal names the key that is actually at
-// fault, and names no key that is not.
+// Both verbs now read identity.Load's PersonIDErr, so this table asserts three
+// things per case for both: the refusal names the key that is actually at
+// fault, names no key that is not, and names a step that fixes it.
+//
+// The last of those was added after the table's first pass enumerated the
+// broken-key spellings by hand and covered writ.writerId only as unset. Set to
+// whitespace, and set to a value that is not hexadecimal, it reproduced the
+// ticket's own opening complaint one key over — so the shape of a value now
+// gets a row alongside its absence, and "an error was printed" is not enough
+// to pass.
 func TestReviewIdentityDiagnosis_AgreesAcrossVerbs(t *testing.T) {
 	cases := []struct {
 		name string
@@ -1738,6 +1755,15 @@ func TestReviewIdentityDiagnosis_AgreesAcrossVerbs(t *testing.T) {
 		// in neither.
 		wantKey      string
 		unwantedKeys []string
+		// wantShared is the half of the message a user acts on, which both
+		// verbs must carry identically. Defaults to the missing-config
+		// rendering; a malformed value renders as invalid instead.
+		wantShared string
+		// wantRemedy is the substring naming a step that actually fixes this
+		// configuration. "run 'writ init'" is not it for a value the user
+		// typed: writ init never overwrites one, so the key has to be cleared
+		// first and the message has to say so.
+		wantRemedy string
 	}{
 		{
 			// The sharp case from the ticket: writ.personId and user.email are
@@ -1775,6 +1801,37 @@ func TestReviewIdentityDiagnosis_AgreesAcrossVerbs(t *testing.T) {
 			key:          "writ.writerId",
 			wantKey:      "writ.writerId",
 			unwantedKeys: []string{"writ.personId", "user.email"},
+		},
+		{
+			// writ.writerId was the one key Load still guarded raw, so this
+			// configuration reinstated WRIT-143's exact shape one key over:
+			// both verbs said `invalid git config "writ.writerId"="   "` with
+			// no remedy at all, while `writ review comment -m` on the same
+			// repository said `run 'writ init'` — which was the working fix,
+			// because init reads a whitespace-only value as absent and mints
+			// over it. Two verbs, one repository, two diagnoses, and the
+			// useful one was the vaguer one.
+			name:         "writer_id_whitespace",
+			key:          "writ.writerId",
+			value:        "   ",
+			wantKey:      "writ.writerId",
+			unwantedKeys: []string{"writ.personId", "user.email"},
+			wantRemedy:   "run 'writ init'",
+		},
+		{
+			// Trimming does not reach this one: "nothexadecimal!" is a value
+			// the user typed, so it is genuinely invalid and ConfigError
+			// appends no writ init remedy to an ErrInvalid — correctly, since
+			// writ init over this value fails with this same error instead of
+			// replacing it. The remedy that works is to clear the key first,
+			// and the message has to be the thing that says so.
+			name:         "writer_id_malformed",
+			key:          "writ.writerId",
+			value:        "nothexadecimal!",
+			wantKey:      "writ.writerId",
+			unwantedKeys: []string{"writ.personId", "user.email"},
+			wantShared:   "identity: invalid git config",
+			wantRemedy:   "unset the key and run 'writ init'",
 		},
 	}
 
@@ -1816,17 +1873,24 @@ func TestReviewIdentityDiagnosis_AgreesAcrossVerbs(t *testing.T) {
 						t.Errorf("%s: error named %s, which is correctly configured here, got %q", verb, unwanted, got)
 					}
 				}
-				if !strings.Contains(got, "writ init") {
-					t.Errorf("%s: error should point at the command that configures it, got %q", verb, got)
+				wantRemedy := tc.wantRemedy
+				if wantRemedy == "" {
+					wantRemedy = "run 'writ init'"
+				}
+				if !strings.Contains(got, wantRemedy) {
+					t.Errorf("%s: error should name a step that fixes this configuration (%q), got %q", verb, wantRemedy, got)
 				}
 			}
 
 			// The two verbs prefix their own context but must agree on the
-			// remedy, which is the half a user acts on.
-			const remedy = "identity: missing git config"
+			// remainder, which is the half a user acts on.
+			shared := tc.wantShared
+			if shared == "" {
+				shared = "identity: missing git config"
+			}
 			for verb, got := range outputs {
-				if !strings.Contains(got, remedy) {
-					t.Errorf("%s: error should carry the shared remedy %q, got %q", verb, remedy, got)
+				if !strings.Contains(got, shared) {
+					t.Errorf("%s: error should carry the shared diagnosis %q, got %q", verb, shared, got)
 				}
 			}
 		})
