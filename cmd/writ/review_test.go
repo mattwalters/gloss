@@ -951,6 +951,23 @@ func openReviewWithComment(t *testing.T, dir string) (reviewID, commentID string
 	return reviewID, commentID
 }
 
+// resolveUnattributed sets a comment's resolution through the public engine
+// API with no ResolvedBy, which is what the spec permits and what a bridge, an
+// importer, or an older client writes.
+func resolveUnattributed(t *testing.T, dir, commentID string, resolved bool) {
+	t.Helper()
+
+	store, err := writ.Open(dir)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.Comments.Resolve(context.Background(), commentID, writ.CommentResolve{Resolved: resolved}); err != nil {
+		t.Fatalf("resolve %s: %v", commentID, err)
+	}
+}
+
 // commentResolution returns the folded resolution state of one comment.
 func commentResolution(t *testing.T, dir, reviewID, commentID string) (resolved bool, resolvedBy string) {
 	t.Helper()
@@ -1028,11 +1045,10 @@ func TestReviewComment_ResolveAttribution(t *testing.T) {
 		}
 	})
 
-	// An unresolve carries resolved_by too. The field folds last-writer-wins,
-	// and lww only overwrites a field the op actually carries, so an unresolve
-	// that omitted it would leave the previous resolver's name attached to a
-	// thread they did not reopen.
-	t.Run("unresolve_reattributes", func(t *testing.T) {
+	// An unresolve does not carry resolved_by. The field names the person who
+	// resolved the thread, not the person who last changed its state, so
+	// reopening leaves the recorded resolver in place: stale, but true.
+	t.Run("unresolve_preserves_resolver", func(t *testing.T) {
 		env := setupTestCLIEnv(t)
 		setGitConfig(t, env.repoDir, "writ.personId", "user:alice")
 		setupSigningKey(t, env.repoDir)
@@ -1060,8 +1076,49 @@ func TestReviewComment_ResolveAttribution(t *testing.T) {
 		if resolved {
 			t.Fatalf("comment is still resolved")
 		}
-		if resolvedBy != "user:bob" {
-			t.Errorf("resolved_by = %q, want %q: the reopener replaces the resolver rather than inheriting them", resolvedBy, "user:bob")
+		if resolvedBy == "user:bob" {
+			t.Fatalf("resolved_by = %q: bob reopened the thread, he did not resolve it", resolvedBy)
+		}
+		if resolvedBy != "user:alice" {
+			t.Errorf("resolved_by = %q, want %q: the recorded resolver survives the reopen", resolvedBy, "user:alice")
+		}
+	})
+
+	// The reason an unresolve must not carry the field: resolved and
+	// resolved_by are independent lww accumulators, so they can be sourced from
+	// different ops. Interleaving with any producer that omits resolved_by —
+	// which the spec permits and store.Comments.Resolve allows verbatim — would
+	// otherwise let the reopener land in an otherwise empty slot and be
+	// recorded, permanently, as the resolver.
+	t.Run("interleaved_with_unattributed_producer", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setGitConfig(t, env.repoDir, "writ.personId", "user:bob")
+		setupSigningKey(t, env.repoDir)
+
+		reviewID, commentID := openReviewWithComment(t, env.repoDir)
+
+		// alice resolves through the engine API without attribution, the way a
+		// bridge, an importer, or a pre-WRIT-132 client does.
+		resolveUnattributed(t, env.repoDir, commentID, true)
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{
+			"review", "comment", "-C", env.repoDir, commentID, "-unresolve",
+		}, &stdout, &stderr); code != 0 {
+			t.Fatalf("review comment -unresolve failed with %d; stderr: %s", code, stderr.String())
+		}
+
+		resolveUnattributed(t, env.repoDir, commentID, true)
+
+		resolved, resolvedBy := commentResolution(t, env.repoDir, reviewID, commentID)
+		if !resolved {
+			t.Fatalf("comment is not resolved")
+		}
+		if resolvedBy == "user:bob" {
+			t.Fatalf("resolved_by = %q: bob only reopened the thread, and an unattributed resolve must not attribute itself to him", resolvedBy)
+		}
+		if resolvedBy != "" {
+			t.Errorf("resolved_by = %q, want empty: no op in this sequence carried one", resolvedBy)
 		}
 	})
 
@@ -1109,6 +1166,40 @@ func TestReviewComment_ResolveAttribution(t *testing.T) {
 		}
 		if len(comments) != 1 {
 			t.Errorf("comment count = %d, want 1: a refused resolve must not leave its -m reply behind", len(comments))
+		}
+	})
+
+	// A repository with writ refs but no writ.writerId — a clone whose owner
+	// never ran `writ init` — has no identity at all, not merely no person
+	// identifier. identity.Load returns a zero Identity there, so PersonID is
+	// empty with no PersonIDErr to explain it; naming writ.personId and
+	// user.email would send a user who has both set to look at keys that are
+	// already correct. The writer ID is checked first so the refusal names the
+	// fix that actually applies, matching what every other write path says.
+	t.Run("no_writer_identity", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setupSigningKey(t, env.repoDir)
+
+		_, commentID := openReviewWithComment(t, env.repoDir)
+
+		cmd := exec.Command("git", "config", "--unset", "writ.writerId")
+		cmd.Dir = env.repoDir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git config --unset writ.writerId failed: %v (%s)", err, string(out))
+		}
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{
+			"review", "comment", "-C", env.repoDir, commentID, "-resolve",
+		}, &stdout, &stderr)
+		if code == 0 {
+			t.Fatalf("review comment -resolve should have failed with no writer identity; stdout: %s", stdout.String())
+		}
+		if !strings.Contains(stderr.String(), "run 'writ init'") {
+			t.Errorf("error should point at writ init, got %q", stderr.String())
+		}
+		if strings.Contains(stderr.String(), "writ.personId") {
+			t.Errorf("error should not name writ.personId when nothing is configured at all, got %q", stderr.String())
 		}
 	})
 }
