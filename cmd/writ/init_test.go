@@ -78,6 +78,183 @@ func TestInit_Idempotent(t *testing.T) {
 	}
 }
 
+// TestInit_ValidatesRepositoryBeforeWriting pins the ordering that keeps a
+// failed init from leaving anything behind: opening the repository is a
+// precondition, not a later step. This is a guard rather than a reproduction —
+// the open now happens once, up front, and nothing may be written before it
+// succeeds, so moving it back down past the writes has to fail here.
+func TestInit_ValidatesRepositoryBeforeWriting(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	addRemote(t, env.repoDir, "origin", "https://example.com/repo.git")
+
+	// A repository git opens happily and writ cannot: writ reads git objects
+	// directly and only understands sha1.
+	setGitConfig(t, env.repoDir, "core.repositoryformatversion", "1")
+	setGitConfig(t, env.repoDir, "extensions.objectFormat", "sha256")
+
+	var stdout, stderr bytes.Buffer
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 1 {
+		t.Fatalf("init exited with %d, want 1; stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "unsupported repository format") {
+		t.Errorf("stderr does not say why the repository was refused:\n%s", stderr.String())
+	}
+
+	// Nothing may have been written, and nothing may have been claimed.
+	if got := getGitConfigAll(t, env.repoDir, "writ.writerId"); len(got) != 0 {
+		t.Errorf("writ.writerId = %v, want nothing written by a run that could not open the repo", got)
+	}
+	if got := getGitConfigAll(t, env.repoDir, "writ.repoId"); len(got) != 0 {
+		t.Errorf("writ.repoId = %v, want nothing written by a run that could not open the repo", got)
+	}
+	for _, entry := range getGitConfigAll(t, env.repoDir, "remote.origin.fetch") {
+		if strings.Contains(entry, "writ") {
+			t.Errorf("writ fetch refspec %q was written by a failed run", entry)
+		}
+	}
+	if strings.Contains(stdout.String(), "minted") {
+		t.Errorf("init reported minting an ID it never persisted:\n%s", stdout.String())
+	}
+}
+
+// TestInit_PartialFailureIsReportedAndRecovers covers the failure that cannot
+// be hoisted ahead of the writes: the refspec write itself. git config has no
+// transaction, so the repository really is left half-configured — identity in
+// config, refspec absent, which reads as clean and is not. The run has to say
+// so, and re-running has to finish the job without minting a second writer-id
+// for this device, which would split its ops across two ref namespaces.
+func TestInit_PartialFailureIsReportedAndRecovers(t *testing.T) {
+	env := setupTestCLIEnv(t)
+
+	// Mint the IDs on a run with no remote to configure, so the failure below
+	// lands where the ticket found it: after identity is in config.
+	var stdout, stderr bytes.Buffer
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+		t.Fatalf("first init exited with %d; stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "(minted)") {
+		t.Fatalf("first init did not mint the IDs:\n%s", stdout.String())
+	}
+	writerID := getGitConfigAll(t, env.repoDir, "writ.writerId")
+	repoID := getGitConfigAll(t, env.repoDir, "writ.repoId")
+	if len(writerID) != 1 || len(repoID) != 1 {
+		t.Fatalf("expected one writerId and one repoId, got %v and %v", writerID, repoID)
+	}
+
+	addRemote(t, env.repoDir, "origin", "https://example.com/repo.git")
+
+	// Hold git's config lock so the refspec write — and only the refspec
+	// write — fails. Reads do not take the lock, so everything ahead of it
+	// still succeeds, which is the shape of the failure being reported.
+	lockPath := filepath.Join(env.repoDir, ".git", "config.lock")
+	if err := os.WriteFile(lockPath, nil, 0600); err != nil {
+		t.Fatalf("holding the config lock: %v", err)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 1 {
+		t.Fatalf("init exited with %d, want 1, while the config was locked; stderr: %s", code, stderr.String())
+	}
+
+	failed := stderr.String()
+	for _, want := range []string{
+		"half-configured",
+		"writ.writerId " + writerID[0],
+		"writ.repoId " + repoID[0],
+		"NOT configured for: origin",
+		"re-run writ init",
+	} {
+		if !strings.Contains(failed, want) {
+			t.Errorf("failure report does not say %q:\n%s", want, failed)
+		}
+	}
+	// The IDs were read back, not minted again.
+	if strings.Contains(stdout.String(), "(minted)") {
+		t.Errorf("a re-run said (minted) for IDs it read out of config:\n%s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "already configured") {
+		t.Errorf("a re-run did not report the IDs as already configured:\n%s", stdout.String())
+	}
+	for _, entry := range getGitConfigAll(t, env.repoDir, "remote.origin.fetch") {
+		if strings.Contains(entry, "writ") {
+			t.Errorf("refspec %q exists despite the write failing", entry)
+		}
+	}
+
+	// Re-running once the error is fixed finishes the job, exactly as the
+	// report promised.
+	if err := os.Remove(lockPath); err != nil {
+		t.Fatalf("releasing the config lock: %v", err)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+		t.Fatalf("re-run exited with %d; stderr: %s", code, stderr.String())
+	}
+	if strings.Contains(stdout.String(), "(minted)") {
+		t.Errorf("the recovery run minted an ID:\n%s", stdout.String())
+	}
+	if got := getGitConfigAll(t, env.repoDir, "writ.writerId"); len(got) != 1 || got[0] != writerID[0] {
+		t.Errorf("writ.writerId = %v, want the original %v: a second writer-id splits this device across two ref namespaces", got, writerID)
+	}
+	if got := getGitConfigAll(t, env.repoDir, "writ.repoId"); len(got) != 1 || got[0] != repoID[0] {
+		t.Errorf("writ.repoId = %v, want the original %v", got, repoID)
+	}
+	var writEntries []string
+	for _, entry := range getGitConfigAll(t, env.repoDir, "remote.origin.fetch") {
+		if strings.Contains(entry, "writ") {
+			writEntries = append(writEntries, entry)
+		}
+	}
+	if len(writEntries) != 1 || writEntries[0] != "refs/writ/*:refs/remotes/origin/writ/*" {
+		t.Errorf("writ refspecs = %v, want exactly the canonical one", writEntries)
+	}
+}
+
+// TestInit_AlreadyInitialisedIsACleanNoOp pins the other end of the same
+// promise: on a repository that is already set up, init changes nothing and
+// warns about nothing.
+func TestInit_AlreadyInitialisedIsACleanNoOp(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+	addRemote(t, env.repoDir, "origin", "https://example.com/repo.git")
+
+	var stdout, stderr bytes.Buffer
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+		t.Fatalf("first init exited with %d; stderr: %s", code, stderr.String())
+	}
+	before := gitConfigSnapshot(t, env.repoDir)
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+		t.Fatalf("second init exited with %d; stderr: %s", code, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("second init on a configured repo warned about something:\n%s", stderr.String())
+	}
+	if strings.Contains(stdout.String(), "minted") {
+		t.Errorf("second init claimed to mint something:\n%s", stdout.String())
+	}
+	if after := gitConfigSnapshot(t, env.repoDir); after != before {
+		t.Errorf("second init changed git config:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
+
+// gitConfigSnapshot returns the repository's local git config verbatim, for
+// comparing a repository against itself across a command.
+func gitConfigSnapshot(t *testing.T, dir string) string {
+	t.Helper()
+	cmd := exec.Command("git", "config", "--local", "--list")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git config --local --list in %s: %v", dir, err)
+	}
+	return string(out)
+}
+
 func TestInit_DriftRepair(t *testing.T) {
 	env := setupTestCLIEnv(t)
 	addRemote(t, env.repoDir, "origin", "https://example.com/repo.git")
