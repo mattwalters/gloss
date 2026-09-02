@@ -62,9 +62,11 @@ func EncodePayload(env Envelope) ([]byte, error) {
 // BuildCommit constructs an unsigned Commit for an op, with a single op.json entry
 // at mode 100644, committer byte-identical to author, and timestamp recorded in UTC (+0000).
 //
-// BuildCommit is the producer boundary, so it is where the payload is checked
-// against the vocabulary schema for its object type (spec/op-envelope.md
-// §Producer validation). The check belongs here and not in EncodePayload:
+// BuildCommit is the producer boundary, so it is where the op is checked
+// against the vocabulary registered for its object type: its op_type and
+// op_version are ones this build defines, and its payload satisfies the
+// vocabulary schema (spec/op-envelope.md §Producer validation, rules 3 and 4).
+// The check belongs here and not in EncodePayload:
 // EncodePayload is also on the read path — the projection re-encodes ops it
 // fetched from the log whose raw bytes it did not keep — and a foreign op writ
 // reads perfectly well today must keep projecting.
@@ -82,7 +84,7 @@ func BuildCommit(env Envelope, author Identity, parents []string) (*Commit, erro
 		return nil, fmt.Errorf("codec: build commit payload: %w", err)
 	}
 
-	if err := validateBody(env.ObjectType, raw); err != nil {
+	if err := validateProducerOp(env, raw); err != nil {
 		return nil, fmt.Errorf("codec: build commit body: %w", err)
 	}
 

@@ -35,14 +35,6 @@
     "kind": "schema",
     "reason": "comment schema requires object_type comment"
   },
-  "invalid-op-type.json": {
-    "kind": "schema",
-    "reason": "comment op_type must be create, edit, delete, or resolve"
-  },
-  "invalid-op-version.json": {
-    "kind": "schema",
-    "reason": "v1 comment schema requires op_version 1"
-  },
   "invalid-resolved-type.json": {
     "kind": "schema",
     "reason": "resolve body resolved must be a boolean"
