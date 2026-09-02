@@ -617,6 +617,7 @@ type ConfigError struct {
 	Problem error
 }
 func (*ConfigError) Error() string
+func (*ConfigError) Message() string
 func (*ConfigError) Unwrap() error
 
 type Identity struct {
@@ -881,6 +882,7 @@ type Context struct {
 	Omitted int `json:"omitted,omitempty"`
 	After []string `json:"after"`
 }
+func (Context) MarshalJSON() ([]byte, error)
 
 type File struct {
 	Path string
