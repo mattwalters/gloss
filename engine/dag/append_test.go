@@ -159,7 +159,7 @@ func TestAppend_CausalParents(t *testing.T) {
 		ObjectType: "review",
 		OpType:     "create",
 		OpVersion:  1,
-		Body:       json.RawMessage(`{}`),
+		Body:       json.RawMessage(`{"title":"Initial"}`),
 	}
 	op1, err := store.Append(context.Background(), env1, nil)
 	if err != nil {
@@ -172,7 +172,7 @@ func TestAppend_CausalParents(t *testing.T) {
 		ObjectType: "comment",
 		OpType:     "create",
 		OpVersion:  1,
-		Body:       json.RawMessage(`{"text":"hello"}`),
+		Body:       json.RawMessage(`{"subject":{"object_type":"review","object_id":"rev-1"},"text":"hello"}`),
 	}
 	opComment, err := store.Append(context.Background(), envComment, []string{op1.ID})
 	if err != nil {
@@ -273,7 +273,7 @@ func TestAppend_ConcurrentRace(t *testing.T) {
 					ObjectType: "review",
 					OpType:     "create",
 					OpVersion:  1,
-					Body:       json.RawMessage(`{}`),
+					Body:       json.RawMessage(`{"title":"Initial"}`),
 				}
 				op, err := store.Append(context.Background(), env, nil)
 				results <- appendResult{op: op, err: err}
@@ -351,7 +351,7 @@ func TestAppend_WithSigner(t *testing.T) {
 		ObjectType: "review",
 		OpType:     "create",
 		OpVersion:  1,
-		Body:       json.RawMessage(`{}`),
+		Body:       json.RawMessage(`{"title":"Initial"}`),
 	}
 
 	op, err := store.Append(context.Background(), env, nil)

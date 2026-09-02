@@ -61,10 +61,29 @@ func EncodePayload(env Envelope) ([]byte, error) {
 
 // BuildCommit constructs an unsigned Commit for an op, with a single op.json entry
 // at mode 100644, committer byte-identical to author, and timestamp recorded in UTC (+0000).
+//
+// BuildCommit is the producer boundary, so it is where the payload is checked
+// against the vocabulary schema for its object type (spec/op-envelope.md
+// §Producer validation). The check belongs here and not in EncodePayload:
+// EncodePayload is also on the read path — the projection re-encodes ops it
+// fetched from the log whose raw bytes it did not keep — and a foreign op writ
+// reads perfectly well today must keep projecting.
+//
+// The cost is one JSON Schema validation per appended op — roughly 17 µs,
+// against the 22 µs the canonical encoding directly above it already costs
+// (BenchmarkProducerPath measures both). It is the same order as the signing
+// that follows it on this path, not smaller: it is not free, it is affordable.
+// It is paid once per write and never on a read, and it buys the one failure
+// mode that cannot be repaired afterwards, which is the trade this check is
+// worth.
 func BuildCommit(env Envelope, author Identity, parents []string) (*Commit, error) {
 	raw, err := EncodePayload(env)
 	if err != nil {
 		return nil, fmt.Errorf("codec: build commit payload: %w", err)
+	}
+
+	if err := validateBody(env.ObjectType, raw); err != nil {
+		return nil, fmt.Errorf("codec: build commit body: %w", err)
 	}
 
 	utcAuthor := Identity{

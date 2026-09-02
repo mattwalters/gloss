@@ -70,7 +70,7 @@ func TestOrder_RealGitStoreMultiWriter(t *testing.T) {
 		ObjectType: "comment",
 		OpType:     "create",
 		OpVersion:  1,
-		Body:       json.RawMessage(`{"text":"Looks good"}`),
+		Body:       json.RawMessage(`{"subject":{"object_type":"review","object_id":"rev-42"},"text":"Looks good"}`),
 	}
 	opB1, err := storeBob.Append(ctx, envB1, []string{opA1.ID})
 	if err != nil {

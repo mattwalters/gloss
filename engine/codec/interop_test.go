@@ -2,6 +2,7 @@ package codec_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -83,6 +84,7 @@ func TestInterop_EngineToSystemGit(t *testing.T) {
 		ObjectType: "review",
 		OpType:     "create",
 		OpVersion:  1,
+		Body:       json.RawMessage(`{"title":"Initial"}`),
 	}
 
 	commit, err := codec.BuildCommit(env, author, nil)
@@ -263,6 +265,7 @@ func TestDeterminism(t *testing.T) {
 		ObjectType: "review",
 		OpType:     "create",
 		OpVersion:  1,
+		Body:       json.RawMessage(`{"title":"Initial"}`),
 	}
 
 	commit1, err := codec.BuildCommit(env, author, nil)

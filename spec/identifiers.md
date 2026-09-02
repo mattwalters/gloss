@@ -293,25 +293,90 @@ Normalization is **structural**: it treats the two halves separately.
 1. **Scheme:** lowercased. Whitespace inside or after a scheme is not removed,
    because the scheme charset has no whitespace in it: `email :alice@x` has no
    valid scheme and is not a person identifier.
-2. **Value:** leading and trailing whitespace removed, then case-folded.
+2. **Value:** leading and trailing whitespace removed, then folded by the
+   algorithm in §[The value folding algorithm](#the-value-folding-algorithm).
 3. **Non-empty:** after normalization, both the scheme and the value MUST
    contain at least one character.
 
-$$\text{norm}(s) = \text{lowercase}(\text{scheme}(s)) \mathbin{\|} \text{":"} \mathbin{\|} \text{casefold}(\text{trim\_whitespace}(\text{value}(s)))$$
-
-> **The exact case-folding algorithm is deliberately deferred to WRIT-117.**
-> That work pins Unicode normalization (NFC) and a named case fold, and the
-> fold may legitimately differ per scheme — an `email:` value folding per
-> RFC 5321 and IDNA, a `user:` value per PRECIS
-> ([RFC 8265](https://www.rfc-editor.org/rfc/rfc8265) `UsernameCaseMapped`).
-> Until it lands, both halves fold with ASCII-plus-Unicode simple lowercasing,
-> and an implementation MUST NOT depend on that choice being final. Pinning an
-> algorithm over the flat string here and rewriting it once the string splits
-> in two is the sequencing error this order exists to avoid.
+$$\text{norm}(s) = \text{lowercase}(\text{scheme}(s)) \mathbin{\|} \text{":"} \mathbin{\|} \text{fold}(\text{trim\_whitespace}(\text{value}(s)))$$
 
 The bound in §[Length bounds](#length-bounds) applies to the value **after**
 this step. The identifier as it appears in the op body is the normalized form,
 which producers MUST already have written.
+
+### The value folding algorithm
+
+$\text{fold}$ is three named steps, applied in this order, and it is the same
+algorithm for **every scheme**:
+
+1. **Normalize to NFC** — Unicode Normalization Form C
+   ([UAX #15](https://www.unicode.org/reports/tr15/)).
+2. **Apply Unicode default case folding** — `toCasefold(X)`
+   ([UAX #21](https://www.unicode.org/reports/tr21/) §2.3), the **full**
+   mappings, being the `C` and `F` entries of `CaseFolding.txt`. The `T`
+   entries are **not** applied: folding is locale-independent, and a Turkish
+   locale MUST NOT change the answer.
+3. **Normalize to NFC again.**
+
+All three steps are evaluated against **Unicode 15.0.0**, which this document
+pins. An implementation MUST state the Unicode version it folds against, and a
+change of version is a change to this specification.
+
+$$\text{fold}(v) = \text{NFC}(\text{toCasefold}(\text{NFC}(v)))$$
+
+**Why "lowercase" was not enough.** The earlier rule said the value was
+lowercased, which is not a specification. Go's `strings.ToLower` applies simple
+case mapping and answers `i` for `İ` (U+0130); Rust's `str::to_lowercase`
+applies the full `SpecialCasing` mappings and answers `i` followed by U+0307.
+Two conforming implementations, different bytes, one person split into two
+identities across assignee sets and approval keys. Under the algorithm above
+both answer `i` followed by U+0307, because `toCasefold` is one function with
+one answer.
+
+**Why NFC, and why twice.** Without a normalization step, `é` written as U+00E9
+and `é` written as `e` followed by U+0301 are two different people, which no
+user typed and no client can repair. The trailing NFC is not redundant: case
+folding does not preserve a normal form, so folding NFC input can leave a
+composable sequence behind — U+017F followed by U+0301 folds to `s` followed by
+U+0301, which is not NFC. Without the second pass $\text{fold}$ would not be
+idempotent, and because normalization is applied by the producer, by the fold
+and again by any projection, a rule whose second pass disagreed with its first
+would reintroduce exactly the divergence it exists to remove. With it,
+$\text{fold}(\text{fold}(v)) = \text{fold}(v)$ for every input.
+
+**Why full folding rather than simple.** Simple case folding (the `C` and `S`
+entries) is exposed by the standard library of neither Go, Python nor Rust, so
+specifying it would give an implementer nothing to target and every implementer
+a table to transcribe.
+Default case folding is one call in each: Go `golang.org/x/text/cases.Fold`,
+Python `str.casefold()`, ICU `u_strFoldCase` with `U_FOLD_CASE_DEFAULT`. The
+cost is that folding can lengthen a value — `ß` folds to `ss` — which
+§[Length bounds](#length-bounds) already accounts for by measuring the bound
+after normalization.
+
+**One algorithm for every scheme**, deliberately. A per-scheme fold — `email:`
+per RFC 5321 and IDNA, `user:` per PRECIS
+([RFC 8265](https://www.rfc-editor.org/rfc/rfc8265) `UsernameCaseMapped`) — was
+considered and rejected. It is a second and third algorithm for two
+implementations to disagree about, it makes the answer to "are these the same
+person" depend on parsing a value this format promises never to interpret
+(§[Format](#format)), and an unknown scheme would have no rule at all. The
+accepted cost is that an `email:` value is not folded the way an SMTP server
+would fold it. Writ does not deliver mail; it compares strings.
+
+**Stream-Safe Text is not applied.** $\text{NFC}$ above is Normalization Form C
+and nothing else. Implementations MUST NOT insert U+034F COMBINING GRAPHEME
+JOINER, and MUST NOT stop composing, because a value carries a long run of
+combining marks. This is called out because it is a live interoperability trap
+rather than a hypothetical: normalization libraries that implement UAX #15
+Stream-Safe Text apply it by default, and a value with more than 30 consecutive
+non-starters — comfortably inside the 320-code-point bound — then folds to
+different bytes in different implementations, which is the one thing this
+format may not do.
+
+This document does not restrict which characters a value may contain. Control
+characters, bidirectional overrides and zero-width characters are an open
+question, deliberately separate from how a value is folded.
 
 ### Comparison and equality
 
@@ -325,6 +390,10 @@ For example:
 - `"email:alice@example.com"` and `"  EMAIL:ALICE@EXAMPLE.COM  "` compare as
   equal.
 - `"email:alice@example.com"` and `"user:alice"` do **not** compare as equal.
+- `"user:José"` written with U+00E9 and `"user:José"` written with `e` followed
+  by U+0301 compare as **equal**: NFC composes both to the same bytes.
+- `"user:İ"` (U+0130) normalizes to `user:` followed by `i` and U+0307, on
+  every conforming implementation.
 - Deduplication, set membership tests in add-wins OR-sets (`set-observed-remove`),
   and keyed LWW lookups (`keyed-lww`) operate on the normalized string.
 
@@ -357,6 +426,9 @@ the consequence of the one that does.
 - **Producers MUST** emit normalized, scheme-prefixed person identifiers when
   writing operation payloads, and MUST reject — never truncate, never repair —
   an identifier that violates the grammar or the bounds.
+- **Producers MUST NOT** write a `writer-id` where a `person-id` is expected,
+  nor derive one from the other
+  (§[Relationship to `writer-id`](#relationship-to-writer-id)).
 - **Readers and Reducers MUST** normalize person identifiers upon reading op
   payloads prior to evaluating set membership, keyed lookups, deduplication,
   or projection indices.
@@ -413,6 +485,17 @@ machines and devices, each with its own distinct `writer-id` (e.g. laptop
 the git refspace; the `person-id` identifies the collaborative actor. A
 `writer-id` is never a person identifier: it has no scheme, and substituting
 one would be a bare identifier, which is invalid.
+
+A producer MUST NOT write a `writer-id` where a `person-id` is expected, and
+MUST NOT derive one identifier from the other. The format objection above is
+not the only one: the two identifiers have different scopes. A `person-id` is
+workspace-global, while a `writer-id` names `(user, device)` — so the person
+above holds two of them. Substituting a `writer-id` therefore splits one human
+into two collaborative actors: two assignees, two voters, and — because
+approval fold is scoped by the key `[subject, revision]`
+([`spec/review-ops.md`](review-ops.md) §Fold Implications & Merge Strategies) —
+two approvers on the same revision, neither of whom is the person who
+approved it.
 
 Writ clients derive the local person identifier from git configuration:
 `writ.personId` when set, otherwise `email:` followed by the normalized

@@ -160,6 +160,81 @@ forward-compatibility rules (how fold treats an op it cannot interpret)
 are specified in `spec/forward-compatibility.md`; this document fixes only the
 envelope-level constraint.
 
+## Producer validation
+
+A conforming producer MUST NOT sign an op it could have known was
+invalid. Before the op commit is built, the producer MUST verify that:
+
+1. The payload satisfies this document's envelope schema
+   (`spec/schemas/op-envelope.schema.json`).
+2. The payload is byte-canonical per the byte-equality rule above.
+3. The payload satisfies the vocabulary schema for its `object_type`,
+   for **every object type the producer itself emits**. A producer is
+   not required to hold a schema for an object type it never writes; it
+   is required to hold one for every type it does.
+4. The `op_type` and `op_version` are ones the producer itself defines
+   for that `object_type`. A producer never legitimately authors an op
+   type or an op version it cannot interpret; where it appears to, the
+   cause is a typo, and the op it would write is one no reader will ever
+   interpret either.
+
+Rule 3 is the one this document previously left unstated, and the gap is
+not academic: the reader rules below constrain what an implementation
+accepts, so an implementation that only implemented those could — and
+one did — write ops that its own reader would reject.
+
+Rules 3 and 4 are distinct, and the difference is why rule 4 is written
+out rather than folded into rule 3. The **vocabulary schemas in
+`spec/schemas/` are reader-safe by construction**: they gate their body
+rules on the `op_version` they specify, so an op carrying an unknown
+`op_type` or a future `op_version` is a *valid instance* of them. That
+is deliberate — a reader must tolerate both
+([`spec/forward-compatibility.md`](forward-compatibility.md)), and any
+implementation that validates incoming ops against a published
+vocabulary schema must not thereby break forward compatibility. Rule 4
+is therefore a producer obligation that the schemas do not and should
+not express; a producer satisfies it from its own vocabulary table, not
+by schema validation alone.
+
+> **Known inconsistency.** `spec/schemas/comment.schema.json` does not
+> yet follow the reader-safe construction: it pins `op_version` and an
+> `op_type` enum in an unconditional `allOf`, so it rejects an op the
+> other five vocabularies accept, and rejects what
+> `spec/comments.md` §Forward Compatibility requires readers to
+> tolerate. The corpus records both sides of the disagreement —
+> `spec/testdata/{review-ops,issue-ops,project,cycle,repo}/valid/`
+> carry `unknown-op-type` and future-version vectors, while
+> `spec/testdata/comments/invalid/` carries `invalid-op-type.json` and
+> `invalid-op-version.json`. Resolving it means changing normative
+> fixtures and is tracked as **WRIT-148**.
+
+The asymmetry with reader validation is deliberate. An op is a signed
+commit in an append-only log: a producer that writes an invalid op
+cannot withdraw it. The op stays in history, is fetched by every clone,
+and is rejected by every strict reader forever, and the best any client
+can do is tombstone it in a local projection. A producer that refuses to
+write one costs its caller an error message. Be maximally strict where
+failure is free.
+
+Rules 3 and 4 bind producers only, and "producer" means the act of
+authoring a new op. They do not extend to re-encoding an op read from
+the log: an implementation that decodes an op it fetched and
+re-serializes it — to cache it, relay it, or project it — is acting as a
+reader there, and MUST keep the tolerance defined in
+[`spec/forward-compatibility.md`](forward-compatibility.md). Unknown
+object types, unknown op types, unknown op versions, and unknown fields
+pass through untouched on that path.
+
+The line is the signature, not the intent. **Re-signing an op under a
+new key is authoring, and is bound by rules 3 and 4** — a bridge that
+reads an op from elsewhere and commits it onto its own writer chain has
+produced a new op, whatever it calls the activity, and it vouches for
+that op with its own identity. The tolerated case above is the one where
+the original signed commit is carried through unchanged; a mirror, a
+cache and a projection all qualify, and a re-signing bridge does not.
+The consequence is intended: an implementation that cannot interpret an
+op type cannot put its own name on it.
+
 ## Reader validation
 
 A conforming reader, given a commit reached via a writ ref, MUST reject

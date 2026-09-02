@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"regexp"
+	"testing"
 
 	"github.com/writtendev/writ/engine"
 )
@@ -31,12 +34,13 @@ func ExampleReviews_Create() {
 	}
 	defer store.Close()
 
-	// Create a new code review
+	// Create a new code review. Base and Head are commit OIDs, not ref names:
+	// resolve the ref first, the way the CLI does with git rev-parse.
 	reviewID, err := store.Reviews.Create(ctx, writ.NewReview{
 		Title:       "Add OAuth2 authentication provider",
 		Description: "Implements Google and GitHub OAuth2 flows",
-		Base:        "main",
-		Head:        "feature/oauth2",
+		Base:        "e83c5163316f89bfbde7d9ab23ca2e25604af290",
+		Head:        "1f7a7a472abf3dd9643fd615f6da379c4acb3e3a",
 	})
 	if err != nil {
 		log.Printf("create review: %v", err)
@@ -105,4 +109,35 @@ func ExampleStore_Watch() {
 			}
 		}
 	}()
+}
+
+// TestDocumentedBaseAndHeadAreOIDs guards the package's own documentation.
+//
+// The godoc landing page and ExampleReviews_Create both passed ref names for
+// base and head — an idiom the producer now refuses — and nothing
+// caught it: an Example without an "// Output:" comment compiles but never
+// runs, so `go test` could not have noticed. It still must not run, because it
+// would append ops to whatever repository `go test` was invoked in and print a
+// freshly minted, nondeterministic object id. So the guard reads the source
+// instead: every Base/Head literal these two files teach must be a commit OID.
+func TestDocumentedBaseAndHeadAreOIDs(t *testing.T) {
+	literal := regexp.MustCompile(`(Base|Head):\s*"([^"]*)"`)
+	oid := regexp.MustCompile(`^([0-9a-f]{40}|[0-9a-f]{64})$`)
+
+	for _, file := range []string{"writ.go", "example_test.go"} {
+		src, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		matches := literal.FindAllStringSubmatch(string(src), -1)
+		if len(matches) == 0 {
+			continue
+		}
+		for _, m := range matches {
+			if !oid.MatchString(m[2]) {
+				t.Errorf("%s documents %s: %q, which is not a commit OID — Reviews.Create and PushRevision refuse ref names, so the documentation would teach a call that fails",
+					file, m[1], m[2])
+			}
+		}
+	}
 }

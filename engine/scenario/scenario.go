@@ -180,7 +180,9 @@ func MakeAnchor(commitSHA, path, content string, startLine, endLine int) resolve
 	if beforeStart < 1 {
 		beforeStart = 1
 	}
-	var before []string
+	// before and after start empty rather than nil: spec/schemas/anchor.schema.json
+	// requires both as arrays, and a nil slice marshals to null.
+	before := []string{}
 	for i := beforeStart; i < startLine && i <= len(lines); i++ {
 		before = append(before, lines[i-1])
 	}
@@ -189,7 +191,7 @@ func MakeAnchor(commitSHA, path, content string, startLine, endLine int) resolve
 	if afterEnd > len(lines) {
 		afterEnd = len(lines)
 	}
-	var after []string
+	after := []string{}
 	for i := endLine + 1; i <= afterEnd; i++ {
 		after = append(after, lines[i-1])
 	}

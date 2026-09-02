@@ -227,8 +227,11 @@ func TestEndToEndCrossRepoIssueLinkAndResolution(t *testing.T) {
 	// 2. Create review in Repo B
 	reviewID, err := storeB.Reviews.Create(ctx, writ.NewReview{
 		Title: "Fix performance bug in worker",
-		Base:  "main",
-		Head:  "feat/fix-worker",
+		// Base and Head are commit OIDs, not ref names: spec/review-ops.md
+		// defines the revision body as a pair of OIDs, and the producer will
+		// not sign a revision op carrying anything else.
+		Base: "0000000000000000000000000000000000000001",
+		Head: "0000000000000000000000000000000000000002",
 	})
 	if err != nil {
 		t.Fatalf("storeB.Reviews.Create: %v", err)
@@ -248,7 +251,7 @@ func TestEndToEndCrossRepoIssueLinkAndResolution(t *testing.T) {
 	err = storeA.Issues.Link(ctx, issueID, writ.Link{
 		Target:     qualifiedReviewRef,
 		TargetType: "review",
-		Relation:   "fixed_by",
+		Relation:   "fixes",
 	})
 	if err != nil {
 		t.Fatalf("storeA.Issues.Link: %v", err)
@@ -267,8 +270,8 @@ func TestEndToEndCrossRepoIssueLinkAndResolution(t *testing.T) {
 	if link.Target != qualifiedReviewRef {
 		t.Errorf("link.Target = %q, want %q", link.Target, qualifiedReviewRef)
 	}
-	if link.Relation != "fixed_by" {
-		t.Errorf("link.Relation = %q, want 'fixed_by'", link.Relation)
+	if link.Relation != "fixes" {
+		t.Errorf("link.Relation = %q, want 'fixes'", link.Relation)
 	}
 
 	// 6. Resolve link target through Repo A's workspace resolver
@@ -300,7 +303,7 @@ func TestEndToEndCrossRepoIssueLinkAndResolution(t *testing.T) {
 	bareReviewID := "11112222333344445555666677778888"
 	err = storeA.Issues.Link(ctx, issueID, writ.Link{
 		Target:   bareReviewID,
-		Relation: "relates_to",
+		Relation: "relates",
 	})
 	if err != nil {
 		t.Fatalf("storeA.Issues.Link bare: %v", err)

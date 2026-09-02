@@ -4,7 +4,17 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf8"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/unicode/norm"
 )
+
+// personUnicodeVersion is the Unicode version spec/identifiers.md pins the
+// person-identifier normalization algorithm to. x/text selects its tables by
+// Go build tag rather than by module version, so this is checked against the
+// tables actually compiled in rather than assumed.
+const personUnicodeVersion = "15.0.0"
 
 // splitPerson splits a person identifier into scheme and value on the FIRST
 // colon, per spec/identifiers.md. The first colon and not "a colon": an email
@@ -20,8 +30,7 @@ func splitPerson(s string) (scheme, value string, ok bool) {
 
 // normalizePerson normalizes a person identifier string per
 // spec/identifiers.md: the scheme is lowercased, and the value is trimmed of
-// leading and trailing whitespace and case-folded. The exact case-folding
-// algorithm is not pinned here and may come to differ per scheme (WRIT-117).
+// leading and trailing whitespace and folded by foldPersonValue.
 //
 // A string carrying no colon is not a conforming identifier; it is folded as
 // a flat string and preserved rather than rejected, because what a reader
@@ -37,9 +46,348 @@ func normalizePerson(s string) string {
 	s = strings.TrimSpace(s)
 	scheme, value, ok := splitPerson(s)
 	if !ok {
-		return strings.ToLower(s)
+		return foldPersonValue(s)
 	}
-	return strings.ToLower(scheme) + ":" + strings.ToLower(strings.TrimSpace(value))
+	return strings.ToLower(scheme) + ":" + foldPersonValue(strings.TrimSpace(value))
+}
+
+// foldPersonValue applies the value half of the normalization rule in
+// spec/identifiers.md §Normalization rules, pinned to Unicode
+// personUnicodeVersion: NFC, then Unicode default case folding (UAX #21 §2.3
+// toCasefold, the full C+F mappings, no locale tailoring), then NFC again. One
+// algorithm for every scheme.
+//
+// The trailing NFC is not redundant. Case folding does not preserve a normal
+// form — U+017F followed by U+0301 folds to "s" plus U+0301, which is not NFC
+// — so a rule that stopped after folding would give a different answer on a
+// second pass, and normalization runs at more than one layer.
+func foldPersonValue(s string) string {
+	if personIsASCII(s) {
+		return personLowerASCII(s)
+	}
+	return personNFC(personCaseFold(personNFC(s)))
+}
+
+func personIsASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= utf8.RuneSelf {
+			return false
+		}
+	}
+	return true
+}
+
+func personLowerASCII(s string) string {
+	var b []byte
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			if b == nil {
+				b = []byte(s)
+			}
+			b[i] = c + ('a' - 'A')
+		}
+	}
+	if b == nil {
+		return s
+	}
+	return string(b)
+}
+
+var personFoldCaser = cases.Fold()
+
+// Cherokee uppercase folds to itself: CaseFolding.txt maps Cherokee lowercase
+// *up* ("AB70..ABBF; C; 13A0..13EF"), and x/text encodes case mappings as XOR
+// deltas, which cannot express a mapping that is not an involution, so
+// cases.Fold toggles these code points rather than holding them fixed
+// (golang/go#46101). Folding is idempotent by definition, so the toggle is a
+// defect; an implementation that inherited it would never settle.
+const personCherokeeLo, personCherokeeHi = 0x13A0, 0x13F5
+
+// personCaseFold applies Unicode default case folding, holding the Cherokee
+// code points at their correct fixed points. Folding runs separately is exact
+// because toCasefold is context-free.
+func personCaseFold(s string) string {
+	if !personHasCherokee(s) {
+		return personFoldCaser.String(s)
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	run := 0
+	for i, r := range s {
+		if r < personCherokeeLo || r > personCherokeeHi {
+			continue
+		}
+		b.WriteString(personFoldCaser.String(s[run:i]))
+		b.WriteRune(r)
+		run = i + utf8.RuneLen(r)
+	}
+	b.WriteString(personFoldCaser.String(s[run:]))
+	return b.String()
+}
+
+func personHasCherokee(s string) bool {
+	for _, r := range s {
+		if r >= personCherokeeLo && r <= personCherokeeHi {
+			return true
+		}
+	}
+	return false
+}
+
+// personNFC returns s in Normalization Form C.
+//
+// It does not ask x/text to normalize anything larger than a single rune or a
+// single pair, because x/text's answer for a whole string is wrong in four
+// ways. The first three are defects; the fourth is a deliberate behaviour that
+// this specification does not want:
+//
+//  1. Over-composition. A composition pair is packed into a 32-bit key as
+//     uint16(a)<<16|uint16(b) (unicode/norm/forminfo.go), so a starter above
+//     U+FFFF is truncated to its low 16 bits and matches the BMP entry sharing
+//     them: NFC of U+10041 U+0300 returns "À". 16,956 (starter, mark) pairs
+//     compose falsely this way, and each one merges two distinct people.
+//  2. Stream-Safe Text, applied unconditionally through String, Bytes and Iter
+//     alike: past 30 consecutive non-starters it inserts U+034F and stops
+//     composing. spec/identifiers.md forbids that, and it is reachable well
+//     inside the 320-code-point bound.
+//  3. Composing across a blocker. NFC of U+00C5 U+0BD7 U+0316 U+0301 returns
+//     U+01FA U+0BD7 U+0316: the acute composed onto the base across a ccc-0
+//     mark that blocks it, and was then dropped from the output.
+//  4. Stream-safe *boundaries*. norm.NextBoundaryInString is driven by
+//     streamSafe.next, so it reports a cut after 30 non-starters rather than a
+//     position nothing composes across. x/text carries a TODO at
+//     unicode/norm/normalize.go saying the two are not the same thing.
+//
+// A round-trip guard alone cannot cover this. NFD(NFC(x)) == NFD(x) catches
+// (1), because a false composition is not canonically equivalent. It is blind
+// to (2), because NFD inserts the same joiner and it is present on both sides
+// of the comparison. It sees (3) only because a code point goes missing, and
+// the only repair available to a guard — fall back to NFD — then discards the
+// composition that was legitimate.
+//
+// So the composition is done here, segment by segment, over a canonically
+// ordered decomposition, with x/text asked only the three questions it answers
+// correctly: what one rune decomposes to, what a code point's combining class
+// is, and whether one specific pair composes. All three are swept exhaustively
+// against CPython, which shares no code with x/text.
+func personNFC(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for len(s) > 0 {
+		n := personSegmentLen(s)
+		b.WriteString(personNFCSegment(s[:n]))
+		s = s[n:]
+	}
+	return b.String()
+}
+
+// personSegmentLen returns the byte length of the leading normalization segment of
+// s: its first rune, plus every following rune that cannot begin a segment of
+// its own.
+//
+// The rule is Properties.BoundaryBefore — ccc == 0 and does not combine
+// backwards — applied rune by rune. That is the definition of a position
+// nothing can compose across, so cutting there cannot separate a composing
+// pair, and it has no length limit. See personNFC (4) for why this is not
+// norm.NextBoundaryInString.
+//
+// Combining backwards, and not merely being a non-starter, is what keeps
+// Hangul whole: V (U+1161..U+1175) and T (U+11A8..U+11C2) have ccc == 0 and
+// compose onto the syllable before them, as do spacing marks such as Grantha
+// U+1133E and Tamil U+0BBE. All of them report BoundaryBefore false and stay
+// with their base.
+func personSegmentLen(s string) int {
+	for i := 0; i < len(s); {
+		p := norm.NFC.PropertiesString(s[i:])
+		if i > 0 && p.BoundaryBefore() {
+			return i
+		}
+		n := p.Size()
+		if n <= 0 {
+			// Invalid UTF-8. Advance a byte so this cannot loop; a person
+			// identifier is not required to be well formed for the fold to
+			// terminate on it.
+			n = 1
+		}
+		i += n
+	}
+	return len(s)
+}
+
+// personNFCSegment composes one normalization segment. See personNFC for why it does the
+// composing itself.
+func personNFCSegment(seg string) string {
+	if !utf8.ValidString(seg) {
+		// Not a conforming identifier at all. Return the bytes untouched
+		// rather than route them through a decoder that would replace them:
+		// normalization is not where malformed input is decided, and identity
+		// is at least deterministic and lossless.
+		return seg
+	}
+	return personCompose(personDecompose(seg))
+}
+
+// personDecompose returns seg canonically decomposed and canonically ordered,
+// alongside each rune's combining class, which the caller needs too and which
+// is measurably worth computing once.
+//
+// Decomposition is applied one rune at a time because it is context-free —
+// NFD(xy) is NFD(x) followed by NFD(y), reordered — and because no single
+// rune's decomposition is long enough to reach the stream-safe limit, so
+// x/text answers each one correctly even where it cannot answer for the whole
+// segment.
+func personDecompose(seg string) ([]rune, []uint8) {
+	rs := make([]rune, 0, len(seg))
+	for _, r := range seg {
+		rs = append(rs, []rune(norm.NFD.String(string(r)))...)
+	}
+	cc := make([]uint8, len(rs))
+	for i, r := range rs {
+		cc[i] = personCCC(r)
+	}
+	personCanonicalOrder(rs, cc)
+	return rs, cc
+}
+
+// personCanonicalOrder applies UAX #15's Canonical Ordering Algorithm in place:
+// non-starters are sorted by combining class, stably, and runes with ccc 0 are
+// fixed points that nothing moves across.
+//
+// It sorts each maximal run of non-starters rather than the whole slice, and
+// it is not the obvious insertion sort. A person identifier's segment length
+// is bounded only by what an op body carries — Check is a producer-side guard
+// and the fold deliberately does not call it — so this runs on attacker-chosen
+// input on every reader of the repository, and the rule it replaced was
+// linear. An O(m^2) sort here is an amplification vector, not a slow path.
+func personCanonicalOrder(rs []rune, cc []uint8) {
+	for i := 0; i < len(rs); {
+		if cc[i] == 0 {
+			i++
+			continue
+		}
+		j := i
+		for j < len(rs) && cc[j] != 0 {
+			j++
+		}
+		personSortByCCC(rs[i:j], cc[i:j])
+		i = j
+	}
+}
+
+// personSortRunInsertionMax is the run length below which an insertion sort wins:
+// almost every real combining sequence is one or two marks, and a counting
+// sort's 256-entry histogram costs more than the whole run.
+const personSortRunInsertionMax = 32
+
+// personSortByCCC stably sorts one run of non-starters by combining class. Insertion
+// sort for the short runs that occur in practice, counting sort — linear, and
+// stable because it walks the run in order — for the long ones that make a
+// quadratic sort worth attacking.
+func personSortByCCC(rs []rune, cc []uint8) {
+	if len(rs) < 2 {
+		return
+	}
+	if len(rs) <= personSortRunInsertionMax {
+		for i := 1; i < len(rs); i++ {
+			r, c := rs[i], cc[i]
+			j := i
+			for ; j > 0 && cc[j-1] > c; j-- {
+				rs[j], cc[j] = rs[j-1], cc[j-1]
+			}
+			rs[j], cc[j] = r, c
+		}
+		return
+	}
+	var counts [256]int
+	for _, c := range cc {
+		counts[c]++
+	}
+	sum := 0
+	for i := range counts {
+		counts[i], sum = sum, sum+counts[i]
+	}
+	outR := make([]rune, len(rs))
+	outC := make([]uint8, len(cc))
+	for i, c := range cc {
+		outR[counts[c]], outC[counts[c]] = rs[i], c
+		counts[c]++
+	}
+	copy(rs, outR)
+	copy(cc, outC)
+}
+
+// personCompose applies UAX #15's Canonical Composition Algorithm to a canonically
+// ordered decomposition. Every Unicode fact it needs — the combining classes,
+// and whether a given pair composes — comes from x/text; nothing here is a
+// table this repository has to keep current.
+//
+// It composes only onto rs[0] and never promotes a later starter to be a new
+// base, which UAX #15 permits in general. That is sound here because of an
+// empirical property of the pinned Unicode version rather than anything about
+// the algorithm: of the 75 starters in 15.0.0 that combine backwards — and so
+// stay inside a segment rather than beginning one — exactly zero are the first
+// element of any composition. A later starter therefore has nothing to compose
+// with even if it were promoted. TestPinnedUnicodeVersion is what keeps this
+// true: a Unicode version bump has to re-establish it.
+func personCompose(rs []rune, cc []uint8) string {
+	if len(rs) == 0 {
+		return ""
+	}
+	out := make([]rune, 0, len(rs))
+	out = append(out, rs[0])
+	// A segment that opens on a non-starter has no starter to compose onto.
+	composable := cc[0] == 0
+	// UAX #15 D115: c is blocked from the base when *any* character already
+	// retained between them has ccc 0, or a class at least as high as c's.
+	// Looking only at the last one is not enough — canonical ordering leaves
+	// ccc-0 marks where they are, so a retained blocker can end up behind a
+	// later mark of lower class and would otherwise be forgotten.
+	blockedAll := false
+	maxRetained := -1
+	for i, c := range rs[1:] {
+		n := int(cc[i+1])
+		blocked := blockedAll || maxRetained >= n
+		if composable && !blocked {
+			if p, ok := personCombine(out[0], c); ok {
+				out[0] = p
+				continue
+			}
+		}
+		out = append(out, c)
+		if n == 0 {
+			blockedAll = true
+		} else if n > maxRetained {
+			maxRetained = n
+		}
+	}
+	return string(out)
+}
+
+// personCombine reports the primary composite of a and b, if there is one. It asks
+// x/text, on a two-rune string that cannot reach the stream-safe limit, and
+// applies the round-trip guard so a composition invented by the truncated key
+// (personNFC (1)) is refused.
+func personCombine(a, b rune) (rune, bool) {
+	in := string([]rune{a, b})
+	out := norm.NFC.String(in)
+	if norm.NFD.String(out) != norm.NFD.String(in) {
+		return 0, false
+	}
+	rs := []rune(out)
+	if len(rs) == 1 {
+		return rs[0], true
+	}
+	return 0, false
+}
+
+// personCCC reports a rune's canonical combining class. It encodes into a stack
+// buffer rather than calling PropertiesString(string(r)), which heap-allocates
+// on every call and is invoked once per code point of every identifier folded.
+func personCCC(r rune) uint8 {
+	var buf [utf8.UTFMax]byte
+	n := utf8.EncodeRune(buf[:], r)
+	return norm.NFC.Properties(buf[:n]).CCC()
 }
 
 // EffectiveTimes computes the causality-monotone effective timestamp

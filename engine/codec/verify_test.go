@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -53,6 +54,7 @@ func TestVerify_Outcomes(t *testing.T) {
 		ObjectType: "review",
 		OpType:     "create",
 		OpVersion:  1,
+		Body:       json.RawMessage(`{"title":"Initial"}`),
 	}
 
 	commit, err := codec.BuildCommit(env, author, nil)

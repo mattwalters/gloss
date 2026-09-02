@@ -10,9 +10,36 @@ import (
 
 // engine/internal/person is on this list for the one definition of the
 // person-identifier normalization rule, which fold applies to assignee and
-// approval-subject values. That package imports strings and nothing else, so
-// admitting it grants fold no capability it did not already have. "strings"
-// itself comes off the list: no non-test file here imports it any more.
+// approval-subject values. "strings" itself is off the list: no non-test file
+// here imports it any more.
+//
+// WRIT-117 changed what that entry reaches. person now imports
+// golang.org/x/text/unicode/norm and golang.org/x/text/cases, because the
+// normalization rule spec/identifiers.md pins is defined over Unicode tables
+// that neither the standard library nor this repository carries. Recorded
+// deliberately, because this list is a source-level check and cannot express
+// transitive safety — an entry grants whatever that package can reach:
+//
+//   - Neither x/text package performs I/O. Both are table-driven computation
+//     over generated Unicode data: no filesystem, no network, no processes,
+//     no clock. cases additionally reaches x/text/language, which is table
+//     lookup over language tags.
+//   - person's transitive closure does now contain os, reached through fmt,
+//     which x/text uses for error formatting. That is true of norm on its own
+//     and cannot be avoided by any Go implementation of NFC. It grants fold
+//     nothing new in practice: this test reads fold's own imports, so fold
+//     calling os would still mean an import here that this list rejects, and
+//     person's own source imports strings, unicode/utf8 and the two x/text
+//     packages and nothing else. Keep it that way.
+//   - For scale: fold's own closure already contained os, net *and os/exec*
+//     before any of this, through engine/codec and golang.org/x/crypto/ssh.
+//     person was the stdlib-only entry on this list; fold's closure was never
+//     stdlib-only, and this change is not where that was lost. What the list
+//     buys is that reaching any of it still takes an import that shows up
+//     here.
+//
+// fold's own import list is unchanged by all of this: it reaches the rule
+// through person, exactly as before.
 var allowedImports = map[string]bool{
 	`"container/heap"`:                                    true,
 	`"encoding/json"`:                                     true,

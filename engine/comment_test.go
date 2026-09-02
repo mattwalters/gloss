@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/writtendev/writ/engine"
@@ -545,6 +546,109 @@ func TestCommentsResolvePersonIDLengthBound(t *testing.T) {
 	}
 }
 
+// TestCommentsResolvePersonIDBoundAppliesAfterNFC pins the rule
+// spec/identifiers.md §Length bounds states: the bound applies to the
+// normalized value, not the value as written. NFC composition shrinks, so an
+// identifier that is 321 code points as the caller spells it and 320 once
+// composed is inside the bound and MUST be accepted. Checking the raw input
+// would refuse it, and two readers checking at different points would disagree
+// about the same identifier.
+//
+// This is the axis TestCommentsResolvePersonIDBoundCountsCodePoints cannot
+// reach: there the value is precomposed U+00E9, which is already NFC, so
+// normalization does not move the count at all.
+func TestCommentsResolvePersonIDBoundAppliesAfterNFC(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+
+	headHash := runGitCmd(t, repoDir, "rev-parse", "HEAD")[:40]
+	reviewID, err := s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Decomposed Person ID Review",
+		Base:  headHash,
+		Head:  headHash,
+	})
+	if err != nil {
+		t.Fatalf("Create review failed: %v", err)
+	}
+
+	// 319 precomposed e-acute plus one written as e + U+0301: 321 code points
+	// as spelled, 320 once composed.
+	raw := strings.Repeat("\u00e9", 319) + "e\u0301"
+	if n := utf8.RuneCountInString(raw); n != 321 {
+		t.Fatalf("test setup: raw value is %d code points, want 321", n)
+	}
+	composed := writ.NormalizePerson("email:" + raw)
+	if n := utf8.RuneCountInString(composed); n != len("email:")+320 {
+		t.Fatalf("test setup: normalized identifier is %d code points, want %d",
+			utf8.RuneCountInString(composed), len("email:")+320)
+	}
+
+	commentID, err := s.Reviews.Comment(ctx, reviewID, writ.NewComment{Text: "Composes to the bound"})
+	if err != nil {
+		t.Fatalf("Comment failed: %v", err)
+	}
+	if err := s.Comments.Resolve(ctx, commentID, writ.CommentResolve{
+		Resolved:   true,
+		ResolvedBy: "email:" + raw,
+	}); err != nil {
+		t.Fatalf("Resolve with a 321-code-point value composing to 320 failed: %v — "+
+			"the bound applies after normalization, not before: %v", err, err)
+	}
+
+	// What was written is the normalized form, and the schema accepts it: the
+	// op body carries 320 code points, never the 321 the caller spelled.
+	ident, _ := identity.ParseWriterID("0123456789abcdef")
+	dagStore, err := dag.Open(repoDir, identity.Identity{WriterID: ident})
+	if err != nil {
+		t.Fatalf("dag.Open failed: %v", err)
+	}
+	enumRes, err := dagStore.Enumerate()
+	if err != nil {
+		t.Fatalf("dagStore.Enumerate failed: %v", err)
+	}
+	var resolveOps int
+	for _, op := range enumRes.Ops[commentID] {
+		if op.OpType != "resolve" {
+			continue
+		}
+		resolveOps++
+		if err := codec.ValidateBody(op.Envelope); err != nil {
+			t.Errorf("the accepted identifier produced an op the comment schema rejects: %v", err)
+		}
+	}
+	if resolveOps != 1 {
+		t.Fatalf("expected 1 resolve op, got %d", resolveOps)
+	}
+
+	// And it is the same person as the fully precomposed spelling.
+	comments, err := s.Query.Comments(writ.CommentFilter{SubjectID: reviewID})
+	if err != nil {
+		t.Fatalf("Query.Comments failed: %v", err)
+	}
+	want := writ.NormalizePerson("email:" + strings.Repeat("\u00e9", 320))
+	var found bool
+	for _, c := range comments {
+		if c.ObjectID != commentID {
+			continue
+		}
+		found = true
+		if c.Comment.ResolvedBy != want {
+			t.Errorf("the decomposed spelling folded to %q, want %q — "+
+				"the two spellings must be one person", c.Comment.ResolvedBy, want)
+		}
+	}
+	if !found {
+		t.Errorf("comment %s not found in query results", commentID)
+	}
+}
+
 // TestCommentsResolvePersonIDBoundCountsCodePoints pins the unit the person-id
 // bound is measured in. JSON Schema maxLength counts code points, so the engine
 // guard has to as well: 320 "é" characters are 640 bytes, so a byte-counting
@@ -579,6 +683,13 @@ func TestCommentsResolvePersonIDBoundCountsCodePoints(t *testing.T) {
 	if len(atLimitValue) != 640 || len(overLimitValue) != 642 {
 		t.Fatalf("test setup: values are %d and %d bytes, want 640 and 642 — a byte-counting guard must see both as over-length",
 			len(atLimitValue), len(overLimitValue))
+	}
+	// Spelled out because this test depends on it: U+00E9 is precomposed and
+	// already NFC, so normalization does not change the count and the code
+	// points here are the code points the bound sees. The decomposed spelling,
+	// where it does change, is TestCommentsResolvePersonIDBoundAppliesAfterNFC.
+	if n := utf8.RuneCountInString(atLimitValue); n != 320 {
+		t.Fatalf("test setup: at-limit value is %d code points, want 320", n)
 	}
 	atLimit := "email:" + atLimitValue
 	overLimit := "email:" + overLimitValue

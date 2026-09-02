@@ -1,0 +1,110 @@
+name: envelope-body-vocabulary-tolerance
+description: >
+  Ops whose bodies violate their own vocabulary schema while satisfying the
+  envelope schema, all of which a conforming reader MUST accept. Producer
+  validation (spec/op-envelope.md §Producer validation) refuses to author every
+  one of these; reader validation is envelope-level and does not, and the two
+  must not be conflated. Without this family a later "consistency" change could
+  tighten the reader to match the producer and silently break forward
+  compatibility, because every existing schema-violation fixture is
+  envelope-level. Covers an out-of-enum verdict, an over-long person
+  identifier, an empty person identifier, a ref name where the revision body
+  requires a commit OID, and a comment anchor whose context collar is null
+  rather than an array.
+
+refs:
+  - name: refs/writ/alice/review
+    history:
+      - commits:
+          - id: verdict-outside-enum
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            op:
+              object_id: review-01
+              object_type: review
+              op_type: approval
+              op_version: 1
+              body:
+                revision: "0000000000000000000000000000000000000000"
+                verdict: "bogus"
+            expect: accept
+          - id: over-long-person-id
+            author: alice
+            timestamp: 2026-01-01T00:01:00Z
+            op:
+              object_id: review-01
+              object_type: review
+              op_type: approval
+              op_version: 1
+              body:
+                revision: "0000000000000000000000000000000000000000"
+                verdict: "approve"
+                subject: "email:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            expect: accept
+          - id: empty-person-id
+            author: alice
+            timestamp: 2026-01-01T00:02:00Z
+            op:
+              object_id: review-01
+              object_type: review
+              op_type: approval
+              op_version: 1
+              body:
+                revision: "0000000000000000000000000000000000000000"
+                verdict: "approve"
+                subject: ""
+            expect: accept
+          - id: revision-ref-name-not-oid
+            author: alice
+            timestamp: 2026-01-01T00:03:00Z
+            op:
+              object_id: review-01
+              object_type: review
+              op_type: revision
+              op_version: 1
+              body:
+                base: "main"
+                head: "feature/oauth2"
+            expect: accept
+          - id: create-missing-required-title
+            author: alice
+            timestamp: 2026-01-01T00:04:00Z
+            op:
+              object_id: review-02
+              object_type: review
+              op_type: create
+              op_version: 1
+              body:
+                description: "no title, which review-ops requires"
+            expect: accept
+
+  - name: refs/writ/alice/comment
+    history:
+      - commits:
+          - id: anchor-null-context-collar
+            author: alice
+            timestamp: 2026-01-01T00:05:00Z
+            op:
+              object_id: comment-01
+              object_type: comment
+              op_type: create
+              op_version: 1
+              body:
+                subject:
+                  object_type: review
+                  object_id: review-01
+                text: "a comment on the first line of a file"
+                anchor:
+                  version: 1
+                  new:
+                    commit: "0000000000000000000000000000000000000000"
+                    path: "README.md"
+                    blob: "1111111111111111111111111111111111111111"
+                    range:
+                      start: 1
+                      end: 1
+                    context:
+                      before: null
+                      lines: ["# Test"]
+                      after: null
+            expect: accept
