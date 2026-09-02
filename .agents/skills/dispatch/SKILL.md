@@ -1,21 +1,25 @@
 ---
 name: dispatch
-description: Batch-run the next WRIT tickets from Linear. Picks 5–10 unblocked tickets by priority, has each one planned into its ticket description, plans parallel vs serial execution, gets human approval, then orchestrates planner, implementer, reviewer, and fixer subagents in isolated git worktrees through CI-green pull requests, adversarial review cycles, and merges. Use when asked to run the queue, work the next tickets, dispatch a batch, or process Linear tickets in parallel. Do not use for a single ticket a human is already driving.
+description: Batch-run the next WRIT tickets from Linear. Picks 5–10 unblocked tickets by priority, has each one planned into its ticket description, plans parallel vs serial execution, gets human approval, then orchestrates planner, implementer, reviewer, and fixer subagents in isolated git worktrees through CI-green pull requests, adversarial review cycles, and a human-approved merge queue. Use when asked to run the queue, work the next tickets, dispatch a batch, or process Linear tickets in parallel. Do not use for a single ticket a human is already driving.
 ---
 
 # Dispatch
 
 You are the orchestrator. You pick a batch of tickets, have each one
-planned, get one human approval, and then run each ticket through
-implement → review → fix → merge using subagents. You do not write
-code, read diffs, or debug CI yourself — every one of those burns
-orchestrator context that the whole batch depends on. Subagents do the work; you route, count rounds, move
-Linear tickets, and merge.
+planned, get one human approval on the batch, and then run each ticket
+through implement → review → fix using subagents. Each merge waits for
+a per-ticket human go-ahead; once given, you own merge order and
+timing. You do not write code, read diffs, or debug CI yourself —
+every one of those burns orchestrator context that the whole batch
+depends on. Subagents do the work; you route, count rounds, move
+Linear tickets, and run the merge queue.
 
 Statuses used (Linear team WRIT): `Todo` → `Implementing` → `In Review`
 → `To Merge` → `Done`, with `Needs Attention` for anything that needs a
-human. Move tickets yourself as they advance; a GitHub automation may
-race you to `Done` on merge, which is harmless.
+human. `In Review` is a reading gate — a ticket rests there until the
+human approves its merge; `To Merge` means approved and sitting in
+your merge queue. Move tickets yourself as they advance; a GitHub
+automation may race you to `Done` on merge, which is harmless.
 
 ## Context rules (non-negotiable)
 
@@ -82,10 +86,10 @@ priority, estimate, wave, one line of why-now, and the plan's one-line
 summary, plus a note on anything serialized and why, and any tickets
 the planners dropped as unplannable. Approving the batch approves the
 plans — the full plans are on the tickets for anyone who wants the
-detail. The human can drop tickets, add tickets (an added ticket gets
-a planner pass before it joins a wave), or mark a ticket **hold** —
-meaning run it through review but do not merge it until they have read
-the PR themselves.
+detail. The human can drop tickets or add tickets (an added ticket
+gets a planner pass before it joins a wave). Merges are approved
+separately, ticket by ticket, at the merge queue — though the human
+can pre-authorize a ticket's merge here if they say so.
 
 Do not start any work, and do not move any ticket, until the human says
 yes. The approval covers this batch only.
@@ -129,7 +133,7 @@ When an implementer reports green:
    brief and the PR — none of the implementer's reasoning. It posts
    findings as PR review comments rated major/medium/minor, and
    returns only counts and one line per finding.
-3. **Zero findings** → the branch is done; go to Phase 7.
+3. **Zero findings** → the branch is ready; go to Phase 7.
 4. **Any findings** → spawn a fixer subagent with `prompts/fixer.md`
    in the same worktree. It addresses every finding (or rebuts one in
    the PR thread with a concrete reason), gets CI green again under the
@@ -142,15 +146,22 @@ the human: the findings summary, what each round fixed, and your read
 on whether it is converging or looping. The human decides whether
 another cycle is warranted. Never run a fourth round unattended.
 
-## Phase 7 — Merge
+## Phase 7 — Merge queue
 
-A branch is mergeable when its latest review round returned zero
-findings and CI is green. Move the ticket to `To Merge` (skip merging
-any ticket the human marked hold — tell them it is ready instead).
+A branch is ready when its latest review round returned zero findings
+and CI is green. Tell the human: ticket, PR link, rounds run, and what
+the last round found. The ticket rests in `In Review` — a reading
+gate — until the human approves that ticket's merge: in chat, by
+moving the ticket to `To Merge` in Linear themselves, or by having
+pre-authorized it at the batch gate. Any of the three counts. Never
+merge a ticket without one of them.
 
-You own merge order. Merge to minimize conflicts: serial chains in
-their intended order, then whatever overlaps least with what just
-landed. For each merge:
+Approval makes a ticket eligible; it does not set the order. The human
+may green-light five at once — sequencing them is still yours, so a
+batch of approvals never turns into merges in whatever order they
+arrived. Move each approved ticket to `To Merge` and merge to minimize
+conflicts: serial chains in their intended order, then whatever
+overlaps least with what just landed. For each merge:
 
 1. Rebase the branch onto current `origin/main` (do it in the ticket's
    worktree; if the rebase throws a non-trivial conflict, that is a
@@ -187,7 +198,8 @@ never silently.
 
 After each merge, and whenever the human asks: one table from the
 manifest — ticket, title, where it is (implementing / review round N /
-fixing / awaiting merge / held / merged / needs attention), PR link.
+fixing / ready for merge approval / queued to merge / merged / needs
+attention), PR link.
 Nothing else; the details live on the PRs.
 
 ## Escalation
