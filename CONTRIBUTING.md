@@ -131,9 +131,10 @@ current, not merely that nothing obviously broke.
 
 ### Reading the diff
 
-A line that changes or disappears is a breaking change. An added line is
-*usually* new surface — with two exceptions that are breaking despite reading
-as plain additions:
+A line that changes or disappears is *usually* a breaking change — renaming a
+parameter or a type parameter, or reordering struct fields, all move lines
+without breaking anyone. An added line is *usually* new surface. Three
+exceptions break callers despite reading as plain additions:
 
 - **A method added to an exported interface.** Every implementation outside
   this repo stops satisfying it. In the listing it looks exactly like the same
@@ -142,20 +143,33 @@ as plain additions:
   after it, silently changing values callers may have persisted. Implicit iota
   members are listed without values, so the renumbering leaves no trace beyond
   the one added line.
+- **A slice, map or func field added to a struct that was comparable.** Those
+  types are not comparable, so the struct stops being comparable: every `==`,
+  every use as a map key, every `switch` on one stops compiling. Adding
+  `Labels []string` to `engine.NewIssue` is one added line in the listing and
+  `./engine.NewIssue: old is comparable, new is not` from apidiff. **If the
+  field is unexported and the struct already had unexported fields, the
+  listing does not change at all** — the whole struct is already one
+  `// unexported fields` line, so a breaking change lands with an empty diff.
+  Most of the DTO structs in `engine` are comparable today, so this is a
+  live hazard, not a corner case.
 
-Adding a field to an exported struct is not on this list: it is compatible.
+Adding a comparable field — an `int`, a `string`, another comparable struct —
+is compatible.
 
 `make api-compat` is what settles it. It runs
 [apidiff](https://pkg.go.dev/golang.org/x/exp/cmd/apidiff) against the merge
 base with `main` and labels each change compatible or incompatible — the
-classification the text listing cannot express. It compares two checkouts
-rather than a committed baseline, so nothing it produces is stored and no
-machine-specific paths ship. CI runs it on every pull request and prints the
-result in the job summary.
+classification the text listing cannot express, including the case above that
+the listing cannot even show. It compares two checkouts rather than a
+committed baseline, so nothing it produces is stored and no machine-specific
+paths ship. CI runs it on every pull request.
 
-It is a **report, not a gate**. Breaking changes aren't forbidden before 1.0,
-so nothing fails on one — but they are never silent: call it out in the PR and
-add a CHANGELOG.md entry.
+Breaking changes aren't forbidden before 1.0 — silent ones are. So
+`api-compat` prints every engine change and fails on exactly one condition:
+apidiff reported an **incompatible** change and the pull request does not
+touch `CHANGELOG.md`. Add the entry, call it out in the PR, and the job goes
+green; there is no baseline to regenerate and no label to apply.
 
 ### Where the listing comes from
 

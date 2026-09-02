@@ -1,6 +1,7 @@
 PKG := github.com/writtendev/writ
 APISURFACE := go run ./internal/cmd/apisurface
 APIDIFF := go run golang.org/x/exp/cmd/apidiff@v0.0.0-20250128182459-e0ece0dbea4c
+APICOMPAT_FILTER := internal/cmd/apisurface/apicompat.awk
 
 # Resolve the install dir the way the go tool does: GOBIN when set, else
 # GOPATH/bin.
@@ -56,33 +57,42 @@ api-check: ## Fail if api/engine.txt is stale (the CI gate)
 		echo; \
 		echo 'api-check: api/engine.txt does not match the code.'; \
 		echo 'api-check: run `make api` and commit the result. Read the diff above:'; \
-		echo 'api-check: a line that changes or disappears is a breaking change, and'; \
-		echo 'api-check: so is an added interface method or a constant inserted into'; \
-		echo 'api-check: an iota block, which renumbers the ones after it. `make'; \
-		echo 'api-check: api-compat` classifies the delta if you want it named.'; \
-		echo 'api-check: Breaking changes are allowed — say so in the PR, and in'; \
-		echo 'api-check: CHANGELOG.md.'; \
+		echo 'api-check: a line that changes or disappears is usually a breaking'; \
+		echo 'api-check: change, and so are three kinds of added line: a method added'; \
+		echo 'api-check: to an exported interface, a constant inserted into an iota'; \
+		echo 'api-check: block (it renumbers the ones after it), and a slice, map or'; \
+		echo 'api-check: func field added to a struct that was comparable (== stops'; \
+		echo 'api-check: compiling) — that last one leaves no diff here at all when'; \
+		echo 'api-check: the field is unexported and the struct already had unexported'; \
+		echo 'api-check: fields. `make api-compat` classifies the delta. Breaking'; \
+		echo 'api-check: changes are allowed — say so in the PR, and in CHANGELOG.md.'; \
 		exit 1; \
 	fi
 
 # api-check answers "is the baseline current". It cannot answer "did that
-# break anyone", because two of the shapes that break callers reach the
+# break anyone", because three of the shapes that break callers reach the
 # listing as plain added lines: a method added to an exported interface
 # (breaking for implementors, indistinguishable from adding the same method
-# to a concrete type) and a constant inserted into an iota block (which
+# to a concrete type), a constant inserted into an iota block (which
 # renumbers every constant after it, invisibly — implicit iota members print
-# without values). apidiff knows the difference. It runs against the merge
-# base rather than a committed baseline, so nothing it produces is stored and
-# no machine-specific paths ship.
+# without values), and a slice, map or func field added to a struct that was
+# comparable (every == on it stops compiling; if the field is unexported and
+# the struct already had unexported fields, the listing does not change at
+# all). apidiff knows the difference. It runs against the merge base rather
+# than a committed baseline, so nothing it produces is stored and no
+# machine-specific paths ship.
 #
-# This is a report, not a gate: before 1.0 a breaking change is allowed, it
-# just may not be silent. It prints the classification and leaves the call to
-# whoever reviews the PR.
+# It reports every engine change and gates on one thing: a breaking change
+# has to be acknowledged in CHANGELOG.md. Before 1.0 breaking changes are
+# allowed — silent ones are not, and CONTRIBUTING.md already asks for the
+# entry. That makes the way through mechanical, needs no baseline to
+# regenerate and no permissions to comment, and puts the finding in the pull
+# request rather than in a job summary nobody opens.
 BASE ?= origin/main
 
-api-compat: ## Name the engine API changes since BASE, breaking ones first (a report)
+api-compat: ## Report the engine API changes since BASE; fail on an unacknowledged breaking one
 	@set -e; \
-	base=$$(git merge-base '$(BASE)' HEAD) || { \
+	base=$$(git merge-base '$(BASE)' HEAD 2>/dev/null) || { \
 	  printf 'api-compat: no merge base with %s — fetch it first\n' '$(BASE)' >&2; \
 	  exit 1; }; \
 	tmp=$$(mktemp -d "$${TMPDIR:-/tmp}/writ-apicompat.XXXXXX"); \
@@ -94,8 +104,7 @@ api-compat: ## Name the engine API changes since BASE, breaking ones first (a re
 	$(APIDIFF) -m "$$tmp/base.api" $(PKG) >"$$tmp/all.txt" 2>"$$tmp/err" \
 	  || { cat "$$tmp/err" >&2; exit 1; }; \
 	grep -v '^Ignoring internal package ' "$$tmp/err" >&2 || true; \
-	awk '/:$$/ && !/^-/ { header = $$0; next } \
-	     /\.\/engine/ { if (header != "") { print header; header = "" } print }' \
+	LC_ALL=C awk -f '$(APICOMPAT_FILTER)' -v mod='$(PKG)' \
 	  "$$tmp/all.txt" > "$$tmp/engine.txt"; \
 	short=$$(git rev-parse --short "$$base"); \
 	if [ -s "$$tmp/engine.txt" ]; then \
@@ -103,7 +112,17 @@ api-compat: ## Name the engine API changes since BASE, breaking ones first (a re
 	  cat "$$tmp/engine.txt"; \
 	else \
 	  printf 'api-compat: no engine API change since %s.\n' "$$short"; \
-	fi
+	fi; \
+	grep -q '^Incompatible changes:' "$$tmp/engine.txt" || exit 0; \
+	if [ -n "$$(git diff --name-only "$$base" HEAD -- CHANGELOG.md)" ]; then \
+	  printf '\napi-compat: breaking, and acknowledged in CHANGELOG.md.\n'; \
+	  exit 0; \
+	fi; \
+	printf '\napi-compat: those changes break callers and CHANGELOG.md says nothing\n' >&2; \
+	printf 'api-compat: about it. Breaking changes are allowed before 1.0; silent\n' >&2; \
+	printf 'api-compat: ones are not — add the CHANGELOG.md entry, and say so in the\n' >&2; \
+	printf 'api-compat: pull request.\n' >&2; \
+	exit 1
 
 # The CLI reference is generated from the command table in cmd/writ, not
 # hand-written, so a flag cannot exist in code and be missing from the docs.

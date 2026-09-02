@@ -47,14 +47,21 @@ jobs:
       - run: make api-check
 
   # api-check answers "is the baseline current". This answers "did anything
-  # break", which the text listing cannot: an added interface method and a
-  # constant inserted into an iota block both reach it as plain added lines.
-  # It needs a base revision to compare against, so it runs on pull requests
-  # only; a push to main has no meaningful base and the job is skipped.
+  # break", which the text listing cannot: an added interface method, a
+  # constant inserted into an iota block, and a non-comparable field added to
+  # a comparable struct all reach it as plain added lines — the last of them
+  # as no line at all when the field is unexported. It needs a base revision
+  # to compare against, so it runs on pull requests only; a push to main has
+  # no meaningful base and the job is skipped.
   #
-  # It reports rather than gates — before 1.0 a breaking change is allowed, it
-  # just may not be silent — so it is deliberately a separate job from `api`:
-  # fetching apidiff is a network call, and the gate must not depend on one.
+  # It prints every engine change and fails on one thing: an incompatible
+  # change that CHANGELOG.md does not mention. Before 1.0 breaking changes are
+  # allowed, silent ones are not, and the CHANGELOG entry is the
+  # acknowledgement CONTRIBUTING.md already asks for — so the way through needs
+  # no baseline, no label, and no write permissions here.
+  #
+  # It is a separate job from `api` deliberately: fetching apidiff is a network
+  # call, and the staleness gate must not depend on one.
   api-compat:
     name: api-compat
     if: github.event_name == 'pull_request'
@@ -72,9 +79,14 @@ jobs:
           git fetch --no-tags --quiet origin \
             "+refs/heads/$GITHUB_BASE_REF:refs/remotes/origin/$GITHUB_BASE_REF"
           out="$RUNNER_TEMP/api-compat.txt"
-          make api-compat BASE="origin/$GITHUB_BASE_REF" > "$out"
+          # A breaking change without a CHANGELOG.md entry fails the job. The
+          # report is the reason for the failure, so it has to reach the log
+          # and the summary either way.
+          status=0
+          make api-compat BASE="origin/$GITHUB_BASE_REF" > "$out" 2>&1 || status=$?
           cat "$out"
           { echo '```'; cat "$out"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
 
   docs:
     name: docs
