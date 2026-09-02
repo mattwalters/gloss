@@ -17,7 +17,7 @@ const (
 	resolutionSchemaID = "https://writ.dev/spec/resolution.schema.json"
 )
 
-var getCompiledResolutionSchema = sync.OnceValue(func() *jsonschema.Schema {
+var getCompiledSchemas = sync.OnceValues(func() (*jsonschema.Schema, *jsonschema.Schema) {
 	rawAnchor, err := spec.FS.ReadFile("schemas/anchor.schema.json")
 	if err != nil {
 		panic(err)
@@ -43,11 +43,15 @@ var getCompiledResolutionSchema = sync.OnceValue(func() *jsonschema.Schema {
 	if err := c.AddResource(resolutionSchemaID, resDoc); err != nil {
 		panic(err)
 	}
-	sch, err := c.Compile(resolutionSchemaID)
+	anchorSch, err := c.Compile(anchorSchemaID)
 	if err != nil {
 		panic(err)
 	}
-	return sch
+	resSch, err := c.Compile(resolutionSchemaID)
+	if err != nil {
+		panic(err)
+	}
+	return anchorSch, resSch
 })
 
 func FuzzResolve(f *testing.F) {
@@ -71,37 +75,48 @@ func FuzzResolve(f *testing.F) {
 		}
 	}
 
-	sch := getCompiledResolutionSchema()
+	anchorSch, resSch := getCompiledSchemas()
 
 	f.Fuzz(func(t *testing.T, anchorData []byte, targetData []byte) {
+		anchorInst, err := jsonschema.UnmarshalJSON(bytes.NewReader(anchorData))
+		if err != nil {
+			return
+		}
+		if err := anchorSch.Validate(anchorInst); err != nil {
+			return
+		}
+
 		anchor, err := resolve.ParseAnchor(anchorData)
 		if err != nil {
 			return
 		}
 
 		var filesMap map[string]string
-		_ = json.Unmarshal(targetData, &filesMap)
+		if err := json.Unmarshal(targetData, &filesMap); err != nil {
+			return
+		}
 		files := make(map[string][]byte, len(filesMap))
 		for k, v := range filesMap {
+			if len(k) == 0 || k[0] == '/' {
+				continue
+			}
 			files[k] = []byte(v)
 		}
 
 		tree := resolve.NewTree(files, resolve.SHA1)
 		outcome := resolve.Resolve(anchor, tree)
 
-		// Assert outcome validates against resolution.schema.json if anchor had at least one side
-		if anchor.Old != nil || anchor.New != nil {
-			outcomeJSON, err := json.Marshal(outcome)
-			if err != nil {
-				t.Fatalf("marshaling outcome: %v", err)
-			}
-			inst, err := jsonschema.UnmarshalJSON(bytes.NewReader(outcomeJSON))
-			if err != nil {
-				t.Fatalf("decoding outcome JSON for schema validation: %v", err)
-			}
-			if err := sch.Validate(inst); err != nil {
-				t.Fatalf("resolution outcome failed schema validation: %v\noutcome: %s", err, string(outcomeJSON))
-			}
+		// Assert outcome validates against resolution.schema.json
+		outcomeJSON, err := json.Marshal(outcome)
+		if err != nil {
+			t.Fatalf("marshaling outcome: %v", err)
+		}
+		inst, err := jsonschema.UnmarshalJSON(bytes.NewReader(outcomeJSON))
+		if err != nil {
+			t.Fatalf("decoding outcome JSON for schema validation: %v", err)
+		}
+		if err := resSch.Validate(inst); err != nil {
+			t.Fatalf("resolution outcome failed schema validation: %v\noutcome: %s", err, string(outcomeJSON))
 		}
 	})
 }
