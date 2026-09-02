@@ -1,0 +1,72 @@
+{
+  "name": "uninterpretable-append",
+  "description": "An append field carrying null, or an array holding a null entry, makes the operation uninterpretable. Entries of other JSON types are stored verbatim and are not affected: they round-trip through canonical JSON, so any implementation reproduces them",
+  "object_id": "obj-1",
+  "fields": {
+    "entries": { "strategy": "append" },
+    "note": { "strategy": "lww" }
+  },
+  "ops": [
+    {
+      "id": "op-a-good",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "entries": ["first"]
+      }
+    },
+    {
+      "id": "op-b-null",
+      "parents": ["op-a-good"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "entries": null,
+        "note": "dies with the op that carried it"
+      }
+    },
+    {
+      "id": "op-c-null-entry",
+      "parents": ["op-b-null"],
+      "time": 300,
+      "object_id": "obj-1",
+      "body": {
+        "entries": ["second", null]
+      }
+    },
+    {
+      "id": "op-d-number",
+      "parents": ["op-c-null-entry"],
+      "time": 400,
+      "object_id": "obj-1",
+      "body": {
+        "entries": 42
+      }
+    },
+    {
+      "id": "op-e-object-entry",
+      "parents": ["op-d-number"],
+      "time": 500,
+      "object_id": "obj-1",
+      "body": {
+        "entries": [{ "base": "b1", "head": "h1" }, true]
+      }
+    },
+    {
+      "id": "op-f-good",
+      "parents": ["op-e-object-entry"],
+      "time": 600,
+      "object_id": "obj-1",
+      "body": {
+        "entries": ["third"],
+        "note": "written by a well-formed op"
+      }
+    }
+  ],
+  "expected_state": {
+    "entries": ["first", 42, { "base": "b1", "head": "h1" }, true, "third"],
+    "note": "written by a well-formed op"
+  },
+  "expected_unknown_ops": ["op-b-null", "op-c-null-entry"]
+}

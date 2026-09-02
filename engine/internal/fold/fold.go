@@ -26,8 +26,12 @@ type OpRef struct {
 }
 
 // UnknownOp records an operation that was preserved in the DAG and participated
-// in ordering and ancestry, but whose (op_type, op_version) had no declared rules
-// per spec/fold.md §7.
+// in ordering and ancestry, but contributed no field writes: either its
+// (op_type, op_version) had no declared rules (spec/fold.md §7), or a field
+// carrying a declared rule held a value its strategy cannot consume, which
+// makes the whole operation uninterpretable (spec/fold.md §7.1). Both are
+// quarantined through this one channel, so a count of them leads to a commit
+// and a commit to the raw op and its signer.
 type UnknownOp struct {
 	Commit    string `json:"commit"`
 	OpType    string `json:"op_type"`
@@ -94,8 +98,14 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 		rawBodyMap[o.Op.ID] = rbm
 	}
 
-	// Identify unknown ops: ops matching no declared rule
+	// Quarantine, in total order, the ops that contribute no field writes: ops
+	// matching no declared rule (spec/fold.md §7) and ops whose body a declared
+	// rule cannot consume (spec/fold.md §7.1). Both stay full members of the
+	// restricted DAG — they are in the total order and in every ancestry
+	// calculation — and both are reported through unknown_ops rather than as a
+	// fold error. One bad op costs that op, never the object.
 	var unknownOps []UnknownOp
+	rejected := make(map[string]bool)
 	for _, o := range orderedOps {
 		known := false
 		for _, r := range rules {
@@ -103,6 +113,10 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 				known = true
 				break
 			}
+		}
+		if known && Uninterpretable(o.Op, bodyMap[o.Op.ID], rules) {
+			rejected[o.Op.ID] = true
+			known = false
 		}
 		if !known {
 			unknownOps = append(unknownOps, UnknownOp{
@@ -117,6 +131,9 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 	matchedRulesByField := make(map[string][]Rule)
 	for _, r := range rules {
 		for _, o := range orderedOps {
+			if rejected[o.Op.ID] {
+				continue
+			}
 			if opMatchesRule(o.Op, r) {
 				bm := bodyMap[o.Op.ID]
 				if _, present := bm[r.Field]; present || o.Op.OpType == "delete" || o.Op.OpType == "undelete" {
@@ -140,6 +157,9 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 
 	// Walk total order L once, dispatching to matching field accumulators
 	for _, o := range orderedOps {
+		if rejected[o.Op.ID] {
+			continue
+		}
 		bm := bodyMap[o.Op.ID]
 		rbm := rawBodyMap[o.Op.ID]
 		for fieldName, fieldRules := range matchedRulesByField {

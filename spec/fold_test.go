@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	writ "github.com/writtendev/writ/engine"
+	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/codec/canonicaljson"
 	"github.com/writtendev/writ/spec"
 )
@@ -124,12 +126,12 @@ func TestMergeVectors(t *testing.T) {
 				})
 			}
 
-			foldedState, err := spec.Fold(vec.Ops, rules)
+			folded, err := spec.Fold(vec.Ops, rules)
 			if err != nil {
 				t.Fatalf("spec.Fold failed: %v", err)
 			}
 
-			gotJSON, err := canonicaljson.Marshal(mustJSON(t, foldedState))
+			gotJSON, err := canonicaljson.Marshal(mustJSON(t, folded.State))
 			if err != nil {
 				t.Fatalf("canonicalizing got state: %v", err)
 			}
@@ -142,7 +144,88 @@ func TestMergeVectors(t *testing.T) {
 			if !bytes.Equal(gotJSON, wantJSON) {
 				t.Errorf("folded state mismatch:\n got: %s\nwant: %s", string(gotJSON), string(wantJSON))
 			}
+
+			wantUnknown := vec.ExpectedUnknownOps
+			if wantUnknown == nil {
+				wantUnknown = []string{}
+			}
+			gotUnknown := folded.UnknownOps
+			if gotUnknown == nil {
+				gotUnknown = []string{}
+			}
+			if !reflect.DeepEqual(gotUnknown, wantUnknown) {
+				t.Errorf("unknown ops mismatch:\n got: %v\nwant: %v", gotUnknown, wantUnknown)
+			}
+
+			// The vectors are the spec, and the spec binds every reducer: run
+			// the same ops through the engine's generic fold and require the
+			// same bytes. Without this the vectors pin only the reference, and
+			// a divergence between the two Go implementations — which is how
+			// WRIT-124 and WRIT-126 were found — passes.
+			assertEngineAgrees(t, vec, gotJSON, gotUnknown)
 		})
+	}
+}
+
+// assertEngineAgrees drives a merge vector through writ.Fold and requires
+// byte-identical state and the same quarantined ops as the reference fold.
+func assertEngineAgrees(t *testing.T, vec spec.MergeVector, wantStateJSON []byte, wantUnknown []string) {
+	t.Helper()
+
+	var rules []writ.Rule
+	for fieldName, cfg := range vec.Fields {
+		rules = append(rules, writ.Rule{
+			Field:    fieldName,
+			Strategy: cfg.Strategy,
+			Key:      cfg.Key,
+			Lattice:  cfg.Lattice,
+		})
+	}
+
+	var ops []codec.Op
+	for _, op := range vec.Ops {
+		if op.ObjectID != vec.ObjectID {
+			continue
+		}
+		body, err := json.Marshal(op.Body)
+		if err != nil {
+			t.Fatalf("marshaling body of op %s: %v", op.ID, err)
+		}
+		ops = append(ops, codec.Op{
+			Envelope: codec.Envelope{
+				ObjectID:   op.ObjectID,
+				ObjectType: "merge-vector",
+				OpType:     op.OpType,
+				OpVersion:  op.OpVersion,
+				Body:       body,
+			},
+			ID:      op.ID,
+			Parents: op.Parents,
+			Author:  codec.Identity{When: time.Unix(op.Time, 0).UTC()},
+		})
+	}
+
+	res, err := writ.Fold(ops, rules)
+	if err != nil {
+		t.Fatalf("writ.Fold failed: %v", err)
+	}
+
+	gotJSON, err := canonicaljson.Marshal(mustJSON(t, res.State))
+	if err != nil {
+		t.Fatalf("canonicalizing engine state: %v", err)
+	}
+	if !bytes.Equal(gotJSON, wantStateJSON) {
+		t.Errorf("engine fold state differs from the reference:\n engine: %s\n ref:    %s",
+			string(gotJSON), string(wantStateJSON))
+	}
+
+	gotUnknown := []string{}
+	for _, u := range res.UnknownOps {
+		gotUnknown = append(gotUnknown, u.Commit)
+	}
+	if !reflect.DeepEqual(gotUnknown, wantUnknown) {
+		t.Errorf("engine unknown ops differ from the reference:\n engine: %v\n ref:    %v",
+			gotUnknown, wantUnknown)
 	}
 }
 

@@ -34,6 +34,8 @@ func FoldProject(ops []codec.Op) (Project, error) {
 	var issueAdds []orSetRecord
 	var issueRemoves []orSetRecord
 
+	rules := internalRules(ProjectRules())
+
 	for _, o := range orderedOps {
 		op := o.Op
 		if op.ObjectType != "project" || op.OpVersion != 1 {
@@ -53,6 +55,19 @@ func FoldProject(ops []codec.Op) (Project, error) {
 		}
 		if body == nil {
 			body = make(map[string]any)
+		}
+
+		// A field with a declared rule carrying a value its strategy cannot
+		// consume makes the whole op uninterpretable (spec/fold.md §7.1). It is
+		// quarantined here on exactly the terms the generic driver applies, so
+		// the typed reducer and fold.Fold reject the same operations.
+		if fold.Uninterpretable(op, body, rules) {
+			unknownOps = append(unknownOps, UnknownOp{
+				Commit:    op.ID,
+				OpType:    op.OpType,
+				OpVersion: op.OpVersion,
+			})
+			continue
 		}
 
 		switch op.OpType {

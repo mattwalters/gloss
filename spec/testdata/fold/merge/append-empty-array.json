@@ -1,0 +1,31 @@
+{
+  "name": "append-empty-array",
+  "description": "An append field written with an empty array folds to the empty list, the strategy's initial state per spec/fold.md §5.5 — not to null. The op is a write of the field, so the field is present in folded state; it just appends nothing",
+  "object_id": "obj-1",
+  "fields": {
+    "entries": { "strategy": "append" }
+  },
+  "ops": [
+    {
+      "id": "op-a-empty",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "entries": []
+      }
+    },
+    {
+      "id": "op-b-empty",
+      "parents": ["op-a-empty"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "entries": []
+      }
+    }
+  ],
+  "expected_state": {
+    "entries": []
+  }
+}

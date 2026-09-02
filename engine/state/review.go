@@ -49,6 +49,8 @@ func FoldReview(ops []codec.Op) (Review, error) {
 	ciStatusesMap := make(map[ciStatusKey]*CIStatus)
 	linksMap := make(map[string]*Link)
 
+	rules := internalRules(ReviewRules())
+
 	for _, o := range orderedOps {
 		op := o.Op
 		if op.ObjectType != "review" || op.OpVersion != 1 {
@@ -68,6 +70,19 @@ func FoldReview(ops []codec.Op) (Review, error) {
 		}
 		if body == nil {
 			body = make(map[string]any)
+		}
+
+		// A field with a declared rule carrying a value its strategy cannot
+		// consume makes the whole op uninterpretable (spec/fold.md §7.1). It is
+		// quarantined here on exactly the terms the generic driver applies, so
+		// the typed reducer and fold.Fold reject the same operations.
+		if fold.Uninterpretable(op, body, rules) {
+			unknownOps = append(unknownOps, UnknownOp{
+				Commit:    op.ID,
+				OpType:    op.OpType,
+				OpVersion: op.OpVersion,
+			})
+			continue
 		}
 
 		switch op.OpType {
@@ -93,7 +108,11 @@ func FoldReview(ops []codec.Op) (Review, error) {
 		case "assign":
 			if addRaw, ok := body["add"].([]any); ok {
 				for _, it := range addRaw {
-					if item := NormalizePerson(fmt.Sprint(it)); item != "" {
+					s, isStr := it.(string)
+					if !isStr {
+						continue
+					}
+					if item := NormalizePerson(s); item != "" {
 						assignAdds = append(assignAdds, orSetRecord{opID: op.ID, item: item})
 					}
 				}
@@ -106,7 +125,11 @@ func FoldReview(ops []codec.Op) (Review, error) {
 			}
 			if remRaw, ok := body["remove"].([]any); ok {
 				for _, it := range remRaw {
-					if item := NormalizePerson(fmt.Sprint(it)); item != "" {
+					s, isStr := it.(string)
+					if !isStr {
+						continue
+					}
+					if item := NormalizePerson(s); item != "" {
 						assignRemoves = append(assignRemoves, orSetRecord{opID: op.ID, item: item})
 					}
 				}
@@ -121,7 +144,11 @@ func FoldReview(ops []codec.Op) (Review, error) {
 		case "label":
 			if addRaw, ok := body["add"].([]any); ok {
 				for _, it := range addRaw {
-					if item := fmt.Sprint(it); item != "" {
+					item, isStr := it.(string)
+					if !isStr {
+						continue
+					}
+					if item != "" {
 						labelAdds = append(labelAdds, orSetRecord{opID: op.ID, item: item})
 					}
 				}
@@ -134,7 +161,11 @@ func FoldReview(ops []codec.Op) (Review, error) {
 			}
 			if remRaw, ok := body["remove"].([]any); ok {
 				for _, it := range remRaw {
-					if item := fmt.Sprint(it); item != "" {
+					item, isStr := it.(string)
+					if !isStr {
+						continue
+					}
+					if item != "" {
 						labelRemoves = append(labelRemoves, orSetRecord{opID: op.ID, item: item})
 					}
 				}

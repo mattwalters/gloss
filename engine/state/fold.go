@@ -27,12 +27,13 @@ var (
 	ErrMixedObjects = fold.ErrMixedObjects
 )
 
-// Fold executes deterministic fold reduction on an input set of operations
-// against declared field merge rules, returning the resulting ObjectState.
-func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
-	internalRules := make([]fold.Rule, len(rules))
+// internalRules converts the public rule table into the internal one. The
+// typed reducers below share it so that they and the generic driver decide
+// which operations are uninterpretable from the same rules.
+func internalRules(rules []Rule) []fold.Rule {
+	out := make([]fold.Rule, len(rules))
 	for i, r := range rules {
-		internalRules[i] = fold.Rule{
+		out[i] = fold.Rule{
 			OpType:    r.OpType,
 			OpVersion: r.OpVersion,
 			Field:     r.Field,
@@ -41,8 +42,13 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 			Lattice:   r.Lattice,
 		}
 	}
+	return out
+}
 
-	res, err := fold.Fold(ops, internalRules)
+// Fold executes deterministic fold reduction on an input set of operations
+// against declared field merge rules, returning the resulting ObjectState.
+func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
+	res, err := fold.Fold(ops, internalRules(rules))
 	if err != nil {
 		return ObjectState{}, err
 	}

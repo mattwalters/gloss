@@ -1,0 +1,83 @@
+{
+  "name": "uninterpretable-set-observed-remove",
+  "description": "An OR-set item that is not a string makes the operation uninterpretable, on the add side and the remove side alike. A null item is the sharpest case: rendered rather than rejected it becomes a member of the set — an assignee nobody named — and a rejected remove leaves the element it named present, because a remove that cannot be read removes nothing",
+  "object_id": "obj-1",
+  "fields": {
+    "labels": { "strategy": "set-observed-remove" }
+  },
+  "ops": [
+    {
+      "id": "op-a-good",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "labels": { "add": ["urgent", "triage"] }
+      }
+    },
+    {
+      "id": "op-b-number",
+      "parents": ["op-a-good"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "labels": { "add": [5] }
+      }
+    },
+    {
+      "id": "op-c-object",
+      "parents": ["op-b-number"],
+      "time": 300,
+      "object_id": "obj-1",
+      "body": {
+        "labels": { "add": [{ "email": "Carol@Example.COM" }] }
+      }
+    },
+    {
+      "id": "op-d-null-item",
+      "parents": ["op-c-object"],
+      "time": 400,
+      "object_id": "obj-1",
+      "body": {
+        "labels": { "add": [null] }
+      }
+    },
+    {
+      "id": "op-e-non-array",
+      "parents": ["op-d-null-item"],
+      "time": 500,
+      "object_id": "obj-1",
+      "body": {
+        "labels": { "add": 5 }
+      }
+    },
+    {
+      "id": "op-f-bad-remove",
+      "parents": ["op-e-non-array"],
+      "time": 600,
+      "object_id": "obj-1",
+      "body": {
+        "labels": { "remove": ["triage", 7] }
+      }
+    },
+    {
+      "id": "op-g-good-remove",
+      "parents": ["op-f-bad-remove"],
+      "time": 700,
+      "object_id": "obj-1",
+      "body": {
+        "labels": { "add": ["kept"], "remove": ["urgent"] }
+      }
+    }
+  ],
+  "expected_state": {
+    "labels": ["kept", "triage"]
+  },
+  "expected_unknown_ops": [
+    "op-b-number",
+    "op-c-object",
+    "op-d-null-item",
+    "op-e-non-array",
+    "op-f-bad-remove"
+  ]
+}

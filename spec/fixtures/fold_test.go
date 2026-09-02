@@ -199,10 +199,11 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 			return nil, fmt.Errorf("total order for object %s: %w", objID, err)
 		}
 
-		foldedState, err := spec.Fold(mergeOps, rules)
+		folded, err := spec.Fold(mergeOps, rules)
 		if err != nil {
 			return nil, fmt.Errorf("fold for object %s: %w", objID, err)
 		}
+		foldedState := folded.State
 
 		// Cross-check: public writ.Fold produces byte-identical canonical state and total order
 		var writRules []writ.Rule
@@ -326,7 +327,7 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 				t.Fatalf("commutativity violation on permutation #%d for object %s: %v", i, objID, err)
 			}
 
-			shuffledJSON, err := canonicaljson.Marshal(mustJSON(t, shuffledFolded))
+			shuffledJSON, err := canonicaljson.Marshal(mustJSON(t, shuffledFolded.State))
 			if err != nil {
 				t.Fatalf("canonicalizing shuffled folded state on permutation #%d: %v", i, err)
 			}
