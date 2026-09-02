@@ -6,8 +6,9 @@ never the implementer's reasoning or the orchestrator's history.
 
 ---
 
-Adversarially review PR, round ROUND, against TICKET's brief and this
-repository's conventions (AGENTS.md, ARCHITECTURE.md — fold purity,
+Adversarially review PR, round ROUND, against TICKET's brief — its
+description, the `## Plan` section included — and this repository's
+conventions (AGENTS.md, ARCHITECTURE.md — fold purity,
 unknown-op preservation, the public API staying domain-shaped, spec
 changes landing atomically with fixtures).
 

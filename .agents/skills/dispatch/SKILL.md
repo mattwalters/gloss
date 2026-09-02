@@ -1,15 +1,15 @@
 ---
 name: dispatch
-description: Batch-run the next WRIT tickets from Linear. Picks 5–10 unblocked tickets by priority, plans parallel vs serial execution, gets human approval, then orchestrates implementer, reviewer, and fixer subagents in isolated git worktrees through CI-green pull requests, adversarial review cycles, and merges. Use when asked to run the queue, work the next tickets, dispatch a batch, or process Linear tickets in parallel. Do not use for a single ticket a human is already driving.
+description: Batch-run the next WRIT tickets from Linear. Picks 5–10 unblocked tickets by priority, has each one planned into its ticket description, plans parallel vs serial execution, gets human approval, then orchestrates planner, implementer, reviewer, and fixer subagents in isolated git worktrees through CI-green pull requests, adversarial review cycles, and merges. Use when asked to run the queue, work the next tickets, dispatch a batch, or process Linear tickets in parallel. Do not use for a single ticket a human is already driving.
 ---
 
 # Dispatch
 
-You are the orchestrator. You pick a batch of tickets, get one human
-approval, and then run each ticket through implement → review → fix →
-merge using subagents. You do not write code, read diffs, or debug CI
-yourself — every one of those burns orchestrator context that the whole
-batch depends on. Subagents do the work; you route, count rounds, move
+You are the orchestrator. You pick a batch of tickets, have each one
+planned, get one human approval, and then run each ticket through
+implement → review → fix → merge using subagents. You do not write
+code, read diffs, or debug CI yourself — every one of those burns
+orchestrator context that the whole batch depends on. Subagents do the work; you route, count rounds, move
 Linear tickets, and merge.
 
 Statuses used (Linear team WRIT): `Todo` → `Implementing` → `In Review`
@@ -40,10 +40,28 @@ project rather than a change. Use judgment: a slightly lower-priority
 ticket that unblocks others, or rounds out a coherent batch, can jump
 the line. Pick 5–10.
 
-## Phase 2 — Plan the waves
+## Phase 2 — Plan each ticket
 
-For each pick, skim the repo just enough to guess which files it
-touches. Then group:
+For each pick, spawn a planner subagent with `prompts/planner.md` —
+strongest reasoning model available (see Models and effort below):
+planning is scope judgment. Planners are read-only, so run them all in
+parallel.
+
+Each planner writes its plan into the ticket's own description under a
+`## Plan` heading — replacing an existing `## Plan` section, touching
+nothing above it — and returns a short report with a summary and the
+files the change will touch. The description is the brief every later
+subagent reads, so a plan there is read by construction; never put a
+plan in a comment, where it sinks under later traffic.
+
+A planner that finds a ticket too vague, or big enough to be several
+tickets, reports it unplannable instead of guessing. Drop it from the
+batch and say why at the approval gate.
+
+## Phase 3 — Plan the waves
+
+Build waves from the planners' file lists — real overlap, not guesses.
+Group:
 
 - **Parallel** is the default: unrelated tickets touching disjoint
   files run at once.
@@ -57,18 +75,22 @@ touches. Then group:
 The output is waves: wave 1 runs in parallel, wave 2 starts as its
 prerequisites merge, and so on.
 
-## Phase 3 — Approval gate
+## Phase 4 — Approval gate
 
-Present the plan to the human and stop: a table of ticket, title,
-priority, estimate, wave, and one line of why-now, plus a note on
-anything serialized and why. The human can drop tickets, add tickets,
-or mark a ticket **hold** — meaning run it through review but do not
-merge it until they have read the PR themselves.
+Present the batch to the human and stop: a table of ticket, title,
+priority, estimate, wave, one line of why-now, and the plan's one-line
+summary, plus a note on anything serialized and why, and any tickets
+the planners dropped as unplannable. Approving the batch approves the
+plans — the full plans are on the tickets for anyone who wants the
+detail. The human can drop tickets, add tickets (an added ticket gets
+a planner pass before it joins a wave), or mark a ticket **hold** —
+meaning run it through review but do not merge it until they have read
+the PR themselves.
 
 Do not start any work, and do not move any ticket, until the human says
 yes. The approval covers this batch only.
 
-## Phase 4 — Implement
+## Phase 5 — Implement
 
 For each ticket in the current wave:
 
@@ -78,7 +100,8 @@ For each ticket in the current wave:
    Every subagent works only in its own worktree. Never let two
    tickets share one.
 3. Spawn an implementer subagent with `prompts/implementer.md`, filling
-   in the placeholders. Run the wave's implementers concurrently.
+   in the placeholders — mid-tier model: implementing to a written plan
+   is the mechanical phase. Run the wave's implementers concurrently.
 
 The implementer's contract (the prompt enforces it): implement the
 ticket, pass the repo's checks locally
@@ -93,17 +116,20 @@ On a failure report: comment what happened on the ticket, move it to
 `Needs Attention`, tell the human, and carry on with the rest of the
 batch. One stuck ticket never stops the others.
 
-## Phase 5 — Adversarial review
+## Phase 6 — Adversarial review
 
 When an implementer reports green:
 
 1. Move the ticket to `In Review`.
-2. Spawn a **fresh** reviewer subagent with `prompts/reviewer.md`. It
-   gets the ticket brief and the PR — none of the implementer's
-   reasoning. It posts findings as PR review comments rated
-   major/medium/minor, and returns only counts and one line per
-   finding.
-3. **Zero findings** → the branch is done; go to Phase 6.
+2. Spawn a **fresh** reviewer subagent with `prompts/reviewer.md` —
+   strongest model, every round, not just later ones: each dirty round
+   costs a fix, a CI wait, and a re-review, and only three rounds
+   exist, so scrutiny up front is cheaper than a round spent learning
+   what round one could have caught. The reviewer gets the ticket
+   brief and the PR — none of the implementer's reasoning. It posts
+   findings as PR review comments rated major/medium/minor, and
+   returns only counts and one line per finding.
+3. **Zero findings** → the branch is done; go to Phase 7.
 4. **Any findings** → spawn a fixer subagent with `prompts/fixer.md`
    in the same worktree. It addresses every finding (or rebuts one in
    the PR thread with a concrete reason), gets CI green again under the
@@ -116,7 +142,7 @@ the human: the findings summary, what each round fixed, and your read
 on whether it is converging or looping. The human decides whether
 another cycle is warranted. Never run a fourth round unattended.
 
-## Phase 6 — Merge
+## Phase 7 — Merge
 
 A branch is mergeable when its latest review round returned zero
 findings and CI is green. Move the ticket to `To Merge` (skip merging
@@ -128,7 +154,10 @@ landed. For each merge:
 
 1. Rebase the branch onto current `origin/main` (do it in the ticket's
    worktree; if the rebase throws a non-trivial conflict, that is a
-   fixer subagent's job, not yours).
+   fixer subagent's job, not yours). A conflict is a refusal, not a
+   puzzle, whatever model meets it: anything needing new logic or a
+   judgment call goes to a fixer with the conflict named, or to the
+   human — never resolved inline at merge time.
 2. Wait for CI green on the rebased head.
 3. Mark the PR ready and `gh pr merge <number> --squash`.
 4. Move the ticket to `Done` and delete the worktree
@@ -136,6 +165,23 @@ landed. For each merge:
 
 After each merge, kick off the next wave's tickets whose prerequisites
 just landed, and post a status update.
+
+## Models and effort
+
+Phases name capability tiers, not vendor models: planning and every
+review round want the strongest reasoning model available, because
+both are judgment; implementing to a written plan and fixing findings
+are mid-tier work. Effort high everywhere. Map by harness:
+
+| Phase               | Claude Code  | Antigravity            | Codex                     |
+| ------------------- | ------------ | ---------------------- | ------------------------- |
+| Plan                | Opus, high   | gemini-3.7-flash, high | strongest available, high |
+| Implement / fix     | Sonnet, high | gemini-3.7-flash, high | mid-tier, high            |
+| Review (all rounds) | Opus, high   | gemini-3.7-flash, high | strongest available, high |
+
+If your harness cannot set a subagent's model, run everything at the
+session model and say so when presenting the batch — degrade loudly,
+never silently.
 
 ## Status updates
 
