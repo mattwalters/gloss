@@ -48,7 +48,7 @@ import (
 //  2. The result of `fmt.Errorf` is an error to return, not a string to use.
 //     `fmt.Errorf("%v", item).Error()` is `fmt.Sprint(item)` spelled through the
 //     one allowed call, so no method may be invoked on a rendering call's
-//     result, and `.Error()` may not be called at all on these paths. Fold code
+//     result, and `.Error()` may not be *called* on these paths. Fold code
 //     wraps errors with `%w` and returns them; it never needs their text, and
 //     `.Error()` is the only door out of an `error` and into a string that does
 //     not go back through half 1.
@@ -57,6 +57,23 @@ import (
 // fmt.Sprint` is not a call expression at any point where `render(it)` appears,
 // so a check that inspects calls sees an ordinary local function and reports
 // nothing.
+//
+// Half 2 is the other way round, and the wording above is narrow for that
+// reason: it is about *calling* `.Error()`, not naming it. `render := err.Error`
+// followed by `render()` is not reported, and is recorded as a known-uncovered
+// case in TestNoGoRenderingLintBites rather than closed. Closing it needs type
+// information — a rule that flagged every `.Error` selector would flag
+// `spec/vectors.go:50`, where `v.Error` is a struct field — and go/types is a
+// disproportionate price for a spelling nobody writes by accident.
+//
+// What the rule does not reach, so that nobody mistakes the only guard for a
+// complete one: a rendering helper defined in a package that is not itself a
+// fold value path but is imported by one, and rendering that goes through
+// `encoding/json`, `text/template` or `reflect` instead of `fmt` or `strconv`.
+// `encoding/json` cannot simply be added to the list — `spec/reffold.go` and
+// `engine/internal/fold/strategy.go` both marshal a `[]string` into a grouping
+// key that is never serialized — and banning it would cost the zero-exceptions
+// property this list has.
 //
 // Scoped to the fold, deliberately. Elsewhere in the repo `fmt.Sprintf` builds
 // log lines, CLI output and map keys that are never anybody's normative bytes.
@@ -133,6 +150,10 @@ func TestNoGoRenderingOnFoldValuePaths(t *testing.T) {
 // against foldValuePaths rather than against a sample file: a `renderItem`
 // helper in a *sibling file of the same package* is callable from reffold.go
 // with nothing to see at the call site. See TestFoldValuePathsCoverWholePackages.
+//
+// The last case in this test is the one that is *not* pinned: `.Error` bound as
+// a method value gets past half 2, and is recorded here so the record is where
+// the reader is rather than in someone's memory.
 func TestNoGoRenderingLintBites(t *testing.T) {
 	cases := []struct {
 		name string
@@ -220,6 +241,29 @@ func TestNoGoRenderingLintBites(t *testing.T) {
 	}
 	if findings := goRenderingFindings(t, path); len(findings) != 0 {
 		t.Errorf("fmt.Errorf reported: %s", strings.Join(findings, "\n"))
+	}
+
+	// And one evasion that is recorded rather than closed, so the next reader
+	// finds it written down instead of rediscovering it. Half 2 matches a call
+	// whose function is an `.Error` selector, so binding the method as a value
+	// and calling the binding walks past it. Written into the real set-union
+	// item path in spec/reffold.go it builds, vets, and leaves
+	// `go test ./spec/... ./engine/... -count=1` green, lint included;
+	// `add(callIt(e.Error))` gets through on the same terms. Closing it needs
+	// go/types: a rule that flagged every `.Error` selector would flag
+	// spec/vectors.go, where `v.Error` is a struct field, and that is a
+	// disproportionate price for a spelling nobody reaches for by accident.
+	// If this assertion ever fails, the hole has been closed — delete this
+	// block and drop the caveat from the rule's docstring above.
+	path = filepath.Join(t.TempDir(), "methodvalue.go")
+	src = "package p\n\nimport \"fmt\"\n\nfunc f(v any) string {\n" +
+		"\te := fmt.Errorf(\"%v\", v)\n\trender := e.Error\n\treturn render()\n}\n"
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatalf("writing sample: %v", err)
+	}
+	if findings := goRenderingFindings(t, path); len(findings) != 0 {
+		t.Errorf("the `.Error` method value is now reported; the docstring and this block "+
+			"still describe it as uncovered:\n%s", strings.Join(findings, "\n"))
 	}
 }
 

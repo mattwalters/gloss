@@ -136,11 +136,15 @@ change the record.
 section of this document and no section of `spec/fold.md` enumerates it: a
 record specified in two places is a record that will be specified two ways.
 
-> **Known non-conformance.** This repository's implementations of the record do
-> not satisfy `FC-5`. `writ.UnknownOp`, the generic driver's `UnknownOp`, the
-> reference fold's and the golden shape in `spec/fixtures` all carry three
-> fields — the op id (spelled `commit`), `op_type` and `op_version` — and none
-> of them carries `object_type`. The rule is right and the code is wrong; the
+> **Known non-conformance.** This repository's five implementations of the
+> record do not satisfy `FC-5`, and they do not all miss it by the same margin.
+> `writ.UnknownOp`, the generic driver's `UnknownOp`, the `--json` shape in
+> `cmd/writ/internal/wire` and the golden shape in `spec/fixtures` each carry
+> the op id (spelled `commit`), `op_type` and `op_version`; the golden adds a
+> `label`, which is a fixture annotation rather than part of the record. The
+> reference fold carries less than any of them: its `UnknownOps` is a list of
+> op ids and nothing else — no `op_type`, no `op_version`. None of the five
+> carries `object_type`. The rule is right and the code is wrong; the
 > rule is not being softened to match. Tracked as `WRIT-155`, which is where the
 > cost of closing it is recorded. The gap predates the uninterpretable-body
 > population and is not introduced by it, but that population widened what flows
