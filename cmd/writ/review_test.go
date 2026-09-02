@@ -914,6 +914,205 @@ func TestReviewComment_ResolveWorkflow(t *testing.T) {
 	}
 }
 
+// openReviewWithComment stands up a repo with one review carrying one root
+// comment, and returns both IDs.
+func openReviewWithComment(t *testing.T, dir string) (reviewID, commentID string) {
+	t.Helper()
+
+	var stdout, stderr bytes.Buffer
+	if code := run(context.Background(), []string{"init", "-C", dir}, &stdout, &stderr); code != 0 {
+		t.Fatalf("writ init failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	commitFile(t, dir, "README.md", "# Hello", "initial commit")
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := run(context.Background(), []string{
+		"review", "open", "-C", dir, "-title", "Resolve attribution",
+	}, &stdout, &stderr); code != 0 {
+		t.Fatalf("review open failed with %d; stderr: %s", code, stderr.String())
+	}
+	matches := regexp.MustCompile(`^([0-9a-f]{32}) `).FindStringSubmatch(strings.TrimSpace(stdout.String()))
+	if len(matches) < 2 {
+		t.Fatalf("unexpected review open output: %q", stdout.String())
+	}
+	reviewID = matches[1]
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := run(context.Background(), []string{
+		"review", "comment", "-C", dir, reviewID, "-m", "Please rename this variable",
+	}, &stdout, &stderr); code != 0 {
+		t.Fatalf("review comment failed with %d; stderr: %s", code, stderr.String())
+	}
+	commentID = strings.TrimSpace(stdout.String())
+
+	return reviewID, commentID
+}
+
+// commentResolution returns the folded resolution state of one comment.
+func commentResolution(t *testing.T, dir, reviewID, commentID string) (resolved bool, resolvedBy string) {
+	t.Helper()
+
+	store, err := writ.Open(dir)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer store.Close()
+
+	comments, err := store.Query.Comments(writ.CommentFilter{SubjectID: reviewID})
+	if err != nil {
+		t.Fatalf("query comments: %v", err)
+	}
+	for _, c := range comments {
+		if c.ObjectID == commentID {
+			return c.Comment.IsResolved(), c.Comment.ResolvedBy
+		}
+	}
+	t.Fatalf("comment %s not found among %d comments", commentID, len(comments))
+	return false, ""
+}
+
+// TestReviewComment_ResolveAttribution pins the person a CLI resolve is
+// recorded against. resolved_by is the only person-level attribution a resolve
+// op carries — the signed commit names a writer-id, which is device-scoped and
+// names nobody — so leaving it unset makes every resolve permanently anonymous
+// in a log that is never rewritten.
+func TestReviewComment_ResolveAttribution(t *testing.T) {
+	// The default is the writer's derived person identifier, the same one
+	// `review approve` falls back to.
+	t.Run("writer", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setupSigningKey(t, env.repoDir)
+
+		reviewID, commentID := openReviewWithComment(t, env.repoDir)
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{
+			"review", "comment", "-C", env.repoDir, commentID, "-resolve",
+		}, &stdout, &stderr); code != 0 {
+			t.Fatalf("review comment -resolve failed with %d; stderr: %s", code, stderr.String())
+		}
+
+		resolved, resolvedBy := commentResolution(t, env.repoDir, reviewID, commentID)
+		if !resolved {
+			t.Fatalf("comment is not resolved")
+		}
+		if resolvedBy == "" {
+			t.Fatalf("resolved_by is empty: a CLI resolve must name the person who ran it")
+		}
+		if resolvedBy != "email:alice@example.com" {
+			t.Errorf("resolved_by = %q, want %q", resolvedBy, "email:alice@example.com")
+		}
+	})
+
+	// writ.personId overrides the email derivation here exactly as it does for
+	// an approval subject.
+	t.Run("person_id_override", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setGitConfig(t, env.repoDir, "writ.personId", "  User:Alice  ")
+		setupSigningKey(t, env.repoDir)
+
+		reviewID, commentID := openReviewWithComment(t, env.repoDir)
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{
+			"review", "comment", "-C", env.repoDir, commentID, "-resolve",
+		}, &stdout, &stderr); code != 0 {
+			t.Fatalf("review comment -resolve failed with %d; stderr: %s", code, stderr.String())
+		}
+
+		if _, resolvedBy := commentResolution(t, env.repoDir, reviewID, commentID); resolvedBy != "user:alice" {
+			t.Errorf("resolved_by = %q, want %q (writ.personId overrides the email derivation, normalized)", resolvedBy, "user:alice")
+		}
+	})
+
+	// An unresolve carries resolved_by too. The field folds last-writer-wins,
+	// and lww only overwrites a field the op actually carries, so an unresolve
+	// that omitted it would leave the previous resolver's name attached to a
+	// thread they did not reopen.
+	t.Run("unresolve_reattributes", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setGitConfig(t, env.repoDir, "writ.personId", "user:alice")
+		setupSigningKey(t, env.repoDir)
+
+		reviewID, commentID := openReviewWithComment(t, env.repoDir)
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{
+			"review", "comment", "-C", env.repoDir, commentID, "-resolve",
+		}, &stdout, &stderr); code != 0 {
+			t.Fatalf("review comment -resolve failed with %d; stderr: %s", code, stderr.String())
+		}
+
+		setGitConfig(t, env.repoDir, "writ.personId", "user:bob")
+
+		stdout.Reset()
+		stderr.Reset()
+		if code := run(context.Background(), []string{
+			"review", "comment", "-C", env.repoDir, commentID, "-unresolve",
+		}, &stdout, &stderr); code != 0 {
+			t.Fatalf("review comment -unresolve failed with %d; stderr: %s", code, stderr.String())
+		}
+
+		resolved, resolvedBy := commentResolution(t, env.repoDir, reviewID, commentID)
+		if resolved {
+			t.Fatalf("comment is still resolved")
+		}
+		if resolvedBy != "user:bob" {
+			t.Errorf("resolved_by = %q, want %q: the reopener replaces the resolver rather than inheriting them", resolvedBy, "user:bob")
+		}
+	})
+
+	// With nothing to derive a person identifier from, the chain ends. It does
+	// not end at the writer ID: that has no scheme, so writing one would record
+	// a bare identifier no conforming reader can interpret. Refusing and saying
+	// what to configure is the only honest option left — the same ruling
+	// `review approve` follows.
+	t.Run("no_derivable_person_id", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setupSigningKey(t, env.repoDir)
+
+		reviewID, commentID := openReviewWithComment(t, env.repoDir)
+
+		// Set the whitespace email after the repo is stood up: setupSigningKey
+		// probes user.email, and review open needs a usable identity.
+		setGitConfig(t, env.repoDir, "user.email", "   ")
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{
+			"review", "comment", "-C", env.repoDir, commentID,
+			"-m", "Fixed in latest push", "-resolve",
+		}, &stdout, &stderr)
+		if code == 0 {
+			t.Fatalf("review comment -resolve should have failed with no derivable person identifier; stdout: %s", stdout.String())
+		}
+		if !strings.Contains(stderr.String(), "writ.personId") {
+			t.Errorf("error should name writ.personId, got %q", stderr.String())
+		}
+
+		if resolved, resolvedBy := commentResolution(t, env.repoDir, reviewID, commentID); resolved || resolvedBy != "" {
+			t.Errorf("comment resolution = (%v, %q), want (false, \"\"): the refused write must leave nothing behind", resolved, resolvedBy)
+		}
+
+		// The refusal lands before any write, so the reply that accompanied the
+		// resolve is not left behind either.
+		store, err := writ.Open(env.repoDir)
+		if err != nil {
+			t.Fatalf("open store: %v", err)
+		}
+		defer store.Close()
+		comments, err := store.Query.Comments(writ.CommentFilter{SubjectID: reviewID})
+		if err != nil {
+			t.Fatalf("query comments: %v", err)
+		}
+		if len(comments) != 1 {
+			t.Errorf("comment count = %d, want 1: a refused resolve must not leave its -m reply behind", len(comments))
+		}
+	})
+}
+
 func TestReview_LabelAndLink(t *testing.T) {
 	env := setupTestCLIEnv(t)
 	setupSigningKey(t, env.repoDir)

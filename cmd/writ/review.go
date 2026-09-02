@@ -351,6 +351,36 @@ func runReviewComment(ctx context.Context, defaultDir string, args []string, std
 		}
 	}
 
+	// Resolve who the resolution is attributed to before anything is written,
+	// so a run that cannot attribute the resolve does not leave the reply
+	// behind first.
+	//
+	// resolved_by is the only person-level attribution a resolve op carries:
+	// the signed commit names a writer-id, which is device-scoped and names no
+	// person. Left unset, every resolve is permanently anonymous in a log that
+	// is never rewritten. There is no flag here on purpose — a resolve is
+	// recorded by the person running it, and the engine API stays the surface
+	// for anything importing someone else's resolution.
+	var resolvedBy string
+	if opts.resolve || opts.unresolve {
+		// The fallback chain ends at the writer's own person identifier —
+		// writ.personId, or email:<user.email> — exactly as it does for
+		// `review approve -subject`. There is no fallback past it: a writer-id
+		// carries no scheme, so substituting one would write a bare
+		// identifier, which is not a person identifier at all.
+		writer := store.Writer()
+		resolvedBy = writer.PersonID
+		if resolvedBy == "" {
+			// Report why it is empty rather than assuming nothing was set.
+			// Telling a user who configured writ.personId to configure
+			// writ.personId sends them to look at a key that is already there.
+			if writer.PersonIDErr != nil {
+				return renderErr(stderr, fmt.Errorf("writ: no resolver identity: %w", writer.PersonIDErr))
+			}
+			return renderErr(stderr, fmt.Errorf("writ: no resolver identity: configure %s (for example %q) or user.email", identity.PersonIDKey, "user:alice"))
+		}
+	}
+
 	var commentID string
 	if opts.message != "" {
 		cid, err := store.Reviews.Comment(ctx, reviewID, writ.NewComment{
@@ -373,14 +403,15 @@ func runReviewComment(ctx context.Context, defaultDir string, args []string, std
 			}
 		}
 
-		if opts.resolve {
-			if err := store.Comments.Resolve(ctx, resolveTarget, writ.CommentResolve{Resolved: true}); err != nil {
-				return renderErr(stderr, err)
-			}
-		} else {
-			if err := store.Comments.Resolve(ctx, resolveTarget, writ.CommentResolve{Resolved: false}); err != nil {
-				return renderErr(stderr, err)
-			}
+		// An unresolve carries resolved_by too. The field folds last-writer-wins
+		// and lww only overwrites a field the op actually carries, so an
+		// unresolve that omitted it would leave the previous resolver's name
+		// attached to a thread they did not reopen.
+		if err := store.Comments.Resolve(ctx, resolveTarget, writ.CommentResolve{
+			Resolved:   opts.resolve,
+			ResolvedBy: resolvedBy,
+		}); err != nil {
+			return renderErr(stderr, err)
 		}
 
 		if commentID == "" {
