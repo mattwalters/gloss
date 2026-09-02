@@ -206,6 +206,11 @@ A `resolve` op records or updates the resolution state of a comment thread.
   value of at most 320 code points) per
   [`spec/identifiers.md`](identifiers.md). A bare, colonless identifier is not a
   person identifier. `resolved_by` is optional even when `resolved` is `true`.
+  It names the person who **resolved** the thread, not the person who last
+  changed its resolution state; because `resolved` and `resolved_by` fold as
+  independent `lww` accumulators, an unresolve op (`resolved: false`) SHOULD
+  omit `resolved_by`, so a previously recorded resolver is preserved rather
+  than overwritten by someone who only reopened the thread.
 
 #### Target & Threading Invariants
 

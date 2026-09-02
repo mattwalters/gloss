@@ -216,8 +216,8 @@ func newReviewCommentFlagSet(defaultDir string) (*flag.FlagSet, *reviewCommentOp
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
 	fs.StringVar(&opts.message, "m", "", "Comment message text `<text>`")
 	fs.StringVar(&opts.replyTo, "reply-to", "", "Comment ID `<comment-id>` to reply to")
-	fs.BoolVar(&opts.resolve, "resolve", false, "Mark comment thread as resolved")
-	fs.BoolVar(&opts.unresolve, "unresolve", false, "Mark comment thread as unresolved")
+	fs.BoolVar(&opts.resolve, "resolve", false, "Mark comment thread as resolved, attributed to writ.personId, else email:<user.email>")
+	fs.BoolVar(&opts.unresolve, "unresolve", false, "Mark comment thread as unresolved, preserving the recorded resolver")
 	fs.Usage = func() {
 		renderUsage(fs.Output(), []string{"review", "comment"}, reviewCommentCmd)
 	}
@@ -351,6 +351,47 @@ func runReviewComment(ctx context.Context, defaultDir string, args []string, std
 		}
 	}
 
+	// Resolve who the resolution is attributed to before anything is written,
+	// so a run that cannot attribute the resolve does not leave the reply
+	// behind first.
+	//
+	// resolved_by is the only person-level attribution a resolve op carries:
+	// the signed commit names a writer-id, which is device-scoped and names no
+	// person. Left unset, every resolve is permanently anonymous in a log that
+	// is never rewritten. There is no flag here on purpose — a resolve is
+	// recorded by the person running it, and the engine API stays the surface
+	// for anything importing someone else's resolution.
+	//
+	// Only a resolve carries it. resolved_by names the person who resolved the
+	// thread, not the person who last changed its resolution state, so an
+	// unresolve omits the field (spec/comments.md §resolve).
+	var resolvedBy string
+	if opts.resolve {
+		writer := store.Writer()
+		// An identity that failed to load reports an empty writer ID and no
+		// PersonIDErr to explain it, so check that first: naming writ.personId
+		// and user.email to a user who has both set and never ran `writ init`
+		// sends them to look at keys that are already correct.
+		if writer.ID == "" {
+			return renderErr(stderr, writ.ErrNoIdentity)
+		}
+		// The fallback chain ends at the writer's own person identifier —
+		// writ.personId, or email:<user.email> — exactly as it does for
+		// `review approve -subject`. There is no fallback past it: a writer-id
+		// carries no scheme, so substituting one would write a bare
+		// identifier, which is not a person identifier at all.
+		resolvedBy = writer.PersonID
+		if resolvedBy == "" {
+			// Report why it is empty rather than assuming nothing was set.
+			// Telling a user who configured writ.personId to configure
+			// writ.personId sends them to look at a key that is already there.
+			if writer.PersonIDErr != nil {
+				return renderErr(stderr, fmt.Errorf("writ: no resolver identity: %w", writer.PersonIDErr))
+			}
+			return renderErr(stderr, fmt.Errorf("writ: no resolver identity: configure %s (for example %q) or user.email", identity.PersonIDKey, "user:alice"))
+		}
+	}
+
 	var commentID string
 	if opts.message != "" {
 		cid, err := store.Reviews.Comment(ctx, reviewID, writ.NewComment{
@@ -373,14 +414,17 @@ func runReviewComment(ctx context.Context, defaultDir string, args []string, std
 			}
 		}
 
-		if opts.resolve {
-			if err := store.Comments.Resolve(ctx, resolveTarget, writ.CommentResolve{Resolved: true}); err != nil {
-				return renderErr(stderr, err)
-			}
-		} else {
-			if err := store.Comments.Resolve(ctx, resolveTarget, writ.CommentResolve{Resolved: false}); err != nil {
-				return renderErr(stderr, err)
-			}
+		// resolvedBy is empty on an unresolve, and the engine omits the key
+		// when it is. resolved_by folds last-writer-wins, and lww only
+		// overwrites a field the op actually carries: omitting it leaves the
+		// recorded resolver in place — stale, but true — where writing it
+		// would record whoever reopened the thread as having resolved it,
+		// which is false and unfixable in an append-only log.
+		if err := store.Comments.Resolve(ctx, resolveTarget, writ.CommentResolve{
+			Resolved:   opts.resolve,
+			ResolvedBy: resolvedBy,
+		}); err != nil {
+			return renderErr(stderr, err)
 		}
 
 		if commentID == "" {

@@ -357,6 +357,9 @@ the consequence of the one that does.
 - **Producers MUST** emit normalized, scheme-prefixed person identifiers when
   writing operation payloads, and MUST reject — never truncate, never repair —
   an identifier that violates the grammar or the bounds.
+- **Producers MUST NOT** write a `writer-id` where a `person-id` is expected,
+  nor derive one from the other
+  (§[Relationship to `writer-id`](#relationship-to-writer-id)).
 - **Readers and Reducers MUST** normalize person identifiers upon reading op
   payloads prior to evaluating set membership, keyed lookups, deduplication,
   or projection indices.
@@ -413,6 +416,17 @@ machines and devices, each with its own distinct `writer-id` (e.g. laptop
 the git refspace; the `person-id` identifies the collaborative actor. A
 `writer-id` is never a person identifier: it has no scheme, and substituting
 one would be a bare identifier, which is invalid.
+
+A producer MUST NOT write a `writer-id` where a `person-id` is expected, and
+MUST NOT derive one identifier from the other. The format objection above is
+not the only one: the two identifiers have different scopes. A `person-id` is
+workspace-global, while a `writer-id` names `(user, device)` — so the person
+above holds two of them. Substituting a `writer-id` therefore splits one human
+into two collaborative actors: two assignees, two voters, and — because
+approval fold is scoped by the key `[subject, revision]`
+([`spec/review-ops.md`](review-ops.md) §Fold Implications & Merge Strategies) —
+two approvers on the same revision, neither of whom is the person who
+approved it.
 
 Writ clients derive the local person identifier from git configuration:
 `writ.personId` when set, otherwise `email:` followed by the normalized
