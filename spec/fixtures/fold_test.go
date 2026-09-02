@@ -196,16 +196,22 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 		// alone would see only the first, and a fixture repo carrying a
 		// malformed body would emit a golden that omits an op both folds
 		// quarantine — a normatively wrong golden in the artifact that is the
-		// spec. Ordering stays the fixture's own commit order rather than the
-		// total order, which is what these goldens already record.
-		quarantined := make(map[string]bool, len(folded.UnknownOps))
-		for _, id := range folded.UnknownOps {
-			quarantined[id] = true
+		// spec.
+		//
+		// The order is the fold's too. spec/reffold.go documents UnknownOps as
+		// carrying the total order $L$, and a golden that re-sorted it by the
+		// fixture's own commit order would record a weaker contract than the
+		// channel actually has: two conforming readers could then disagree
+		// about the sequence and both match the golden.
+		byID := make(map[string]codec.Op, len(codecOps))
+		for _, cop := range codecOps {
+			byID[cop.ID] = cop
 		}
 		var unknownOps []FoldUnknownOp
-		for _, cop := range codecOps {
-			if !quarantined[cop.ID] {
-				continue
+		for _, id := range folded.UnknownOps {
+			cop, ok := byID[id]
+			if !ok {
+				return nil, fmt.Errorf("fold quarantined op %s, which is not in the input set for object %s", id, objID)
 			}
 			unknownOps = append(unknownOps, FoldUnknownOp{
 				Commit:    cop.ID,
@@ -255,6 +261,24 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 			if ref.Commit != totalOrder[i] || ref.TStar != effectiveTimes[ref.Commit] {
 				t.Fatalf("engine TotalOrder[%d] mismatch for %s in %s: got (%s, %d), want (%s, %d)",
 					i, objID, fix.Name, ref.Commit, ref.TStar, totalOrder[i], effectiveTimes[totalOrder[i]])
+			}
+		}
+
+		// The quarantine channel is cross-checked here on the same terms as
+		// State and TotalOrder. It is the third thing fold returns and the one
+		// this fixture family exists to exercise; leaving it out would let the
+		// two implementations disagree about which ops contributed nothing —
+		// and, since a quarantined op contributes no writes, they could reach
+		// identical State by quarantining different operations.
+		if len(engineRes.UnknownOps) != len(folded.UnknownOps) {
+			t.Fatalf("engine quarantined %d ops for %s in %s, spec reference quarantined %d:\n engine: %v\n ref:    %v",
+				len(engineRes.UnknownOps), objID, fix.Name, len(folded.UnknownOps),
+				engineRes.UnknownOps, folded.UnknownOps)
+		}
+		for i, u := range engineRes.UnknownOps {
+			if u.Commit != folded.UnknownOps[i] {
+				t.Fatalf("engine UnknownOps[%d] mismatch for %s in %s: got %s, want %s",
+					i, objID, fix.Name, u.Commit, folded.UnknownOps[i])
 			}
 		}
 

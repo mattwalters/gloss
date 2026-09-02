@@ -94,8 +94,13 @@ func FoldRepo(ops []codec.Op) (RepoEntry, error) {
 			}
 
 		case "add-remote":
-			if r, ok := body["remote"].(string); ok && r != "" {
-				remotesSet[r] = true
+			// `remote` is a set-union field, so it carries a string or an
+			// array of strings (spec/fold.md §5.3) and both shapes fold. The
+			// empty string is not an element (§5.3).
+			for _, r := range stringItems(body["remote"]) {
+				if r != "" {
+					remotesSet[r] = true
+				}
 			}
 
 		default:

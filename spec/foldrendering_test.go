@@ -36,23 +36,48 @@ import (
 // reintroducing `fmt.Sprint` on an item path leaves every merge vector passing.
 // The vectors cannot see this regression any more. This test is what does.
 //
-// The rule: on a fold value path, `fmt.Errorf` is the only call into `fmt` or
-// `strconv` allowed. Nothing else in either package turns a value into bytes
-// that a reader in another language could be expected to reproduce. Where a
-// fold needs a value as a string, the value is a string — an op whose declared
-// field carries anything else is uninterpretable and never reaches a reducer —
-// so a type assertion says what is meant and this says so when it does not.
+// The rule has two halves, because rendering has two doors:
+//
+//  1. On a fold value path, `fmt.Errorf` is the only symbol of `fmt` or
+//     `strconv` that may be *named* — called, aliased, or passed as a value.
+//     Nothing else in either package turns a value into bytes that a reader in
+//     another language could be expected to reproduce. Where a fold needs a
+//     value as a string, the value is a string — an op whose declared field
+//     carries anything else is uninterpretable and never reaches a reducer — so
+//     a type assertion says what is meant and this says so when it does not.
+//  2. The result of `fmt.Errorf` is an error to return, not a string to use.
+//     `fmt.Errorf("%v", item).Error()` is `fmt.Sprint(item)` spelled through the
+//     one allowed call, so no method may be invoked on a rendering call's
+//     result, and `.Error()` may not be called at all on these paths. Fold code
+//     wraps errors with `%w` and returns them; it never needs their text, and
+//     `.Error()` is the only door out of an `error` and into a string that does
+//     not go back through half 1.
+//
+// Naming, not calling, is the unit of half 1 deliberately. `var render =
+// fmt.Sprint` is not a call expression at any point where `render(it)` appears,
+// so a check that inspects calls sees an ordinary local function and reports
+// nothing.
 //
 // Scoped to the fold, deliberately. Elsewhere in the repo `fmt.Sprintf` builds
 // log lines, CLI output and map keys that are never anybody's normative bytes.
+//
+// Scoped by *package*, also deliberately. Naming `reffold.go` alone guarded one
+// file of a package whose other files compile into the same namespace: a
+// `renderItem` helper dropped in any sibling file is callable from `reffold.go`
+// with nothing to see at the call site. `spec/fieldrules.go` had a `fmt.Sprintf`
+// on exactly those terms until it was rewritten to use a composite map key, so
+// this list can name the whole package with no exceptions to keep.
 var foldValuePaths = []string{
-	"reffold.go",
+	// The spec package, whole. The test binary runs with spec/ as its working
+	// directory, so "." is spec/ — reffold.go and every file that shares its
+	// package namespace.
+	".",
 	"../engine/internal/fold",
 	"../engine/state",
 }
 
 // renderingPackages are the packages a fold value path may not render values
-// with, mapped to the functions it may still call in them.
+// with, mapped to the symbols it may still name in them.
 //
 // engine/internal/fold additionally carries an import allowlist
 // (engine/internal/fold/imports_test.go) that keeps strconv out of that package
@@ -81,14 +106,33 @@ func TestNoGoRenderingOnFoldValuePaths(t *testing.T) {
 	}
 }
 
-// TestNoGoRenderingLintBites pins the check against the two ways it could
-// silently cover nothing: a qualified call it must catch, and a dot-import
-// that makes the same call unqualified. The dot-import case is not
-// hypothetical — `import . "fmt"` turns `fmt.Sprint(item)` into a bare
-// `Sprint(item)`, which is not a selector expression at all, so a check that
-// only inspects selectors reports nothing and passes. Nothing else in this
-// repository flags a dot import: there is no .golangci.yml, and no linter
-// enabled by default rejects one.
+// TestNoGoRenderingLintBites pins the check against every way found so far of
+// putting Go rendering back on the OR-set item path while this file stays
+// green. A lint nobody has attacked is a lint nobody has measured, and this one
+// is now the only guard on WRIT-124's defect: the reject rule filters
+// non-strings upstream, so the merge vectors are blind to a reintroduced
+// `fmt.Sprint` there and go on passing.
+//
+// None of these are hypothetical. Each was written into spec/reffold.go, built
+// cleanly, and left `go test ./...` and `go vet ./...` green against the
+// check's earlier shape:
+//
+//   - `import . "fmt"` turns `fmt.Sprint(item)` into a bare `Sprint(item)`,
+//     which is not a selector expression at all. Nothing else in this
+//     repository flags a dot import: there is no .golangci.yml, and no linter
+//     enabled by default rejects one.
+//   - `var render = fmt.Sprint` binds the function as a value. `render(it)` is
+//     a call of a package-local identifier, indistinguishable at the call site
+//     from any other helper — which is why half 1 of the rule is about naming
+//     a symbol, not calling one.
+//   - `fmt.Errorf("%v", it).Error()` reaches Go's formatting through the one
+//     call the rule allows, and `err := fmt.Errorf(...)` then `err.Error()`
+//     reaches it in two statements.
+//
+// The fourth evasion is not a source shape but a coverage hole, so it is pinned
+// against foldValuePaths rather than against a sample file: a `renderItem`
+// helper in a *sibling file of the same package* is callable from reffold.go
+// with nothing to see at the call site. See TestFoldValuePathsCoverWholePackages.
 func TestNoGoRenderingLintBites(t *testing.T) {
 	cases := []struct {
 		name string
@@ -119,6 +163,36 @@ func TestNoGoRenderingLintBites(t *testing.T) {
 				"func f(v float64) string { return strconv.FormatFloat(v, 'g', -1, 64) }\n",
 			want: "strconv.FormatFloat",
 		},
+		{
+			name: "fmt.Sprint bound as a function value",
+			src: "package p\n\nimport \"fmt\"\n\nvar render = fmt.Sprint\n\n" +
+				"func f(items []any) []string {\n" +
+				"\tvar out []string\n" +
+				"\tfor _, it := range items {\n" +
+				"\t\tout = append(out, render(it))\n" +
+				"\t}\n" +
+				"\treturn out\n}\n",
+			want: "fmt.Sprint",
+		},
+		{
+			name: "fmt.Sprint passed as an argument",
+			src: "package p\n\nimport \"fmt\"\n\n" +
+				"func apply(f func(...any) string, v any) string { return f(v) }\n\n" +
+				"func g(v any) string { return apply(fmt.Sprint, v) }\n",
+			want: "fmt.Sprint",
+		},
+		{
+			name: "Error on the result of fmt.Errorf",
+			src: "package p\n\nimport \"fmt\"\n\n" +
+				"func f(v any) string { return fmt.Errorf(\"%v\", v).Error() }\n",
+			want: "on the result of fmt.Errorf",
+		},
+		{
+			name: "Error on an fmt.Errorf bound to a variable",
+			src: "package p\n\nimport \"fmt\"\n\n" +
+				"func f(v any) string {\n\terr := fmt.Errorf(\"%v\", v)\n\treturn err.Error()\n}\n",
+			want: ".Error() turns an error into a string",
+		},
 	}
 
 	for _, tc := range cases {
@@ -146,6 +220,65 @@ func TestNoGoRenderingLintBites(t *testing.T) {
 	}
 	if findings := goRenderingFindings(t, path); len(findings) != 0 {
 		t.Errorf("fmt.Errorf reported: %s", strings.Join(findings, "\n"))
+	}
+}
+
+// TestFoldValuePathsCoverWholePackages pins the fourth evasion, which no sample
+// file can express because it is not a source shape: a helper in a sibling file
+// of a guarded package. `reffold.go` and `spec/fieldrules.go` compile into one
+// namespace, so
+//
+//	// spec/foldhelpers.go
+//	func renderItem(v any) string { return fmt.Sprint(v) }
+//
+// makes `items = append(items, renderItem(it))` in reffold.go legal, green and
+// invisible to a list that names `reffold.go` alone — which is what this list
+// named until it named the package instead. Demonstrated by writing exactly
+// that file: with foldValuePaths naming the package the check reports it, and
+// with foldValuePaths naming reffold.go it reported nothing.
+//
+// So: every non-test Go file in every package that holds a guarded file must
+// itself be guarded. A new file in spec/, engine/state or engine/internal/fold
+// is covered the moment it is written, with nothing to remember.
+func TestFoldValuePathsCoverWholePackages(t *testing.T) {
+	guarded := make(map[string]bool)
+	dirs := make(map[string]bool)
+	for _, target := range foldValuePaths {
+		for _, path := range goFilesUnder(t, target) {
+			abs, err := filepath.Abs(path)
+			if err != nil {
+				t.Fatalf("resolving %s: %v", path, err)
+			}
+			guarded[abs] = true
+			dirs[filepath.Dir(abs)] = true
+		}
+	}
+	if len(dirs) == 0 {
+		t.Fatal("no fold value path resolved to a directory")
+	}
+
+	for dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatalf("reading %s: %v", dir, err)
+		}
+		var siblings int
+		for _, e := range entries {
+			name := e.Name()
+			if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+				continue
+			}
+			siblings++
+			if !guarded[filepath.Join(dir, name)] {
+				t.Errorf("%s shares a package with a guarded fold value path but is not itself guarded.\n"+
+					"A rendering helper defined here is callable from the guarded file with nothing to "+
+					"see at the call site. Add the package directory to foldValuePaths rather than "+
+					"individual files.", filepath.Join(dir, name))
+			}
+		}
+		if siblings == 0 {
+			t.Errorf("%s holds no non-test Go files; a fold value path has moved", dir)
+		}
 	}
 }
 
@@ -226,37 +359,88 @@ func goRenderingFindings(t *testing.T, path string) []string {
 			fset.Position(imp0Pos(file, pkg)), pkg, pkg))
 	}
 
-	ast.Inspect(file, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
+	// renderingSelector reports the package a selector expression names a symbol
+	// of, if any: `fmt.Sprint` under any local import name, whether it is being
+	// called, assigned to a variable, or passed as an argument.
+	renderingSelector := func(e ast.Expr) (sel *ast.SelectorExpr, pkg string, ok bool) {
+		s, isSel := e.(*ast.SelectorExpr)
+		if !isSel {
+			return nil, "", false
 		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok {
-			return true
+		ident, isIdent := s.X.(*ast.Ident)
+		if !isIdent {
+			return nil, "", false
 		}
-		ident, ok := sel.X.(*ast.Ident)
-		if !ok {
-			return true
-		}
-		pkg, forbidden := localNames[ident.Name]
+		p, forbidden := localNames[ident.Name]
 		if !forbidden {
-			return true
+			return nil, "", false
 		}
-		if renderingPackages[pkg][sel.Sel.Name] {
-			return true
+		return s, p, true
+	}
+
+	ast.Inspect(file, func(n ast.Node) bool {
+		switch node := n.(type) {
+		case *ast.SelectorExpr:
+			// Half 1: any *reference* to a rendering symbol, not only a call
+			// of one. `var render = fmt.Sprint` binds the function itself, and
+			// the later `render(it)` carries no trace of fmt at the call site.
+			sel, pkg, ok := renderingSelector(node)
+			if !ok || renderingPackages[pkg][sel.Sel.Name] {
+				return true
+			}
+			findings = append(findings, fmt.Sprintf(
+				"%s: %s.%s renders a value using Go's own formatting on a fold value path.\n"+
+					"Folded state must be reproducible from spec/fold.md by an implementation in any "+
+					"language, and Go's rendering of a map, a slice, nil or a float exponent is Go "+
+					"syntax that no other implementation produces. Assert the type you mean instead; "+
+					"fmt.Errorf is the only symbol of fmt or strconv that may be named here, and "+
+					"naming it — calling it, aliasing it, passing it — is what this reports.",
+				fset.Position(sel.Pos()), exprName(sel.X), sel.Sel.Name))
+
+		case *ast.CallExpr:
+			// Half 2: the result of the one allowed call is an error to
+			// return, not a string to use. Both doors out of it are closed —
+			// a method invoked directly on the call's result, and .Error()
+			// anywhere, which is what the two-statement spelling reaches for.
+			method, isSel := node.Fun.(*ast.SelectorExpr)
+			if !isSel {
+				return true
+			}
+			if inner, isCall := method.X.(*ast.CallExpr); isCall {
+				if sel, _, ok := renderingSelector(inner.Fun); ok {
+					findings = append(findings, fmt.Sprintf(
+						"%s: .%s() on the result of %s.%s renders a value on a fold value path.\n"+
+							"fmt.Errorf(\"%%v\", item).Error() is fmt.Sprint(item) spelled through the one "+
+							"allowed call. The result of fmt.Errorf is an error to return, not a string to "+
+							"use; wrap with %%w and return it.",
+						fset.Position(node.Pos()), method.Sel.Name, exprName(sel.X), sel.Sel.Name))
+					return true
+				}
+			}
+			if method.Sel.Name == "Error" && len(node.Args) == 0 {
+				findings = append(findings, fmt.Sprintf(
+					"%s: .Error() turns an error into a string on a fold value path.\n"+
+						"It is the one door out of an error that does not go back through fmt, so it is "+
+						"closed here too: fmt.Errorf(\"%%v\", item) assigned to a variable and then "+
+						".Error()-ed is fmt.Sprint(item) in two statements. Fold code wraps errors with "+
+						"%%w and returns them; it never needs their text.",
+					fset.Position(node.Pos())))
+			}
 		}
-		findings = append(findings, fmt.Sprintf(
-			"%s: %s.%s renders a value using Go's own formatting on a fold value path.\n"+
-				"Folded state must be reproducible from spec/fold.md by an implementation in any "+
-				"language, and Go's rendering of a map, a slice, nil or a float exponent is Go "+
-				"syntax that no other implementation produces. Assert the type you mean instead; "+
-				"fmt.Errorf is the only call into fmt or strconv allowed here.",
-			fset.Position(call.Pos()), ident.Name, sel.Sel.Name))
 		return true
 	})
 
 	return findings
+}
+
+// exprName renders the left-hand side of a selector for a message: the local
+// import name in every case this check reports, since renderingSelector only
+// matches a bare identifier.
+func exprName(e ast.Expr) string {
+	if ident, ok := e.(*ast.Ident); ok {
+		return ident.Name
+	}
+	return "?"
 }
 
 // imp0Pos returns the position of the import of pkg, for a readable message.

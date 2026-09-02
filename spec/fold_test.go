@@ -4,7 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"reflect"
+	"regexp"
+	"strconv"
 	"testing"
 	"time"
 
@@ -257,4 +261,33 @@ func mustJSON(t *testing.T, v any) []byte {
 		t.Fatalf("marshal json: %v", err)
 	}
 	return b
+}
+
+// TestCatalogueCountMatchesProse binds §5's "closed catalogue of N" to the set
+// the code actually enforces. The two drifted once already: the prose said 7
+// while the table listed 8 and KnownCatalogueStrategies held 8, and it took an
+// external reviewer to notice. A closed catalogue whose size is stated wrongly
+// is the one kind of error a reader has no way to detect from the document.
+func TestCatalogueCountMatchesProse(t *testing.T) {
+	raw, err := os.ReadFile("fold.md")
+	if err != nil {
+		raw, err = os.ReadFile(filepath.Join("spec", "fold.md"))
+		if err != nil {
+			t.Fatalf("reading fold.md: %v", err)
+		}
+	}
+
+	m := regexp.MustCompile(`\*\*closed catalogue\*\* of (\d+) per-field merge strategies`).FindSubmatch(raw)
+	if m == nil {
+		t.Fatal("fold.md no longer states the catalogue size in the form this test reads; " +
+			"update the test deliberately rather than dropping the claim")
+	}
+	stated, err := strconv.Atoi(string(m[1]))
+	if err != nil {
+		t.Fatalf("parsing stated catalogue size %q: %v", m[1], err)
+	}
+	if stated != len(spec.KnownCatalogueStrategies) {
+		t.Errorf("fold.md §5 states a closed catalogue of %d strategies; KnownCatalogueStrategies holds %d",
+			stated, len(spec.KnownCatalogueStrategies))
+	}
 }

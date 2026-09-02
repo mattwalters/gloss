@@ -164,7 +164,7 @@ overwrites $A$.
 ## 5. Per-field merge strategies catalogue
 
 To prevent implicit or undefined merge behavior, Writ establishes a
-**closed catalogue** of 7 per-field merge strategies.
+**closed catalogue** of 8 per-field merge strategies.
 
 ### The "no implicit behavior" requirement
 
@@ -300,10 +300,12 @@ consume, as each strategy states in §5. A conforming reader MUST:
    operation contributes no field writes at all — not to the malformed field
    and not to the well-formed fields it also carries.
 2. **Quarantine it, not fail.** It is reported through the same channel as an
-   operation with an unknown `op_type` (§7), carrying its commit id, `op_type`
-   and `op_version`. Rejection MUST NOT be an error return from fold: every
-   other operation materializes normally. One bad operation costs that
-   operation, never the object.
+   operation with an unknown `op_type` (§7), as the opaque record
+   `spec/forward-compatibility.md` `FC-5` specifies. That rule is the single
+   definition of what the record carries; this section widens the population
+   that flows through the channel and does not restate its contents. Rejection
+   MUST NOT be an error return from fold: every other operation materializes
+   normally. One bad operation costs that operation, never the object.
 3. **Preserve it.** As in §7, an uninterpretable operation remains a full
    member of the restricted DAG — it participates in $t^*$, in the total order
    $L$ and in every ancestry test — and it remains in the DAG byte-for-byte

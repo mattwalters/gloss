@@ -19,11 +19,22 @@ type FieldRule struct {
 	Vocabulary string   `json:"-"`
 }
 
+// ruleKey identifies one declared rule for duplicate detection. It is a struct
+// rather than a formatted string because every non-test file in this package is
+// a fold value path (spec/foldrendering_test.go): `fmt.Errorf` is the only call
+// into `fmt` allowed here, and a composite map key needs no formatting at all.
+type ruleKey struct {
+	Dir       string
+	OpType    string
+	OpVersion int64
+	Field     string
+}
+
 // FieldRules loads all field-rules.json files from the embedded spec.FS and validates each entry
 // against the closed catalogue of strategies defined in spec/fold.md.
 func FieldRules() ([]FieldRule, error) {
 	var allRules []FieldRule
-	seen := make(map[string]bool)
+	seen := make(map[ruleKey]bool)
 
 	err := fs.WalkDir(FS, "testdata", func(filePath string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -64,9 +75,10 @@ func FieldRules() ([]FieldRule, error) {
 				return fmt.Errorf("spec: %s rule for (%s, %s) uses lattice but defines no elements", filePath, r.OpType, r.Field)
 			}
 
-			key := fmt.Sprintf("%s:%s:%d:%s", path.Dir(filePath), r.OpType, r.OpVersion, r.Field)
+			key := ruleKey{Dir: path.Dir(filePath), OpType: r.OpType, OpVersion: r.OpVersion, Field: r.Field}
 			if seen[key] {
-				return fmt.Errorf("spec: %s has duplicate rule for %s", filePath, key)
+				return fmt.Errorf("spec: %s has duplicate rule for (%s, %d, %s) under %s",
+					filePath, r.OpType, r.OpVersion, r.Field, key.Dir)
 			}
 			seen[key] = true
 

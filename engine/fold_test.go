@@ -185,6 +185,24 @@ func TestMergeVectors(t *testing.T) {
 				t.Errorf("folded state mismatch for vector %q:\n got:  %s\n want: %s", vec.Name, string(gotJSON), string(wantJSON))
 			}
 
+			// The quarantine channel is the vector's second assertion, not a
+			// detail of the reference implementation: spec/fold.md §7.1 rule 2
+			// makes "which ops contributed nothing" part of what a conforming
+			// reader produces. spec/fold_test.go cross-checks the two Go folds
+			// against each other; this pins writ.Fold against the vector
+			// directly, so a regression here names the vector that saw it.
+			wantUnknown := vec.ExpectedUnknownOps
+			if wantUnknown == nil {
+				wantUnknown = []string{}
+			}
+			gotUnknown := make([]string, 0, len(res.UnknownOps))
+			for _, u := range res.UnknownOps {
+				gotUnknown = append(gotUnknown, u.Commit)
+			}
+			if !reflect.DeepEqual(gotUnknown, wantUnknown) {
+				t.Errorf("unknown ops mismatch for vector %q:\n got:  %v\n want: %v", vec.Name, gotUnknown, wantUnknown)
+			}
+
 			// Permutation invariance: shuffle input ops 100 times and verify identical bytes
 			r := rand.New(rand.NewSource(time.Now().UnixNano()))
 			for i := 0; i < 100; i++ {

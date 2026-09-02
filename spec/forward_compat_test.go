@@ -26,12 +26,29 @@ type knownOpCapacity struct {
 	ObjectType string  `json:"object_type"`
 	OpType     string  `json:"op_type"`
 	Versions   []int64 `json:"versions"`
+	// Vocabulary names the directory under spec/testdata/ whose
+	// field-rules.json publishes the merge rules this reader implements for
+	// the op type. The profile is synthetic — `comment/post` is not a shipped
+	// Writ op type — so the triple it implements and the rules that govern
+	// that triple have to be stated separately, and this is where the second
+	// one is stated.
+	Vocabulary string `json:"vocabulary"`
 }
 
 type forwardCompatEntry struct {
 	Disposition string   `json:"disposition"`
 	Rules       []string `json:"rules"`
 	Reason      string   `json:"reason"`
+	// EnvelopeDisposition is what `FC-1`'s type leg alone decides. It is
+	// present only where the two legs disagree — an op whose envelope is
+	// interpretable and whose body is not — and it exists because
+	// `codec.Profile.Classify` classifies envelopes and structurally cannot
+	// decide the body leg: deciding it needs the vocabulary's merge rules and a
+	// fold, which the codec layer neither has nor should have.
+	// engine/codec/forwardcompat_test.go measures Classify against this field;
+	// this file measures the full disposition, and binds the two together in
+	// TestForwardCompatConformances.
+	EnvelopeDisposition string `json:"envelope_disposition,omitempty"`
 }
 
 func loadReaderProfile(t *testing.T) readerProfile {
@@ -47,7 +64,68 @@ func loadReaderProfile(t *testing.T) readerProfile {
 	if len(p.KnownOps) == 0 {
 		t.Fatal("reader profile declares no known ops")
 	}
+	rules, err := spec.FieldRules()
+	if err != nil {
+		t.Fatalf("loading field rules: %v", err)
+	}
+	published := make(map[string]bool)
+	for _, r := range rules {
+		published[r.Vocabulary] = true
+	}
+	for _, k := range p.KnownOps {
+		if !published[k.Vocabulary] {
+			t.Fatalf("reader profile names vocabulary %q for %s/%s, which publishes no field rules; "+
+				"a vocabulary directory has been renamed and the profile is now deriving dispositions "+
+				"against an empty rule table", k.Vocabulary, k.ObjectType, k.OpType)
+		}
+	}
 	return p
+}
+
+// implementsTriple reports whether the reader profile implements an op's
+// (object_type, op_type, op_version). This is `FC-1`'s type leg, and the only
+// leg `codec.Profile.Classify` decides.
+func implementsTriple(profile readerProfile, objectType, opType string, opVersion int64) bool {
+	for _, k := range profile.KnownOps {
+		if k.ObjectType != objectType || k.OpType != opType {
+			continue
+		}
+		for _, v := range k.Versions {
+			if v == opVersion {
+				return true
+			}
+		}
+		return false
+	}
+	return false
+}
+
+// governingRules returns the published merge rules that govern one op: the
+// rules of the vocabulary the profile names for its (object_type, op_type),
+// narrowed to its op_version.
+//
+// Narrowing here is a filter over the published table, not a second opinion
+// about the op. Which rules govern an op is what a rule table means; whether
+// the op's body survives them is decided in deriveDisposition by running the
+// reference fold and reading what it quarantined.
+func governingRules(profile readerProfile, rules []spec.FieldRule, objectType, opType string, opVersion int64) []spec.FieldRule {
+	var vocab string
+	for _, k := range profile.KnownOps {
+		if k.ObjectType == objectType && k.OpType == opType {
+			vocab = k.Vocabulary
+			break
+		}
+	}
+	if vocab == "" {
+		return nil
+	}
+	var out []spec.FieldRule
+	for _, r := range rules {
+		if r.Vocabulary == vocab && r.OpType == opType && r.OpVersion == opVersion {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 func loadForwardCompatIndex(t *testing.T) map[string]forwardCompatEntry {
@@ -66,28 +144,68 @@ func loadForwardCompatIndex(t *testing.T) map[string]forwardCompatEntry {
 	return index
 }
 
-// deriveDisposition deterministically computes whether an op payload is
-// interpretable or opaque under a given reader profile.
-func deriveDisposition(profile readerProfile, rawOp []byte) (string, error) {
+// deriveDisposition computes whether an op payload is interpretable or opaque
+// under a given reader profile.
+//
+// `FC-1` puts two populations in the opaque category, so this has two legs and
+// only the first is derivable from the envelope:
+//
+//  1. **The type.** Whether the reader implements this
+//     (object_type, op_type, op_version) triple. The profile is the only source
+//     for that — it is a *synthetic* reader, deliberately not the shipped one,
+//     which is the whole point of testing a reader against ops it does not know.
+//  2. **The body.** Whether the fold can consume it (`spec/fold.md` §7.1).
+//     This is not restated here. The op is run through the reference fold
+//     against the rules that govern it, and the answer is whether the fold put
+//     it in `UnknownOps` — the same quarantine channel §7.1 rule 2 specifies,
+//     read rather than predicted.
+//
+// Leg 2 used to be missing entirely: this harness classified an op from the
+// envelope alone and never opened `body`. When `FC-1` was widened to cover
+// uninterpretable bodies, that made the harness stale in the way that matters
+// most — it could not express a fixture for the newly-covered half, so `FC-1`
+// went on claiming coverage it did not have. `uninterpretable-body.json` is
+// that fixture, and it fails against a re-derived disposition.
+func deriveDisposition(profile readerProfile, allRules []spec.FieldRule, name string, rawOp []byte) (string, error) {
 	var env struct {
-		ObjectType string `json:"object_type"`
-		OpType     string `json:"op_type"`
-		OpVersion  int64  `json:"op_version"`
+		ObjectID   string         `json:"object_id"`
+		ObjectType string         `json:"object_type"`
+		OpType     string         `json:"op_type"`
+		OpVersion  int64          `json:"op_version"`
+		Body       map[string]any `json:"body"`
 	}
 	if err := json.Unmarshal(rawOp, &env); err != nil {
 		return "", fmt.Errorf("decoding envelope: %w", err)
 	}
-	for _, k := range profile.KnownOps {
-		if k.ObjectType == env.ObjectType && k.OpType == env.OpType {
-			for _, v := range k.Versions {
-				if v == env.OpVersion {
-					return "interpretable", nil
-				}
-			}
-			return "opaque", nil
-		}
+
+	// Leg 1: the type.
+	if !implementsTriple(profile, env.ObjectType, env.OpType, env.OpVersion) {
+		return "opaque", nil
 	}
-	return "opaque", nil
+
+	// Leg 2: the body. §7.1 reaches only fields with a declared merge rule, so
+	// a triple no published rule governs has nothing for it to reject — which
+	// is the case for the profile's synthetic `comment/post`.
+	rules := governingRules(profile, allRules, env.ObjectType, env.OpType, env.OpVersion)
+	if len(rules) == 0 {
+		return "interpretable", nil
+	}
+	folded, err := spec.Fold([]spec.MergeOp{{
+		ID:        name,
+		ObjectID:  env.ObjectID,
+		OpType:    env.OpType,
+		OpVersion: env.OpVersion,
+		Body:      env.Body,
+	}}, rules)
+	if err != nil {
+		return "", fmt.Errorf("folding instance: %w", err)
+	}
+	// Every rule passed governs this op, so the only way into the quarantine
+	// channel here is §7.1.
+	if len(folded.UnknownOps) > 0 {
+		return "opaque", nil
+	}
+	return "interpretable", nil
 }
 
 // TestForwardCompatConformances tests every instance in the forward-compat
@@ -100,6 +218,10 @@ func TestForwardCompatConformances(t *testing.T) {
 	sch, _ := envelopeSchema(t)
 	profile := loadReaderProfile(t)
 	index := loadForwardCompatIndex(t)
+	allRules, err := spec.FieldRules()
+	if err != nil {
+		t.Fatalf("loading field rules: %v", err)
+	}
 
 	entries, err := spec.FS.ReadDir("testdata/forward-compat/ops")
 	if err != nil {
@@ -147,6 +269,16 @@ func TestForwardCompatConformances(t *testing.T) {
 			if entry.Disposition != "interpretable" && entry.Disposition != "opaque" {
 				t.Errorf("invalid disposition %q (want interpretable or opaque)", entry.Disposition)
 			}
+			if entry.EnvelopeDisposition != "" {
+				if entry.EnvelopeDisposition != "interpretable" && entry.EnvelopeDisposition != "opaque" {
+					t.Errorf("invalid envelope_disposition %q (want interpretable or opaque)", entry.EnvelopeDisposition)
+				}
+				if entry.EnvelopeDisposition == entry.Disposition {
+					t.Errorf("envelope_disposition duplicates disposition (%q); state it only where the two "+
+						"legs of FC-1 disagree, or engine/codec's harness is asserting nothing extra",
+						entry.Disposition)
+				}
+			}
 
 			path := "testdata/forward-compat/ops/" + name
 			raw, err := spec.FS.ReadFile(path)
@@ -173,12 +305,36 @@ func TestForwardCompatConformances(t *testing.T) {
 			}
 
 			// Disposition derivation check
-			derived, err := deriveDisposition(profile, raw)
+			derived, err := deriveDisposition(profile, allRules, name, raw)
 			if err != nil {
 				t.Fatalf("deriving disposition: %v", err)
 			}
 			if derived != entry.Disposition {
 				t.Errorf("disposition mismatch for %s: derived %q, index declares %q (reason: %s)", name, derived, entry.Disposition, entry.Reason)
+			}
+
+			// And where the index declares an envelope_disposition, FC-1's
+			// type leg alone must produce it. Without this the field would be
+			// an unchecked assertion in a data file that only the codec
+			// harness reads, and the two harnesses could drift apart on which
+			// leg they think they are measuring.
+			if entry.EnvelopeDisposition != "" {
+				var env struct {
+					ObjectType string `json:"object_type"`
+					OpType     string `json:"op_type"`
+					OpVersion  int64  `json:"op_version"`
+				}
+				if err := json.Unmarshal(raw, &env); err != nil {
+					t.Fatalf("decoding envelope: %v", err)
+				}
+				wantEnvelope := "opaque"
+				if implementsTriple(profile, env.ObjectType, env.OpType, env.OpVersion) {
+					wantEnvelope = "interpretable"
+				}
+				if entry.EnvelopeDisposition != wantEnvelope {
+					t.Errorf("envelope_disposition is %q but FC-1's type leg derives %q for %s",
+						entry.EnvelopeDisposition, wantEnvelope, name)
+				}
 			}
 		})
 	}
@@ -235,19 +391,51 @@ func TestForwardCompatRuleCoverage(t *testing.T) {
 	}
 }
 
-// TestNegativeDispositionDerivation verifies that the derivation check is active
-// and fails if an expected disposition is inverted.
+// TestNegativeDispositionDerivation verifies that the derivation check is
+// active and fails if an expected disposition is inverted — once per leg of
+// FC-1, because a harness that reads only the envelope answers the first
+// correctly while being blind to the second.
 func TestNegativeDispositionDerivation(t *testing.T) {
 	profile := loadReaderProfile(t)
-	raw, err := spec.FS.ReadFile("testdata/forward-compat/ops/future-op-version.json")
+	allRules, err := spec.FieldRules()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("loading field rules: %v", err)
 	}
-	derived, err := deriveDisposition(profile, raw)
-	if err != nil {
-		t.Fatal(err)
+
+	cases := []struct {
+		name string
+		file string
+		leg  string
+	}{
+		{
+			name: "unimplemented op_version",
+			file: "future-op-version.json",
+			leg:  "type",
+		},
+		{
+			// review/create v1 is in the reader profile and its envelope is
+			// beyond reproach. Only `body` makes it opaque: `title` carries a
+			// declared `lww` rule and holds null, which §7.1 rejects.
+			name: "body a strategy cannot consume",
+			file: "uninterpretable-body.json",
+			leg:  "body",
+		},
 	}
-	if derived == "interpretable" {
-		t.Errorf("expected future-op-version to derive as opaque, got %q", derived)
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw, err := spec.FS.ReadFile("testdata/forward-compat/ops/" + tc.file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			derived, err := deriveDisposition(profile, allRules, tc.file, raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if derived != "opaque" {
+				t.Errorf("%s derives as %q, want opaque; the %s leg of FC-1 is not being decided",
+					tc.file, derived, tc.leg)
+			}
+		})
 	}
 }

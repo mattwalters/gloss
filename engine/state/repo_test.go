@@ -305,3 +305,79 @@ func TestFoldRepoAgreement(t *testing.T) {
 		t.Errorf("remotes mismatch: got %v, want %v", repoState.Remotes, expectedRemotes)
 	}
 }
+
+// TestFoldRepoSetUnionBodyShapes pins FoldRepo against the generic driver and
+// the reference fold on both shapes a `set-union` field consumes: a string, or
+// an array of strings (spec/fold.md §5.3).
+//
+// The array form was a divergence. FoldRepo read `remote` with a bare
+// `.(string)` assertion, so `{"remote":["origin","upstream"]}` — which the
+// uninterpretability predicate accepts and which both other implementations
+// fold to that pair — produced no remotes at all, and no quarantine record
+// either. Nothing in the log said so: §7.1's whole point is that an operation
+// either folds or is reported, and this one did neither. It reached the public
+// API and, through it, the SQLite projection.
+func TestFoldRepoSetUnionBodyShapes(t *testing.T) {
+	repoID := "b2c3d4e5f60718293a4b5c6d7e8f9012"
+	remoteOp := func(id, parent, body string, when int64) codec.Op {
+		op := codec.Op{
+			Envelope: codec.Envelope{
+				ObjectID:   repoID,
+				ObjectType: "repo",
+				OpType:     "add-remote",
+				OpVersion:  1,
+				Body:       json.RawMessage(body),
+			},
+			ID:     id,
+			Author: codec.Identity{When: time.Unix(when, 0).UTC()},
+		}
+		if parent != "" {
+			op.Parents = []string{parent}
+		}
+		return op
+	}
+
+	ops := []codec.Op{
+		remoteOp("m1", "", `{"remote":["origin","upstream"]}`, 100),
+		remoteOp("m2", "m1", `{"remote":"fork"}`, 200),
+		remoteOp("m3", "m2", `{"remote":["",  "kept"]}`, 300),
+		remoteOp("m4", "m3", `{"remote":["never",7]}`, 400),
+	}
+
+	repoState, err := s.FoldRepo(ops)
+	if err != nil {
+		t.Fatalf("FoldRepo failed: %v", err)
+	}
+
+	// m4 is uninterpretable, so its well-formed `never` dies with the op.
+	// The empty string is not an element (§5.3).
+	want := []string{"fork", "kept", "origin", "upstream"}
+	if !reflect.DeepEqual(repoState.Remotes, want) {
+		t.Errorf("Remotes = %v, want %v", repoState.Remotes, want)
+	}
+
+	var quarantined []string
+	for _, u := range repoState.UnknownOps {
+		quarantined = append(quarantined, u.Commit)
+	}
+	if !reflect.DeepEqual(quarantined, []string{"m4"}) {
+		t.Errorf("quarantined = %v, want [m4]", quarantined)
+	}
+
+	// The generic driver must reach the same set through the same rules, and
+	// quarantine the same operation.
+	generic, err := s.Fold(ops, s.RepoRules())
+	if err != nil {
+		t.Fatalf("Fold failed: %v", err)
+	}
+	if !reflect.DeepEqual(generic.State["remote"], want) {
+		t.Errorf("generic remote = %v, want %v", generic.State["remote"], want)
+	}
+	var genericQuarantined []string
+	for _, u := range generic.UnknownOps {
+		genericQuarantined = append(genericQuarantined, u.Commit)
+	}
+	if !reflect.DeepEqual(genericQuarantined, quarantined) {
+		t.Errorf("generic quarantined = %v, want %v", genericQuarantined, quarantined)
+	}
+}

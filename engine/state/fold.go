@@ -79,14 +79,21 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 	}, nil
 }
 
-// orSetItems returns the items one side of an OR-set body carries. The side
-// holds a string or an array of strings (spec/fold.md §5.4); anything else made
-// the operation uninterpretable (§7.1) before it reached a reducer, so a
-// non-string here is unreachable and skipped rather than rendered.
+// stringItems returns the items a set-valued field carries. Both set strategies
+// consume the same two shapes: a `set-union` field holds a string or an array of
+// strings (spec/fold.md §5.3), and so does each side of an OR-set (§5.4).
+// Anything else made the operation uninterpretable (§7.1) before it reached a
+// reducer, so a non-string here is unreachable and skipped rather than rendered.
 //
-// The typed reducers share this with the generic fold's own orSetItems so a
-// body shape one consumes cannot be silently dropped by the other.
-func orSetItems(raw any) []string {
+// Every typed reducer shares this with the generic fold's own item helpers so a
+// body shape one consumes cannot be silently dropped by the other. FoldRepo read
+// `remote` with a bare `.(string)` assertion until WRIT-124's round-2 review:
+// `{"remote":["origin","upstream"]}` is accepted by the uninterpretability check
+// and folded by both the generic driver and the reference fold, so nothing
+// quarantined it and the typed reducer alone returned no remotes at all — "skip
+// invents an absence" relocated from the predicate into a reducer, reaching the
+// public API and the SQLite projection.
+func stringItems(raw any) []string {
 	switch v := raw.(type) {
 	case string:
 		return []string{v}

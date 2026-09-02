@@ -132,11 +132,19 @@ same way, because a reader's user can act on either only by looking at the raw
 op. Widening the category widens what flows through the record; it does not
 change the record.
 
-> Implementation note, not normative. The Go engine's opaque record
-> (`writ.UnknownOp`) carries `op_id`, `op_type` and `op_version` but not
-> `object_type`, so it does not yet satisfy `FC-5`. That gap predates §7.1 and
-> is not introduced by it, but §7.1 widens the set of ops flowing through the
-> record, so it is recorded here rather than left implicit.
+`FC-5` below is the single definition of what that record carries. No other
+section of this document and no section of `spec/fold.md` enumerates it: a
+record specified in two places is a record that will be specified two ways.
+
+> **Known non-conformance.** This repository's implementations of the record do
+> not satisfy `FC-5`. `writ.UnknownOp`, the generic driver's `UnknownOp`, the
+> reference fold's and the golden shape in `spec/fixtures` all carry three
+> fields — the op id (spelled `commit`), `op_type` and `op_version` — and none
+> of them carries `object_type`. The rule is right and the code is wrong; the
+> rule is not being softened to match. Tracked as `WRIT-155`, which is where the
+> cost of closing it is recorded. The gap predates the uninterpretable-body
+> population and is not introduced by it, but that population widened what flows
+> through the record, so it is stated here rather than left implicit.
 
 ### Stale vs. corrupt state
 
@@ -238,10 +246,28 @@ and unrecognized fields are executed against the reader capability profile and
 verified for byte-for-byte preservation and field isolation.
 
 That family covers the unknown-type half of `FC-1`. The other half — a known op
-whose body a strategy cannot consume — is pinned by the `uninterpretable-*`
-merge vectors under `spec/testdata/fold/merge/`, which assert both the folded
-state and the quarantine list, against the reference fold and the engine alike.
-It is not in the repository-level family because those fixtures are built by
+whose body a strategy cannot consume — is covered in the two other places
+conformance data lives:
+
+- `spec/testdata/forward-compat/ops/uninterpretable-body.json` carries the
+  disposition itself: a `review/create` v1 op, in the reader profile and beyond
+  reproach at the envelope, whose `title` holds `null`. Its declared disposition
+  is `opaque`, and the harness derives that by folding the body and reading the
+  quarantine channel rather than by re-reading the envelope. These instances are
+  hand-authored, which is what lets them state a body no conforming producer
+  writes — as `unknown-object-type.json` states an `object_type` none emits.
+
+  Its index entry also carries `envelope_disposition`, which the other entries
+  do not. An envelope classifier decides only `FC-1`'s type leg; deciding the
+  body leg needs the vocabulary's merge rules and a fold. Where the two legs
+  disagree the index states both, so a reader that classifies envelopes and a
+  reader that folds can each be measured against the half they answer, and
+  neither is scored on the other's.
+- The `uninterpretable-*` merge vectors under `spec/testdata/fold/merge/` carry
+  the effect: each asserts both the folded state and the quarantine list,
+  against the reference fold and the engine alike.
+
+The repository-level family carries neither, because its fixtures are built by
 Writ's own producer, which validates bodies before signing
-(`spec/op-envelope.md` §Producer validation) and so cannot emit one.
+(`spec/op-envelope.md` §Producer validation) and so cannot emit such an op.
 
