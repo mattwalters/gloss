@@ -110,3 +110,33 @@ One toolchain, one command, per ARCHITECTURE.md: `go build ./...` and
 `golangci-lint` and `go test -race` on every PR; the conformance fixtures
 run as part of the ordinary test suite as they land, so a fixture failure
 in CI is the spec speaking.
+
+## The public API baseline
+
+`api/engine.txt` lists every exported symbol in `engine` and its public
+subpackages. Downstream tools are meant to need nothing but that surface, so
+it is kept as a file you can read rather than a fact you have to derive:
+
+```
+make api        # regenerate api/engine.txt
+make api-check  # what CI's `api` job runs
+```
+
+**If you change the public API, run `make api` and commit the result in the
+same PR.** `make api-check` regenerates the listing into a temp file and diffs
+it against the committed one, so it fails on *any* drift — an added symbol as
+readily as a removed one. A green `api` job therefore means the baseline is
+current, not merely that nothing obviously broke.
+
+Read the diff it produces: added lines are new surface, and a line that
+changes or disappears is a breaking change. Breaking changes aren't forbidden
+before 1.0, but they are never silent — call it out in the PR and add a
+CHANGELOG.md entry.
+
+The listing comes from `internal/cmd/apisurface`, which parses the source and
+prints declarations. No type checking, no compiler export data: the bytes
+depend only on the code, so two contributors on different machines and
+different Go versions produce the same file. The baseline it replaced was
+apidiff export data, which embedded the generating machine's absolute paths,
+changed wholesale between toolchains, and — because it was only ever consulted
+for *incompatible* changes — could not tell a stale baseline from a clean one.

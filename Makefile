@@ -1,5 +1,5 @@
 PKG := github.com/writtendev/writ
-APIDIFF := go run golang.org/x/exp/cmd/apidiff@v0.0.0-20250128182459-e0ece0dbea4c
+APISURFACE := go run ./internal/cmd/apisurface
 
 # Resolve the install dir the way the go tool does: GOBIN when set, else
 # GOPATH/bin.
@@ -31,16 +31,28 @@ install: ## Build and install writ into Go's bin dir
 	@printf 'PATH resolves writ to: %s\n' \
 	  "$$(command -v writ || echo '(nothing — is $(GOBIN) on your PATH?)')"
 
-api:
+# api/engine.txt is the public API baseline: every exported symbol in engine
+# and its public subpackages, as plain text. It is read in the PR diff, not by
+# a tool, so an API change has to be visible to whoever reviews it. Generated
+# from the source text alone — no export data, no absolute paths, nothing that
+# varies with the Go version — which is what makes `api-check` below able to
+# say "the baseline is stale" rather than "your toolchain differs from mine".
+api: ## Regenerate api/engine.txt from the source
 	@mkdir -p api
-	$(APIDIFF) -w api/engine.api $(PKG)/engine
+	$(APISURFACE) ./engine > api/engine.txt
 
-api-check:
+api-check: ## Fail if api/engine.txt is stale (the CI gate)
 	@set -e; \
-	out=$$($(APIDIFF) -incompatible api/engine.api $(PKG)/engine); \
-	if [ -n "$$out" ]; then \
-		echo "Incompatible API changes detected in $(PKG)/engine:"; \
-		echo "$$out"; \
+	tmp=$$(mktemp "$${TMPDIR:-/tmp}/writ-api.XXXXXX"); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	$(APISURFACE) ./engine > "$$tmp"; \
+	if ! diff -u -L 'api/engine.txt (committed)' -L 'api/engine.txt (regenerated)' \
+	     api/engine.txt "$$tmp"; then \
+		echo; \
+		echo 'api-check: api/engine.txt does not match the code.'; \
+		echo 'api-check: run `make api` and commit the result. A line above that'; \
+		echo 'api-check: changes or disappears is a breaking API change — say so'; \
+		echo 'api-check: in the PR, and in CHANGELOG.md.'; \
 		exit 1; \
 	fi
 
