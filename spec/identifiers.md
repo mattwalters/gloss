@@ -636,6 +636,17 @@ schema (WRIT-129), and the schemas `$ref` this definition — so a producer that
 tried to write an over-long `target` is refused before the commit exists, by
 the same 513 the fixtures enforce.
 
+Unlike the person-identifier bound, **513 is not derived from this grammar**.
+The repo-id half is fixed at 32 hex characters and the envelope bounds
+`object_id` at 256 printable-ASCII characters, so the longest reference the
+format can actually produce is 32 + 1 + 256 = 289 code points; 513 reads as
+256 + 1 + 256, a two-envelope-id form the pattern does not admit. The
+practical consequence is that the object-id half of a reference may carry up
+to 480 code points of arbitrary non-ASCII, wider than the envelope's own bound
+on the same value. The number is recorded here as it stands — narrowing it is
+a spec amendment with fixture consequences, tracked as WRIT-157 — and an
+implementation MUST enforce 513 until that lands.
+
 ### Short forms and presentation
 
 In human-facing user interfaces (CLI, TUI, web), clients MAY display shortened
