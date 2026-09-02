@@ -292,6 +292,116 @@ func TestInit_SigningKeyGuidance(t *testing.T) {
 	}
 }
 
+// TestInit_NeverAdvisesRunningInit pins the one piece of advice writ init must
+// never print: itself. The remediation is carried by identity.ConfigError and
+// is right from every other command; printed by init it tells the reader to
+// run what they are running, and implies init failed at something it never
+// attempts. The git config lines init prints below each warning are the actual
+// remediation, so the assertions here also check those survived.
+func TestInit_NeverAdvisesRunningInit(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(t *testing.T, repoDir string)
+	}{
+		{
+			name:  "nothing configured at all",
+			setup: func(t *testing.T, repoDir string) {},
+		},
+		{
+			name: "gpg.format set to something writ cannot use",
+			setup: func(t *testing.T, repoDir string) {
+				setGitConfig(t, repoDir, "user.name", "Alice")
+				setGitConfig(t, repoDir, "user.email", "alice@example.com")
+				setGitConfig(t, repoDir, "gpg.format", "openpgp")
+			},
+		},
+		{
+			name: "no person identifier to derive",
+			setup: func(t *testing.T, repoDir string) {
+				setGitConfig(t, repoDir, "user.email", "   ")
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := setupTestCLIEnv(t)
+			tc.setup(t, env.repoDir)
+
+			var stdout, stderr bytes.Buffer
+			if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+				t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
+			}
+
+			out := stdout.String() + stderr.String()
+			if strings.Contains(out, "writ init") {
+				t.Errorf("writ init advised the reader to run writ init:\n%s", out)
+			}
+			if !strings.Contains(out, "git config") {
+				t.Errorf("init dropped the git config remediation entirely:\n%s", out)
+			}
+		})
+	}
+
+	// The other half of the rule: suppressed for init, kept everywhere else.
+	// A verb that needs a signed write on an unconfigured repo is exactly
+	// where "run 'writ init' to configure" is the right thing to say.
+	t.Run("but another verb still says it", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{"review", "open", "-C", env.repoDir, "-title", "x"}, &stdout, &stderr); code == 0 {
+			t.Fatalf("review open should refuse on an unconfigured repo; stdout: %s", stdout.String())
+		}
+		if got := stderr.String(); !strings.Contains(got, "run 'writ init' to configure") {
+			t.Errorf("review open dropped the remediation:\n%s", got)
+		}
+	})
+}
+
+// TestInit_UnconfiguredSigningReadsAsUnset is the message half of the same
+// report: a repo with no signing configuration was told its gpg.format was an
+// unsupported format, which reads as writ having found something broken rather
+// than something absent.
+func TestInit_UnconfiguredSigningReadsAsUnset(t *testing.T) {
+	t.Run("unset", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setGitConfig(t, env.repoDir, "user.name", "Alice")
+		setGitConfig(t, env.repoDir, "user.email", "alice@example.com")
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+			t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
+		}
+		got := stderr.String()
+		if !strings.Contains(got, "missing git config \"gpg.format\"") {
+			t.Errorf("init should report gpg.format as missing, got:\n%s", got)
+		}
+		if strings.Contains(got, "unsupported") {
+			t.Errorf("init called an unconfigured gpg.format unsupported:\n%s", got)
+		}
+	})
+
+	t.Run("set to openpgp", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setGitConfig(t, env.repoDir, "user.name", "Alice")
+		setGitConfig(t, env.repoDir, "user.email", "alice@example.com")
+		setGitConfig(t, env.repoDir, "gpg.format", "openpgp")
+
+		var stdout, stderr bytes.Buffer
+		if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
+			t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
+		}
+		got := stderr.String()
+		if !strings.Contains(got, "unsupported git config \"gpg.format\"=\"openpgp\"") {
+			t.Errorf("init should quote the configured format back, got:\n%s", got)
+		}
+		if strings.Contains(got, "missing") {
+			t.Errorf("init called a configured gpg.format missing:\n%s", got)
+		}
+	})
+}
+
 func TestInit_E2E_PlainGitFetch(t *testing.T) {
 	requireGit(t)
 	tempDir := t.TempDir()

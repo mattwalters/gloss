@@ -4,6 +4,7 @@ package identity
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"strings"
 )
@@ -136,19 +137,26 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 	}
 
 	// 4. GPG Format: gpg.format (must be ssh)
-	gpgFormat, ok := cfg["gpg.format"]
-	if !ok || gpgFormat == "" {
+	//
+	// Unset and unsupported are two different states and get two different
+	// errors, the way the user.signingKey branch below already does it. A user
+	// who has configured nothing is not told their configuration is wrong —
+	// that reads as writ having found something broken rather than something
+	// absent, and it is the first screen a new user sees. A user who has set
+	// openpgp made a deliberate choice writ is asking them to reconsider,
+	// which is actionable in a different way and so says something different.
+	gpgFormat := strings.TrimSpace(cfg["gpg.format"])
+	if gpgFormat == "" {
 		return baseIdent, &ConfigError{
 			Key:     "gpg.format",
-			Value:   "",
-			Problem: ErrUnsupportedFormat,
+			Problem: fmt.Errorf("%w: writ signs with ssh, so set it to ssh", ErrMissing),
 		}
 	}
-	if strings.ToLower(gpgFormat) != "ssh" {
+	if !strings.EqualFold(gpgFormat, "ssh") {
 		return baseIdent, &ConfigError{
 			Key:     "gpg.format",
 			Value:   gpgFormat,
-			Problem: ErrUnsupportedFormat,
+			Problem: fmt.Errorf("%w: writ signs with ssh", ErrUnsupportedFormat),
 		}
 	}
 

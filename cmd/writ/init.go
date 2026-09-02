@@ -31,6 +31,21 @@ func newInitFlagSet(defaultDir string) (*flag.FlagSet, *initOpts) {
 	return fs, opts
 }
 
+// initMessage renders err for writ init's own output. An identity.ConfigError
+// signs its message with "(run 'writ init' to configure)", which is the right
+// advice from every other command and the wrong advice from this one: it tells
+// the reader to run what they are already running, and implies init failed at
+// something it never attempts. writ does not write signing configuration for
+// anyone — it prints the git config lines and expects the user to run them,
+// which is what the reader sees directly below each of these warnings.
+func initMessage(err error) string {
+	var cfgErr *identity.ConfigError
+	if errors.As(err, &cfgErr) {
+		return cfgErr.Message()
+	}
+	return err.Error()
+}
+
 func runInit(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
 	fs, opts := newInitFlagSet(defaultDir)
 	fs.SetOutput(stderr)
@@ -127,7 +142,7 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 		personID, personErr := identity.DerivePersonID(gitCfg)
 		switch {
 		case personErr != nil:
-			fmt.Fprintf(stderr, "warning: no person identifier: %v\n", personErr)
+			fmt.Fprintf(stderr, "warning: no person identifier: %s\n", initMessage(personErr))
 			fmt.Fprintf(stderr, "Configure one of:\n")
 			fmt.Fprintf(stderr, "  git config %s user:<handle>\n", identity.PersonIDKey)
 			fmt.Fprintf(stderr, "  git config user.email <address>\n")
@@ -146,20 +161,20 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 			switch {
 			case errors.Is(cfgErr.Problem, identity.ErrMissing) || errors.Is(cfgErr.Problem, identity.ErrUnsupportedFormat) || errors.Is(cfgErr.Problem, identity.ErrInvalid):
 				if cfgErr.Key == "gpg.format" || cfgErr.Key == "user.signingKey" || strings.HasPrefix(cfgErr.Key, "user.") {
-					fmt.Fprintf(stderr, "warning: SSH signing key or identity not fully configured (%v)\n", cfgErr)
+					fmt.Fprintf(stderr, "warning: SSH signing key or identity not fully configured (%s)\n", initMessage(cfgErr))
 					fmt.Fprintf(stderr, "To configure SSH signing for Writ and Git:\n")
 					fmt.Fprintf(stderr, "  git config gpg.format ssh\n")
 					fmt.Fprintf(stderr, "  git config user.signingKey ~/.ssh/id_ed25519.pub\n")
 					fmt.Fprintf(stderr, "Optionally configure verification allowed signers:\n")
 					fmt.Fprintf(stderr, "  git config gpg.ssh.allowedSignersFile ~/.ssh/allowed_signers\n")
 				} else {
-					fmt.Fprintf(stderr, "warning: identity configuration: %v\n", cfgErr)
+					fmt.Fprintf(stderr, "warning: identity configuration: %s\n", initMessage(cfgErr))
 				}
 			default:
-				fmt.Fprintf(stderr, "warning: identity configuration: %v\n", err)
+				fmt.Fprintf(stderr, "warning: identity configuration: %s\n", initMessage(err))
 			}
 		} else {
-			fmt.Fprintf(stderr, "warning: identity configuration: %v\n", err)
+			fmt.Fprintf(stderr, "warning: identity configuration: %s\n", initMessage(err))
 		}
 	} else {
 		if ident.Key.Literal {
