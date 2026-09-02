@@ -177,8 +177,8 @@ func TestBuildCommitAcceptsForeignObjectTypes(t *testing.T) {
 // under object_type: comment MUST be preserved ... and ignored").
 //
 // The corpus disagrees with itself, and resolving it means changing normative
-// fixtures. Tracked separately; this test pins today's behavior so the change
-// cannot happen by accident.
+// fixtures. Tracked as WRIT-148, which also removes this test; until then it
+// pins today's behavior so the change cannot happen by accident.
 func TestVocabulariesDisagreeOnUnknownOpTypeAndVersion(t *testing.T) {
 	tolerant := []string{"review", "issue", "project", "cycle", "repo"}
 
@@ -215,7 +215,7 @@ func TestVocabulariesDisagreeOnUnknownOpTypeAndVersion(t *testing.T) {
 			OpVersion:  1,
 			Body:       json.RawMessage(`{"pinned":true}`),
 		}, testAuthor(), nil); err == nil {
-			t.Fatal("comment.schema.json accepted an unknown op type — the divergence this test characterizes has been resolved; update it and the corpus together")
+			t.Fatal("comment.schema.json accepted an unknown op type — the divergence this test characterizes has been resolved (WRIT-148); delete this test and the spec note with it")
 		}
 	})
 	t.Run("comment/future op version is refused", func(t *testing.T) {
@@ -226,7 +226,7 @@ func TestVocabulariesDisagreeOnUnknownOpTypeAndVersion(t *testing.T) {
 			OpVersion:  2,
 			Body:       json.RawMessage(`{"headline":"v2 renamed the field"}`),
 		}, testAuthor(), nil); err == nil {
-			t.Fatal("comment.schema.json accepted a future op version — the divergence this test characterizes has been resolved; update it and the corpus together")
+			t.Fatal("comment.schema.json accepted a future op version — the divergence this test characterizes has been resolved (WRIT-148); delete this test and the spec note with it")
 		}
 	})
 }

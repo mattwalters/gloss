@@ -206,7 +206,7 @@ by schema validation alone.
 > carry `unknown-op-type` and future-version vectors, while
 > `spec/testdata/comments/invalid/` carries `invalid-op-type.json` and
 > `invalid-op-version.json`. Resolving it means changing normative
-> fixtures and is tracked separately.
+> fixtures and is tracked as **WRIT-148**.
 
 The asymmetry with reader validation is deliberate. An op is a signed
 commit in an append-only log: a producer that writes an invalid op
