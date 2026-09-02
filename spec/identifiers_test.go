@@ -299,13 +299,14 @@ func TestPersonIdentifierNormalization(t *testing.T) {
 	// TestReffoldNormalizePersonMatchesEngine is the test that binds the
 	// implementations to each other.
 	//
-	// This is the algorithm exactly as written, with no correction for the two
-	// x/text defects the implementations work around: a correction here would
-	// make this a third copy of the fix rather than an independent reading of
-	// the rule. Its cases therefore stay off that surface \u2014 Cherokee
-	// U+13A0..U+13F5, and supplementary starters \u2014 which is swept
-	// exhaustively against CPython in engine/internal/person's differential
-	// test instead.
+	// This is the algorithm exactly as written, with no correction for the
+	// four x/text behaviours the implementations work around: a correction
+	// here would make this a third copy of the fix rather than an independent
+	// reading of the rule. Its cases therefore stay off that surface —
+	// Cherokee U+13A0..U+13F5, supplementary starters, runs of more than
+	// thirty non-starters, and composition across a ccc-0 blocker — all of
+	// which are swept exhaustively against CPython in engine/internal/person's
+	// differential tests instead.
 	fold := func(v string) string {
 		return unicodenorm.NFC.String(unicodecases.Fold().String(unicodenorm.NFC.String(v)))
 	}

@@ -1,6 +1,7 @@
 package spec_test
 
 import (
+	"strings"
 	"testing"
 
 	"golang.org/x/text/cases"
@@ -17,9 +18,10 @@ import (
 // colonless strings that are not conforming identifiers at all.
 //
 // Since WRIT-117 it also pins every step of the folding algorithm, because two
-// copies of a three-step rule have three times as many ways to drift as two
-// copies of strings.ToLower did: composition, the case fold itself, the second
-// composition, and the two upstream defects each copy has to work around.
+// copies of a three-step rule have far more ways to drift than two copies of
+// strings.ToLower did: composition, the case fold itself, the second
+// composition, and the four x/text behaviours each copy has to work around.
+// The last of those is what this table missed once already — see below.
 var normalizePersonInputs = []string{
 	"",
 	" ",
@@ -70,7 +72,22 @@ var normalizePersonInputs = []string{
 	"user:\u00e9\U00010041\u0300\u0065\u0301", // a false composition must not cost its neighbours
 	"\u0130:alice",                            // a non-conforming scheme, where the two copies still must agree
 	"\U00010041\u0300@example.com",            // colonless, and past the ASCII fast path
+	// One input per defect the folding implementations work around, mirroring
+	// the list in the nfc doc comment. Every one of these has actually
+	// diverged between the two copies at some point: a hand-written table only
+	// covers the cases somebody thought to write down, and these are the ones
+	// that were paid for.
+	"user:\U00010041\u0300",           // 1: the truncated composition key
+	"user:a" + longMarkRun + "\u0301", // 2: Stream-Safe Text, and the boundary that follows from it
+	"user:\u00e1" + longMarkRun,       // 2 again, from the spelling it has to match
+	"user:\u00c5\u0bd7\u0316\u0301",   // 3: composing across a ccc-0 blocker
+	"user:\u00c5\u0bd7\u0316\u0301\u0316\u0301",
+	"user:a\xff\u0341", // invalid UTF-8, where the two copies took different exits
 }
+
+// longMarkRun is thirty U+0316: one more than x/text will compose before it
+// gives up and inserts U+034F.
+var longMarkRun = strings.Repeat("\u0316", 30)
 
 // TestReffoldPinnedUnicodeVersion binds the reference fold's copy of the rule
 // to the Unicode tables x/text actually compiled in. x/text selects tables by

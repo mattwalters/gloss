@@ -182,37 +182,42 @@ func hasCherokeeFoldedRune(s string) bool {
 	return false
 }
 
-// nfc composes s in Normalization Form C.
+// nfc returns s in Normalization Form C.
 //
-// It cannot hand the whole string to norm.NFC and trust the answer. x/text
-// packs a composition pair into a 32-bit key as uint16(a)<<16|uint16(b)
-// (unicode/norm/forminfo.go), so a starter above U+FFFF is truncated to its
-// low 16 bits and matches the BMP entry that shares them: NFC of U+10041
-// followed by U+0300 returns "À", where the correct answer leaves both code
-// points alone. 16,956 (starter, mark) pairs compose falsely this way. Every
-// one of them merges two distinct people into one — the failure
-// spec/identifiers.md §Length bounds refuses to accept from truncation,
-// arriving by a different road — and it puts this implementation at odds with
-// any other, which is the one property the format has to deliver.
+// It does not ask x/text to normalize anything larger than a single rune or a
+// single pair, because x/text's answer for a whole string is wrong in four
+// ways. The first three are defects; the fourth is a deliberate behaviour that
+// this specification does not want:
 //
-// Rather than reimplement composition or hardcode the affected ranges, nfc
-// checks the invariant. NFD is trie-driven, does not use the packed key, and
-// is unaffected, so NFD(NFC(x)) == NFD(x) is an independent verification that
-// what NFC returned is canonically equivalent to what it was given. A false
-// composition fails it. Checking the invariant rather than the symptom also
-// catches any other composition defect, present or future.
+//  1. Over-composition. A composition pair is packed into a 32-bit key as
+//     uint16(a)<<16|uint16(b) (unicode/norm/forminfo.go), so a starter above
+//     U+FFFF is truncated to its low 16 bits and matches the BMP entry sharing
+//     them: NFC of U+10041 U+0300 returns "À". 16,956 (starter, mark) pairs
+//     compose falsely this way, and each one merges two distinct people.
+//  2. Stream-Safe Text, applied unconditionally through String, Bytes and Iter
+//     alike: past 30 consecutive non-starters it inserts U+034F and stops
+//     composing. spec/identifiers.md forbids that, and it is reachable well
+//     inside the 320-code-point bound.
+//  3. Composing across a blocker. NFC of U+00C5 U+0BD7 U+0316 U+0301 returns
+//     U+01FA U+0BD7 U+0316: the acute composed onto the base across a ccc-0
+//     mark that blocks it, and was then dropped from the output.
+//  4. Stream-safe *boundaries*. norm.NextBoundaryInString is driven by
+//     streamSafe.next, so it reports a cut after 30 non-starters rather than a
+//     position nothing composes across. x/text carries a TODO at
+//     unicode/norm/normalize.go saying the two are not the same thing.
 //
-// The check is per normalization segment, so a bad pair in one segment cannot
-// discard the compositions in the segments around it, and no composing pair is
-// ever split — Hangul jamo, Kaithi U+11099 U+110BA and Grantha U+11347 U+1133E
-// all stay whole. See segmentLen for where a segment ends and why that is not
-// the boundary x/text's NextBoundary reports. A segment that fails falls back
-// to its decomposed form, which is canonical, so two spellings of the same
-// value still normalize alike.
+// A round-trip guard alone cannot cover this. NFD(NFC(x)) == NFD(x) catches
+// (1), because a false composition is not canonically equivalent. It is blind
+// to (2), because NFD inserts the same joiner and it is present on both sides
+// of the comparison. It sees (3) only because a code point goes missing, and
+// the only repair available to a guard — fall back to NFD — then discards the
+// composition that was legitimate.
 //
-// The guard cannot block a legitimate composition: of the 1088 canonical
-// composing pairs in Unicode 15.0.0 no two share a truncated key, so a pair
-// the guard rejects was never a composition to begin with.
+// So the composition is done here, segment by segment, over a canonically
+// ordered decomposition, with x/text asked only the three questions it answers
+// correctly: what one rune decomposes to, what a code point's combining class
+// is, and whether one specific pair composes. All three are swept exhaustively
+// against CPython, which shares no code with x/text.
 func nfc(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
@@ -231,17 +236,8 @@ func nfc(s string) string {
 // The rule is Properties.BoundaryBefore — ccc == 0 and does not combine
 // backwards — applied rune by rune. That is the definition of a position
 // nothing can compose across, so cutting there cannot separate a composing
-// pair. It is deliberately not norm.NextBoundaryInString, which is a
-// *stream-safe* boundary: that loop is driven by streamSafe.next and cuts
-// after 30 consecutive non-starters, mid-segment, so a mark past the cut can
-// no longer reach the starter before it. x/text carries a TODO at
-// unicode/norm/normalize.go saying the two are not the same thing.
-//
-// The difference is reachable well inside the 320-code-point bound and splits
-// one person into two: "a" followed by thirty U+0316 and then U+0301 must fold
-// to the same value as U+00E1 followed by thirty U+0316, and under a
-// stream-safe cut it does not. TestLengthAxisDifferentialAgainstCPython covers
-// the whole axis.
+// pair, and it has no length limit. See nfc (4) for why this is not
+// norm.NextBoundaryInString.
 //
 // Combining backwards, and not merely being a non-starter, is what keeps
 // Hangul whole: V (U+1161..U+1175) and T (U+11A8..U+11C2) have ccc == 0 and
@@ -266,29 +262,8 @@ func segmentLen(s string) int {
 	return len(s)
 }
 
-// nfcSegment composes one normalization segment.
-//
-// It does not ask x/text to normalize the segment. Three separate defects make
-// that answer untrustworthy, and only the first is one the round-trip guard
-// can see:
-//
-//   - Over-composition. The packed 32-bit key composes pairs that are not
-//     compositions (see nfc). NFD(NFC(x)) != NFD(x) catches this.
-//   - Stream-Safe Text. Past maxNonStarters consecutive non-starters, every
-//     x/text entry point — String, Bytes, Iter — inserts U+034F and stops
-//     composing. NFD inserts the same joiner, so the guard is blind: it is
-//     present on both sides of the comparison.
-//   - Composing across a blocker. NFC of U+00C5 U+0BD7 U+0316 U+0301 returns
-//     U+01FA U+0BD7 U+0316: the acute composed onto the base across a ccc-0
-//     mark that blocks it, and was then dropped from the output. CPython
-//     returns the input unchanged. The guard sees this one only because a
-//     code point went missing, and falling back to NFD then loses the ring
-//     that legitimately composes.
-//
-// So the composition is done here, over a canonically ordered decomposition,
-// with x/text asked only the questions it answers correctly: what a single
-// rune decomposes to, what a code point's combining class is, and whether one
-// specific pair composes. Those three are swept exhaustively against CPython.
+// nfcSegment composes one normalization segment. See nfc for why it does the
+// composing itself.
 func nfcSegment(seg string) string {
 	if !utf8.ValidString(seg) {
 		// Not a conforming identifier at all. Return the bytes untouched
@@ -300,49 +275,116 @@ func nfcSegment(seg string) string {
 	return compose(decompose(seg))
 }
 
-// decompose returns seg in canonical decomposition, canonically ordered.
+// decompose returns seg canonically decomposed and canonically ordered,
+// alongside each rune's combining class, which the caller needs too and which
+// is measurably worth computing once.
 //
 // Decomposition is applied one rune at a time because it is context-free —
 // NFD(xy) is NFD(x) followed by NFD(y), reordered — and because no single
 // rune's decomposition is long enough to reach the stream-safe limit, so
 // x/text answers each one correctly even where it cannot answer for the whole
 // segment.
-func decompose(seg string) []rune {
-	var out []rune
+func decompose(seg string) ([]rune, []uint8) {
+	rs := make([]rune, 0, len(seg))
 	for _, r := range seg {
-		out = append(out, []rune(norm.NFD.String(string(r)))...)
+		rs = append(rs, []rune(norm.NFD.String(string(r)))...)
 	}
-	canonicalOrder(out)
-	return out
+	cc := make([]uint8, len(rs))
+	for i, r := range rs {
+		cc[i] = ccc(r)
+	}
+	canonicalOrder(rs, cc)
+	return rs, cc
 }
 
-// canonicalOrder sorts non-starters by canonical combining class, stably, in
-// place: UAX #15's Canonical Ordering Algorithm. Runes with ccc 0 are fixed
-// points and nothing moves across them.
-func canonicalOrder(rs []rune) {
-	for i := 1; i < len(rs); i++ {
-		c := ccc(rs[i])
-		if c == 0 {
+// canonicalOrder applies UAX #15's Canonical Ordering Algorithm in place:
+// non-starters are sorted by combining class, stably, and runes with ccc 0 are
+// fixed points that nothing moves across.
+//
+// It sorts each maximal run of non-starters rather than the whole slice, and
+// it is not the obvious insertion sort. A person identifier's segment length
+// is bounded only by what an op body carries — Check is a producer-side guard
+// and the fold deliberately does not call it — so this runs on attacker-chosen
+// input on every reader of the repository, and the rule it replaced was
+// linear. An O(m^2) sort here is an amplification vector, not a slow path.
+func canonicalOrder(rs []rune, cc []uint8) {
+	for i := 0; i < len(rs); {
+		if cc[i] == 0 {
+			i++
 			continue
 		}
-		for j := i; j > 0 && ccc(rs[j-1]) > c; j-- {
-			rs[j-1], rs[j] = rs[j], rs[j-1]
+		j := i
+		for j < len(rs) && cc[j] != 0 {
+			j++
 		}
+		sortByCCC(rs[i:j], cc[i:j])
+		i = j
 	}
+}
+
+// sortRunInsertionMax is the run length below which an insertion sort wins:
+// almost every real combining sequence is one or two marks, and a counting
+// sort's 256-entry histogram costs more than the whole run.
+const sortRunInsertionMax = 32
+
+// sortByCCC stably sorts one run of non-starters by combining class. Insertion
+// sort for the short runs that occur in practice, counting sort — linear, and
+// stable because it walks the run in order — for the long ones that make a
+// quadratic sort worth attacking.
+func sortByCCC(rs []rune, cc []uint8) {
+	if len(rs) < 2 {
+		return
+	}
+	if len(rs) <= sortRunInsertionMax {
+		for i := 1; i < len(rs); i++ {
+			r, c := rs[i], cc[i]
+			j := i
+			for ; j > 0 && cc[j-1] > c; j-- {
+				rs[j], cc[j] = rs[j-1], cc[j-1]
+			}
+			rs[j], cc[j] = r, c
+		}
+		return
+	}
+	var counts [256]int
+	for _, c := range cc {
+		counts[c]++
+	}
+	sum := 0
+	for i := range counts {
+		counts[i], sum = sum, sum+counts[i]
+	}
+	outR := make([]rune, len(rs))
+	outC := make([]uint8, len(cc))
+	for i, c := range cc {
+		outR[counts[c]], outC[counts[c]] = rs[i], c
+		counts[c]++
+	}
+	copy(rs, outR)
+	copy(cc, outC)
 }
 
 // compose applies UAX #15's Canonical Composition Algorithm to a canonically
 // ordered decomposition. Every Unicode fact it needs — the combining classes,
 // and whether a given pair composes — comes from x/text; nothing here is a
 // table this repository has to keep current.
-func compose(rs []rune) string {
+//
+// It composes only onto rs[0] and never promotes a later starter to be a new
+// base, which UAX #15 permits in general. That is sound here because of an
+// empirical property of the pinned Unicode version rather than anything about
+// the algorithm: of the 75 starters in 15.0.0 that combine backwards — and so
+// stay inside a segment rather than beginning one — exactly zero are the first
+// element of any composition. A later starter therefore has nothing to compose
+// with even if it were promoted. TestPinnedUnicodeVersion is what keeps this
+// true: a Unicode version bump has to re-establish it.
+func compose(rs []rune, cc []uint8) string {
 	if len(rs) == 0 {
 		return ""
 	}
 	out := make([]rune, 0, len(rs))
 	out = append(out, rs[0])
 	// A segment that opens on a non-starter has no starter to compose onto.
-	composable := ccc(rs[0]) == 0
+	composable := cc[0] == 0
 	// UAX #15 D115: c is blocked from the base when *any* character already
 	// retained between them has ccc 0, or a class at least as high as c's.
 	// Looking only at the last one is not enough — canonical ordering leaves
@@ -350,9 +392,9 @@ func compose(rs []rune) string {
 	// later mark of lower class and would otherwise be forgotten.
 	blockedAll := false
 	maxRetained := -1
-	for _, c := range rs[1:] {
-		cc := int(ccc(c))
-		blocked := blockedAll || maxRetained >= cc
+	for i, c := range rs[1:] {
+		n := int(cc[i+1])
+		blocked := blockedAll || maxRetained >= n
 		if composable && !blocked {
 			if p, ok := combine(out[0], c); ok {
 				out[0] = p
@@ -360,10 +402,10 @@ func compose(rs []rune) string {
 			}
 		}
 		out = append(out, c)
-		if cc == 0 {
+		if n == 0 {
 			blockedAll = true
-		} else if cc > maxRetained {
-			maxRetained = cc
+		} else if n > maxRetained {
+			maxRetained = n
 		}
 	}
 	return string(out)
@@ -371,8 +413,8 @@ func compose(rs []rune) string {
 
 // combine reports the primary composite of a and b, if there is one. It asks
 // x/text, on a two-rune string that cannot reach the stream-safe limit, and
-// applies the same round-trip guard as nfcSegment so a composition invented by
-// the truncated key is refused here too.
+// applies the round-trip guard so a composition invented by the truncated key
+// (nfc (1)) is refused.
 func combine(a, b rune) (rune, bool) {
 	in := string([]rune{a, b})
 	out := norm.NFC.String(in)
@@ -386,7 +428,14 @@ func combine(a, b rune) (rune, bool) {
 	return 0, false
 }
 
-func ccc(r rune) uint8 { return norm.NFC.PropertiesString(string(r)).CCC() }
+// ccc reports a rune's canonical combining class. It encodes into a stack
+// buffer rather than calling PropertiesString(string(r)), which heap-allocates
+// on every call and is invoked once per code point of every identifier folded.
+func ccc(r rune) uint8 {
+	var buf [utf8.UTFMax]byte
+	n := utf8.EncodeRune(buf[:], r)
+	return norm.NFC.Properties(buf[:n]).CCC()
+}
 
 // Problem names the ways a string can fail to be a conforming person
 // identifier. It is an enumeration rather than an error so that this package
