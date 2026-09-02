@@ -7,6 +7,7 @@ package projection_test
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -238,9 +239,23 @@ func BenchmarkThreadsAssembly(b *testing.B) {
 	}
 }
 
+// TestQueryPerformanceBudget asserts wall-clock query budgets over synthetic projection data.
+//
+// Wall-clock timing assertions in the standard unit suite are prone to flaking on shared
+// or loaded CI runners, cold caches, or slower hardware. By default, this test is skipped
+// to keep unit tests fast and deterministic (see WRIT-146).
+//
+// To run the performance budget assertion explicitly:
+//
+//	WRIT_PERF_BUDGET=1 go test -v ./engine/projection -run TestQueryPerformanceBudget
+//	WRIT_PERF_BUDGET=1 go test -race -v ./engine/projection -run TestQueryPerformanceBudget
+//
+// For standard profiling and regression measurement, run the benchmarks directly:
+//
+//	go test -bench=. ./engine/projection
 func TestQueryPerformanceBudget(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping query performance budget test in short mode")
+	if os.Getenv("WRIT_PERF_BUDGET") == "" || testing.Short() {
+		t.Skip("skipping query performance budget test; set WRIT_PERF_BUDGET=1 to run or use go test -bench=.")
 	}
 
 	budget := 20 * time.Millisecond
