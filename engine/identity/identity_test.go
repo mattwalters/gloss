@@ -139,6 +139,81 @@ func TestLoad_ValidLiteralKey(t *testing.T) {
 	}
 }
 
+// TestLoad_WhitespaceOnlyAuthor pins the guard on user.name and user.email.
+// git config stores a whitespace-only value verbatim, so a raw == "" check let
+// one through as a configured identity — and that identity is written into the
+// commit author of every appended op and used as the principal signature
+// verification matches against allowed-signers. Whitespace-only is unset.
+func TestLoad_WhitespaceOnlyAuthor(t *testing.T) {
+	values := []struct {
+		name  string
+		value string
+	}{
+		{"spaces", "   "},
+		{"tab", "\t"},
+	}
+
+	for _, key := range []string{"user.name", "user.email"} {
+		for _, v := range values {
+			t.Run(key+"/"+v.name, func(t *testing.T) {
+				env := setupTestEnv(t)
+				populateValidLocalConfig(t, env.repoDir)
+				setGitConfig(t, env.repoDir, key, v.value)
+
+				// The value really did survive the round trip through git;
+				// otherwise this test would pass for the wrong reason.
+				cfg, err := identity.ReadGitConfig(context.Background(), env.repoDir)
+				if err != nil {
+					t.Fatalf("ReadGitConfig: %v", err)
+				}
+				if got := cfg[strings.ToLower(key)]; got != v.value {
+					t.Fatalf("git stored %s as %q, want %q verbatim", key, got, v.value)
+				}
+
+				_, err = identity.Load(context.Background(), env.repoDir)
+				if err == nil {
+					t.Fatalf("Load accepted whitespace-only %s", key)
+				}
+				if !errors.Is(err, identity.ErrMissing) {
+					t.Errorf("Load error = %v, want errors.Is ErrMissing", err)
+				}
+				var cfgErr *identity.ConfigError
+				if !errors.As(err, &cfgErr) {
+					t.Fatalf("Load error is %T, want *identity.ConfigError", err)
+				}
+				if cfgErr.Key != key {
+					t.Errorf("cfgErr.Key = %q, want %q", cfgErr.Key, key)
+				}
+			})
+		}
+	}
+}
+
+// TestLoad_TrimsAuthorPadding is the other half of the guard above: a padded
+// value is configured, so Load succeeds, but the padding does not travel into
+// the commit author or the verification principal.
+func TestLoad_TrimsAuthorPadding(t *testing.T) {
+	env := setupTestEnv(t)
+	populateValidLocalConfig(t, env.repoDir)
+	setGitConfig(t, env.repoDir, "user.name", "  Alice Example  ")
+	setGitConfig(t, env.repoDir, "user.email", "  alice@example.test\t")
+
+	id, err := identity.Load(context.Background(), env.repoDir)
+	if err != nil {
+		t.Fatalf("Load unexpected error: %v", err)
+	}
+	if id.Author.Name != "Alice Example" {
+		t.Errorf("id.Author.Name = %q, want %q", id.Author.Name, "Alice Example")
+	}
+	if id.Author.Email != "alice@example.test" {
+		t.Errorf("id.Author.Email = %q, want %q", id.Author.Email, "alice@example.test")
+	}
+	// The person identifier already trimmed; the author now agrees with it.
+	if id.PersonID != "email:alice@example.test" {
+		t.Errorf("id.PersonID = %q, want %q", id.PersonID, "email:alice@example.test")
+	}
+}
+
 func TestLoad_WriterIDPrecedence(t *testing.T) {
 	t.Run("local_only", func(t *testing.T) {
 		env := setupTestEnv(t)

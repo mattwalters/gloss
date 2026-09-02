@@ -87,8 +87,19 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 	}
 
 	// 2. Author Name: user.name
-	name, ok := cfg["user.name"]
-	if !ok || name == "" {
+	//
+	// Trim before the emptiness check, the way DerivePersonID and the two
+	// Ensure* helpers in this package already do. git config stores a
+	// whitespace-only value verbatim, so a raw == "" guard lets one through as
+	// a configured identity — and this identity is not merely displayed: it
+	// becomes the commit author on every appended op, and user.email becomes
+	// the principal signature verification matches against allowed-signers. A
+	// set key with nothing in it is nothing configured, so it falls through to
+	// the missing-config path. The trimmed value is what the identity carries,
+	// matching git's own ident parsing and the person identifier derived from
+	// the same key below.
+	name := strings.TrimSpace(cfg["user.name"])
+	if name == "" {
 		return Identity{}, &ConfigError{
 			Key:     "user.name",
 			Problem: ErrMissing,
@@ -96,8 +107,8 @@ func Load(ctx context.Context, repoDir string) (Identity, error) {
 	}
 
 	// 3. Author Email: user.email
-	email, ok := cfg["user.email"]
-	if !ok || email == "" {
+	email := strings.TrimSpace(cfg["user.email"])
+	if email == "" {
 		return Identity{}, &ConfigError{
 			Key:     "user.email",
 			Problem: ErrMissing,

@@ -684,5 +684,13 @@ func TestInit_PersonID(t *testing.T) {
 		if !strings.Contains(stderr.String(), "writ.personId") {
 			t.Errorf("init should say which key to set, got stderr:\n%s", stderr.String())
 		}
+		// The ErrMissing arm of ConfigError.Error must carry the wrapped
+		// guidance through rather than short-circuiting on the sentinel. init
+		// derives from git config directly, so it is the one command that
+		// still reaches this arm now that identity.Load rejects a
+		// whitespace-only user.email outright (WRIT-131).
+		if !strings.Contains(stderr.String(), "user:alice") {
+			t.Errorf("init should carry the wrapped example through, got stderr:\n%s", stderr.String())
+		}
 	})
 }

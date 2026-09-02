@@ -1225,12 +1225,15 @@ func TestReviewApprove_Subject(t *testing.T) {
 		env := setupTestCLIEnv(t)
 		setGitConfig(t, env.repoDir, "writ.writerId", "cccccccccccccccc")
 		setupSigningKey(t, env.repoDir)
-		// Set the whitespace email after setupSigningKey: its getGitConfigAll
-		// probe trims and drops empty lines, so a whitespace user.email set
-		// before it would be overwritten with alice@example.com.
-		setGitConfig(t, env.repoDir, "user.email", "   ")
-
 		reviewID := openReviewWithRevision(t, env.repoDir)
+
+		// Blank the address only now. Since WRIT-131 identity.Load treats a
+		// whitespace-only user.email as unset, so a repo configured this way
+		// from the start cannot open a review to approve in the first place.
+		// The state under test is the one that outlives configuration: a
+		// review already on disk, and no person identifier left to sign it
+		// over to.
+		setGitConfig(t, env.repoDir, "user.email", "   ")
 
 		var stdout, stderr bytes.Buffer
 		code := run(context.Background(), []string{
@@ -1285,9 +1288,13 @@ func TestReviewApprove_PersonIDDiagnosis(t *testing.T) {
 	t.Run("nothing configured is reported as missing", func(t *testing.T) {
 		env := setupTestCLIEnv(t)
 		setupSigningKey(t, env.repoDir)
-		setGitConfig(t, env.repoDir, "user.email", "   ")
 
 		reviewID := openReviewWithRevision(t, env.repoDir)
+
+		// Blank the address only now: since WRIT-131 a whitespace-only
+		// user.email is not an identity, so a repo configured this way from
+		// the start could not open the review being approved here.
+		setGitConfig(t, env.repoDir, "user.email", "   ")
 
 		var stdout, stderr bytes.Buffer
 		code := run(context.Background(), []string{
@@ -1300,10 +1307,10 @@ func TestReviewApprove_PersonIDDiagnosis(t *testing.T) {
 		if !strings.Contains(got, "writ.personId") {
 			t.Errorf("error should name writ.personId, got %q", got)
 		}
-		// The ErrMissing arm of ConfigError.Error must carry the wrapped
-		// guidance through rather than short-circuiting on the sentinel.
+		// The guidance naming a concrete identifier must reach the reader
+		// whichever arm produces it.
 		if !strings.Contains(got, "user:alice") {
-			t.Errorf("error should carry the wrapped example through, got %q", got)
+			t.Errorf("error should carry the example through, got %q", got)
 		}
 	})
 }
