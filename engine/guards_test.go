@@ -209,6 +209,175 @@ func TestReviewsDomainGuards(t *testing.T) {
 			t.Errorf("got error %q, want %q", err.Error(), want)
 		}
 	})
+
+	t.Run("Comment anchor valid multibyte context lines exceeding 1000 bytes", func(t *testing.T) {
+		line2000Bytes := strings.Repeat("é", 1000) // 1000 runes, 2000 bytes
+		line1500Bytes := strings.Repeat("世", 500)  // 500 runes, 1500 bytes
+		line4000Bytes := strings.Repeat("𠀀", 1000) // 1000 runes, 4000 bytes
+
+		for _, tc := range []struct {
+			name string
+			side string
+			ctx  *resolve.Context
+		}{
+			{
+				name: "new side with 1000 2-byte runes in lines, 500 3-byte runes in before, 1000 4-byte runes in after",
+				side: "new",
+				ctx: &resolve.Context{
+					Before: []string{line1500Bytes},
+					Lines:  []string{line2000Bytes},
+					After:  []string{line4000Bytes},
+				},
+			},
+			{
+				name: "old side with multibyte lines",
+				side: "old",
+				ctx: &resolve.Context{
+					Before: []string{line4000Bytes},
+					Lines:  []string{line1500Bytes},
+					After:  []string{line2000Bytes},
+				},
+			},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				anchor := &writ.Anchor{Version: 1}
+				sideAnchor := &resolve.SideAnchor{
+					Commit:  headHash,
+					Path:    "README.md",
+					Blob:    blobHash,
+					Range:   &resolve.Range{Start: 1, End: 1},
+					Context: tc.ctx,
+				}
+				if tc.side == "new" {
+					anchor.New = sideAnchor
+				} else {
+					anchor.Old = sideAnchor
+				}
+				_, err := s.Reviews.Comment(ctx, reviewID, writ.NewComment{
+					Text:   "valid multibyte anchor comment",
+					Anchor: anchor,
+				})
+				if err != nil {
+					t.Fatalf("expected success for valid multibyte context, got error: %v", err)
+				}
+			})
+		}
+	})
+
+	t.Run("Comment anchor context line exceeds 1000 characters", func(t *testing.T) {
+		cases := []struct {
+			name  string
+			side  string
+			label string
+			ctx   *resolve.Context
+			want  string
+		}{
+			{
+				name:  "new side lines exceeds 1000 ascii characters",
+				side:  "new",
+				label: "lines",
+				ctx: &resolve.Context{
+					Lines: []string{strings.Repeat("a", 1001)},
+				},
+				want: "writ: new side anchor context lines line exceeds 1000 characters",
+			},
+			{
+				name:  "new side lines exceeds 1000 multibyte 2-byte characters",
+				side:  "new",
+				label: "lines",
+				ctx: &resolve.Context{
+					Lines: []string{strings.Repeat("é", 1001)},
+				},
+				want: "writ: new side anchor context lines line exceeds 1000 characters",
+			},
+			{
+				name:  "new side lines exceeds 1000 supplementary 4-byte characters",
+				side:  "new",
+				label: "lines",
+				ctx: &resolve.Context{
+					Lines: []string{strings.Repeat("𠀀", 1001)},
+				},
+				want: "writ: new side anchor context lines line exceeds 1000 characters",
+			},
+			{
+				name:  "new side before line exceeds 1000 characters",
+				side:  "new",
+				label: "before",
+				ctx: &resolve.Context{
+					Before: []string{strings.Repeat("é", 1001)},
+					Lines:  []string{"valid"},
+				},
+				want: "writ: new side anchor context before line exceeds 1000 characters",
+			},
+			{
+				name:  "new side after line exceeds 1000 characters",
+				side:  "new",
+				label: "after",
+				ctx: &resolve.Context{
+					Lines: []string{"valid"},
+					After: []string{strings.Repeat("世", 1001)},
+				},
+				want: "writ: new side anchor context after line exceeds 1000 characters",
+			},
+			{
+				name:  "old side lines exceeds 1000 characters",
+				side:  "old",
+				label: "lines",
+				ctx: &resolve.Context{
+					Lines: []string{strings.Repeat("é", 1001)},
+				},
+				want: "writ: old side anchor context lines line exceeds 1000 characters",
+			},
+			{
+				name:  "old side before line exceeds 1000 characters",
+				side:  "old",
+				label: "before",
+				ctx: &resolve.Context{
+					Before: []string{strings.Repeat("é", 1001)},
+					Lines:  []string{"valid"},
+				},
+				want: "writ: old side anchor context before line exceeds 1000 characters",
+			},
+			{
+				name:  "old side after line exceeds 1000 characters",
+				side:  "old",
+				label: "after",
+				ctx: &resolve.Context{
+					Lines: []string{"valid"},
+					After: []string{strings.Repeat("é", 1001)},
+				},
+				want: "writ: old side anchor context after line exceeds 1000 characters",
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				anchor := &writ.Anchor{Version: 1}
+				sideAnchor := &resolve.SideAnchor{
+					Commit:  headHash,
+					Path:    "README.md",
+					Blob:    blobHash,
+					Range:   &resolve.Range{Start: 1, End: 1},
+					Context: tc.ctx,
+				}
+				if tc.side == "new" {
+					anchor.New = sideAnchor
+				} else {
+					anchor.Old = sideAnchor
+				}
+				_, err := s.Reviews.Comment(ctx, reviewID, writ.NewComment{
+					Text:   "anchor line length test",
+					Anchor: anchor,
+				})
+				if err == nil {
+					t.Fatalf("expected error %q, got nil", tc.want)
+				}
+				if err.Error() != tc.want {
+					t.Errorf("got error %q, want %q", err.Error(), tc.want)
+				}
+			})
+		}
+	})
 }
 
 func TestIssuesDomainGuards(t *testing.T) {

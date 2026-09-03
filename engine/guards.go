@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/writtendev/writ/engine/resolve"
 )
@@ -127,7 +128,7 @@ func validateSideAnchor(side string, s *resolve.SideAnchor) error {
 				if strings.Contains(line, "\n") {
 					return fmt.Errorf("writ: %s side anchor context %s line cannot contain newlines", side, label)
 				}
-				if len(line) > 1000 {
+				if utf8.RuneCountInString(line) > 1000 {
 					return fmt.Errorf("writ: %s side anchor context %s line exceeds 1000 characters", side, label)
 				}
 			}
