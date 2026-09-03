@@ -420,23 +420,34 @@ func newKeyedLWWAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 func (a *keyedLWWAccumulator) Apply(op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	val, ok := body[a.field]
 	if !ok {
-		return nil
+		if a.field == "subject" && op.OpType == "approval" && op.Author.Email != "" {
+			val = person.NormalizePerson("email:" + op.Author.Email)
+		} else {
+			return nil
+		}
+	} else if a.field == "subject" && op.OpType == "approval" {
+		if s, isStr := val.(string); isStr {
+			norm := person.NormalizePerson(s)
+			if norm == "" && op.Author.Email != "" {
+				norm = person.NormalizePerson("email:" + op.Author.Email)
+			}
+			val = norm
+		}
 	}
 	a.hasKeyed = true
 	// The stored value is normalized on the same terms as the key component it
 	// mirrors: a person identifier reads back normalized per spec/identifiers.md.
-	if a.field == "subject" && op.OpType == "approval" {
-		if s, isStr := val.(string); isStr {
-			val = person.NormalizePerson(s)
-		}
-	}
 	key := make([]string, 0, len(a.keyCols))
 	for _, kf := range a.keyCols {
 		// Every present key component is a string; see setUnionAccumulator.Apply.
-		// An absent one contributes the empty component.
+		// An absent one contributes the empty component, except for approval
+		// subject which falls back to the commit author's email.
 		vStr, _ := body[kf].(string)
 		if kf == "subject" && op.OpType == "approval" {
 			vStr = person.NormalizePerson(vStr)
+			if vStr == "" && op.Author.Email != "" {
+				vStr = person.NormalizePerson("email:" + op.Author.Email)
+			}
 		}
 		key = append(key, vStr)
 	}

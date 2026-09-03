@@ -45,6 +45,12 @@ type StrategyConfig struct {
 	Key      []string `json:"key,omitempty"`
 }
 
+// MergeAuthor represents the author identity on a commit carrier for an operation.
+type MergeAuthor struct {
+	Name  string `json:"name,omitempty"`
+	Email string `json:"email,omitempty"`
+}
+
 // MergeOp represents a single synthetic operation in a merge vector.
 type MergeOp struct {
 	ID        string         `json:"id"`
@@ -53,6 +59,7 @@ type MergeOp struct {
 	ObjectID  string         `json:"object_id"`
 	OpType    string         `json:"op_type,omitempty"`
 	OpVersion int64          `json:"op_version,omitempty"`
+	Author    MergeAuthor    `json:"author,omitempty"`
 	Body      map[string]any `json:"body"`
 }
 

@@ -1161,6 +1161,10 @@ func TestFoldReviewMixedFlatAndNestedShapes(t *testing.T) {
 			ObjectID:  o.ObjectID,
 			OpType:    o.OpType,
 			OpVersion: o.OpVersion,
+			Author: spec.MergeAuthor{
+				Name:  o.Author.Name,
+				Email: o.Author.Email,
+			},
 			Body:      bm,
 		})
 	}
@@ -1184,3 +1188,104 @@ func TestFoldReviewMixedFlatAndNestedShapes(t *testing.T) {
 		t.Errorf("ref remove = %v, want %v", refRes.State["remove"], want)
 	}
 }
+
+func TestFoldReviewSubjectlessApprovals(t *testing.T) {
+	now := time.Unix(100, 0).UTC()
+	rev := "1111111111111111111111111111111111111111"
+
+	opAlice := codec.Op{
+		Envelope: codec.Envelope{
+			ObjectID:   "r-subjectless",
+			ObjectType: "review",
+			OpType:     "approval",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"revision":"` + rev + `","verdict":"approve","message":"looks great"}`),
+		},
+		ID: "op-alice-app",
+		Author: codec.Identity{
+			Email: "Alice@Example.COM",
+			When:  now,
+		},
+	}
+
+	opBob := codec.Op{
+		Envelope: codec.Envelope{
+			ObjectID:   "r-subjectless",
+			ObjectType: "review",
+			OpType:     "approval",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"revision":"` + rev + `","verdict":"request-changes","message":"needs tests"}`),
+		},
+		ID: "op-bob-app",
+		Author: codec.Identity{
+			Email: "bob@example.com",
+			When:  now.Add(time.Minute),
+		},
+	}
+
+	state, err := s.FoldReview([]codec.Op{opAlice, opBob})
+	if err != nil {
+		t.Fatalf("FoldReview failed: %v", err)
+	}
+
+	if len(state.Approvals) != 2 {
+		t.Fatalf("expected 2 active approvals, got %d: %+v", len(state.Approvals), state.Approvals)
+	}
+
+	wantAlice := s.Approval{
+		Subject:  "email:alice@example.com",
+		Revision: rev,
+		Verdict:  "approve",
+		Message:  "looks great",
+	}
+	wantBob := s.Approval{
+		Subject:  "email:bob@example.com",
+		Revision: rev,
+		Verdict:  "request-changes",
+		Message:  "needs tests",
+	}
+
+	if state.Approvals[0] != wantAlice {
+		t.Errorf("approval[0] mismatch: got %+v, want %+v", state.Approvals[0], wantAlice)
+	}
+	if state.Approvals[1] != wantBob {
+		t.Errorf("approval[1] mismatch: got %+v, want %+v", state.Approvals[1], wantBob)
+	}
+
+	// Whitespace-only subject from Alice updates Alice's approval (normalizes away to commit author email)
+	opAliceUpdate := codec.Op{
+		Envelope: codec.Envelope{
+			ObjectID:   "r-subjectless",
+			ObjectType: "review",
+			OpType:     "approval",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"revision":"` + rev + `","verdict":"request-changes","subject":"   ","message":"rethinking"}`),
+		},
+		ID:      "op-alice-update",
+		Parents: []string{"op-alice-app"},
+		Author: codec.Identity{
+			Email: "alice@example.com",
+			When:  now.Add(2 * time.Minute),
+		},
+	}
+
+	stateUpdated, err := s.FoldReview([]codec.Op{opAlice, opBob, opAliceUpdate})
+	if err != nil {
+		t.Fatalf("FoldReview with update failed: %v", err)
+	}
+
+	if len(stateUpdated.Approvals) != 2 {
+		t.Fatalf("expected 2 active approvals after update, got %d: %+v", len(stateUpdated.Approvals), stateUpdated.Approvals)
+	}
+
+	wantAliceUpdated := s.Approval{
+		Subject:  "email:alice@example.com",
+		Revision: rev,
+		Verdict:  "request-changes",
+		Message:  "rethinking",
+	}
+	if stateUpdated.Approvals[0] != wantAliceUpdated {
+		t.Errorf("updated approval[0] mismatch: got %+v, want %+v", stateUpdated.Approvals[0], wantAliceUpdated)
+	}
+}
+

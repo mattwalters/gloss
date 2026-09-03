@@ -172,6 +172,10 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 				ObjectID:  cop.ObjectID,
 				OpType:    cop.OpType,
 				OpVersion: cop.OpVersion,
+				Author: spec.MergeAuthor{
+					Name:  cop.Author.Name,
+					Email: cop.Author.Email,
+				},
 				Body:      body,
 			})
 		}

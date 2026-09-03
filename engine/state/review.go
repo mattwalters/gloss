@@ -159,6 +159,9 @@ func FoldReview(ops []codec.Op) (Review, error) {
 			rev, _ := body["revision"].(string)
 			subject, _ := body["subject"].(string)
 			subject = NormalizePerson(subject)
+			if subject == "" && op.Author.Email != "" {
+				subject = NormalizePerson("email:" + op.Author.Email)
+			}
 
 			key := approvalKey{subject: subject, revision: rev}
 			entry, ok := approvalsMap[key]

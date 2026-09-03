@@ -885,6 +885,8 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 					} else if r.Field == "remove" && op.Body["add"] != nil {
 						hasWrite = true
 					}
+				} else if r.Field == "subject" && op.OpType == "approval" && op.Author.Email != "" {
+					hasWrite = true
 				}
 				if hasWrite {
 					matchedRulesByField[r.Field] = append(matchedRulesByField[r.Field], r)
@@ -1204,25 +1206,33 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 					if opMatchesRule(op, rule) {
 						val, present := op.Body[fieldName]
 						if !present {
-							continue
-						}
-						hasKeyed = true
-						// The stored value is normalized on the same terms as the
-						// key component it mirrors: a person identifier reads back
-						// normalized per spec/identifiers.md.
-						if fieldName == "subject" && op.OpType == "approval" {
+							if fieldName == "subject" && op.OpType == "approval" && op.Author.Email != "" {
+								val = normalizePerson("email:" + op.Author.Email)
+							} else {
+								continue
+							}
+						} else if fieldName == "subject" && op.OpType == "approval" {
 							if s, isStr := val.(string); isStr {
-								val = normalizePerson(s)
+								norm := normalizePerson(s)
+								if norm == "" && op.Author.Email != "" {
+									norm = normalizePerson("email:" + op.Author.Email)
+								}
+								val = norm
 							}
 						}
+						hasKeyed = true
 						key := make([]string, 0, len(rule.Key))
 						for _, kf := range rule.Key {
 							// Every present key component is a string; see the
 							// set-union arm. An absent one contributes the
-							// empty component.
+							// empty component, except for approval subject which
+							// falls back to the commit author's email.
 							vStr, _ := op.Body[kf].(string)
 							if kf == "subject" && op.OpType == "approval" {
 								vStr = normalizePerson(vStr)
+								if vStr == "" && op.Author.Email != "" {
+									vStr = normalizePerson("email:" + op.Author.Email)
+								}
 							}
 							key = append(key, vStr)
 						}

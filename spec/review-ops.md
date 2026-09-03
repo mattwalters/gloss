@@ -306,6 +306,10 @@ specific revision head.
   - `"none"`: Retracts or dismisses any existing verdict for the `(subject, revision)` pair.
 - `subject` (person identifier per [`spec/identifiers.md`](identifiers.md), optional):
   Person identifier (writer or user email identity) whose vote is recorded.
+  Serves as an explicit "on behalf of" override (e.g., for imported GitHub review
+  dismissals or bot submissions). When omitted or empty after normalization, the
+  effective subject defaults to `email:` concatenated with the op commit author's
+  email (`email:<author.email>`), normalized per [`spec/identifiers.md`](identifiers.md).
   Normalized (trimmed, lowercase) per [`spec/identifiers.md`](identifiers.md)
   prior to key evaluation.
 - `message` (string, optional): Text summary or review message explaining the
@@ -315,7 +319,11 @@ specific revision head.
 
 The `subject` field allows recording an approval or dismissal on behalf of
 another writer, which is necessary when importing GitHub review dismissals or
-team approvals.
+team approvals. When omitted or empty after normalization, the effective subject
+defaults to `email:` concatenated with the op commit author's email (`email:<author.email>`),
+allowing `subject` to act strictly as an "on behalf of" override and ensuring that
+distinct reviewers' subjectless approvals on the same revision do not overwrite each
+other under `keyed-lww`.
 
 **Writ has no authorization model at the specification layer.** Anyone with
 git push access to their namespace can push an `approval` op. Operations are
@@ -441,10 +449,10 @@ treated as unknown data, preserved in the DAG, and ignored during fold.
 | `set-status` | `reason` | `lww` | Last writer wins |
 | `assign` | `add` | `set-observed-remove` | Add-wins OR-set over normalized person identifiers (`spec/identifiers.md`) |
 | `assign` | `remove` | `set-observed-remove` | Add-wins OR-set over normalized person identifiers (`spec/identifiers.md`) |
-| `approval` | `revision` | `keyed-lww` | Scoped by key `[subject, revision]` (subject normalized per `spec/identifiers.md`) |
-| `approval` | `verdict` | `keyed-lww` | Scoped by key `[subject, revision]`; `"none"` retracts verdict |
-| `approval` | `subject` | `keyed-lww` | Scoped by key `[subject, revision]` |
-| `approval` | `message` | `keyed-lww` | Scoped by key `[subject, revision]` |
+| `approval` | `revision` | `keyed-lww` | Scoped by key `[subject, revision]` over effective subject (omitted/empty subject defaults to `email:` + op commit author's email, normalized per `spec/identifiers.md`) |
+| `approval` | `verdict` | `keyed-lww` | Scoped by key `[subject, revision]` over effective subject; `"none"` retracts verdict |
+| `approval` | `subject` | `keyed-lww` | Scoped by key `[subject, revision]` over effective subject |
+| `approval` | `message` | `keyed-lww` | Scoped by key `[subject, revision]` over effective subject |
 | `ci-status` | `revision` | `keyed-lww` | Scoped by key `[revision, name]` |
 | `ci-status` | `name` | `keyed-lww` | Scoped by key `[revision, name]` |
 | `ci-status` | `state` | `keyed-lww` | Scoped by key `[revision, name]` |
