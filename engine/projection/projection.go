@@ -53,39 +53,43 @@ func Open(path string, opts ...OpenOption) (*DB, error) {
 		}
 	}
 
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", formatDSN(path))
 	if err != nil {
 		return nil, fmt.Errorf("projection: open sqlite %q: %w", path, err)
 	}
-
-	// Configure pragmas for projection db
-	_, _ = db.Exec("PRAGMA journal_mode = WAL;")
-	if _, err := db.Exec("PRAGMA busy_timeout = 5000;"); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("projection: set busy_timeout: %w", err)
-	}
-	if _, err := db.Exec("PRAGMA foreign_keys = ON;"); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("projection: set foreign_keys: %w", err)
+	if isMemory(path) {
+		db.SetMaxOpenConns(1)
 	}
 
-	localDB, err := sql.Open("sqlite", localPath)
+	pragmas := []string{
+		"PRAGMA journal_mode = WAL;",
+		"PRAGMA busy_timeout = 5000;",
+		"PRAGMA foreign_keys = ON;",
+		"PRAGMA synchronous = NORMAL;",
+	}
+
+	for _, pragma := range pragmas {
+		if _, err := db.Exec(pragma); err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("projection: exec %q: %w", pragma, err)
+		}
+	}
+
+	localDB, err := sql.Open("sqlite", formatDSN(localPath))
 	if err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("projection: open local sqlite %q: %w", localPath, err)
 	}
-
-	// Configure pragmas for local db
-	_, _ = localDB.Exec("PRAGMA journal_mode = WAL;")
-	if _, err := localDB.Exec("PRAGMA busy_timeout = 5000;"); err != nil {
-		_ = db.Close()
-		_ = localDB.Close()
-		return nil, fmt.Errorf("projection: set busy_timeout on local: %w", err)
+	if isMemory(localPath) {
+		localDB.SetMaxOpenConns(1)
 	}
-	if _, err := localDB.Exec("PRAGMA foreign_keys = ON;"); err != nil {
-		_ = db.Close()
-		_ = localDB.Close()
-		return nil, fmt.Errorf("projection: set foreign_keys on local: %w", err)
+
+	for _, pragma := range pragmas {
+		if _, err := localDB.Exec(pragma); err != nil {
+			_ = db.Close()
+			_ = localDB.Close()
+			return nil, fmt.Errorf("projection: exec %q on local: %w", pragma, err)
+		}
 	}
 
 	proj := &DB{
@@ -256,3 +260,19 @@ func (d *DB) String() string {
 	}
 	return "projection:" + d.path
 }
+
+func formatDSN(path string) string {
+	const params = "_busy_timeout=5000&_foreign_keys=on&_journal_mode=WAL&_synchronous=NORMAL"
+	if strings.Contains(path, "?") {
+		if strings.HasSuffix(path, "?") || strings.HasSuffix(path, "&") {
+			return path + params
+		}
+		return path + "&" + params
+	}
+	return path + "?" + params
+}
+
+func isMemory(path string) bool {
+	return path == ":memory:" || strings.Contains(path, ":memory:") || strings.Contains(path, "mode=memory")
+}
+
