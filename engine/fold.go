@@ -71,6 +71,12 @@ func FoldWorkflowState(ops []codec.Op) (WorkflowState, error) {
 	return state.FoldWorkflowState(ops)
 }
 
+// FoldLabel executes deterministic fold reduction on an input set of operations
+// for a label collaborative object, returning the materialized Label state.
+func FoldLabel(ops []codec.Op) (Label, error) {
+	return state.FoldLabel(ops)
+}
+
 // ReviewRules returns the built-in field merge rules for the review-ops vocabulary (v1).
 func ReviewRules() []Rule {
 	return state.ReviewRules()
@@ -94,4 +100,9 @@ func CycleRules() []Rule {
 // WorkflowStateRules returns the built-in field merge rules for the workflow-state vocabulary (v1).
 func WorkflowStateRules() []Rule {
 	return state.WorkflowStateRules()
+}
+
+// LabelRules returns the built-in field merge rules for the label vocabulary (v1).
+func LabelRules() []Rule {
+	return state.LabelRules()
 }

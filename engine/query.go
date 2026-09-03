@@ -3,6 +3,7 @@ package writ
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/writtendev/writ/engine/projection"
 )
@@ -41,6 +42,12 @@ type (
 
 	// WorkflowStateResult represents a workflow state object along with its authorship and timestamps.
 	WorkflowStateResult = projection.WorkflowStateResult
+
+	// LabelFilter specifies filter criteria when querying labels.
+	LabelFilter = projection.LabelFilter
+
+	// LabelResult represents a label object along with its authorship and timestamps.
+	LabelResult = projection.LabelResult
 
 	// CommentResult represents a comment object along with its authorship, timestamps, and anchor resolutions.
 	CommentResult = projection.CommentResult
@@ -99,6 +106,38 @@ func (q *Query) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 	}
 	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
 		return nil, err
+	}
+	if len(f.Label) > 0 && q.store.Workspace != nil && q.store.Workspace.IsConfigured() {
+		labels, err := q.Labels(LabelFilter{})
+		if err == nil {
+			expanded := make([]string, len(f.Label))
+			copy(expanded, f.Label)
+			seen := make(map[string]bool)
+			for _, l := range expanded {
+				seen[l] = true
+			}
+			for _, req := range f.Label {
+				target := req
+				if idx := strings.Index(req, "#"); idx >= 0 && idx < len(req)-1 {
+					target = req[idx+1:]
+				}
+				for _, l := range labels {
+					if strings.EqualFold(l.Label.Name, req) || strings.EqualFold(l.Label.Name, target) {
+						if !seen[l.ObjectID] {
+							seen[l.ObjectID] = true
+							expanded = append(expanded, l.ObjectID)
+						}
+					}
+					if l.ObjectID == req || l.ObjectID == target || strings.HasPrefix(l.ObjectID, target) {
+						if !seen[l.Label.Name] {
+							seen[l.Label.Name] = true
+							expanded = append(expanded, l.Label.Name)
+						}
+					}
+				}
+			}
+			f.Label = expanded
+		}
 	}
 	return q.store.projection.Reviews(f)
 }
@@ -238,4 +277,28 @@ func (q *Query) WorkflowState(id string) (WorkflowStateResult, error) {
 		return WorkflowStateResult{}, err
 	}
 	return target.projection.WorkflowState(id)
+}
+
+// Labels executes a list and filter query over labels.
+func (q *Query) Labels(f LabelFilter) ([]LabelResult, error) {
+	target, err := q.targetStoreForIssues(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if err := target.maybeAutoRefresh(context.Background()); err != nil {
+		return nil, err
+	}
+	return target.projection.Labels(f)
+}
+
+// Label fetches a single label by its object ID, returning ErrNotFound if not found.
+func (q *Query) Label(id string) (LabelResult, error) {
+	target, err := q.targetStoreForIssues(context.Background())
+	if err != nil {
+		return LabelResult{}, err
+	}
+	if err := target.maybeAutoRefresh(context.Background()); err != nil {
+		return LabelResult{}, err
+	}
+	return target.projection.Label(id)
 }

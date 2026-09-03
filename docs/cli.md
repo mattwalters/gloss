@@ -30,6 +30,10 @@ slug: "cli"
 - [`writ state list`](#writ-state-list)
 - [`writ state create`](#writ-state-create)
 - [`writ state update`](#writ-state-update)
+- [`writ label list`](#writ-label-list)
+- [`writ label create`](#writ-label-create)
+- [`writ label edit`](#writ-label-edit)
+- [`writ label migrate`](#writ-label-migrate)
 - [`writ sync`](#writ-sync)
 - [`writ version`](#writ-version)
 - [`writ completion`](#writ-completion)
@@ -651,6 +655,114 @@ Update an existing workflow state.
 ```bash
 writ state update 01J8ABC -name "Code Review"
 writ state update 01J8ABC -position f -color "#e2b93c"
+```
+
+### `writ label list`
+
+List labels
+
+#### Synopsis
+
+```console
+Usage: writ label list [-C <dir>] [--json]
+```
+
+#### Description
+
+List labels.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-json`: Output machine-readable JSON
+
+#### Examples
+
+```bash
+writ label list
+writ label list --json
+```
+
+### `writ label create`
+
+Create a label
+
+#### Synopsis
+
+```console
+Usage: writ label create [-C <dir>] -name <name> [-color <c>] [-description <d>]
+```
+
+#### Description
+
+Create a new label.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-name string`: Label display name
+- `-color string`: Hex color client hint
+- `-description string`: Label description
+
+#### Examples
+
+```bash
+writ label create -name bug
+writ label create -name bug -color "#d73a4a" -description "Something isn't working"
+```
+
+### `writ label edit`
+
+Edit a label
+
+#### Synopsis
+
+```console
+Usage: writ label edit [-C <dir>] <id> [-name <name>] [-color <c>] [-description <d>]
+```
+
+#### Description
+
+Edit an existing label.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-name value`: Label display name
+- `-color string`: Hex color client hint
+- `-description string`: Label description
+
+#### Examples
+
+```bash
+writ label edit 01J8ABC -color "#e2b93c"
+writ label edit bug -name defect
+```
+
+### `writ label migrate`
+
+Migrate legacy bare-string labels to collaborative label objects
+
+#### Synopsis
+
+```console
+Usage: writ label migrate [-C <dir>] [--json]
+```
+
+#### Description
+
+Migrate legacy bare-string labels across issues and reviews into collaborative label objects.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-json`: Output machine-readable JSON
+
+#### Examples
+
+```bash
+writ label migrate
+writ label migrate --json
 ```
 
 ### `writ sync`

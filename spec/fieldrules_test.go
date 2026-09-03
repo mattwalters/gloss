@@ -31,9 +31,11 @@ func TestFieldRulesSchemaValidation(t *testing.T) {
 		"testdata/comments/field-rules.json",
 		"testdata/cycle/field-rules.json",
 		"testdata/issue-ops/field-rules.json",
+		"testdata/label/field-rules.json",
 		"testdata/project/field-rules.json",
 		"testdata/repo/field-rules.json",
 		"testdata/review-ops/field-rules.json",
+		"testdata/workflow-state/field-rules.json",
 	}
 
 	for _, file := range files {

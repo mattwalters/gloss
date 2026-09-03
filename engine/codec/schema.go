@@ -44,6 +44,7 @@ var vocabularySchemaFiles = map[string]string{
 	"cycle":          "cycle-ops.schema.json",
 	"repo":           "repo-ops.schema.json",
 	"workflow-state": "workflow-state-ops.schema.json",
+	"label":          "label-ops.schema.json",
 }
 
 // vocabularyOpTypes maps an object type to the op types this build defines for
@@ -72,6 +73,7 @@ var vocabularyOpTypes = map[string][]string{
 	"cycle":          {"add-issue", "create", "remove-issue", "set-dates", "update"},
 	"repo":           {"add-remote", "create", "set-slug"},
 	"workflow-state": {"create", "update"},
+	"label":          {"create", "update"},
 }
 
 // vocabularyOpVersion is the op version this build defines for every object

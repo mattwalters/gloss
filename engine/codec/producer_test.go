@@ -119,6 +119,7 @@ var knownCreateBodies = map[string]string{
 	"cycle":          `{"ends_at":"2026-02-01T00:00:00Z","starts_at":"2026-01-01T00:00:00Z","title":"Sprint 1"}`,
 	"repo":           `{"slug":"org/repo"}`,
 	"workflow-state": `{"name":"Todo","position":"V","type":"unstarted"}`,
+	"label":          `{"name":"bug"}`,
 }
 
 // TestBuildCommitAcceptsUnknownFieldsInEveryVocabulary asserts the producer
@@ -233,6 +234,7 @@ var producerTypos = map[string]string{
 	"cycle":          "set-date",
 	"repo":           "add-remot",
 	"workflow-state": "creat",
+	"label":          "creat",
 }
 
 // TestBuildCommitRefusesOpTypesItDoesNotDefine pins producer rule 4

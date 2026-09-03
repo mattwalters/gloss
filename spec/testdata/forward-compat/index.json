@@ -23,7 +23,8 @@
       "FC-5",
       "FC-8",
       "FC-9",
-      "FC-13"
+      "FC-13",
+      "FC-16"
     ],
     "reason": "standard valid op matching reader profile folds normally without opaque marking"
   },

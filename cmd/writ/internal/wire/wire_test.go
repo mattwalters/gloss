@@ -412,3 +412,28 @@ func TestWire_FromIssueResult(t *testing.T) {
 	}
 }
 
+func TestWire_FromLabelResult(t *testing.T) {
+	now := time.Now().UTC()
+	lr := writ.LabelResult{
+		ObjectID:  "lbl-123",
+		CreatedAt: now,
+		UpdatedAt: now,
+		Label: writ.Label{
+			Name:        "bug",
+			Color:       "#d73a4a",
+			Description: "Defect",
+		},
+	}
+
+	summary := wire.FromLabelResult(lr)
+	if summary.ObjectID != "lbl-123" || summary.Name != "bug" || summary.Color != "#d73a4a" || summary.Description != "Defect" {
+		t.Errorf("unexpected summary: %+v", summary)
+	}
+
+	summaries := wire.FromLabelResultSummaries([]writ.LabelResult{lr})
+	if len(summaries) != 1 || summaries[0].ObjectID != "lbl-123" {
+		t.Errorf("unexpected summaries: %+v", summaries)
+	}
+}
+
+

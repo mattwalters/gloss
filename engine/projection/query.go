@@ -49,6 +49,15 @@ type WorkflowStateResult struct {
 	WorkflowState state.WorkflowState `json:"workflow_state"`
 }
 
+// LabelResult represents a label object along with its authorship and timestamps.
+type LabelResult struct {
+	ObjectID  string      `json:"object_id"`
+	Author    Author      `json:"author"`
+	CreatedAt time.Time   `json:"created_at"`
+	UpdatedAt time.Time   `json:"updated_at"`
+	Label     state.Label `json:"label"`
+}
+
 // ResolvedPosition describes the resolved anchor position for a comment side.
 type ResolvedPosition struct {
 	Side      string `json:"side"`
@@ -124,10 +133,7 @@ func (d *DB) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 	}
 
 	if len(f.Label) > 0 {
-		sb.WriteString(" AND EXISTS (SELECT 1 FROM review_labels rl WHERE rl.review_object_id = r.object_id AND rl.label IN (" + placeholders(len(f.Label)) + "))")
-		for _, l := range f.Label {
-			args = append(args, l)
-		}
+		appendLabelFilter(&sb, &args, "review_labels", "rl", "review_object_id", "r.object_id", f.Label)
 	}
 
 	if f.Text != "" {
@@ -403,10 +409,7 @@ func (d *DB) Issues(f IssueFilter) ([]IssueResult, error) {
 	}
 
 	if len(f.Label) > 0 {
-		sb.WriteString(" AND EXISTS (SELECT 1 FROM issue_labels il WHERE il.issue_object_id = i.object_id AND il.label IN (" + placeholders(len(f.Label)) + "))")
-		for _, l := range f.Label {
-			args = append(args, l)
-		}
+		appendLabelFilter(&sb, &args, "issue_labels", "il", "issue_object_id", "i.object_id", f.Label)
 	}
 
 	if f.Text != "" {
@@ -1855,3 +1858,246 @@ func (d *DB) WorkflowState(id string) (WorkflowStateResult, error) {
 		},
 	}, nil
 }
+
+// Labels executes a list query over labels.
+func (d *DB) Labels(f LabelFilter) ([]LabelResult, error) {
+	if d == nil || d.db == nil {
+		return nil, fmt.Errorf("projection: database is closed")
+	}
+
+	var sb strings.Builder
+	var args []any
+
+	sb.WriteString("SELECT l.object_id, l.name, l.color, l.description, ")
+	sb.WriteString("l.author_name, l.author_email, l.created_at, l.updated_at ")
+	sb.WriteString("FROM labels l WHERE 1=1")
+
+	switch f.OrderBy {
+	case OrderByCreatedAtAsc:
+		sb.WriteString(" ORDER BY l.created_at ASC, l.object_id ASC")
+	case OrderByCreatedAtDesc:
+		sb.WriteString(" ORDER BY l.created_at DESC, l.object_id DESC")
+	case OrderByUpdatedAtAsc:
+		sb.WriteString(" ORDER BY l.updated_at ASC, l.object_id ASC")
+	case OrderByUpdatedAtDesc:
+		sb.WriteString(" ORDER BY l.updated_at DESC, l.object_id DESC")
+	case OrderByTitleAsc:
+		sb.WriteString(" ORDER BY l.name ASC, l.object_id ASC")
+	case OrderByTitleDesc:
+		sb.WriteString(" ORDER BY l.name DESC, l.object_id DESC")
+	default:
+		sb.WriteString(" ORDER BY LOWER(l.name) ASC, l.object_id ASC")
+	}
+
+	appendLimitOffset(&sb, &args, f.Limit, f.Offset)
+
+	rows, err := d.db.Query(sb.String(), args...)
+	if err != nil {
+		return nil, fmt.Errorf("projection: query labels: %w", err)
+	}
+	defer rows.Close()
+
+	type rawLabel struct {
+		objectID    string
+		name        string
+		color       string
+		description string
+		authorName  string
+		authorEmail string
+		createdAt   int64
+		updatedAt   int64
+	}
+
+	var rawLabels []rawLabel
+	var objectIDs []string
+
+	for rows.Next() {
+		var rl rawLabel
+		if err := rows.Scan(
+			&rl.objectID, &rl.name, &rl.color, &rl.description,
+			&rl.authorName, &rl.authorEmail, &rl.createdAt, &rl.updatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("projection: scan label: %w", err)
+		}
+		rawLabels = append(rawLabels, rl)
+		objectIDs = append(objectIDs, rl.objectID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("projection: scan labels rows: %w", err)
+	}
+
+	unknownMap := make(map[string][]state.UnknownOp)
+	if len(objectIDs) > 0 {
+		uRows, err := d.queryIn("SELECT object_id, op_id, object_type, op_type, op_version FROM unknown_ops WHERE object_id IN (?) ORDER BY object_id ASC, op_index ASC", objectIDs)
+		if err != nil {
+			return nil, fmt.Errorf("projection: query unknown_ops: %w", err)
+		}
+		for uRows.Next() {
+			var objID, opID, objType, opType string
+			var opVersion int64
+			if err := uRows.Scan(&objID, &opID, &objType, &opType, &opVersion); err != nil {
+				uRows.Close()
+				return nil, fmt.Errorf("projection: scan unknown op: %w", err)
+			}
+			unknownMap[objID] = append(unknownMap[objID], state.UnknownOp{
+				Commit:     opID,
+				ObjectType: objType,
+				OpType:     opType,
+				OpVersion:  opVersion,
+			})
+		}
+		uRows.Close()
+	}
+
+	results := make([]LabelResult, 0, len(rawLabels))
+	for _, rl := range rawLabels {
+		results = append(results, LabelResult{
+			ObjectID: rl.objectID,
+			Author: Author{
+				Name:  rl.authorName,
+				Email: rl.authorEmail,
+			},
+			CreatedAt: time.Unix(rl.createdAt, 0).UTC(),
+			UpdatedAt: time.Unix(rl.updatedAt, 0).UTC(),
+			Label: state.Label{
+				Name:        rl.name,
+				Color:       rl.color,
+				Description: rl.description,
+				UnknownOps:  unknownMap[rl.objectID],
+			},
+		})
+	}
+
+	return results, nil
+}
+
+// Label fetches a single label by its object ID, returning ErrNotFound if not found.
+func (d *DB) Label(id string) (LabelResult, error) {
+	if d == nil || d.db == nil {
+		return LabelResult{}, fmt.Errorf("projection: database is closed")
+	}
+	if id == "" {
+		return LabelResult{}, fmt.Errorf("projection: label id cannot be empty")
+	}
+
+	var (
+		objectID    string
+		name        string
+		color       string
+		description string
+		authorName  string
+		authorEmail string
+		createdAt   int64
+		updatedAt   int64
+	)
+
+	err := d.db.QueryRow(
+		"SELECT object_id, name, color, description, author_name, author_email, created_at, updated_at FROM labels WHERE object_id = ?",
+		id,
+	).Scan(&objectID, &name, &color, &description, &authorName, &authorEmail, &createdAt, &updatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return LabelResult{}, ErrNotFound
+		}
+		return LabelResult{}, fmt.Errorf("projection: query label %s: %w", id, err)
+	}
+
+	uRows, err := d.db.Query(
+		"SELECT op_id, object_type, op_type, op_version FROM unknown_ops WHERE object_id = ? ORDER BY op_index ASC",
+		id,
+	)
+	if err != nil {
+		return LabelResult{}, fmt.Errorf("projection: query unknown_ops: %w", err)
+	}
+	defer uRows.Close()
+
+	var unknownOps []state.UnknownOp
+	for uRows.Next() {
+		var u state.UnknownOp
+		if err := uRows.Scan(&u.Commit, &u.ObjectType, &u.OpType, &u.OpVersion); err != nil {
+			return LabelResult{}, fmt.Errorf("projection: scan unknown op: %w", err)
+		}
+		unknownOps = append(unknownOps, u)
+	}
+	if err := uRows.Err(); err != nil {
+		return LabelResult{}, fmt.Errorf("projection: iterate unknown_ops: %w", err)
+	}
+
+	return LabelResult{
+		ObjectID: objectID,
+		Author: Author{
+			Name:  authorName,
+			Email: authorEmail,
+		},
+		CreatedAt: time.Unix(createdAt, 0).UTC(),
+		UpdatedAt: time.Unix(updatedAt, 0).UTC(),
+		Label: state.Label{
+			Name:        name,
+			Color:       color,
+			Description: description,
+			UnknownOps:  unknownOps,
+		},
+	}, nil
+}
+
+func appendLabelFilter(sb *strings.Builder, args *[]any, tableName, alias, objIDCol, parentObjIDCol string, labelFilters []string) {
+	if len(labelFilters) == 0 {
+		return
+	}
+	var rawValues []string
+	var lowerValues []string
+	seenRaw := make(map[string]bool)
+	seenLower := make(map[string]bool)
+
+	addVal := func(v string) {
+		if !seenRaw[v] {
+			seenRaw[v] = true
+			rawValues = append(rawValues, v)
+		}
+		low := strings.ToLower(v)
+		if !seenLower[low] {
+			seenLower[low] = true
+			lowerValues = append(lowerValues, low)
+		}
+	}
+
+	for _, l := range labelFilters {
+		addVal(l)
+		if idx := strings.Index(l, "#"); idx >= 0 && idx < len(l)-1 {
+			addVal(l[idx+1:])
+		}
+	}
+
+	rawPH := placeholders(len(rawValues))
+	lowPH := placeholders(len(lowerValues))
+
+	sb.WriteString(fmt.Sprintf(" AND EXISTS (SELECT 1 FROM %s %s WHERE %s.%s = %s AND (%s.label IN (%s) OR LOWER(%s.label) IN (%s) OR (LENGTH(%s.label) > 32 AND substr(%s.label, -32) IN (%s)) OR %s.label IN (SELECT object_id FROM labels WHERE LOWER(name) IN (%s)) OR (LENGTH(%s.label) > 32 AND substr(%s.label, -32) IN (SELECT object_id FROM labels WHERE LOWER(name) IN (%s))) OR LOWER(%s.label) IN (SELECT LOWER(name) FROM labels WHERE object_id IN (%s))))",
+		tableName, alias, alias, objIDCol, parentObjIDCol,
+		alias, rawPH,
+		alias, lowPH,
+		alias, alias, rawPH,
+		alias, lowPH,
+		alias, alias, lowPH,
+		alias, rawPH,
+	))
+
+	for _, v := range rawValues {
+		*args = append(*args, v)
+	}
+	for _, v := range lowerValues {
+		*args = append(*args, v)
+	}
+	for _, v := range rawValues {
+		*args = append(*args, v)
+	}
+	for _, v := range lowerValues {
+		*args = append(*args, v)
+	}
+	for _, v := range lowerValues {
+		*args = append(*args, v)
+	}
+	for _, v := range rawValues {
+		*args = append(*args, v)
+	}
+}
+

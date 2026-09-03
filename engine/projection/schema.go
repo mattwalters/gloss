@@ -12,7 +12,8 @@ package projection
 // default case folding, NFC (spec/identifiers.md). Also covers WRIT-102, which
 // 8: WRIT-155 added object_type column to unknown_ops table (spec FC-5).
 // 9: WRIT-104 added workflow_states table.
-const schemaVersion = 9
+// 10: WRIT-109 added labels table.
+const schemaVersion = 10
 
 var projectionTables = []string{
 	"meta",
@@ -41,6 +42,7 @@ var projectionTables = []string{
 	"repos",
 	"repo_remotes",
 	"workflow_states",
+	"labels",
 }
 
 var tableQueries = map[string]string{
@@ -70,6 +72,7 @@ var tableQueries = map[string]string{
 	"repos":              "SELECT * FROM repos ORDER BY object_id ASC",
 	"repo_remotes":       "SELECT * FROM repo_remotes ORDER BY repo_object_id ASC, remote ASC",
 	"workflow_states":    "SELECT * FROM workflow_states ORDER BY object_id ASC",
+	"labels":             "SELECT * FROM labels ORDER BY object_id ASC",
 }
 
 const schemaSQL = `
@@ -309,4 +312,16 @@ CREATE TABLE IF NOT EXISTS workflow_states (
 );
 CREATE INDEX IF NOT EXISTS idx_workflow_states_position ON workflow_states(position ASC, op_id ASC);
 CREATE INDEX IF NOT EXISTS idx_workflow_states_type ON workflow_states(type);
+
+CREATE TABLE IF NOT EXISTS labels (
+    object_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL,
+    description TEXT NOT NULL,
+    author_name TEXT NOT NULL,
+    author_email TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_labels_name ON labels(name);
 `

@@ -21,7 +21,7 @@ type ReviewFilter struct {
 	Status         []string
 	Author         []string
 	Assignee       []string
-	Label          []string
+	Label          []string // Filter by label names or canonical label object IDs.
 	Text           string
 	IncludeDeleted bool
 	OrderBy        OrderBy
@@ -34,7 +34,7 @@ type IssueFilter struct {
 	State          []string
 	Author         []string
 	Assignee       []string
-	Label          []string
+	Label          []string // Filter by label names or canonical label object IDs.
 	Text           string
 	IncludeDeleted bool
 	OrderBy        OrderBy
@@ -70,6 +70,13 @@ type ObjectFilter struct {
 // WorkflowStateFilter specifies filter criteria when querying workflow states.
 type WorkflowStateFilter struct {
 	Type    []string
+	OrderBy OrderBy
+	Limit   int
+	Offset  int
+}
+
+// LabelFilter specifies filter criteria when querying labels.
+type LabelFilter struct {
 	OrderBy OrderBy
 	Limit   int
 	Offset  int
