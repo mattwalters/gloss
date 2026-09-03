@@ -3,6 +3,7 @@ package projection
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -50,7 +51,8 @@ type Stats struct {
 }
 
 type refreshConfig struct {
-	targetRefs []string
+	targetRefs   []string
+	enumOverride *dag.EnumerateResult
 }
 
 // Option configures a Refresh or Rebuild pass.
@@ -111,9 +113,15 @@ func (d *DB) Refresh(store *dag.Store, opts ...Option) (Stats, error) {
 	}
 
 	// 3. Enumerate delta since stored cursors
-	enumRes, err := store.EnumerateSince(storedCursors)
-	if err != nil {
-		return Stats{}, fmt.Errorf("projection: enumerate since cursors: %w", err)
+	var enumRes *dag.EnumerateResult
+	if cfg.enumOverride != nil {
+		enumRes = cfg.enumOverride
+	} else {
+		res, err := store.EnumerateSince(storedCursors)
+		if err != nil {
+			return Stats{}, fmt.Errorf("projection: enumerate since cursors: %w", err)
+		}
+		enumRes = res
 	}
 
 	if len(enumRes.Rewound) > 0 {
@@ -192,7 +200,16 @@ func (d *DB) Refresh(store *dag.Store, opts ...Option) (Stats, error) {
 		if len(ops) == 0 {
 			continue
 		}
-		objType := ops[0].ObjectType
+		objType := determineObjectType(ops)
+		if objType == "" {
+			var dbType string
+			err := d.db.QueryRow("SELECT object_type FROM objects WHERE object_id = ?", objID).Scan(&dbType)
+			if err == nil {
+				objType = dbType
+			} else if !errors.Is(err, sql.ErrNoRows) {
+				return Stats{}, fmt.Errorf("projection: query object_type for %s: %w", objID, err)
+			}
+		}
 		var opTypes []string
 		seenOpTypes := make(map[string]bool)
 		created := false
