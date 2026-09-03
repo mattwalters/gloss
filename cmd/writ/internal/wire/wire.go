@@ -22,6 +22,8 @@ const (
 	KindReviewStatus = "review.status"
 	KindIssueList    = "issue.list"
 	KindIssueStatus  = "issue.status"
+	KindIssueLabel   = "issue.label"
+	KindIssueLabels  = "issue.label"
 	KindSyncStatus   = "sync.status"
 	KindSyncResult   = "sync.result"
 )
@@ -140,6 +142,12 @@ type Issue struct {
 	Labels      []string    `json:"labels"`
 	Links       []IssueLink `json:"links"`
 	UnknownOps  []UnknownOp `json:"unknown_ops"`
+}
+
+// IssueLabels represents the labels attached to an issue.
+type IssueLabels struct {
+	ObjectID string   `json:"object_id"`
+	Labels   []string `json:"labels"`
 }
 
 // Range is a 1-based inclusive line range [Start, End].
@@ -407,6 +415,18 @@ func FromIssueResult(r writ.IssueResult) Issue {
 		Labels:      labels,
 		Links:       links,
 		UnknownOps:  unknownOps,
+	}
+}
+
+// FromIssueLabels converts an issue ID and label slice into an IssueLabels wire struct.
+// Collections are always initialized to empty non-nil slices so they serialize as `[]`.
+func FromIssueLabels(objectID string, labels []string) IssueLabels {
+	if labels == nil {
+		labels = []string{}
+	}
+	return IssueLabels{
+		ObjectID: objectID,
+		Labels:   labels,
 	}
 }
 

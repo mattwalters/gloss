@@ -21,7 +21,7 @@ All plumbing commands emit a single top-level JSON document on `stdout` adhering
 | Field | Type | Description |
 |---|---|---|
 | `schema_version` | integer | Envelope schema version (currently `1`). Bumps only on breaking changes. |
-| `kind` | string | Discriminator for the payload schema (e.g. `review.list`, `review.status`, `issue.list`, `issue.status`, `sync.status`, `sync.result`). |
+| `kind` | string | Discriminator for the payload schema (e.g. `review.list`, `review.status`, `issue.list`, `issue.status`, `issue.label`, `sync.status`, `sync.result`). |
 | `data` | object or array | Verb-specific payload structure. |
 
 ---
@@ -275,6 +275,35 @@ Fetches detailed status and folded state for a single issue.
 
 ---
 
+### `writ issue label <id> [--json]`
+
+Views or updates labels on a single issue.
+
+- **Envelope `kind`**: `"issue.label"`
+- **`data` Type**: `IssueLabels` object
+
+#### `IssueLabels` Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `object_id` | string | 32-character lowercase hex identifier for the issue. |
+| `labels` | array of strings | Labels attached to the issue, converged from concurrent add/remove operations. |
+
+#### Example Output
+
+```json
+{
+  "schema_version": 1,
+  "kind": "issue.label",
+  "data": {
+    "object_id": "0123456789abcdef0123456789abcdef",
+    "labels": ["bug", "documentation"]
+  }
+}
+```
+
+---
+
 ### `writ sync --status --json [remote...]`
 
 Reports the count of unpushed local operations without performing network transport.
@@ -380,4 +409,9 @@ writ sync --status --json | jq '[.data[].unsynced] | add'
 ### Verify zero errors across all CI checks
 ```bash
 writ review status <id> --json | jq 'all(.data.ci_statuses[]; .state == "success")'
+```
+
+### List labels on an issue
+```bash
+writ issue label <id> --json | jq -r '.data.labels[]'
 ```

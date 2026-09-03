@@ -67,7 +67,7 @@ var initCmd = &command{
 
 var issueCmd = &command{
 	Name:      "issue",
-	Short:     "Manage issues (create, status, assign, list, link)",
+	Short:     "Manage issues (create, status, assign, list, link, label)",
 	UsageLine: "Usage: writ issue [-C <dir>] <subcommand> [arguments]",
 	Long:      "Manage issues.",
 	Flags: []flagSpec{
@@ -83,6 +83,7 @@ var issueCmd = &command{
 		issueAssignCmd,
 		issueListCmd,
 		issueLinkCmd,
+		issueLabelCmd,
 	},
 }
 
@@ -175,6 +176,25 @@ var issueLinkCmd = &command{
 	Examples: []string{
 		"writ issue link 01J8ABC -target 01J8DEF -relation fixes",
 		"writ issue link 01J8ABC -target other-repo#01J8DEF -relation relates",
+	},
+}
+
+var issueLabelCmd = &command{
+	Name:      "label",
+	Short:     "Add or remove issue labels",
+	UsageLine: "Usage: writ issue label [-C <dir>] <id> [-add <l>]... [-remove <l>]... [--json]",
+	Long:      "Add or remove issue labels.",
+	Flags: []flagSpec{
+		{Name: "C"},
+		{Name: "add", Repeatable: true},
+		{Name: "remove", Repeatable: true},
+		{Name: "json"},
+	},
+	Examples: []string{
+		"writ issue label 01J8ABC",
+		"writ issue label 01J8ABC -add bug",
+		"writ issue label 01J8ABC -remove duplicate",
+		"writ issue label 01J8ABC --json",
 	},
 }
 
@@ -430,6 +450,7 @@ func init() {
 		"issue assign":   func() *flag.FlagSet { fs, _ := newIssueAssignFlagSet(""); return fs },
 		"issue list":     func() *flag.FlagSet { fs, _ := newIssueListFlagSet(""); return fs },
 		"issue link":     func() *flag.FlagSet { fs, _ := newIssueLinkFlagSet(""); return fs },
+		"issue label":    func() *flag.FlagSet { fs, _ := newIssueLabelFlagSet(""); return fs },
 		"review open":    func() *flag.FlagSet { fs, _ := newReviewOpenFlagSet(""); return fs },
 		"review comment": func() *flag.FlagSet { fs, _ := newReviewCommentFlagSet(""); return fs },
 		"review approve": func() *flag.FlagSet { fs, _ := newReviewApproveFlagSet(""); return fs },

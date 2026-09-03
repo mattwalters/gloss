@@ -24,7 +24,7 @@ func TestCompletion_Bash(t *testing.T) {
 	// Verify all subcommands mentioned
 	expectedWords := []string{
 		"init", "issue", "review", "sync", "completion", "help",
-		"open", "comment", "approve", "status", "list", "create", "assign", "link",
+		"open", "comment", "approve", "status", "list", "create", "assign", "link", "label",
 		"approve", "request-changes", "draft", "merged", "closed",
 	}
 	for _, word := range expectedWords {
@@ -62,7 +62,7 @@ func TestCompletion_Zsh(t *testing.T) {
 
 	expectedWords := []string{
 		"init", "issue", "review", "sync", "completion", "help",
-		"open", "comment", "approve", "status", "list", "create", "assign", "link",
+		"open", "comment", "approve", "status", "list", "create", "assign", "link", "label",
 		"approve", "request-changes", "draft", "merged", "closed",
 	}
 	for _, word := range expectedWords {
@@ -99,7 +99,7 @@ func TestCompletion_Fish(t *testing.T) {
 
 	expectedWords := []string{
 		"init", "issue", "review", "sync", "completion", "help",
-		"open", "comment", "approve", "status", "list", "create", "assign", "link",
+		"open", "comment", "approve", "status", "list", "create", "assign", "link", "label",
 		"approve", "request-changes", "draft", "merged", "closed",
 	}
 	for _, word := range expectedWords {
