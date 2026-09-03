@@ -691,6 +691,21 @@ func ruleAccepts(r FieldRule, body map[string]any) bool {
 		}
 	}
 
+	if r.Strategy == "set-observed-remove" {
+		if r.Field == "add" || r.Field == "remove" {
+			sibling := "remove"
+			if r.Field == "remove" {
+				sibling = "add"
+			}
+			_, presentField := body[r.Field]
+			_, presentSibling := body[sibling]
+			if !presentField && !presentSibling {
+				return true
+			}
+			return refOrSetAccepts(r.Field, body[r.Field], body)
+		}
+	}
+
 	v, present := body[r.Field]
 	if !present {
 		return true
@@ -717,46 +732,7 @@ func ruleAccepts(r FieldRule, body map[string]any) bool {
 	case "set-union":
 		return isRefStringOrStringSlice(v)
 	case "set-observed-remove":
-		// Three body shapes reach this and every vocabulary uses one of them
-		// (spec/fold.md §5.4): nested, where the field holds an object with
-		// `add` and `remove` members; flat, where `add` and `remove` are
-		// themselves the declared fields; and scalar, where the field holds
-		// one item and the op type carries the side. A side holds a string or
-		// an array of strings, as a set-union field does. An absent side is
-		// not a write and is accepted; a side present and holding null is a
-		// write claimed with no value in it, and is rejected — reading it as
-		// absent would make `{"add": null}` and `{}` byte-identical in folded
-		// state.
-		//
-		// In the flat shape the reducer for one declared field also reads the
-		// sibling side out of the same body, so this inspects it too. A
-		// vocabulary normally declares a rule for both `add` and `remove`,
-		// which makes that redundant — but only normally, and a predicate that
-		// skipped a side the reducer goes on to consume is the disagreement
-		// this check exists to prevent.
-		sideOK := func(member any, present bool) bool {
-			return !present || isRefStringOrStringSlice(member)
-		}
-		if obj, ok := v.(map[string]any); ok {
-			for _, side := range []string{"add", "remove"} {
-				member, sidePresent := obj[side]
-				if !sideOK(member, sidePresent) {
-					return false
-				}
-			}
-			return true
-		}
-		if r.Field == "add" || r.Field == "remove" {
-			sibling := "remove"
-			if r.Field == "remove" {
-				sibling = "add"
-			}
-			member, sidePresent := body[sibling]
-			if !sideOK(member, sidePresent) {
-				return false
-			}
-		}
-		return isRefStringOrStringSlice(v)
+		return refOrSetAccepts(r.Field, v, body)
 	case "tombstone":
 		_, ok := v.(bool)
 		return ok
@@ -764,6 +740,38 @@ func ruleAccepts(r FieldRule, body map[string]any) bool {
 		return isRefString(v)
 	}
 	return true
+}
+
+func refOrSetAccepts(field string, v any, body map[string]any) bool {
+	sideOK := func(member any, present bool) bool {
+		if !present {
+			return true
+		}
+		if obj, ok := member.(map[string]any); ok {
+			for _, side := range []string{"add", "remove"} {
+				m, p := obj[side]
+				if !p || isRefStringOrStringSlice(m) {
+					continue
+				}
+				return false
+			}
+			return true
+		}
+		return isRefStringOrStringSlice(member)
+	}
+	if field == "add" || field == "remove" {
+		sibling := "remove"
+		if field == "remove" {
+			sibling = "add"
+		}
+		member, sidePresent := body[sibling]
+		if !sideOK(member, sidePresent) {
+			return false
+		}
+		vMember, vPresent := body[field]
+		return sideOK(vMember, vPresent)
+	}
+	return sideOK(v, true)
 }
 
 func isRefString(v any) bool {
@@ -868,7 +876,17 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 				continue
 			}
 			if opMatchesRule(op, r) {
+				hasWrite := false
 				if _, present := op.Body[r.Field]; present || op.OpType == "delete" || op.OpType == "undelete" {
+					hasWrite = true
+				} else if r.Strategy == "set-observed-remove" {
+					if r.Field == "add" && op.Body["remove"] != nil {
+						hasWrite = true
+					} else if r.Field == "remove" && op.Body["add"] != nil {
+						hasWrite = true
+					}
+				}
+				if hasWrite {
 					matchedRulesByField[r.Field] = append(matchedRulesByField[r.Field], r)
 					break
 				}
@@ -986,23 +1004,32 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 				}
 				for _, r := range frs {
 					if opMatchesRule(op, r) {
-						var addRaw, remRaw any
-						if bodyMap, ok := op.Body[fieldName].(map[string]any); ok {
-							addRaw = bodyMap["add"]
-							remRaw = bodyMap["remove"]
-						} else {
-							if raw, ok := op.Body[fieldName]; ok && raw != nil {
-								if fieldName == "add" {
-									addRaw = raw
-									remRaw = op.Body["remove"]
-								} else if fieldName == "remove" {
-									remRaw = raw
-									addRaw = op.Body["add"]
-								}
+						var addItems, remItems []string
+						if fieldName == "add" || fieldName == "remove" {
+							if m, ok := op.Body["add"].(map[string]any); ok {
+								addItems = append(addItems, refOrSetItems(m["add"])...)
+								remItems = append(remItems, refOrSetItems(m["remove"])...)
+							} else {
+								addItems = append(addItems, refOrSetItems(op.Body["add"])...)
+							}
+							if m, ok := op.Body["remove"].(map[string]any); ok {
+								addItems = append(addItems, refOrSetItems(m["add"])...)
+								remItems = append(remItems, refOrSetItems(m["remove"])...)
+							} else {
+								remItems = append(remItems, refOrSetItems(op.Body["remove"])...)
+							}
+						} else if bodyMap, ok := op.Body[fieldName].(map[string]any); ok {
+							addItems = append(addItems, refOrSetItems(bodyMap["add"])...)
+							remItems = append(remItems, refOrSetItems(bodyMap["remove"])...)
+						} else if raw, ok := op.Body[fieldName]; ok && raw != nil {
+							if strings.HasPrefix(op.OpType, "add-") || op.OpType == "add" {
+								addItems = append(addItems, refOrSetItems(raw)...)
+							} else if strings.HasPrefix(op.OpType, "remove-") || op.OpType == "remove" {
+								remItems = append(remItems, refOrSetItems(raw)...)
 							}
 						}
 
-						if addRaw != nil || remRaw != nil {
+						if len(addItems) > 0 || len(remItems) > 0 {
 							hasOps = true
 							// Person-valued fields normalize per spec/identifiers.md;
 							// every other item is taken verbatim. Items that are empty
@@ -1019,12 +1046,12 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 							// side holds one item or an array of them, and
 							// refOrSetItems consumes exactly what ruleAccepts
 							// admitted.
-							for _, it := range refOrSetItems(addRaw) {
+							for _, it := range addItems {
 								if item := normalizeItem(it); item != "" {
 									adds = append(adds, addRecord{opID: op.ID, item: item})
 								}
 							}
-							for _, it := range refOrSetItems(remRaw) {
+							for _, it := range remItems {
 								if item := normalizeItem(it); item != "" {
 									removes = append(removes, removeRecord{opID: op.ID, item: item})
 								}

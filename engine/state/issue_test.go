@@ -681,3 +681,150 @@ func TestFoldIssuePersonNormalization(t *testing.T) {
 		t.Errorf("Assignees = %v, want %v", state.Assignees, wantAssignees)
 	}
 }
+
+func TestFoldIssueOrSetBodyShapes(t *testing.T) {
+	labelOp := func(id, parent, body string, when int64) codec.Op {
+		op := codec.Op{
+			Envelope: codec.Envelope{
+				ObjectID:   "i-shapes",
+				ObjectType: "issue",
+				OpType:     "label",
+				OpVersion:  1,
+				Body:       json.RawMessage(body),
+			},
+			ID:     id,
+			Author: codec.Identity{When: time.Unix(when, 0).UTC()},
+		}
+		if parent != "" {
+			op.Parents = []string{parent}
+		}
+		return op
+	}
+
+	ops := []codec.Op{
+		labelOp("l1", "", `{"add":["urgent","triage"]}`, 100),
+		labelOp("l2", "l1", `{"add":"solo"}`, 200),
+		labelOp("l3", "l2", `{"add":null}`, 300),
+		labelOp("l4", "l3", `{"add":["never"],"remove":["triage",7]}`, 400),
+		labelOp("l5", "l4", `{"add":["kept"],"remove":["urgent"]}`, 500),
+		labelOp("l6-remove-only", "l5", `{"remove":["solo"]}`, 600),
+	}
+
+	issue, err := s.FoldIssue(ops)
+	if err != nil {
+		t.Fatalf("FoldIssue: %v", err)
+	}
+
+	want := []string{"kept", "triage"}
+	if !reflect.DeepEqual(issue.Labels, want) {
+		t.Errorf("Labels = %v, want %v", issue.Labels, want)
+	}
+
+	wantQuarantined := []string{"l3", "l4"}
+	var got []string
+	for _, u := range issue.UnknownOps {
+		got = append(got, u.Commit)
+	}
+	if !reflect.DeepEqual(got, wantQuarantined) {
+		t.Errorf("quarantined = %v, want %v", got, wantQuarantined)
+	}
+
+	generic, err := s.Fold(ops, s.IssueRules())
+	if err != nil {
+		t.Fatalf("Fold: %v", err)
+	}
+	if !reflect.DeepEqual(generic.State["add"], want) {
+		t.Errorf("generic add = %v, want %v", generic.State["add"], want)
+	}
+}
+
+func TestFoldIssueNestedShapeAtFlatField(t *testing.T) {
+	labelOp := func(id, parent, body string, when int64) codec.Op {
+		op := codec.Op{
+			Envelope: codec.Envelope{
+				ObjectID:   "i-nested",
+				ObjectType: "issue",
+				OpType:     "label",
+				OpVersion:  1,
+				Body:       json.RawMessage(body),
+			},
+			ID:     id,
+			Author: codec.Identity{When: time.Unix(when, 0).UTC()},
+		}
+		if parent != "" {
+			op.Parents = []string{parent}
+		}
+		return op
+	}
+
+	ops := []codec.Op{
+		labelOp("l1", "", `{"add":{"add":["feature","urgent"],"remove":[]}}`, 100),
+		labelOp("l2", "l1", `{"add":{"remove":["urgent"]}}`, 200),
+		labelOp("l3", "l2", `{"remove":{"add":["bug"],"remove":["feature"]}}`, 300),
+	}
+
+	issue, err := s.FoldIssue(ops)
+	if err != nil {
+		t.Fatalf("FoldIssue: %v", err)
+	}
+
+	want := []string{"bug"}
+	if !reflect.DeepEqual(issue.Labels, want) {
+		t.Errorf("Labels = %v, want %v", issue.Labels, want)
+	}
+
+	generic, err := s.Fold(ops, s.IssueRules())
+	if err != nil {
+		t.Fatalf("Fold: %v", err)
+	}
+	if !reflect.DeepEqual(generic.State["add"], want) {
+		t.Errorf("generic add = %v, want %v", generic.State["add"], want)
+	}
+}
+
+func TestFoldIssueMixedFlatAndNestedShapes(t *testing.T) {
+	labelOp := func(id, parent, body string, when int64) codec.Op {
+		op := codec.Op{
+			Envelope: codec.Envelope{
+				ObjectID:   "i-mixed",
+				ObjectType: "issue",
+				OpType:     "label",
+				OpVersion:  1,
+				Body:       json.RawMessage(body),
+			},
+			ID:     id,
+			Author: codec.Identity{When: time.Unix(when, 0).UTC()},
+		}
+		if parent != "" {
+			op.Parents = []string{parent}
+		}
+		return op
+	}
+
+	ops := []codec.Op{
+		labelOp("l1", "", `{"add":"feature","remove":{"remove":["old"]}}`, 100),
+		labelOp("l2", "l1", `{"add":{"add":["bug"]},"remove":"temporary"}`, 200),
+		labelOp("l3", "l2", `{"add":{"add":["urgent"],"remove":["feature"]},"remove":{"add":["security"],"remove":["bug"]}}`, 300),
+	}
+
+	issue, err := s.FoldIssue(ops)
+	if err != nil {
+		t.Fatalf("FoldIssue: %v", err)
+	}
+
+	want := []string{"security", "urgent"}
+	if !reflect.DeepEqual(issue.Labels, want) {
+		t.Errorf("Labels = %v, want %v", issue.Labels, want)
+	}
+
+	generic, err := s.Fold(ops, s.IssueRules())
+	if err != nil {
+		t.Fatalf("Fold: %v", err)
+	}
+	if !reflect.DeepEqual(generic.State["add"], want) {
+		t.Errorf("generic add = %v, want %v", generic.State["add"], want)
+	}
+	if !reflect.DeepEqual(generic.State["remove"], want) {
+		t.Errorf("generic remove = %v, want %v", generic.State["remove"], want)
+	}
+}

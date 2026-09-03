@@ -176,23 +176,32 @@ func newSetObservedRemoveAccumulator(rule Rule, reach ReachOracle) (Accumulator,
 }
 
 func (a *setObservedRemoveAccumulator) Apply(op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
-	var addRaw, remRaw any
-	if bodyMap, ok := body[a.field].(map[string]any); ok {
-		addRaw = bodyMap["add"]
-		remRaw = bodyMap["remove"]
-	} else {
-		if raw, ok := body[a.field]; ok && raw != nil {
-			if a.field == "add" {
-				addRaw = raw
-				remRaw = body["remove"]
-			} else if a.field == "remove" {
-				remRaw = raw
-				addRaw = body["add"]
-			}
+	var adds, removes []string
+	if a.field == "add" || a.field == "remove" {
+		if m, ok := body["add"].(map[string]any); ok {
+			adds = append(adds, orSetItems(m["add"])...)
+			removes = append(removes, orSetItems(m["remove"])...)
+		} else {
+			adds = append(adds, orSetItems(body["add"])...)
+		}
+		if m, ok := body["remove"].(map[string]any); ok {
+			adds = append(adds, orSetItems(m["add"])...)
+			removes = append(removes, orSetItems(m["remove"])...)
+		} else {
+			removes = append(removes, orSetItems(body["remove"])...)
+		}
+	} else if bodyMap, ok := body[a.field].(map[string]any); ok {
+		adds = append(adds, orSetItems(bodyMap["add"])...)
+		removes = append(removes, orSetItems(bodyMap["remove"])...)
+	} else if raw, ok := body[a.field]; ok && raw != nil {
+		if (len(op.OpType) >= 4 && op.OpType[:4] == "add-") || op.OpType == "add" {
+			adds = append(adds, orSetItems(raw)...)
+		} else if (len(op.OpType) >= 7 && op.OpType[:7] == "remove-") || op.OpType == "remove" {
+			removes = append(removes, orSetItems(raw)...)
 		}
 	}
 
-	if addRaw == nil && remRaw == nil {
+	if len(adds) == 0 && len(removes) == 0 {
 		return nil
 	}
 	a.hasOps = true
@@ -210,12 +219,12 @@ func (a *setObservedRemoveAccumulator) Apply(op codec.Op, body map[string]any, _
 	// Every item is a string; see setUnionAccumulator.Apply. A side holds one
 	// item or an array of them, and orSetItems consumes exactly what
 	// orSetAccepts admitted.
-	for _, it := range orSetItems(addRaw) {
+	for _, it := range adds {
 		if item := normalizeItem(it); item != "" {
 			a.adds = append(a.adds, orSetAddRecord{opID: op.ID, item: item})
 		}
 	}
-	for _, it := range orSetItems(remRaw) {
+	for _, it := range removes {
 		if item := normalizeItem(it); item != "" {
 			a.removes = append(a.removes, orSetRemoveRecord{opID: op.ID, item: item})
 		}

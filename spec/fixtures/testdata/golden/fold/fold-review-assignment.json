@@ -32,6 +32,7 @@
           "user:david"
         ],
         "remove": [
+          "user:alice",
           "user:charlie",
           "user:david"
         ],

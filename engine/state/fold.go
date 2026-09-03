@@ -1,6 +1,8 @@
 package state
 
 import (
+	"strings"
+
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/internal/fold"
 )
@@ -109,4 +111,41 @@ func stringItems(raw any) []string {
 		return v
 	}
 	return nil
+}
+
+// extractOrSetItems extracts additions and removals from a flat OR-set body,
+// accommodating both flat fields (body[addField] / body[remField]) and nested
+// maps ({add: [...], remove: [...]}) present at either field (spec/fold.md §5.4).
+func extractOrSetItems(body map[string]any, addField, remField string) (adds []string, removes []string) {
+	if m, ok := body[addField].(map[string]any); ok {
+		adds = append(adds, stringItems(m["add"])...)
+		removes = append(removes, stringItems(m["remove"])...)
+	} else {
+		adds = append(adds, stringItems(body[addField])...)
+	}
+	if m, ok := body[remField].(map[string]any); ok {
+		adds = append(adds, stringItems(m["add"])...)
+		removes = append(removes, stringItems(m["remove"])...)
+	} else {
+		removes = append(removes, stringItems(body[remField])...)
+	}
+	return adds, removes
+}
+
+// extractScalarOrSetItems extracts additions and removals from a scalar OR-set
+// body (such as project/cycle add-issue / remove-issue), supporting scalar
+// items (or arrays) mapped to side by opType, or nested maps present at the field.
+func extractScalarOrSetItems(body map[string]any, field string, opType string) (adds []string, removes []string) {
+	if m, ok := body[field].(map[string]any); ok {
+		adds = append(adds, stringItems(m["add"])...)
+		removes = append(removes, stringItems(m["remove"])...)
+		return adds, removes
+	}
+	items := stringItems(body[field])
+	if strings.HasPrefix(opType, "add-") || opType == "add" {
+		adds = append(adds, items...)
+	} else if strings.HasPrefix(opType, "remove-") || opType == "remove" {
+		removes = append(removes, items...)
+	}
+	return adds, removes
 }

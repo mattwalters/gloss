@@ -87,14 +87,17 @@ func FoldProject(ops []codec.Op) (Project, error) {
 				state.Reason = r
 			}
 
-		case "add-issue":
-			if iss, ok := body["issue"].(string); ok && iss != "" {
-				issueAdds = append(issueAdds, orSetRecord{opID: op.ID, item: iss})
+		case "add-issue", "remove-issue":
+			adds, removes := extractScalarOrSetItems(body, "issue", op.OpType)
+			for _, iss := range adds {
+				if iss != "" {
+					issueAdds = append(issueAdds, orSetRecord{opID: op.ID, item: iss})
+				}
 			}
-
-		case "remove-issue":
-			if iss, ok := body["issue"].(string); ok && iss != "" {
-				issueRemoves = append(issueRemoves, orSetRecord{opID: op.ID, item: iss})
+			for _, iss := range removes {
+				if iss != "" {
+					issueRemoves = append(issueRemoves, orSetRecord{opID: op.ID, item: iss})
+				}
 			}
 
 		default:

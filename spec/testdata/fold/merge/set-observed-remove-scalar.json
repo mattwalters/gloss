@@ -1,0 +1,63 @@
+{
+  "name": "set-observed-remove-scalar",
+  "description": "Scalar OR-set shape where the declared field holds the item and op_type determines add vs remove",
+  "object_id": "obj-1",
+  "fields": {
+    "issue": { "strategy": "set-observed-remove" }
+  },
+  "ops": [
+    {
+      "id": "op-01-add-1",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "op_type": "add-issue",
+      "body": {
+        "issue": "ISSUE-1"
+      }
+    },
+    {
+      "id": "op-02-add-2",
+      "parents": ["op-01-add-1"],
+      "time": 200,
+      "object_id": "obj-1",
+      "op_type": "add-issue",
+      "body": {
+        "issue": "ISSUE-2"
+      }
+    },
+    {
+      "id": "op-03-remove-1",
+      "parents": ["op-02-add-2"],
+      "time": 300,
+      "object_id": "obj-1",
+      "op_type": "remove-issue",
+      "body": {
+        "issue": "ISSUE-1"
+      }
+    },
+    {
+      "id": "op-04-concurrent-add-1",
+      "parents": ["op-02-add-2"],
+      "time": 300,
+      "object_id": "obj-1",
+      "op_type": "add-issue",
+      "body": {
+        "issue": "ISSUE-1"
+      }
+    },
+    {
+      "id": "op-05-remove-2",
+      "parents": ["op-03-remove-1", "op-04-concurrent-add-1"],
+      "time": 400,
+      "object_id": "obj-1",
+      "op_type": "remove-issue",
+      "body": {
+        "issue": "ISSUE-2"
+      }
+    }
+  ],
+  "expected_state": {
+    "issue": ["ISSUE-1"]
+  }
+}

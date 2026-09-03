@@ -56,6 +56,21 @@ func ruleAccepts(r Rule, body map[string]any) bool {
 		}
 	}
 
+	if r.Strategy == "set-observed-remove" {
+		if r.Field == "add" || r.Field == "remove" {
+			sibling := "remove"
+			if r.Field == "remove" {
+				sibling = "add"
+			}
+			_, presentField := body[r.Field]
+			_, presentSibling := body[sibling]
+			if !presentField && !presentSibling {
+				return true
+			}
+			return orSetAccepts(r.Field, body[r.Field], body)
+		}
+	}
+
 	v, present := body[r.Field]
 	if !present {
 		return true
@@ -126,17 +141,20 @@ func appendAccepts(v any) bool {
 // reducer goes on to consume is the disagreement this file exists to prevent.
 func orSetAccepts(field string, v any, body map[string]any) bool {
 	sideOK := func(member any, present bool) bool {
-		return !present || isStringOrStringSlice(member)
-	}
-
-	if obj, ok := v.(map[string]any); ok {
-		for _, side := range []string{"add", "remove"} {
-			member, present := obj[side]
-			if !sideOK(member, present) {
+		if !present {
+			return true
+		}
+		if obj, ok := member.(map[string]any); ok {
+			for _, side := range []string{"add", "remove"} {
+				m, p := obj[side]
+				if !p || isStringOrStringSlice(m) {
+					continue
+				}
 				return false
 			}
+			return true
 		}
-		return true
+		return isStringOrStringSlice(member)
 	}
 
 	if field == "add" || field == "remove" {
@@ -148,8 +166,10 @@ func orSetAccepts(field string, v any, body map[string]any) bool {
 		if !sideOK(member, present) {
 			return false
 		}
+		vMember, vPresent := body[field]
+		return sideOK(vMember, vPresent)
 	}
-	return isStringOrStringSlice(v)
+	return sideOK(v, true)
 }
 
 // orSetItems returns the items one side of an OR-set body carries. The side

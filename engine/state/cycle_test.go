@@ -321,6 +321,42 @@ func TestFoldCycleAgreement(t *testing.T) {
 			},
 			Author: codec.Identity{Email: "alice@example.com", When: now.Add(2 * time.Minute)},
 		},
+		{
+			ID:      "iss1",
+			Parents: []string{"d1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "c-agree",
+				ObjectType: "cycle",
+				OpType:     "add-issue",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"issue":"ISSUE-1"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(3 * time.Minute)},
+		},
+		{
+			ID:      "iss2",
+			Parents: []string{"iss1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "c-agree",
+				ObjectType: "cycle",
+				OpType:     "add-issue",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"issue":"ISSUE-2"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(4 * time.Minute)},
+		},
+		{
+			ID:      "iss3",
+			Parents: []string{"iss2"},
+			Envelope: codec.Envelope{
+				ObjectID:   "c-agree",
+				ObjectType: "cycle",
+				OpType:     "remove-issue",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"issue":"ISSUE-1"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(5 * time.Minute)},
+		},
 	}
 
 	cycleState, err := s.FoldCycle(ops)
@@ -344,5 +380,68 @@ func TestFoldCycleAgreement(t *testing.T) {
 	}
 	if cycleState.EndsAt != objectState.State["ends_at"] {
 		t.Errorf("ends_at mismatch: got %q, want %v", cycleState.EndsAt, objectState.State["ends_at"])
+	}
+	if !reflect.DeepEqual(cycleState.Issues, objectState.State["issue"]) {
+		t.Errorf("issues mismatch: got %v, want %v", cycleState.Issues, objectState.State["issue"])
+	}
+}
+
+func TestFoldCycleScalarAndNestedMembership(t *testing.T) {
+	now := time.Unix(100, 0).UTC()
+
+	ops := []codec.Op{
+		{
+			ID: "op1",
+			Envelope: codec.Envelope{
+				ObjectID:   "c-mem",
+				ObjectType: "cycle",
+				OpType:     "add-issue",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"issue":["ISSUE-1","ISSUE-2"]}`),
+			},
+			Author: codec.Identity{When: now},
+		},
+		{
+			ID:      "op2",
+			Parents: []string{"op1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "c-mem",
+				ObjectType: "cycle",
+				OpType:     "remove-issue",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"issue":"ISSUE-1"}`),
+			},
+			Author: codec.Identity{When: now.Add(time.Minute)},
+		},
+		{
+			ID:      "op3",
+			Parents: []string{"op2"},
+			Envelope: codec.Envelope{
+				ObjectID:   "c-mem",
+				ObjectType: "cycle",
+				OpType:     "add-issue",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"issue":{"add":["ISSUE-3"],"remove":["ISSUE-2"]}}`),
+			},
+			Author: codec.Identity{When: now.Add(2 * time.Minute)},
+		},
+	}
+
+	cycleState, err := s.FoldCycle(ops)
+	if err != nil {
+		t.Fatalf("FoldCycle failed: %v", err)
+	}
+
+	objectState, err := s.Fold(ops, s.CycleRules())
+	if err != nil {
+		t.Fatalf("Fold failed: %v", err)
+	}
+
+	wantIssues := []string{"ISSUE-3"}
+	if !reflect.DeepEqual(cycleState.Issues, wantIssues) {
+		t.Errorf("FoldCycle issues = %v, want %v", cycleState.Issues, wantIssues)
+	}
+	if !reflect.DeepEqual(objectState.State["issue"], wantIssues) {
+		t.Errorf("Fold generic issue = %v, want %v", objectState.State["issue"], wantIssues)
 	}
 }
