@@ -175,8 +175,6 @@ func FoldReview(ops []codec.Op) (Review, error) {
 			}
 			if m, ok := body["message"].(string); ok {
 				entry.Message = m
-			} else {
-				entry.Message = ""
 			}
 
 		case "ci-status":

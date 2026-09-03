@@ -673,9 +673,7 @@ func (r *Reviews) Approve(ctx context.Context, id string, a Approval) error {
 	if subject != "" {
 		body["subject"] = subject
 	}
-	if a.Message != "" {
-		body["message"] = a.Message
-	}
+	body["message"] = a.Message
 
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {

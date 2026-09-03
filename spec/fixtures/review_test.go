@@ -271,6 +271,29 @@ func assertReviewFoldAgreement(t *testing.T, review writ.Review, state writ.Obje
 			}
 		}
 
+		activeMessages := make(map[string]string)
+		if rawMessages, ok := state.State["message"].([]any); ok {
+			for _, v := range rawMessages {
+				if m, ok := v.(map[string]any); ok {
+					var keyList []string
+					switch ks := m["key"].(type) {
+					case []string:
+						keyList = ks
+					case []any:
+						for _, k := range ks {
+							keyList = append(keyList, fmt.Sprint(k))
+						}
+					}
+					if len(keyList) >= 2 {
+						subj := keyList[0]
+						rev := keyList[1]
+						val := fmt.Sprint(m["value"])
+						activeMessages[subj+":"+rev] = val
+					}
+				}
+			}
+		}
+
 		if len(review.Approvals) != len(activeVerdicts) {
 			t.Errorf("[%s/%s] approvals count mismatch: FoldReview=%d, Fold active=%d",
 				fixtureName, objectID, len(review.Approvals), len(activeVerdicts))
@@ -280,6 +303,11 @@ func assertReviewFoldAgreement(t *testing.T, review writ.Review, state writ.Obje
 			if expectedVerdict, exists := activeVerdicts[k]; !exists || expectedVerdict != app.Verdict {
 				t.Errorf("[%s/%s] approval %s mismatch: FoldReview verdict=%q, Fold=%q",
 					fixtureName, objectID, k, app.Verdict, expectedVerdict)
+			}
+			expectedMsg := activeMessages[k]
+			if app.Message != expectedMsg {
+				t.Errorf("[%s/%s] approval %s message mismatch: FoldReview message=%q, Fold=%q",
+					fixtureName, objectID, k, app.Message, expectedMsg)
 			}
 		}
 	}

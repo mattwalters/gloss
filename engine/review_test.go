@@ -115,7 +115,7 @@ func TestFoldReviewApprovalMessageResetOnSubsequentVerdict(t *testing.T) {
 	now := time.Unix(100, 0).UTC()
 	const rev = "1111111111111111111111111111111111111111"
 
-	t.Run("omitted message resets to empty", func(t *testing.T) {
+	t.Run("omitted message preserves existing message under keyed-lww", func(t *testing.T) {
 		op1 := codec.Op{
 			ID: "op1",
 			Envelope: codec.Envelope{
@@ -150,8 +150,19 @@ func TestFoldReviewApprovalMessageResetOnSubsequentVerdict(t *testing.T) {
 		if state.Approvals[0].Verdict != "approve" {
 			t.Errorf("verdict = %q, want %q", state.Approvals[0].Verdict, "approve")
 		}
-		if state.Approvals[0].Message != "" {
-			t.Errorf("expected empty message after subsequent approve without message, got %q", state.Approvals[0].Message)
+		if state.Approvals[0].Message != "Please fix tests before merging" {
+			t.Errorf("expected preserved message %q after subsequent approve omitting message, got %q", "Please fix tests before merging", state.Approvals[0].Message)
+		}
+
+		// Assert agreement with generic Fold
+		genState, err := writ.Fold([]codec.Op{op1, op2}, writ.ReviewRules())
+		if err != nil {
+			t.Fatalf("writ.Fold failed: %v", err)
+		}
+		rawMsg := genState.State["message"].([]any)
+		entry := rawMsg[0].(map[string]any)
+		if entry["value"] != state.Approvals[0].Message {
+			t.Errorf("generic Fold value %v != FoldReview message %q", entry["value"], state.Approvals[0].Message)
 		}
 	})
 
@@ -193,6 +204,17 @@ func TestFoldReviewApprovalMessageResetOnSubsequentVerdict(t *testing.T) {
 		if state.Approvals[0].Message != "Tests look great now" {
 			t.Errorf("expected updated message %q, got %q", "Tests look great now", state.Approvals[0].Message)
 		}
+
+		// Assert agreement with generic Fold
+		genState, err := writ.Fold([]codec.Op{op1, op2}, writ.ReviewRules())
+		if err != nil {
+			t.Fatalf("writ.Fold failed: %v", err)
+		}
+		rawMsg := genState.State["message"].([]any)
+		entry := rawMsg[0].(map[string]any)
+		if entry["value"] != state.Approvals[0].Message {
+			t.Errorf("generic Fold value %v != FoldReview message %q", entry["value"], state.Approvals[0].Message)
+		}
 	})
 
 	t.Run("empty string message resets to empty", func(t *testing.T) {
@@ -232,6 +254,17 @@ func TestFoldReviewApprovalMessageResetOnSubsequentVerdict(t *testing.T) {
 		}
 		if state.Approvals[0].Message != "" {
 			t.Errorf("expected empty message after subsequent approve with message: \"\", got %q", state.Approvals[0].Message)
+		}
+
+		// Assert agreement with generic Fold
+		genState, err := writ.Fold([]codec.Op{op1, op2}, writ.ReviewRules())
+		if err != nil {
+			t.Fatalf("writ.Fold failed: %v", err)
+		}
+		rawMsg := genState.State["message"].([]any)
+		entry := rawMsg[0].(map[string]any)
+		if entry["value"] != state.Approvals[0].Message {
+			t.Errorf("generic Fold value %v != FoldReview message %q", entry["value"], state.Approvals[0].Message)
 		}
 	})
 }
