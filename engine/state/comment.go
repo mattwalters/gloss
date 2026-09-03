@@ -74,9 +74,10 @@ func convertCommentFold(cf fold.CommentFold) (Comment, error) {
 		unknownOps = make([]UnknownOp, len(cf.UnknownOps))
 		for i, u := range cf.UnknownOps {
 			unknownOps[i] = UnknownOp{
-				Commit:    u.Commit,
-				OpType:    u.OpType,
-				OpVersion: u.OpVersion,
+				Commit:     u.Commit,
+				ObjectType: u.ObjectType,
+				OpType:     u.OpType,
+				OpVersion:  u.OpVersion,
 			}
 		}
 	}

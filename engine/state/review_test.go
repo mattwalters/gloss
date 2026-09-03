@@ -544,8 +544,8 @@ func TestFoldReviewUnknownOpVersionAndType(t *testing.T) {
 	}
 
 	expectedUnknown := []s.UnknownOp{
-		{Commit: "op-v2", OpType: "update", OpVersion: 2},
-		{Commit: "op-unknown", OpType: "archive", OpVersion: 1},
+		{Commit: "op-v2", ObjectType: "review", OpType: "update", OpVersion: 2},
+		{Commit: "op-unknown", ObjectType: "review", OpType: "archive", OpVersion: 1},
 	}
 	if !reflect.DeepEqual(state.UnknownOps, expectedUnknown) {
 		t.Errorf("unknown_ops mismatch:\n got:  %+v\n want: %+v", state.UnknownOps, expectedUnknown)

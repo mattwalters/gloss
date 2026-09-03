@@ -33,9 +33,10 @@ type OpRef struct {
 // quarantined through this one channel, so a count of them leads to a commit
 // and a commit to the raw op and its signer.
 type UnknownOp struct {
-	Commit    string `json:"commit"`
-	OpType    string `json:"op_type"`
-	OpVersion int64  `json:"op_version"`
+	Commit     string `json:"commit"`
+	ObjectType string `json:"object_type"`
+	OpType     string `json:"op_type"`
+	OpVersion  int64  `json:"op_version"`
 }
 
 // ObjectState is the folded state produced by the fold driver for a collaborative object.
@@ -140,9 +141,10 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 		}
 		if !known {
 			unknownOps = append(unknownOps, UnknownOp{
-				Commit:    o.Op.ID,
-				OpType:    o.Op.OpType,
-				OpVersion: o.Op.OpVersion,
+				Commit:     o.Op.ID,
+				ObjectType: o.Op.ObjectType,
+				OpType:     o.Op.OpType,
+				OpVersion:  o.Op.OpVersion,
 			})
 		}
 	}

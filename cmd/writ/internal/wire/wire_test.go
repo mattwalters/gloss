@@ -94,7 +94,7 @@ func TestWire_FromReviewResult_FullMapping(t *testing.T) {
 				{Revision: "head1", Name: "ci/lint", State: "success", URL: "https://ci.example.com"},
 			},
 			UnknownOps: []state.UnknownOp{
-				{Commit: "opcommit", OpType: "telemetry", OpVersion: 2},
+				{Commit: "opcommit", ObjectType: "review", OpType: "telemetry", OpVersion: 2},
 			},
 		},
 	}
@@ -112,7 +112,7 @@ func TestWire_FromReviewResult_FullMapping(t *testing.T) {
 	if len(wireRev.CIStatuses) != 1 || wireRev.CIStatuses[0].Name != "ci/lint" {
 		t.Errorf("ci_statuses mapping mismatch: %+v", wireRev.CIStatuses)
 	}
-	if len(wireRev.UnknownOps) != 1 || wireRev.UnknownOps[0].OpType != "telemetry" {
+	if len(wireRev.UnknownOps) != 1 || wireRev.UnknownOps[0].OpType != "telemetry" || wireRev.UnknownOps[0].ObjectType != "review" {
 		t.Errorf("unknown_ops mapping mismatch: %+v", wireRev.UnknownOps)
 	}
 }

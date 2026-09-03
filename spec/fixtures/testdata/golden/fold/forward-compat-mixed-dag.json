@@ -47,36 +47,42 @@
         {
           "commit": "6dd9f5605c5b7abcf3a8f4280ae41087508d304e",
           "label": "bob-mix-opaque-v2",
+          "object_type": "review",
           "op_type": "create",
           "op_version": 2
         },
         {
           "commit": "c41f48c534a9ef87ae10bd4331ca7ced6868015a",
           "label": "alice-mix-opaque-telemetry",
+          "object_type": "telemetry",
           "op_type": "emit",
           "op_version": 1
         },
         {
           "commit": "0d454a6c7b1823e4743b6c1762a78307a7c983ce",
           "label": "alice-ctrl-comment",
+          "object_type": "comment",
           "op_type": "post",
           "op_version": 1
         },
         {
           "commit": "7e440b19a86317f08137120af2b39c063ddb1cf0",
           "label": "alice-mix-comment",
+          "object_type": "comment",
           "op_type": "post",
           "op_version": 1
         },
         {
           "commit": "607c4a2101962c2ea15f759cd140ab67a8a43806",
           "label": "bob-ctrl-close",
+          "object_type": "review",
           "op_type": "close",
           "op_version": 1
         },
         {
           "commit": "af4ca081fea9b3db3360894c8958ad8cf699b2c7",
           "label": "bob-mix-close",
+          "object_type": "review",
           "op_type": "close",
           "op_version": 1
         }

@@ -13,6 +13,8 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
+	writ "github.com/writtendev/writ/engine"
+	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/codec/canonicaljson"
 	"github.com/writtendev/writ/spec"
 )
@@ -191,11 +193,12 @@ func deriveDisposition(profile readerProfile, allRules []spec.FieldRule, name st
 		return "interpretable", nil
 	}
 	folded, err := spec.Fold([]spec.MergeOp{{
-		ID:        name,
-		ObjectID:  env.ObjectID,
-		OpType:    env.OpType,
-		OpVersion: env.OpVersion,
-		Body:      env.Body,
+		ID:         name,
+		ObjectID:   env.ObjectID,
+		ObjectType: env.ObjectType,
+		OpType:     env.OpType,
+		OpVersion:  env.OpVersion,
+		Body:       env.Body,
 	}}, rules)
 	if err != nil {
 		return "", fmt.Errorf("folding instance: %w", err)
@@ -435,6 +438,127 @@ func TestNegativeDispositionDerivation(t *testing.T) {
 			if derived != "opaque" {
 				t.Errorf("%s derives as %q, want opaque; the %s leg of FC-1 is not being decided",
 					tc.file, derived, tc.leg)
+			}
+		})
+	}
+}
+
+// TestForwardCompatFC5 verifies normative rule FC-5: folded state MUST surface
+// each uninterpretable op as an opaque record containing op_id (spelled commit),
+// object_type, op_type, and op_version.
+func TestForwardCompatFC5(t *testing.T) {
+	allRules, err := spec.FieldRules()
+	if err != nil {
+		t.Fatalf("loading field rules: %v", err)
+	}
+
+	cases := []struct {
+		name string
+		file string
+	}{
+		{name: "unknown object type", file: "unknown-object-type.json"},
+		{name: "unknown op type", file: "unknown-op-type.json"},
+		{name: "future op version", file: "future-op-version.json"},
+		{name: "uninterpretable body", file: "uninterpretable-body.json"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw, err := spec.FS.ReadFile("testdata/forward-compat/ops/" + tc.file)
+			if err != nil {
+				t.Fatalf("reading %s: %v", tc.file, err)
+			}
+			var env struct {
+				ObjectID   string         `json:"object_id"`
+				ObjectType string         `json:"object_type"`
+				OpType     string         `json:"op_type"`
+				OpVersion  int64          `json:"op_version"`
+				Body       map[string]any `json:"body"`
+			}
+			if err := json.Unmarshal(raw, &env); err != nil {
+				t.Fatalf("decoding envelope: %v", err)
+			}
+
+			var rules []spec.FieldRule
+			for _, r := range allRules {
+				if r.OpType == env.OpType && r.OpVersion == env.OpVersion {
+					rules = append(rules, r)
+				}
+			}
+
+			// 1. Reference fold assertion
+			folded, err := spec.Fold([]spec.MergeOp{{
+				ID:         tc.file,
+				ObjectID:   env.ObjectID,
+				ObjectType: env.ObjectType,
+				OpType:     env.OpType,
+				OpVersion:  env.OpVersion,
+				Body:       env.Body,
+			}}, rules)
+			if err != nil {
+				t.Fatalf("spec.Fold failed: %v", err)
+			}
+			if len(folded.UnknownOps) != 1 {
+				t.Fatalf("spec.Fold expected 1 UnknownOp, got %d", len(folded.UnknownOps))
+			}
+			refU := folded.UnknownOps[0]
+			if refU.Commit != tc.file {
+				t.Errorf("ref.Commit mismatch: got %q, want %q", refU.Commit, tc.file)
+			}
+			if refU.ObjectType != env.ObjectType {
+				t.Errorf("ref.ObjectType mismatch: got %q, want %q", refU.ObjectType, env.ObjectType)
+			}
+			if refU.OpType != env.OpType {
+				t.Errorf("ref.OpType mismatch: got %q, want %q", refU.OpType, env.OpType)
+			}
+			if refU.OpVersion != env.OpVersion {
+				t.Errorf("ref.OpVersion mismatch: got %d, want %d", refU.OpVersion, env.OpVersion)
+			}
+
+			// 2. Engine fold assertion
+			var writRules []writ.Rule
+			for _, r := range rules {
+				writRules = append(writRules, writ.Rule{
+					OpType:    r.OpType,
+					OpVersion: r.OpVersion,
+					Field:     r.Field,
+					Strategy:  r.Strategy,
+					Key:       r.Key,
+					Lattice:   r.Lattice,
+				})
+			}
+			bodyJSON, err := json.Marshal(env.Body)
+			if err != nil {
+				t.Fatalf("marshaling body: %v", err)
+			}
+			engineRes, err := writ.Fold([]codec.Op{{
+				ID: tc.file,
+				Envelope: codec.Envelope{
+					ObjectID:   env.ObjectID,
+					ObjectType: env.ObjectType,
+					OpType:     env.OpType,
+					OpVersion:  env.OpVersion,
+					Body:       bodyJSON,
+				},
+			}}, writRules)
+			if err != nil {
+				t.Fatalf("writ.Fold failed: %v", err)
+			}
+			if len(engineRes.UnknownOps) != 1 {
+				t.Fatalf("writ.Fold expected 1 UnknownOp, got %d", len(engineRes.UnknownOps))
+			}
+			engU := engineRes.UnknownOps[0]
+			if engU.Commit != tc.file {
+				t.Errorf("engine.Commit mismatch: got %q, want %q", engU.Commit, tc.file)
+			}
+			if engU.ObjectType != env.ObjectType {
+				t.Errorf("engine.ObjectType mismatch: got %q, want %q", engU.ObjectType, env.ObjectType)
+			}
+			if engU.OpType != env.OpType {
+				t.Errorf("engine.OpType mismatch: got %q, want %q", engU.OpType, env.OpType)
+			}
+			if engU.OpVersion != env.OpVersion {
+				t.Errorf("engine.OpVersion mismatch: got %d, want %d", engU.OpVersion, env.OpVersion)
 			}
 		})
 	}

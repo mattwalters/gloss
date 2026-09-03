@@ -114,7 +114,7 @@ Fetches detailed status and folded state for a single code review.
 | `revisions` | array of objects | Pushed revisions: `[ { "base": string, "head": string } ]`. |
 | `approvals` | array of objects | Recorded review verdicts: `[ { "subject": string, "revision": string, "verdict": string, "message": string } ]`. |
 | `ci_statuses` | array of objects | Automated CI checks: `[ { "revision": string, "name": string, "state": string, "url": string, "description": string, "started_at": string, "completed_at": string, "external_id": string } ]`. |
-| `unknown_ops` | array of objects | Preserved forward-compatibility operations: `[ { "commit": string, "op_type": string, "op_version": integer } ]`. |
+| `unknown_ops` | array of objects | Preserved forward-compatibility operations: `[ { "commit": string, "object_type": string, "op_type": string, "op_version": integer } ]`. |
 
 #### Example Output
 
@@ -241,7 +241,7 @@ Fetches detailed status and folded state for a single issue.
 | `labels` | array of strings | Labels attached to the issue, converged from concurrent add/remove operations. |
 | `links` | array of objects | Cross-reference links: `[ { "target": string, "target_type": string, "relation": string } ]`. `target` is either a bare object ID (same repo) or `<repo-id>#<object-id>` (cross-repo). |
 | `comments` | array of objects | Threaded comments attached to the issue: `[ CommentThread ]`. |
-| `unknown_ops` | array of objects | Preserved forward-compatibility operations: `[ { "commit": string, "op_type": string, "op_version": integer } ]`. |
+| `unknown_ops` | array of objects | Preserved forward-compatibility operations: `[ { "commit": string, "object_type": string, "op_type": string, "op_version": integer } ]`. |
 
 #### Example Output
 

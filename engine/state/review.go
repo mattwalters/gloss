@@ -55,9 +55,10 @@ func FoldReview(ops []codec.Op) (Review, error) {
 		op := o.Op
 		if op.ObjectType != "review" || op.OpVersion != 1 {
 			unknownOps = append(unknownOps, UnknownOp{
-				Commit:    op.ID,
-				OpType:    op.OpType,
-				OpVersion: op.OpVersion,
+				Commit:     op.ID,
+				ObjectType: op.ObjectType,
+				OpType:     op.OpType,
+				OpVersion:  op.OpVersion,
 			})
 			continue
 		}
@@ -78,9 +79,10 @@ func FoldReview(ops []codec.Op) (Review, error) {
 		// the typed reducer and fold.Fold reject the same operations.
 		if fold.Uninterpretable(op, body, rules) {
 			unknownOps = append(unknownOps, UnknownOp{
-				Commit:    op.ID,
-				OpType:    op.OpType,
-				OpVersion: op.OpVersion,
+				Commit:     op.ID,
+				ObjectType: op.ObjectType,
+				OpType:     op.OpType,
+				OpVersion:  op.OpVersion,
 			})
 			continue
 		}
@@ -215,9 +217,10 @@ func FoldReview(ops []codec.Op) (Review, error) {
 
 		default:
 			unknownOps = append(unknownOps, UnknownOp{
-				Commit:    op.ID,
-				OpType:    op.OpType,
-				OpVersion: op.OpVersion,
+				Commit:     op.ID,
+				ObjectType: op.ObjectType,
+				OpType:     op.OpType,
+				OpVersion:  op.OpVersion,
 			})
 		}
 	}

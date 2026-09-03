@@ -71,9 +71,10 @@ type CIStatus struct {
 
 // UnknownOp records an unrecognized operation preserved for forward compatibility.
 type UnknownOp struct {
-	Commit    string `json:"commit"`
-	OpType    string `json:"op_type"`
-	OpVersion int64  `json:"op_version"`
+	Commit     string `json:"commit"`
+	ObjectType string `json:"object_type"`
+	OpType     string `json:"op_type"`
+	OpVersion  int64  `json:"op_version"`
 }
 
 // ReviewSummary is a single row in the review list output.
@@ -310,9 +311,10 @@ func FromReviewResult(r writ.ReviewResult) Review {
 	unknownOps := make([]UnknownOp, len(r.Review.UnknownOps))
 	for i, u := range r.Review.UnknownOps {
 		unknownOps[i] = UnknownOp{
-			Commit:    u.Commit,
-			OpType:    u.OpType,
-			OpVersion: u.OpVersion,
+			Commit:     u.Commit,
+			ObjectType: u.ObjectType,
+			OpType:     u.OpType,
+			OpVersion:  u.OpVersion,
 		}
 	}
 	assignees := r.Review.Assignees
@@ -403,9 +405,10 @@ func FromIssueResult(r writ.IssueResult, threads []state.CommentThread) Issue {
 	unknownOps := make([]UnknownOp, len(r.Issue.UnknownOps))
 	for i, u := range r.Issue.UnknownOps {
 		unknownOps[i] = UnknownOp{
-			Commit:    u.Commit,
-			OpType:    u.OpType,
-			OpVersion: u.OpVersion,
+			Commit:     u.Commit,
+			ObjectType: u.ObjectType,
+			OpType:     u.OpType,
+			OpVersion:  u.OpVersion,
 		}
 	}
 
@@ -563,9 +566,10 @@ func FromCommentResult(c writ.CommentResult) Comment {
 	unknownOps := make([]UnknownOp, len(c.Comment.UnknownOps))
 	for i, u := range c.Comment.UnknownOps {
 		unknownOps[i] = UnknownOp{
-			Commit:    u.Commit,
-			OpType:    u.OpType,
-			OpVersion: u.OpVersion,
+			Commit:     u.Commit,
+			ObjectType: u.ObjectType,
+			OpType:     u.OpType,
+			OpVersion:  u.OpVersion,
 		}
 	}
 	var anchor *Anchor
@@ -616,9 +620,10 @@ func FromCommentThread(t state.CommentThread) CommentThread {
 	unknownOps := make([]UnknownOp, len(t.UnknownOps))
 	for i, u := range t.UnknownOps {
 		unknownOps[i] = UnknownOp{
-			Commit:    u.Commit,
-			OpType:    u.OpType,
-			OpVersion: u.OpVersion,
+			Commit:     u.Commit,
+			ObjectType: u.ObjectType,
+			OpType:     u.OpType,
+			OpVersion:  u.OpVersion,
 		}
 	}
 	var anchor *Anchor

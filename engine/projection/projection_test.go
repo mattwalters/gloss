@@ -22,11 +22,10 @@ func TestOpenCloseMemory(t *testing.T) {
 
 	// The literal is deliberate: bumping the projection schema has to be a
 	// conscious edit, because it is what makes an existing checkout rebuild
-	// its cache. WRIT-117 took it to 7 so projections holding person
-	// identifiers folded under the old rule are dropped rather than queried
-	// with the new one.
-	if v := projection.SchemaVersion(); v != 7 {
-		t.Fatalf("expected schema version 7, got %d", v)
+	// its cache. WRIT-155 took it to 8 so projections holding unknown_ops
+	// without object_type are dropped rather than queried without it.
+	if v := projection.SchemaVersion(); v != 8 {
+		t.Fatalf("expected schema version 8, got %d", v)
 	}
 
 	var version string

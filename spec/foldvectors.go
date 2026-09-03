@@ -53,14 +53,15 @@ type MergeAuthor struct {
 
 // MergeOp represents a single synthetic operation in a merge vector.
 type MergeOp struct {
-	ID        string         `json:"id"`
-	Parents   []string       `json:"parents"`
-	Time      int64          `json:"time"`
-	ObjectID  string         `json:"object_id"`
-	OpType    string         `json:"op_type,omitempty"`
-	OpVersion int64          `json:"op_version,omitempty"`
-	Author    MergeAuthor    `json:"author,omitempty"`
-	Body      map[string]any `json:"body"`
+	ID         string         `json:"id"`
+	Parents    []string       `json:"parents"`
+	Time       int64          `json:"time"`
+	ObjectID   string         `json:"object_id"`
+	ObjectType string         `json:"object_type,omitempty"`
+	OpType     string         `json:"op_type,omitempty"`
+	OpVersion  int64          `json:"op_version,omitempty"`
+	Author     MergeAuthor    `json:"author,omitempty"`
+	Body       map[string]any `json:"body"`
 }
 
 // MergeVector represents one merge strategy test case under testdata/fold/merge/.

@@ -300,7 +300,7 @@ func TestFoldProjectUnknownOpVersionAndType(t *testing.T) {
 	if state.Title != "V1 Title" {
 		t.Errorf("title mismatch: got %q, want 'V1 Title'", state.Title)
 	}
-	if len(state.UnknownOps) != 1 || state.UnknownOps[0].Commit != "op-v2" {
+	if len(state.UnknownOps) != 1 || state.UnknownOps[0].Commit != "op-v2" || state.UnknownOps[0].ObjectType != "project" {
 		t.Errorf("unknown_ops mismatch: %+v", state.UnknownOps)
 	}
 }

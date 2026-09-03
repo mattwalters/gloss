@@ -66,9 +66,10 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 	unknownOps := make([]UnknownOp, len(res.UnknownOps))
 	for i, u := range res.UnknownOps {
 		unknownOps[i] = UnknownOp{
-			Commit:    u.Commit,
-			OpType:    u.OpType,
-			OpVersion: u.OpVersion,
+			Commit:     u.Commit,
+			ObjectType: u.ObjectType,
+			OpType:     u.OpType,
+			OpVersion:  u.OpVersion,
 		}
 	}
 

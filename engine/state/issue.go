@@ -46,9 +46,10 @@ func FoldIssue(ops []codec.Op) (Issue, error) {
 		op := o.Op
 		if op.ObjectType != "issue" || op.OpVersion != 1 {
 			unknownOps = append(unknownOps, UnknownOp{
-				Commit:    op.ID,
-				OpType:    op.OpType,
-				OpVersion: op.OpVersion,
+				Commit:     op.ID,
+				ObjectType: op.ObjectType,
+				OpType:     op.OpType,
+				OpVersion:  op.OpVersion,
 			})
 			continue
 		}
@@ -69,9 +70,10 @@ func FoldIssue(ops []codec.Op) (Issue, error) {
 		// the typed reducer and fold.Fold reject the same operations.
 		if fold.Uninterpretable(op, body, rules) {
 			unknownOps = append(unknownOps, UnknownOp{
-				Commit:    op.ID,
-				OpType:    op.OpType,
-				OpVersion: op.OpVersion,
+				Commit:     op.ID,
+				ObjectType: op.ObjectType,
+				OpType:     op.OpType,
+				OpVersion:  op.OpVersion,
 			})
 			continue
 		}
@@ -143,9 +145,10 @@ func FoldIssue(ops []codec.Op) (Issue, error) {
 
 		default:
 			unknownOps = append(unknownOps, UnknownOp{
-				Commit:    op.ID,
-				OpType:    op.OpType,
-				OpVersion: op.OpVersion,
+				Commit:     op.ID,
+				ObjectType: op.ObjectType,
+				OpType:     op.OpType,
+				OpVersion:  op.OpVersion,
 			})
 		}
 	}
