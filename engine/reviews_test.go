@@ -1019,3 +1019,67 @@ func TestReviewsSetStatusRejectsTransitionOutOfMerged(t *testing.T) {
 	}
 }
 
+func TestReviewsApproveMessageResetOnSubsequentVerdict(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+	headHash := strings.TrimSpace(runGitCmd(t, repoDir, "rev-parse", "HEAD"))
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+	id, err := s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Approval message reset review",
+		Base:  headHash,
+		Head:  headHash,
+	})
+	if err != nil {
+		t.Fatalf("Create review failed: %v", err)
+	}
+
+	// 1. Initial request-changes with a comment
+	if err := s.Reviews.Approve(ctx, id, writ.Approval{
+		Verdict: "request-changes",
+		Message: "Please fix tests before merging",
+	}); err != nil {
+		t.Fatalf("Reviews.Approve request-changes failed: %v", err)
+	}
+
+	res, err := s.Query.Review(id)
+	if err != nil {
+		t.Fatalf("Query.Review failed: %v", err)
+	}
+	if len(res.Review.Approvals) != 1 {
+		t.Fatalf("expected 1 approval, got %d", len(res.Review.Approvals))
+	}
+	if res.Review.Approvals[0].Verdict != "request-changes" {
+		t.Errorf("verdict = %q, want request-changes", res.Review.Approvals[0].Verdict)
+	}
+	if res.Review.Approvals[0].Message != "Please fix tests before merging" {
+		t.Errorf("message = %q, want %q", res.Review.Approvals[0].Message, "Please fix tests before merging")
+	}
+
+	// 2. Subsequent approve with no message
+	if err := s.Reviews.Approve(ctx, id, writ.Approval{
+		Verdict: "approve",
+	}); err != nil {
+		t.Fatalf("Reviews.Approve approve failed: %v", err)
+	}
+
+	res, err = s.Query.Review(id)
+	if err != nil {
+		t.Fatalf("Query.Review failed: %v", err)
+	}
+	if len(res.Review.Approvals) != 1 {
+		t.Fatalf("expected 1 approval, got %d", len(res.Review.Approvals))
+	}
+	if res.Review.Approvals[0].Verdict != "approve" {
+		t.Errorf("verdict = %q, want approve", res.Review.Approvals[0].Verdict)
+	}
+	if res.Review.Approvals[0].Message != "" {
+		t.Errorf("expected empty message after approve without message, got %q", res.Review.Approvals[0].Message)
+	}
+}
+

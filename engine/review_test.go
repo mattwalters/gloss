@@ -111,6 +111,164 @@ func TestFoldReviewApprovalsAndRetraction(t *testing.T) {
 	}
 }
 
+func TestFoldReviewApprovalMessageResetOnSubsequentVerdict(t *testing.T) {
+	now := time.Unix(100, 0).UTC()
+	const rev = "1111111111111111111111111111111111111111"
+
+	t.Run("omitted message preserves existing message under keyed-lww", func(t *testing.T) {
+		op1 := codec.Op{
+			ID: "op1",
+			Envelope: codec.Envelope{
+				ObjectID:   "r-msg",
+				ObjectType: "review",
+				OpType:     "approval",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"` + rev + `","verdict":"request-changes","subject":"user:alice","message":"Please fix tests before merging"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now},
+		}
+		op2 := codec.Op{
+			ID:      "op2",
+			Parents: []string{"op1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-msg",
+				ObjectType: "review",
+				OpType:     "approval",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"` + rev + `","verdict":"approve","subject":"user:alice"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(time.Minute)},
+		}
+
+		state, err := writ.FoldReview([]codec.Op{op1, op2})
+		if err != nil {
+			t.Fatalf("FoldReview failed: %v", err)
+		}
+		if len(state.Approvals) != 1 {
+			t.Fatalf("expected 1 active approval, got %d", len(state.Approvals))
+		}
+		if state.Approvals[0].Verdict != "approve" {
+			t.Errorf("verdict = %q, want %q", state.Approvals[0].Verdict, "approve")
+		}
+		if state.Approvals[0].Message != "Please fix tests before merging" {
+			t.Errorf("expected preserved message %q after subsequent approve omitting message, got %q", "Please fix tests before merging", state.Approvals[0].Message)
+		}
+
+		// Assert agreement with generic Fold
+		genState, err := writ.Fold([]codec.Op{op1, op2}, writ.ReviewRules())
+		if err != nil {
+			t.Fatalf("writ.Fold failed: %v", err)
+		}
+		rawMsg := genState.State["message"].([]any)
+		entry := rawMsg[0].(map[string]any)
+		if entry["value"] != state.Approvals[0].Message {
+			t.Errorf("generic Fold value %v != FoldReview message %q", entry["value"], state.Approvals[0].Message)
+		}
+	})
+
+	t.Run("explicit new comment updates message", func(t *testing.T) {
+		op1 := codec.Op{
+			ID: "op1",
+			Envelope: codec.Envelope{
+				ObjectID:   "r-msg",
+				ObjectType: "review",
+				OpType:     "approval",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"` + rev + `","verdict":"request-changes","subject":"user:alice","message":"Please fix tests before merging"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now},
+		}
+		op2 := codec.Op{
+			ID:      "op2",
+			Parents: []string{"op1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-msg",
+				ObjectType: "review",
+				OpType:     "approval",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"` + rev + `","verdict":"approve","subject":"user:alice","message":"Tests look great now"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(time.Minute)},
+		}
+
+		state, err := writ.FoldReview([]codec.Op{op1, op2})
+		if err != nil {
+			t.Fatalf("FoldReview failed: %v", err)
+		}
+		if len(state.Approvals) != 1 {
+			t.Fatalf("expected 1 active approval, got %d", len(state.Approvals))
+		}
+		if state.Approvals[0].Verdict != "approve" {
+			t.Errorf("verdict = %q, want %q", state.Approvals[0].Verdict, "approve")
+		}
+		if state.Approvals[0].Message != "Tests look great now" {
+			t.Errorf("expected updated message %q, got %q", "Tests look great now", state.Approvals[0].Message)
+		}
+
+		// Assert agreement with generic Fold
+		genState, err := writ.Fold([]codec.Op{op1, op2}, writ.ReviewRules())
+		if err != nil {
+			t.Fatalf("writ.Fold failed: %v", err)
+		}
+		rawMsg := genState.State["message"].([]any)
+		entry := rawMsg[0].(map[string]any)
+		if entry["value"] != state.Approvals[0].Message {
+			t.Errorf("generic Fold value %v != FoldReview message %q", entry["value"], state.Approvals[0].Message)
+		}
+	})
+
+	t.Run("empty string message resets to empty", func(t *testing.T) {
+		op1 := codec.Op{
+			ID: "op1",
+			Envelope: codec.Envelope{
+				ObjectID:   "r-msg",
+				ObjectType: "review",
+				OpType:     "approval",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"` + rev + `","verdict":"request-changes","subject":"user:alice","message":"Please fix tests before merging"}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now},
+		}
+		op2 := codec.Op{
+			ID:      "op2",
+			Parents: []string{"op1"},
+			Envelope: codec.Envelope{
+				ObjectID:   "r-msg",
+				ObjectType: "review",
+				OpType:     "approval",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"revision":"` + rev + `","verdict":"approve","subject":"user:alice","message":""}`),
+			},
+			Author: codec.Identity{Email: "alice@example.com", When: now.Add(time.Minute)},
+		}
+
+		state, err := writ.FoldReview([]codec.Op{op1, op2})
+		if err != nil {
+			t.Fatalf("FoldReview failed: %v", err)
+		}
+		if len(state.Approvals) != 1 {
+			t.Fatalf("expected 1 active approval, got %d", len(state.Approvals))
+		}
+		if state.Approvals[0].Verdict != "approve" {
+			t.Errorf("verdict = %q, want %q", state.Approvals[0].Verdict, "approve")
+		}
+		if state.Approvals[0].Message != "" {
+			t.Errorf("expected empty message after subsequent approve with message: \"\", got %q", state.Approvals[0].Message)
+		}
+
+		// Assert agreement with generic Fold
+		genState, err := writ.Fold([]codec.Op{op1, op2}, writ.ReviewRules())
+		if err != nil {
+			t.Fatalf("writ.Fold failed: %v", err)
+		}
+		rawMsg := genState.State["message"].([]any)
+		entry := rawMsg[0].(map[string]any)
+		if entry["value"] != state.Approvals[0].Message {
+			t.Errorf("generic Fold value %v != FoldReview message %q", entry["value"], state.Approvals[0].Message)
+		}
+	})
+}
+
 func TestFoldReviewRevisionsPairing(t *testing.T) {
 	now := time.Unix(100, 0).UTC()
 
