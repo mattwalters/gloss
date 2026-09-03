@@ -16,37 +16,52 @@
 // stale rather than that the toolchain moved.
 //
 // Reading the source rather than the type-checked package buys that
-// reproducibility at a known cost. All of it is latent in engine today, and
-// `make api-compat` — apidiff against the merge base — covers the first two:
+// reproducibility at a known cost: five known blind spots where the baseline
+// records how a symbol is spelled rather than what it resolves to. Blind spot
+// 3 is closed by refusing to run on constrained non-test files; the remaining
+// four stay open because closing them requires full type-checking, defeating the
+// AST-only reproducibility guarantee across toolchains. All four open blind
+// spots are covered by `make api-compat` (apidiff against the merge base):
 //
-//   - Build constraints are ignored. Every non-test .go file in a directory is
-//     parsed and merged, //go:build lines and GOOS-suffixed names alike, so a
-//     file excluded from every build still reaches the listing. Honouring the
-//     constraints with go/build's default context would make the output depend
-//     on the host's GOOS/GOARCH, which is the one thing this tool exists not
-//     to do. Refusing to run when a non-test file carries a constraint or a
-//     GOOS/GOARCH-suffixed name is the third option — it keeps the output
-//     host-independent and needs no platform policy — and is what should
-//     happen here; it is not implemented yet (WRIT-145). What is implemented
-//     is the case that bites today: files in one directory disagreeing on
-//     their package name, which is what a //go:build ignore generator looks
-//     like, is an error rather than a listing of the generator's symbols.
-//   - A const spec with no values prints without one, so inserting a constant
-//     into an iota block renumbers the constants after it with no sign of it
-//     here beyond the added line.
-//   - Only methods declared on exported types are listed. A method promoted
-//     from an embedded type, or declared on an unexported type that an
-//     exported function returns, is reachable by callers but invisible here.
-//   - Symbols are recorded as the source spells them, not as they resolve. A
-//     renamed import alias churns the listing without an API change; a var
-//     declared without a type records no type, so a change to what it aliases
-//     does not show.
+//   - Promoted and unexported-receiver methods (open): Only methods declared on
+//     exported types are listed. A method promoted from an embedded type, or
+//     declared on an unexported type that an exported function returns, is
+//     reachable by callers but invisible here. Resolving promoted methods and
+//     unexported types across packages requires full type checking. Covered by
+//     `make api-compat`.
+//   - Implicit const values and multi-name vars (open): A const spec with no
+//     values prints without one, so inserting a constant into an iota block
+//     renumbers every constant after it with no representation in the file
+//     beyond the added line. Evaluating constant expressions and iota increments
+//     requires type checking and constant evaluation. Similarly, multi-name var
+//     specs with shared value lists (e.g. `var P, Q = pair()`) are unhandled by
+//     AST splitting and latent in engine. Covered by `make api-compat`.
+//   - Build constraints and GOOS/GOARCH filenames (closed): Non-test files
+//     carrying build constraints (//go:build or // +build) or GOOS/GOARCH-suffixed
+//     names are refused. Honouring constraints with go/build's default context
+//     would make output depend on the host's GOOS/GOARCH, which is the one thing
+//     this tool exists not to do. Refusing to run keeps output strictly
+//     host-independent without requiring a platform policy. Test files (*_test.go)
+//     remain permitted to carry build tags.
+//   - Source spelling vs. semantics (open): Symbols are recorded as the source
+//     spells them, not as they resolve. A private import alias leaks into the
+//     listing, so renaming it churns the baseline without an API change. Exported
+//     vars declared without a type record no type, so changes to what they alias
+//     do not show. Covered by `make api-compat`.
+//   - Loss of struct comparability (open): Adding a non-comparable field (a
+//     slice, map, or func) to a comparable struct breaks ==, map keys, and
+//     switch statements. The listing records field declarations, not the
+//     comparability property. When unexported fields already exist, adding an
+//     unexported non-comparable field produces no diff in the baseline at all.
+//     Determining comparability across embedded types requires full type-checking.
+//     Covered by `make api-compat`.
 package main
 
 import (
 	"bufio"
 	"fmt"
 	"go/ast"
+	"go/build/constraint"
 	"go/parser"
 	"go/printer"
 	"go/token"
@@ -227,11 +242,131 @@ func sourceFiles(dir string) ([]string, error) {
 	return names, nil
 }
 
+// checkFileConstraints refuses any non-test file that carries build constraints,
+// either via a GOOS/GOARCH filename suffix or a directive comment (//go:build, // +build).
+func checkFileConstraints(path string) error {
+	if reason := checkFilenameConstraint(path); reason != "" {
+		return fmt.Errorf("%s: build constraints are not supported (%s)", path, reason)
+	}
+	return checkBuildDirectives(path)
+}
+
+// checkFilenameConstraint reports whether a non-test file name matches any of:
+//   *_GOOS.go
+//   *_GOARCH.go
+//   *_GOOS_GOARCH.go
+// returning a description of the matched suffix, or "" if unconstrained.
+func checkFilenameConstraint(path string) string {
+	base := filepath.Base(path)
+	if strings.HasSuffix(base, "_test.go") {
+		return ""
+	}
+	name, ok := strings.CutSuffix(base, ".go")
+	if !ok {
+		return ""
+	}
+	i := strings.Index(name, "_")
+	if i < 0 {
+		return ""
+	}
+	name = name[i:]
+	l := strings.Split(name, "_")
+	n := len(l)
+	if n >= 3 && knownOS[l[n-2]] && knownArch[l[n-1]] {
+		return fmt.Sprintf("GOOS/GOARCH suffix %q", l[n-2]+"_"+l[n-1])
+	}
+	if n >= 2 && knownOS[l[n-1]] {
+		return fmt.Sprintf("GOOS suffix %q", l[n-1])
+	}
+	if n >= 2 && knownArch[l[n-1]] {
+		return fmt.Sprintf("GOARCH suffix %q", l[n-1])
+	}
+	return ""
+}
+
+// checkBuildDirectives scans the comments before the package clause of a Go file
+// and returns an error if any //go:build or legacy // +build directive is found.
+func checkBuildDirectives(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	s := bufio.NewScanner(f)
+	for s.Scan() {
+		line := strings.TrimSpace(strings.TrimPrefix(s.Text(), "\ufeff"))
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "package ") || strings.HasPrefix(line, "package\t") || line == "package" {
+			break
+		}
+		if constraint.IsGoBuild(line) || constraint.IsPlusBuild(line) {
+			return fmt.Errorf("%s: build constraints are not supported (%s)", path, line)
+		}
+	}
+	return s.Err()
+}
+
+var knownOS = map[string]bool{
+	"aix":       true,
+	"android":   true,
+	"darwin":    true,
+	"dragonfly": true,
+	"freebsd":   true,
+	"hurd":      true,
+	"illumos":   true,
+	"ios":       true,
+	"js":        true,
+	"linux":     true,
+	"nacl":      true,
+	"netbsd":    true,
+	"openbsd":   true,
+	"plan9":     true,
+	"solaris":   true,
+	"wasip1":    true,
+	"windows":   true,
+	"zos":       true,
+}
+
+var knownArch = map[string]bool{
+	"386":         true,
+	"amd64":       true,
+	"amd64p32":    true,
+	"arm":         true,
+	"armbe":       true,
+	"arm64":       true,
+	"arm64be":     true,
+	"loong64":     true,
+	"mips":        true,
+	"mipsle":      true,
+	"mips64":      true,
+	"mips64le":    true,
+	"mips64p32":   true,
+	"mips64p32le": true,
+	"ppc":         true,
+	"ppc64":       true,
+	"ppc64le":     true,
+	"riscv":       true,
+	"riscv64":     true,
+	"s390":        true,
+	"s390x":       true,
+	"sparc":       true,
+	"sparc64":     true,
+	"wasm":        true,
+}
+
 // renderPackage writes the exported surface of the package in dir.
 func renderPackage(w io.Writer, dir, path string) error {
 	names, err := sourceFiles(dir)
 	if err != nil {
 		return err
+	}
+	for _, name := range names {
+		if err := checkFileConstraints(name); err != nil {
+			return err
+		}
 	}
 	fset := token.NewFileSet()
 	var files []*ast.File
@@ -245,17 +380,14 @@ func renderPackage(w io.Writer, dir, path string) error {
 	if len(files) == 0 {
 		return fmt.Errorf("%s: no Go files", dir)
 	}
-	// Build constraints are ignored (see the package comment), so a directory
-	// holding a //go:build ignore generator would otherwise be listed under
-	// whichever package name sorted first — the generator's, if its file
-	// happens to sort ahead of the real ones. Disagreement is an error rather
-	// than a coin toss: a listing of the wrong package's symbols is a baseline
-	// the gate would then defend.
+	// Every non-test file in a directory must agree on its package name.
+	// Disagreement is an error rather than a coin toss: a listing of the
+	// wrong package's symbols is a baseline the gate would then defend.
 	pkgName := files[0].Name.Name
 	for i, f := range files[1:] {
 		if f.Name.Name != pkgName {
 			return fmt.Errorf("%s: %s declares package %s but %s declares package %s "+
-				"(build constraints are not honoured here, so every non-test file has to agree)",
+				"(every non-test file has to agree)",
 				dir, filepath.Base(names[0]), pkgName, filepath.Base(names[i+1]), f.Name.Name)
 		}
 	}
