@@ -182,7 +182,7 @@ func TestFoldCommentUnknownOps(t *testing.T) {
 	if len(c.UnknownOps) != 1 {
 		t.Fatalf("expected 1 UnknownOp on Comment, got %d", len(c.UnknownOps))
 	}
-	if c.UnknownOps[0].Commit != "c1-future" || c.UnknownOps[0].OpType != "react" || c.UnknownOps[0].OpVersion != 2 {
+	if c.UnknownOps[0].Commit != "c1-future" || c.UnknownOps[0].ObjectType != "comment" || c.UnknownOps[0].OpType != "react" || c.UnknownOps[0].OpVersion != 2 {
 		t.Errorf("unexpected UnknownOp: %+v", c.UnknownOps[0])
 	}
 
@@ -196,7 +196,7 @@ func TestFoldCommentUnknownOps(t *testing.T) {
 	if len(threads[0].UnknownOps) != 1 {
 		t.Fatalf("expected 1 UnknownOp on CommentThread, got %d", len(threads[0].UnknownOps))
 	}
-	if threads[0].UnknownOps[0].Commit != "c1-future" {
+	if threads[0].UnknownOps[0].Commit != "c1-future" || threads[0].UnknownOps[0].ObjectType != "comment" {
 		t.Errorf("unexpected thread UnknownOp: %+v", threads[0].UnknownOps[0])
 	}
 }

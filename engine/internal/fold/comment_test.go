@@ -194,7 +194,7 @@ func TestFoldCommentUnknownOp(t *testing.T) {
 	if len(cf.UnknownOps) != 1 {
 		t.Fatalf("expected 1 UnknownOp, got %d", len(cf.UnknownOps))
 	}
-	if cf.UnknownOps[0].Commit != "future-op-1" || cf.UnknownOps[0].OpType != "react" || cf.UnknownOps[0].OpVersion != 2 {
+	if cf.UnknownOps[0].Commit != "future-op-1" || cf.UnknownOps[0].ObjectType != "comment" || cf.UnknownOps[0].OpType != "react" || cf.UnknownOps[0].OpVersion != 2 {
 		t.Errorf("unexpected UnknownOp entry: %+v", cf.UnknownOps[0])
 	}
 	if cf.Text != "Edited text" {

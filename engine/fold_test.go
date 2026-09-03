@@ -378,10 +378,11 @@ func TestFold_UnknownOpsPreserved(t *testing.T) {
 			ID:      "op-unknown-future",
 			Parents: []string{"op-root"},
 			Envelope: codec.Envelope{
-				ObjectID:  "obj-1",
-				OpType:    "future-op-type",
-				OpVersion: 2,
-				Body:      json.RawMessage(`{"future_field": "future_val"}`),
+				ObjectID:   "obj-1",
+				ObjectType: "custom",
+				OpType:     "future-op-type",
+				OpVersion:  2,
+				Body:       json.RawMessage(`{"future_field": "future_val"}`),
 			},
 			Author: codec.Identity{When: time.Unix(200, 0).UTC()},
 		},
@@ -428,7 +429,7 @@ func TestFold_UnknownOpsPreserved(t *testing.T) {
 		t.Fatalf("expected 1 unknown op, got %d", len(res.UnknownOps))
 	}
 	u := res.UnknownOps[0]
-	if u.Commit != "op-unknown-future" || u.OpType != "future-op-type" || u.OpVersion != 2 {
+	if u.Commit != "op-unknown-future" || u.ObjectType != "custom" || u.OpType != "future-op-type" || u.OpVersion != 2 {
 		t.Errorf("unexpected unknown op record: %+v", u)
 	}
 }

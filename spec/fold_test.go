@@ -153,12 +153,15 @@ func TestMergeVectors(t *testing.T) {
 			if wantUnknown == nil {
 				wantUnknown = []string{}
 			}
-			gotUnknown := folded.UnknownOps
-			if gotUnknown == nil {
-				gotUnknown = []string{}
+			var gotUnknownIDs []string
+			for _, u := range folded.UnknownOps {
+				gotUnknownIDs = append(gotUnknownIDs, u.Commit)
 			}
-			if !reflect.DeepEqual(gotUnknown, wantUnknown) {
-				t.Errorf("unknown ops mismatch:\n got: %v\nwant: %v", gotUnknown, wantUnknown)
+			if gotUnknownIDs == nil {
+				gotUnknownIDs = []string{}
+			}
+			if !reflect.DeepEqual(gotUnknownIDs, wantUnknown) {
+				t.Errorf("unknown ops mismatch:\n got: %v\nwant: %v", gotUnknownIDs, wantUnknown)
 			}
 
 			// The vectors are the spec, and the spec binds every reducer: run
@@ -166,14 +169,14 @@ func TestMergeVectors(t *testing.T) {
 			// same bytes. Without this the vectors pin only the reference, and
 			// a divergence between the two Go implementations — which is how
 			// WRIT-124 and WRIT-126 were found — passes.
-			assertEngineAgrees(t, vec, gotJSON, gotUnknown)
+			assertEngineAgrees(t, vec, gotJSON, folded.UnknownOps)
 		})
 	}
 }
 
 // assertEngineAgrees drives a merge vector through writ.Fold and requires
 // byte-identical state and the same quarantined ops as the reference fold.
-func assertEngineAgrees(t *testing.T, vec spec.MergeVector, wantStateJSON []byte, wantUnknown []string) {
+func assertEngineAgrees(t *testing.T, vec spec.MergeVector, wantStateJSON []byte, wantUnknown []spec.UnknownOp) {
 	t.Helper()
 
 	var rules []writ.Rule
@@ -198,7 +201,7 @@ func assertEngineAgrees(t *testing.T, vec spec.MergeVector, wantStateJSON []byte
 		ops = append(ops, codec.Op{
 			Envelope: codec.Envelope{
 				ObjectID:   op.ObjectID,
-				ObjectType: "merge-vector",
+				ObjectType: op.ObjectType,
 				OpType:     op.OpType,
 				OpVersion:  op.OpVersion,
 				Body:       body,
@@ -223,12 +226,20 @@ func assertEngineAgrees(t *testing.T, vec spec.MergeVector, wantStateJSON []byte
 			string(gotJSON), string(wantStateJSON))
 	}
 
-	gotUnknown := []string{}
-	for _, u := range res.UnknownOps {
-		gotUnknown = append(gotUnknown, u.Commit)
+	gotUnknown := make([]spec.UnknownOp, len(res.UnknownOps))
+	for i, u := range res.UnknownOps {
+		gotUnknown[i] = spec.UnknownOp{
+			Commit:     u.Commit,
+			ObjectType: u.ObjectType,
+			OpType:     u.OpType,
+			OpVersion:  u.OpVersion,
+		}
+	}
+	if wantUnknown == nil {
+		wantUnknown = []spec.UnknownOp{}
 	}
 	if !reflect.DeepEqual(gotUnknown, wantUnknown) {
-		t.Errorf("engine unknown ops differ from the reference:\n engine: %v\n ref:    %v",
+		t.Errorf("engine unknown ops differ from the reference:\n engine: %+v\n ref:    %+v",
 			gotUnknown, wantUnknown)
 	}
 }

@@ -303,21 +303,22 @@ func (d *DB) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 
 	// Batch load unknown_ops
 	unknownMap := make(map[string][]state.UnknownOp)
-	uRows, err := d.queryIn("SELECT object_id, op_id, op_type, op_version FROM unknown_ops WHERE object_id IN (?) ORDER BY object_id ASC, op_index ASC", objectIDs)
+	uRows, err := d.queryIn("SELECT object_id, op_id, object_type, op_type, op_version FROM unknown_ops WHERE object_id IN (?) ORDER BY object_id ASC, op_index ASC", objectIDs)
 	if err != nil {
 		return nil, fmt.Errorf("projection: query unknown_ops: %w", err)
 	}
 	for uRows.Next() {
-		var objID, opID, opType string
+		var objID, opID, objType, opType string
 		var opVersion int64
-		if err := uRows.Scan(&objID, &opID, &opType, &opVersion); err != nil {
+		if err := uRows.Scan(&objID, &opID, &objType, &opType, &opVersion); err != nil {
 			uRows.Close()
 			return nil, fmt.Errorf("projection: scan unknown op: %w", err)
 		}
 		unknownMap[objID] = append(unknownMap[objID], state.UnknownOp{
-			Commit:    opID,
-			OpType:    opType,
-			OpVersion: opVersion,
+			Commit:     opID,
+			ObjectType: objType,
+			OpType:     opType,
+			OpVersion:  opVersion,
 		})
 	}
 	uRows.Close()
@@ -513,21 +514,22 @@ func (d *DB) Issues(f IssueFilter) ([]IssueResult, error) {
 
 	// Batch load unknown_ops
 	unknownMap := make(map[string][]state.UnknownOp)
-	uRows, err := d.queryIn("SELECT object_id, op_id, op_type, op_version FROM unknown_ops WHERE object_id IN (?) ORDER BY object_id ASC, op_index ASC", objectIDs)
+	uRows, err := d.queryIn("SELECT object_id, op_id, object_type, op_type, op_version FROM unknown_ops WHERE object_id IN (?) ORDER BY object_id ASC, op_index ASC", objectIDs)
 	if err != nil {
 		return nil, fmt.Errorf("projection: query unknown_ops: %w", err)
 	}
 	for uRows.Next() {
-		var objID, opID, opType string
+		var objID, opID, objType, opType string
 		var opVersion int64
-		if err := uRows.Scan(&objID, &opID, &opType, &opVersion); err != nil {
+		if err := uRows.Scan(&objID, &opID, &objType, &opType, &opVersion); err != nil {
 			uRows.Close()
 			return nil, fmt.Errorf("projection: scan unknown op: %w", err)
 		}
 		unknownMap[objID] = append(unknownMap[objID], state.UnknownOp{
-			Commit:    opID,
-			OpType:    opType,
-			OpVersion: opVersion,
+			Commit:     opID,
+			ObjectType: objType,
+			OpType:     opType,
+			OpVersion:  opVersion,
 		})
 	}
 	uRows.Close()
@@ -666,21 +668,22 @@ func (d *DB) Comments(f CommentFilter) ([]CommentResult, error) {
 
 	// Batch load unknown_ops
 	unknownMap := make(map[string][]state.UnknownOp)
-	uRows, err := d.queryIn("SELECT object_id, op_id, op_type, op_version FROM unknown_ops WHERE object_id IN (?) ORDER BY object_id ASC, op_index ASC", objectIDs)
+	uRows, err := d.queryIn("SELECT object_id, op_id, object_type, op_type, op_version FROM unknown_ops WHERE object_id IN (?) ORDER BY object_id ASC, op_index ASC", objectIDs)
 	if err != nil {
 		return nil, fmt.Errorf("projection: query unknown_ops: %w", err)
 	}
 	for uRows.Next() {
-		var objID, opID, opType string
+		var objID, opID, objType, opType string
 		var opVersion int64
-		if err := uRows.Scan(&objID, &opID, &opType, &opVersion); err != nil {
+		if err := uRows.Scan(&objID, &opID, &objType, &opType, &opVersion); err != nil {
 			uRows.Close()
 			return nil, fmt.Errorf("projection: scan unknown op: %w", err)
 		}
 		unknownMap[objID] = append(unknownMap[objID], state.UnknownOp{
-			Commit:    opID,
-			OpType:    opType,
-			OpVersion: opVersion,
+			Commit:     opID,
+			ObjectType: objType,
+			OpType:     opType,
+			OpVersion:  opVersion,
 		})
 	}
 	uRows.Close()
@@ -1297,21 +1300,22 @@ func (d *DB) Review(objectID string) (ReviewResult, error) {
 	}
 
 	var unknownOps []state.UnknownOp
-	uRows, err := d.db.Query("SELECT op_id, op_type, op_version FROM unknown_ops WHERE object_id = ? ORDER BY op_index ASC", objectID)
+	uRows, err := d.db.Query("SELECT op_id, object_type, op_type, op_version FROM unknown_ops WHERE object_id = ? ORDER BY op_index ASC", objectID)
 	if err != nil {
 		return ReviewResult{}, fmt.Errorf("projection: query unknown_ops: %w", err)
 	}
 	defer uRows.Close()
 	for uRows.Next() {
-		var opID, opType string
+		var opID, objType, opType string
 		var opVersion int64
-		if err := uRows.Scan(&opID, &opType, &opVersion); err != nil {
+		if err := uRows.Scan(&opID, &objType, &opType, &opVersion); err != nil {
 			return ReviewResult{}, fmt.Errorf("projection: scan unknown op: %w", err)
 		}
 		unknownOps = append(unknownOps, state.UnknownOp{
-			Commit:    opID,
-			OpType:    opType,
-			OpVersion: opVersion,
+			Commit:     opID,
+			ObjectType: objType,
+			OpType:     opType,
+			OpVersion:  opVersion,
 		})
 	}
 	if err := uRows.Err(); err != nil {
@@ -1431,21 +1435,22 @@ func (d *DB) Issue(objectID string) (IssueResult, error) {
 	}
 
 	var unknownOps []state.UnknownOp
-	uRows, err := d.db.Query("SELECT op_id, op_type, op_version FROM unknown_ops WHERE object_id = ? ORDER BY op_index ASC", objectID)
+	uRows, err := d.db.Query("SELECT op_id, object_type, op_type, op_version FROM unknown_ops WHERE object_id = ? ORDER BY op_index ASC", objectID)
 	if err != nil {
 		return IssueResult{}, fmt.Errorf("projection: query unknown_ops: %w", err)
 	}
 	defer uRows.Close()
 	for uRows.Next() {
-		var opID, opType string
+		var opID, objType, opType string
 		var opVersion int64
-		if err := uRows.Scan(&opID, &opType, &opVersion); err != nil {
+		if err := uRows.Scan(&opID, &objType, &opType, &opVersion); err != nil {
 			return IssueResult{}, fmt.Errorf("projection: scan unknown op: %w", err)
 		}
 		unknownOps = append(unknownOps, state.UnknownOp{
-			Commit:    opID,
-			OpType:    opType,
-			OpVersion: opVersion,
+			Commit:     opID,
+			ObjectType: objType,
+			OpType:     opType,
+			OpVersion:  opVersion,
 		})
 	}
 	if err := uRows.Err(); err != nil {
@@ -1525,21 +1530,22 @@ func (d *DB) Repos() ([]state.RepoEntry, error) {
 
 	// Batch load unknown_ops
 	unknownMap := make(map[string][]state.UnknownOp)
-	uRows, err := d.queryIn("SELECT object_id, op_id, op_type, op_version FROM unknown_ops WHERE object_id IN (?) ORDER BY object_id ASC, op_index ASC", objectIDs)
+	uRows, err := d.queryIn("SELECT object_id, op_id, object_type, op_type, op_version FROM unknown_ops WHERE object_id IN (?) ORDER BY object_id ASC, op_index ASC", objectIDs)
 	if err != nil {
 		return nil, fmt.Errorf("projection: query unknown_ops: %w", err)
 	}
 	for uRows.Next() {
-		var objID, opID, opType string
+		var objID, opID, objType, opType string
 		var opVersion int64
-		if err := uRows.Scan(&objID, &opID, &opType, &opVersion); err != nil {
+		if err := uRows.Scan(&objID, &opID, &objType, &opType, &opVersion); err != nil {
 			uRows.Close()
 			return nil, fmt.Errorf("projection: scan unknown op: %w", err)
 		}
 		unknownMap[objID] = append(unknownMap[objID], state.UnknownOp{
-			Commit:    opID,
-			OpType:    opType,
-			OpVersion: opVersion,
+			Commit:     opID,
+			ObjectType: objType,
+			OpType:     opType,
+			OpVersion:  opVersion,
 		})
 	}
 	uRows.Close()
@@ -1602,21 +1608,22 @@ func (d *DB) Repo(objectID string) (state.RepoEntry, error) {
 	}
 
 	var unknownOps []state.UnknownOp
-	uRows, err := d.db.Query("SELECT op_id, op_type, op_version FROM unknown_ops WHERE object_id = ? ORDER BY op_index ASC", objectID)
+	uRows, err := d.db.Query("SELECT op_id, object_type, op_type, op_version FROM unknown_ops WHERE object_id = ? ORDER BY op_index ASC", objectID)
 	if err != nil {
 		return state.RepoEntry{}, fmt.Errorf("projection: query unknown_ops: %w", err)
 	}
 	defer uRows.Close()
 	for uRows.Next() {
-		var opID, opType string
+		var opID, objType, opType string
 		var opVersion int64
-		if err := uRows.Scan(&opID, &opType, &opVersion); err != nil {
+		if err := uRows.Scan(&opID, &objType, &opType, &opVersion); err != nil {
 			return state.RepoEntry{}, fmt.Errorf("projection: scan unknown op: %w", err)
 		}
 		unknownOps = append(unknownOps, state.UnknownOp{
-			Commit:    opID,
-			OpType:    opType,
-			OpVersion: opVersion,
+			Commit:     opID,
+			ObjectType: objType,
+			OpType:     opType,
+			OpVersion:  opVersion,
 		})
 	}
 	if err := uRows.Err(); err != nil {

@@ -32,18 +32,21 @@
         {
           "commit": "a23e174bb43ce3a520727918eed325dd11ad4c5a",
           "label": "bob-unknown-op-type",
+          "object_type": "review",
           "op_type": "archive",
           "op_version": 1
         },
         {
           "commit": "637142a214438e299cd8b145809fc2ec28a5c315",
           "label": "alice-nested-body",
+          "object_type": "comment",
           "op_type": "post",
           "op_version": 1
         },
         {
           "commit": "5fc45d99af1ec746b9f684b96bd18b4af431ad0a",
           "label": "bob-unknown-body-field",
+          "object_type": "review",
           "op_type": "close",
           "op_version": 1
         }
@@ -64,6 +67,7 @@
         {
           "commit": "c82adc77f0882af189ed84b86a09208375a785c1",
           "label": "alice-unknown-object",
+          "object_type": "telemetry",
           "op_type": "emit",
           "op_version": 1
         }

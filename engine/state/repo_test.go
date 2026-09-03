@@ -214,7 +214,7 @@ func TestFoldRepoUnknownOpVersionAndType(t *testing.T) {
 	if state.Slug != "writ" {
 		t.Errorf("slug mismatch: got %q, want 'writ'", state.Slug)
 	}
-	if len(state.UnknownOps) != 1 || state.UnknownOps[0].Commit != "op-v2" {
+	if len(state.UnknownOps) != 1 || state.UnknownOps[0].Commit != "op-v2" || state.UnknownOps[0].ObjectType != "repo" {
 		t.Errorf("unknown_ops mismatch: %+v", state.UnknownOps)
 	}
 }

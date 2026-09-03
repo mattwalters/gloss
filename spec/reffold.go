@@ -596,17 +596,26 @@ func BuildReachabilityMap(ops []MergeOp, inSet map[string]bool) map[string]map[s
 	return ancestors
 }
 
+// UnknownOp records an operation that was preserved in the DAG and participated
+// in ordering and ancestry, but contributed no field writes per FC-5.
+type UnknownOp struct {
+	Commit     string `json:"commit"`
+	ObjectType string `json:"object_type"`
+	OpType     string `json:"op_type"`
+	OpVersion  int64  `json:"op_version"`
+}
+
 // FoldResult is the output of the reference fold: the materialized state, and
 // the operations that contributed nothing to it.
 type FoldResult struct {
 	// State is the folded state, keyed by field name.
 	State map[string]any
-	// UnknownOps lists, in total order, the ids of operations that were
+	// UnknownOps lists, in total order, the operations that were
 	// preserved in the DAG and participated in ordering and ancestry but
 	// contributed no field writes: operations matching no declared rule
 	// (spec/fold.md §7) and operations a declared rule found uninterpretable
 	// (spec/fold.md §7.1).
-	UnknownOps []string
+	UnknownOps []UnknownOp
 }
 
 // uninterpretable reports whether an operation is uninterpretable because a
@@ -846,7 +855,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 	// calculation — and neither is an error. One bad op costs that op, never
 	// the object.
 	rejected := make(map[string]bool)
-	var unknownOps []string
+	var unknownOps []UnknownOp
 	var reduceOrder []string
 	for _, id := range totalOrder {
 		op := opMap[id]
@@ -864,7 +873,12 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 		if known {
 			reduceOrder = append(reduceOrder, id)
 		} else {
-			unknownOps = append(unknownOps, id)
+			unknownOps = append(unknownOps, UnknownOp{
+				Commit:     op.ID,
+				ObjectType: op.ObjectType,
+				OpType:     op.OpType,
+				OpVersion:  op.OpVersion,
+			})
 		}
 	}
 

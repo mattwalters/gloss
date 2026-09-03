@@ -116,7 +116,7 @@ Folded state MUST surface uninterpretable ops as an explicit, opaque list rather
 than skipping them silently. For each uninterpretable op encountered in an object's
 DAG, the folded object MUST expose a record containing:
 
-- `op_id`: the commit SHA of the op
+- `op_id`: the commit SHA of the op (carried as `commit` in Go structs and JSON serialization, matching `OpRef.commit`, because in Writ's commit-backed storage an operation's unique identifier is its git commit SHA)
 - `object_type`: the object type string from the payload
 - `op_type`: the op type string from the payload
 - `op_version`: the integer version from the payload
@@ -135,20 +135,6 @@ change the record.
 `FC-5` below is the single definition of what that record carries. No other
 section of this document and no section of `spec/fold.md` enumerates it: a
 record specified in two places is a record that will be specified two ways.
-
-> **Known non-conformance.** This repository's five implementations of the
-> record do not satisfy `FC-5`, and they do not all miss it by the same margin.
-> `writ.UnknownOp`, the generic driver's `UnknownOp`, the `--json` shape in
-> `cmd/writ/internal/wire` and the golden shape in `spec/fixtures` each carry
-> the op id (spelled `commit`), `op_type` and `op_version`; the golden adds a
-> `label`, which is a fixture annotation rather than part of the record. The
-> reference fold carries less than any of them: its `UnknownOps` is a list of
-> op ids and nothing else — no `op_type`, no `op_version`. None of the five
-> carries `object_type`. The rule is right and the code is wrong; the
-> rule is not being softened to match. Tracked as `WRIT-155`, which is where the
-> cost of closing it is recorded. The gap predates the uninterpretable-body
-> population and is not introduced by it, but that population widened what flows
-> through the record, so it is stated here rather than left implicit.
 
 ### Stale vs. corrupt state
 
@@ -229,7 +215,7 @@ MUST NOT:
 | `FC-2` | Unknown top-level fields in `op.json` MUST be preserved byte-for-byte and ignored by readers. | Codec / Envelope |
 | `FC-3` | Unknown fields inside `body` (including arbitrarily nested objects and arrays) MUST be preserved byte-for-byte and ignored by readers. | Codec / Payload |
 | `FC-4` | Uninterpretable ops MUST NOT alter or perturb the folded value of any field understood by the reader. | Fold |
-| `FC-5` | Folded state MUST surface each uninterpretable op as an opaque record containing `op_id`, `object_type`, `op_type`, and `op_version`. | Fold / Projection |
+| `FC-5` | Folded state MUST surface each uninterpretable op as an opaque record containing `op_id` (carried as `commit` in Go structs and JSON serialization, matching `OpRef.commit`, because in Writ's commit-backed storage an op ID is its commit SHA), `object_type`, `op_type`, and `op_version`. | Fold / Projection |
 | `FC-6` | Additive optional fields MUST NOT bump `op_version`. | Schema / Evolution |
 | `FC-7` | Breaking schema changes, altered field semantics, changed defaults, or modified fold behavior MUST bump `op_version` to the next monotonic integer. | Schema / Evolution |
 | `FC-8` | `op_version` numbers MUST be strictly monotonic per `(object_type, op_type)` and never reused; op type names MUST NOT be repurposed for different semantics. | Schema / Evolution |

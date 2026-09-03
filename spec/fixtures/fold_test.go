@@ -52,10 +52,11 @@ type FoldOpOrderEntry struct {
 }
 
 type FoldUnknownOp struct {
-	Commit    string `json:"commit"`
-	Label     string `json:"label,omitempty"`
-	OpType    string `json:"op_type"`
-	OpVersion int64  `json:"op_version"`
+	Commit     string `json:"commit"`
+	Label      string `json:"label,omitempty"`
+	ObjectType string `json:"object_type"`
+	OpType     string `json:"op_type"`
+	OpVersion  int64  `json:"op_version"`
 }
 
 func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
@@ -166,12 +167,13 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 			}
 
 			mergeOps = append(mergeOps, spec.MergeOp{
-				ID:        cop.ID,
-				Parents:   cop.Parents,
-				Time:      cop.Author.When.UTC().Unix(),
-				ObjectID:  cop.ObjectID,
-				OpType:    cop.OpType,
-				OpVersion: cop.OpVersion,
+				ID:         cop.ID,
+				Parents:    cop.Parents,
+				Time:       cop.Author.When.UTC().Unix(),
+				ObjectID:   cop.ObjectID,
+				ObjectType: cop.ObjectType,
+				OpType:     cop.OpType,
+				OpVersion:  cop.OpVersion,
 				Author: spec.MergeAuthor{
 					Name:  cop.Author.Name,
 					Email: cop.Author.Email,
@@ -212,16 +214,13 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 			byID[cop.ID] = cop
 		}
 		var unknownOps []FoldUnknownOp
-		for _, id := range folded.UnknownOps {
-			cop, ok := byID[id]
-			if !ok {
-				return nil, fmt.Errorf("fold quarantined op %s, which is not in the input set for object %s", id, objID)
-			}
+		for _, u := range folded.UnknownOps {
 			unknownOps = append(unknownOps, FoldUnknownOp{
-				Commit:    cop.ID,
-				Label:     shaToLabel[cop.ID],
-				OpType:    cop.OpType,
-				OpVersion: cop.OpVersion,
+				Commit:     u.Commit,
+				Label:      shaToLabel[u.Commit],
+				ObjectType: u.ObjectType,
+				OpType:     u.OpType,
+				OpVersion:  u.OpVersion,
 			})
 		}
 
@@ -279,10 +278,11 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 				len(engineRes.UnknownOps), objID, fix.Name, len(folded.UnknownOps),
 				engineRes.UnknownOps, folded.UnknownOps)
 		}
-		for i, u := range engineRes.UnknownOps {
-			if u.Commit != folded.UnknownOps[i] {
-				t.Fatalf("engine UnknownOps[%d] mismatch for %s in %s: got %s, want %s",
-					i, objID, fix.Name, u.Commit, folded.UnknownOps[i])
+		for i, engU := range engineRes.UnknownOps {
+			refU := folded.UnknownOps[i]
+			if engU.Commit != refU.Commit || engU.ObjectType != refU.ObjectType || engU.OpType != refU.OpType || engU.OpVersion != refU.OpVersion {
+				t.Fatalf("engine UnknownOps[%d] mismatch for %s in %s:\n got: %+v\nwant: %+v",
+					i, objID, fix.Name, engU, refU)
 			}
 		}
 

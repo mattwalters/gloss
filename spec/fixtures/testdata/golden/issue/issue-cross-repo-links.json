@@ -16,11 +16,13 @@
         "unknown_ops": [
           {
             "commit": "b9690b6c16601effee63e62bbac007aab96b4183",
+            "object_type": "issue",
             "op_type": "archive",
             "op_version": 1
           },
           {
             "commit": "fe4c47e589d216d03da88094580794d39183660e",
+            "object_type": "issue",
             "op_type": "update",
             "op_version": 2
           }

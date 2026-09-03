@@ -126,8 +126,8 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 
 		for i, u := range review.UnknownOps {
 			_, err = tx.Exec(
-				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?)",
-				objectID, u.Commit, u.OpType, u.OpVersion, i,
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, object_type, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?, ?)",
+				objectID, u.Commit, u.ObjectType, u.OpType, u.OpVersion, i,
 			)
 			if err != nil {
 				return fmt.Errorf("projection: insert unknown op %s: %w", u.Commit, err)
@@ -173,8 +173,8 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 
 		for i, u := range comment.UnknownOps {
 			_, err = tx.Exec(
-				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?)",
-				objectID, u.Commit, u.OpType, u.OpVersion, i,
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, object_type, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?, ?)",
+				objectID, u.Commit, u.ObjectType, u.OpType, u.OpVersion, i,
 			)
 			if err != nil {
 				return fmt.Errorf("projection: insert unknown op %s: %w", u.Commit, err)
@@ -227,8 +227,8 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 
 		for i, u := range issue.UnknownOps {
 			_, err = tx.Exec(
-				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?)",
-				objectID, u.Commit, u.OpType, u.OpVersion, i,
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, object_type, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?, ?)",
+				objectID, u.Commit, u.ObjectType, u.OpType, u.OpVersion, i,
 			)
 			if err != nil {
 				return fmt.Errorf("projection: insert unknown op %s: %w", u.Commit, err)
@@ -261,8 +261,8 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 
 		for i, u := range project.UnknownOps {
 			_, err = tx.Exec(
-				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?)",
-				objectID, u.Commit, u.OpType, u.OpVersion, i,
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, object_type, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?, ?)",
+				objectID, u.Commit, u.ObjectType, u.OpType, u.OpVersion, i,
 			)
 			if err != nil {
 				return fmt.Errorf("projection: insert unknown op %s: %w", u.Commit, err)
@@ -295,8 +295,8 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 
 		for i, u := range cycle.UnknownOps {
 			_, err = tx.Exec(
-				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?)",
-				objectID, u.Commit, u.OpType, u.OpVersion, i,
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, object_type, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?, ?)",
+				objectID, u.Commit, u.ObjectType, u.OpType, u.OpVersion, i,
 			)
 			if err != nil {
 				return fmt.Errorf("projection: insert unknown op %s: %w", u.Commit, err)
@@ -334,8 +334,8 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 
 		for i, u := range repoEntry.UnknownOps {
 			_, err = tx.Exec(
-				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?)",
-				objectID, u.Commit, u.OpType, u.OpVersion, i,
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, object_type, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?, ?)",
+				objectID, u.Commit, u.ObjectType, u.OpType, u.OpVersion, i,
 			)
 			if err != nil {
 				return fmt.Errorf("projection: insert unknown op %s: %w", u.Commit, err)
@@ -346,8 +346,8 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 		// Preserved-but-unreduced ops: record in unknown_ops
 		for i, op := range ops {
 			_, err = tx.Exec(
-				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?)",
-				objectID, op.ID, op.OpType, op.OpVersion, i,
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, object_type, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?, ?)",
+				objectID, op.ID, op.ObjectType, op.OpType, op.OpVersion, i,
 			)
 			if err != nil {
 				return fmt.Errorf("projection: insert unreduced op %s: %w", op.ID, err)

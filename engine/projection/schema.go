@@ -10,8 +10,8 @@ package projection
 //
 // 7: WRIT-117 pinned the person-identifier folding algorithm to NFC, Unicode
 // default case folding, NFC (spec/identifiers.md). Also covers WRIT-102, which
-// made identifiers scheme-prefixed without bumping.
-const schemaVersion = 7
+// 8: WRIT-155 added object_type column to unknown_ops table (spec FC-5).
+const schemaVersion = 8
 
 var projectionTables = []string{
 	"meta",
@@ -122,6 +122,7 @@ CREATE INDEX IF NOT EXISTS idx_objects_object_type ON objects(object_type);
 CREATE TABLE IF NOT EXISTS unknown_ops (
     object_id TEXT NOT NULL,
     op_id TEXT NOT NULL,
+    object_type TEXT NOT NULL,
     op_type TEXT NOT NULL,
     op_version INTEGER NOT NULL,
     op_index INTEGER NOT NULL DEFAULT 0,
