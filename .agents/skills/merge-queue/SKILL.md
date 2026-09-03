@@ -68,14 +68,22 @@ not a reason to serialize — that's exactly what the rebase absorbs.
    BRANCH, PR. It rebases onto current `origin/main`, resolves any
    purely mechanical conflict itself, pushes, and watches CI under the
    same three-attempt rule as implementing.
-4. **`RESULT: green`** → mark the PR ready and
-   `gh pr merge <number> --squash --delete-branch`. This repo doesn't
-   auto-delete branches on merge, so pass the flag yourself every
-   time — the squash commit is all of the branch's content that
-   survives, and a remote branch with nothing left to give is just
-   clutter. Move the ticket to `Done` (a GitHub automation may race you
-   there, which is harmless) and delete the worktree
-   (`git worktree remove <path>`). Move to the next PR.
+4. **`RESULT: green`** → mark the PR ready and merge it, then delete
+   the now-redundant remote branch as a separate step:
+
+       gh pr merge <number> --squash
+       git push origin --delete <branch>
+
+   Don't use `gh pr merge`'s own `--delete-branch` flag: it tries to
+   switch the local checkout to the base branch first, which fails
+   whenever that branch is checked out in another worktree — which,
+   in this pipeline, it always is. The two-command form never touches
+   the local checkout. This repo doesn't auto-delete branches on
+   merge, so do it every time — the squash commit is all of the
+   branch's content that survives, and a remote branch with nothing
+   left to give is just clutter. Move the ticket to `Done` (a GitHub
+   automation may race you there, which is harmless) and delete the
+   worktree (`git worktree remove <path>`). Move to the next PR.
 5. **`RESULT: blocked`** — the resolver found a conflict that needs new
    logic or a judgment call, not just combining both sides. Stop this
    PR's merge, tell the human exactly what it found (files, the nature

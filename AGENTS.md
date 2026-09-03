@@ -46,6 +46,12 @@ stubs alone. Same pattern as the rest of the studio.
   landed without one is `git commit --amend -s` away from fixed. A
   fresh worktree doesn't inherit this config — check it before your
   first commit there, not after CI fails.
+- Rebase a branch onto current `origin/main` before opening or
+  force-pushing its PR — don't trust a branch just because you haven't
+  touched it, or its worktree, in a while. Other tickets merge to
+  `main` concurrently, so a branch (and its diff against `main`) goes
+  stale fast; this applies whether a subagent is doing the rebase as
+  part of implementing/reviewing/merging, or you're driving directly.
 
 ## Layout
 
