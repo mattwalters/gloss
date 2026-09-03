@@ -41,6 +41,12 @@ Three decisions shape what the workspace-home is:
 
 Homing is the write side only. On the read side, **multi-repo aggregation is first-class client behavior**: a client folds `refs/writ/*` from every repo in the workspace registry into one projection, so a team's views are additive across all its repos regardless of where any object homes. This is pure projection/client work — the fold is unchanged, per-repo, and fixture-pinned.
 
+### Public issue intake: a bridge, not a format feature (decided, WRIT-111)
+
+Writ structurally does not solve anonymous public issue intake at the format level. Writing any writ op requires push access to `refs/writ/<writer-id>/*`. A stranger filing a bug on an open-source project does not have push access, and Writ provides no authorization model or anonymous write path at the spec layer.
+
+The settled answer is an **intake bot or bridge**: a designated writer with push access that accepts reports from a public webhook, form, email, or forge issues, and writes them into the workspace repository as ordinary signed ops. To attribute external reporters truthfully without synthesizing fake email addresses, bots use the `user:` person identifier scheme (such as `user:github-octocat` or `user:<service>-<id>`) defined in `spec/identifiers.md` (WRIT-102). Alternatively, open-source projects may keep GitHub Issues as their public front door and bridge accepted issues into Writ.
+
 ### Anchoring (the hard problem)
 
 Line comments anchor to **content** (blob hash + hunk context), not line numbers, so they survive force-pushes and rebases as well as possible; when re-anchoring fails, comments degrade to "orphaned but preserved," never silently lost. The format (`spec/anchors.md`, WRIT-13) is dual-sided, following Radicle's `CodeLocation`: an anchor carries an `old` and/or `new` side — each a (commit, path, blob, line-range, captured-context) tuple — because deleted-line comments and GitHub's cross-side ranges are not representable as a single blob position. This gets its own spec section and its own fixture family; expect iteration.

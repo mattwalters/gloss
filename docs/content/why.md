@@ -242,6 +242,11 @@ No binary storage format for canonical data. Binary means no diff, no merge,
 no delta compression — and git *is* the append-only log already. Commits are
 the entries; refs are the head pointers.
 
+No anonymous intake format or in-git public issue submissions. Writing an
+operation requires push access to a `refs/writ/*` namespace, which public bug
+reporters do not have. Writ does not build an anonymous write protocol or
+authorization layer; public intake belongs in a bridge or intake bot.
+
 ## What's hard, and what isn't solved
 
 **Comment anchoring across force-pushes** is the genuinely hard problem in
@@ -267,6 +272,17 @@ people quickly is the axis where a server-backed tool wins today.
 **Identity mapping** from signing keys to directory identities is deliberately
 out of spec scope, and it is exactly what an organization deploying this would
 ask about first.
+
+**Public issue intake.** Writing a writ operation requires push access to
+`refs/writ/<writer-id>/*`. A stranger filing a bug on an open-source project
+does not have it. Writ is built for the work of a team that already has commit
+access; it structurally cannot let unauthenticated strangers write ops without
+an account. The answer is an intake bot — a writer with push credentials that
+accepts reports from a public webhook, form, or email, attributing reporters
+truthfully via `user:` person identifiers (such as `user:github-octocat`)
+without inventing fake email addresses. For many open-source projects, the
+honest answer is to keep GitHub Issues as the public front door and use Writ
+for everything behind it.
 
 ## The spec is the fixtures
 
