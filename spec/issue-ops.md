@@ -360,8 +360,8 @@ A Linear `Issue` maps to an `issue` collaborative object (`object_type: "issue"`
 | `sortOrder` | position string | `lww` | Fractional indexing position string per WRIT-106 and WRIT-108. |
 | `assignee` / `assignees` | `assign.add` / `assign.remove` | `set-observed-remove` | Scheme-prefixed person identifiers per §Identity Mapping. |
 | `labels` | `label.add` / `label.remove` | `set-observed-remove` | Label name strings. |
-| `relations` (`blocks`, `relatedTo`, `duplicateOf`) | `link` op | `keyed-lww` | `relation: "blocks"`, `"relates"`, `"duplicate"`. |
-| `parent` / `sub-issues` | `link` op | `keyed-lww` | `relation: "parent"` on child issue targeting parent issue ID. |
+| `relations` (`blocks`, `relatedTo`, `duplicateOf`) | `link` op | `keyed-lww` | Target `link` relation: `"blocks"`, `"relates"`, `"duplicate"`. For basic v1 schema compatibility (where `relation` is constrained to `"fixes"`, `"relates"`, `"none"`), relations other than `"fixes"` MUST degrade to `"relates"`. |
+| `parent` / `sub-issues` | `link` op | `keyed-lww` | Target `link` relation: `"parent"` on child issue targeting parent issue ID. For basic v1 schema compatibility, `relation` MUST degrade to `"relates"`. |
 | `identifier` (e.g. `WRIT-93`) | `linear:<identifier>` label & description header | `set-observed-remove` / `lww` | Preserved via `linear:<identifier>` label and description provenance header per §Identifier Preservation. |
 | `createdAt`, `updatedAt` | Op commit author timestamps | — | Recorded on op commits. |
 | `creator` | Op commit author | — | Recorded on initial create op commit (or bridge committer with provenance). |
@@ -383,7 +383,7 @@ A Linear `Comment` maps to a `comment` collaborative object (`object_type: "comm
 `spec/comments.md`):
 
 - `subject`: `{"object_type": "issue", "object_id": <issue-id>}`.
-- `body`: Comment Markdown text with Linear XML tags rewritten per §Markdown Dialect Rewriting.
+- `text`: Comment Markdown text with Linear XML tags rewritten per §Markdown Dialect Rewriting.
 - Threading: Replies map to `comment` objects with `in_reply_to` pointing to the
   parent comment object ID.
 - `createdAt`, `updatedAt`: Op commit author timestamps.
@@ -394,7 +394,8 @@ A Linear `Document` associated with an issue maps to a `document` collaborative
 object (WRIT-105):
 
 - Attached to the issue via a `link` op targeting the document's object ID with
-  `relation: "implementation-plan"` or `relation: "relates"`.
+  `relation: "implementation-plan"` or `relation: "relates"`. For basic v1 schema
+  compatibility, `relation` MUST degrade to `"relates"`.
 
 #### 5. Projects
 
@@ -420,11 +421,18 @@ rules:
    folding). Example: `email:alice@example.com`.
 2. **User without email:** When no email address is available (e.g. users
    authenticated via third-party SAML without email disclosure, or deactivated
-   accounts), the importer MUST emit `user:<linear-handle>` (or the slugified user
-   identifier if no handle exists). Example: `user:bob`.
+   accounts), the importer MUST emit `user:<normalized-handle>` (or the slugified user
+   identifier if no handle exists), where the handle is normalized by the value
+   folding algorithm in `spec/identifiers.md` §The value folding algorithm
+   (trimmed whitespace, lowercase NFC, Unicode default case folding). Example: `user:bob`.
 3. **System and bot actors:** Automated Linear integrations and bot users MUST
-   map to `user:linear` or `user:<bot-name>`.
+   map to `user:linear` or `user:<normalized-bot-name>`, where the bot name is
+   normalized by the value folding algorithm in `spec/identifiers.md` §The value
+   folding algorithm. Example: `user:linear`.
 4. **Validation and bounds:**
+   - Per `spec/identifiers.md` §The producer normalization rule, importers MUST
+     write person identifiers in normalized form; unnormalized identifiers MUST
+     NOT be written into op payloads.
    - Importers MUST NOT emit bare (colonless) strings; colonless strings are
      invalid person identifiers and are rejected by Writ schemas.
    - The scheme MUST match `^[a-z][a-z0-9+.-]*$` and be at most 32 characters.
@@ -465,7 +473,7 @@ original Linear identifier using two complementary mechanisms:
 1. **Indexable label:** Add a label formatted as `linear:<identifier>` (e.g.
    `linear:WRIT-93`, preserving the team prefix and issue number in uppercase ASCII
    for the key) via an `issue` `label` op (`add: ["linear:<identifier>"]`). This
-   enables fast index queries in the projection (`store.Query.Issues(filter.WithLabel("linear:WRIT-93"))`)
+   enables fast index queries in the projection (`store.Query.Issues(writ.IssueFilter{Label: []string{"linear:WRIT-93"}})`)
    without modifying the core issue schema.
 2. **Provenance header:** Prepend a provenance blockquote to the issue description:
    ```markdown
@@ -533,6 +541,10 @@ warn users about them:
   breach timestamps, and response timers are lost.
 - **Native cross-team DAG relations:** Cross-team dependency graphs degrade to
   unindexed external Markdown links.
+- **Granular link relations:** Under basic v1 schemas where `relation` is
+  constrained to `"fixes"`, `"relates"`, and `"none"`, fine-grained relations
+  (`"blocks"`, `"duplicate"`, `"parent"`, `"implementation-plan"`) degrade to
+  `"relates"`, losing directed dependency semantics.
 - **Entity internal UUIDs:** Linear's internal UUIDs on issues, comments, labels,
   and tags are replaced by Writ's 128-bit random IDs (though preserved in
   provenance headers and `linear:<key>` labels).
