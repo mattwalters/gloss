@@ -239,16 +239,13 @@ func TestRunIsDeterministic(t *testing.T) {
 	}
 }
 
-// Build constraints are ignored, so a //go:build ignore generator sitting in a
-// package directory is parsed like any other file. When it sorts ahead of the
-// real sources — g.go before main.go, or the common case of gen.go before
-// almost anything — the package name came from it and the listing became the
-// generator's public API. Refuse instead.
+// Non-test files in one directory disagreeing on their package name is an
+// error rather than a coin toss on whichever sorts first.
 func TestRunRejectsDisagreeingPackageNames(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, "go.mod"), "module example.com/m\n")
 	write(t, filepath.Join(root, "pkg", "gen.go"),
-		"//go:build ignore\n\npackage main\n\nfunc Generate() {}\n")
+		"package main\n\nfunc Generate() {}\n")
 	write(t, filepath.Join(root, "pkg", "real.go"), "package demo\n\nfunc Real() {}\n")
 
 	var out strings.Builder
@@ -261,6 +258,138 @@ func TestRunRejectsDisagreeingPackageNames(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "func Generate") {
 		t.Errorf("the generator's symbols reached the listing:\n%s", out.String())
+	}
+}
+
+func TestRunRejectsBuildConstraints(t *testing.T) {
+	tests := []struct {
+		name     string
+		file     string
+		content  string
+		wantFile string
+		wantSub  string
+	}{
+		{
+			name:     "go_build_ignore",
+			file:     "pkg/gen.go",
+			content:  "//go:build ignore\n\npackage demo\n\nfunc Generate() {}\n",
+			wantFile: "gen.go",
+			wantSub:  "//go:build ignore",
+		},
+		{
+			name:     "go_build_linux",
+			file:     "pkg/linux_tag.go",
+			content:  "//go:build linux\n\npackage demo\n\nfunc Linux() {}\n",
+			wantFile: "linux_tag.go",
+			wantSub:  "//go:build linux",
+		},
+		{
+			name:     "plus_build_legacy",
+			file:     "pkg/legacy.go",
+			content:  "// +build linux\n\npackage demo\n\nfunc Legacy() {}\n",
+			wantFile: "legacy.go",
+			wantSub:  "// +build linux",
+		},
+		{
+			name:     "goos_suffix",
+			file:     "pkg/file_linux.go",
+			content:  "package demo\n\nfunc Linux() {}\n",
+			wantFile: "file_linux.go",
+			wantSub:  `GOOS suffix "linux"`,
+		},
+		{
+			name:     "goarch_suffix",
+			file:     "pkg/file_amd64.go",
+			content:  "package demo\n\nfunc Amd64() {}\n",
+			wantFile: "file_amd64.go",
+			wantSub:  `GOARCH suffix "amd64"`,
+		},
+		{
+			name:     "goos_goarch_suffix",
+			file:     "pkg/file_linux_amd64.go",
+			content:  "package demo\n\nfunc LinuxAmd64() {}\n",
+			wantFile: "file_linux_amd64.go",
+			wantSub:  `GOOS/GOARCH suffix "linux_amd64"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			write(t, filepath.Join(root, "go.mod"), "module example.com/m\n")
+			write(t, filepath.Join(root, tt.file), tt.content)
+
+			var out strings.Builder
+			err := run(&out, filepath.Join(root, "pkg"))
+			if err == nil {
+				t.Fatalf("want error for build constraint, got none; output:\n%s", out.String())
+			}
+			if !strings.Contains(err.Error(), tt.wantFile) {
+				t.Errorf("error %q should name file %q", err.Error(), tt.wantFile)
+			}
+			if !strings.Contains(err.Error(), "build constraints are not supported") {
+				t.Errorf("error %q should state build constraints are not supported", err.Error())
+			}
+			if !strings.Contains(err.Error(), tt.wantSub) {
+				t.Errorf("error %q should contain %q", err.Error(), tt.wantSub)
+			}
+			if strings.Contains(out.String(), "\nfunc ") || strings.Contains(out.String(), "\npackage ") {
+				t.Errorf("symbols reached listing despite constraint error:\n%s", out.String())
+			}
+		})
+	}
+}
+
+func TestRunPermitsTestBuildConstraints(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "go.mod"), "module example.com/m\n")
+	write(t, filepath.Join(root, "pkg", "real.go"), "package demo\n\nfunc Real() {}\n")
+	write(t, filepath.Join(root, "pkg", "real_test.go"),
+		"//go:build race\n\npackage demo\n\nimport \"testing\"\n\nfunc TestRace(t *testing.T) {}\n")
+	write(t, filepath.Join(root, "pkg", "real_linux_test.go"),
+		"//go:build linux\n\npackage demo\n\nimport \"testing\"\n\nfunc TestLinux(t *testing.T) {}\n")
+	write(t, filepath.Join(root, "pkg", "real_linux_amd64_test.go"),
+		"// +build linux,amd64\n\npackage demo\n\nimport \"testing\"\n\nfunc TestLinuxAmd64(t *testing.T) {}\n")
+
+	var out strings.Builder
+	if err := run(&out, filepath.Join(root, "pkg")); err != nil {
+		t.Fatalf("run failed on package with tagged tests: %v", err)
+	}
+	if !strings.Contains(out.String(), "func Real()") {
+		t.Errorf("expected func Real() in output, got:\n%s", out.String())
+	}
+	if strings.Contains(out.String(), "Test") {
+		t.Errorf("test functions should not appear in output, got:\n%s", out.String())
+	}
+}
+
+func TestCheckFilenameConstraint(t *testing.T) {
+	tests := []struct {
+		path string
+		want string
+	}{
+		{"file_linux.go", `GOOS suffix "linux"`},
+		{"file_darwin.go", `GOOS suffix "darwin"`},
+		{"file_windows.go", `GOOS suffix "windows"`},
+		{"file_amd64.go", `GOARCH suffix "amd64"`},
+		{"file_arm64.go", `GOARCH suffix "arm64"`},
+		{"file_linux_amd64.go", `GOOS/GOARCH suffix "linux_amd64"`},
+		{"file_darwin_arm64.go", `GOOS/GOARCH suffix "darwin_arm64"`},
+		{"file_test.go", ""},
+		{"file_linux_test.go", ""},
+		{"file_linux_amd64_test.go", ""},
+		{"file.go", ""},
+		{"linux.go", ""},
+		{"amd64.go", ""},
+		{"file_bar.go", ""},
+		{"file_linux.txt", ""},
+	}
+
+	for _, tt := range tests {
+		got := checkFilenameConstraint(tt.path)
+		if got != tt.want {
+			t.Errorf("checkFilenameConstraint(%q) = %q, want %q", tt.path, got, tt.want)
+		}
 	}
 }
 
