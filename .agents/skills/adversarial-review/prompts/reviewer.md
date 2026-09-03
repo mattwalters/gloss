@@ -29,10 +29,20 @@ A clean round is a good round. Do not invent findings to justify the
 review; zero is an acceptable and expected answer for a small, correct
 change.
 
+Some things aren't a diff-level finding at all: the PR doesn't
+actually do what TICKET's brief describes, it's built on a base that's
+plainly diverged from what the brief assumed, or you notice a serious
+pre-existing bug the diff doesn't touch. Don't force these into
+major/medium/minor or invent a line in the diff to hang them on. Post
+one PR comment describing the mismatch, skip the usual severity count,
+and report back as blocked instead of scoring the round.
+
 Report back to the orchestrator in exactly this shape — one line per
 finding, no diffs:
 
     TICKET: <id>
     ROUND: <n>
-    FINDINGS: <count> (major: n, medium: n, minor: n)
+    RESULT: reviewed | blocked
+    FINDINGS: <count> (major: n, medium: n, minor: n) — omit if blocked
     - [major|medium|minor] <file>: <one-line failure scenario>
+    NOTES: <the mismatch, if blocked>

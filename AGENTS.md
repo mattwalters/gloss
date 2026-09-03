@@ -54,10 +54,14 @@ Planned monorepo layout (see `ARCHITECTURE.md` for the rationale):
 
 ## Workflow
 
-The pipeline is the `dispatch` skill (`.agents/skills/dispatch/`):
-batches of Linear team `WRIT` tickets run by an orchestrating agent
-through implementer, reviewer, and fixer subagents in detached git
-worktrees. Read its `SKILL.md` before changing how runs are queued or
-what a stage is expected to produce.
+The pipeline is three composable skills, each in `.agents/skills/`:
+`implement-ticket` takes one Linear WRIT ticket to a CI-green draft PR
+in a detached git worktree; `adversarial-review` runs reviewer/fixer
+rounds on an open PR to a mergeable or capped verdict; `dispatch`
+orchestrates a batch of tickets through both of those plus a
+human-approved merge queue. The first two stand alone for a single
+ticket a human is already driving; `dispatch` is for running the
+queue. Read a skill's `SKILL.md` before changing what its stage
+produces; read `dispatch`'s before changing how runs are queued.
 
 Build and test commands will be documented here once code exists.
