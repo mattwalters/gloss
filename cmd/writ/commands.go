@@ -41,6 +41,7 @@ var rootCommand = &command{
 	},
 	Subs: []*command{
 		initCmd,
+		commentCmd,
 		issueCmd,
 		reviewCmd,
 		syncCmd,
@@ -62,6 +63,55 @@ var initCmd = &command{
 	Examples: []string{
 		"writ init",
 		"writ init origin",
+	},
+}
+
+var commentCmd = &command{
+	Name:      "comment",
+	Short:     "Manage comments (edit, delete)",
+	UsageLine: "Usage: writ comment [-C <dir>] <subcommand> [arguments]",
+	Long:      "Manage comments on collaborative objects.",
+	Flags: []flagSpec{
+		{
+			Name:  "C",
+			Arg:   "<dir>",
+			Usage: "Run as if writ was started in <dir>",
+		},
+	},
+	Subs: []*command{
+		commentEditCmd,
+		commentDeleteCmd,
+	},
+}
+
+var commentEditCmd = &command{
+	Name:      "edit",
+	Short:     "Edit an existing comment",
+	UsageLine: "Usage: writ comment edit [-C <dir>] <id> -m <msg> [--json]",
+	Long:      "Edit the text of an existing comment.",
+	Flags: []flagSpec{
+		{Name: "C"},
+		{Name: "m"},
+		{Name: "json"},
+	},
+	Examples: []string{
+		`writ comment edit 01J8ABC -m "Updated comment text"`,
+		`writ comment edit 01J8ABC -m "Updated comment text" --json`,
+	},
+}
+
+var commentDeleteCmd = &command{
+	Name:      "delete",
+	Short:     "Delete a comment (tombstone)",
+	UsageLine: "Usage: writ comment delete [-C <dir>] <id> [--json]",
+	Long:      "Delete a comment by creating a tombstone operation.",
+	Flags: []flagSpec{
+		{Name: "C"},
+		{Name: "json"},
+	},
+	Examples: []string{
+		"writ comment delete 01J8ABC",
+		"writ comment delete 01J8ABC --json",
 	},
 }
 
@@ -466,6 +516,8 @@ var flagSetConstructors map[string]func() *flag.FlagSet
 func init() {
 	flagSetConstructors = map[string]func() *flag.FlagSet{
 		"init":           func() *flag.FlagSet { fs, _ := newInitFlagSet(""); return fs },
+		"comment edit":   func() *flag.FlagSet { fs, _ := newCommentEditFlagSet(""); return fs },
+		"comment delete": func() *flag.FlagSet { fs, _ := newCommentDeleteFlagSet(""); return fs },
 		"issue create":   func() *flag.FlagSet { fs, _ := newIssueCreateFlagSet(""); return fs },
 		"issue status":   func() *flag.FlagSet { fs, _ := newIssueStatusFlagSet(""); return fs },
 		"issue comment":  func() *flag.FlagSet { fs, _ := newIssueCommentFlagSet(""); return fs },

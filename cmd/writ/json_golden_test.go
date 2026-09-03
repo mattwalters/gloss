@@ -5,12 +5,18 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/spec/fixtures"
 )
+
+func maskGoldenTimestamps(data []byte) []byte {
+	re := regexp.MustCompile(`"(created_at|updated_at)":"[^"]+"`)
+	return re.ReplaceAll(data, []byte(`"$1":"2026-01-01T00:00:00Z"`))
+}
 
 func compareOrUpdateGolden(t *testing.T, goldenName string, got []byte) {
 	t.Helper()
@@ -200,6 +206,44 @@ func TestGolden_IssueLabel(t *testing.T) {
 	}
 
 	compareOrUpdateGolden(t, "issue_labels.json", stdout.Bytes())
+}
+
+func TestGolden_CommentEdit(t *testing.T) {
+	repoDir := loadFixtureRepo(t, "fold-comment-threads")
+	setupSigningKey(t, repoDir)
+
+	var initOut, initErr bytes.Buffer
+	code := run(context.Background(), []string{"init", "-C", repoDir}, &initOut, &initErr)
+	if code != 0 {
+		t.Fatalf("init failed: %s", initErr.String())
+	}
+
+	var stdout, stderr bytes.Buffer
+	code = run(context.Background(), []string{"comment", "edit", "-C", repoDir, "c-root", "-m", "Updated root comment for golden", "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("comment edit --json failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	compareOrUpdateGolden(t, "comment_edit.json", maskGoldenTimestamps(stdout.Bytes()))
+}
+
+func TestGolden_CommentDelete(t *testing.T) {
+	repoDir := loadFixtureRepo(t, "fold-comment-threads")
+	setupSigningKey(t, repoDir)
+
+	var initOut, initErr bytes.Buffer
+	code := run(context.Background(), []string{"init", "-C", repoDir}, &initOut, &initErr)
+	if code != 0 {
+		t.Fatalf("init failed: %s", initErr.String())
+	}
+
+	var stdout, stderr bytes.Buffer
+	code = run(context.Background(), []string{"comment", "delete", "-C", repoDir, "c-root", "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("comment delete --json failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	compareOrUpdateGolden(t, "comment_delete.json", maskGoldenTimestamps(stdout.Bytes()))
 }
 
 func TestGolden_SyncStatus(t *testing.T) {

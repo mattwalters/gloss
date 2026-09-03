@@ -10,6 +10,8 @@ slug: "cli"
 ## Table of Contents
 
 - [`writ init`](#writ-init)
+- [`writ comment edit`](#writ-comment-edit)
+- [`writ comment delete`](#writ-comment-delete)
 - [`writ issue create`](#writ-issue-create)
 - [`writ issue status`](#writ-issue-status)
 - [`writ issue comment`](#writ-issue-comment)
@@ -56,6 +58,59 @@ verifying SSH signing key configuration, and adding fetch refspecs for git remot
 ```bash
 writ init
 writ init origin
+```
+
+### `writ comment edit`
+
+Edit an existing comment
+
+#### Synopsis
+
+```console
+Usage: writ comment edit [-C <dir>] <id> -m <msg> [--json]
+```
+
+#### Description
+
+Edit the text of an existing comment.
+
+#### Flags
+
+- `-C <dir>`: Run as if writ was started in <dir>
+- `-m <msg>`: Comment message <msg>
+- `-json`: Output result as JSON
+
+#### Examples
+
+```bash
+writ comment edit 01J8ABC -m "Updated comment text"
+writ comment edit 01J8ABC -m "Updated comment text" --json
+```
+
+### `writ comment delete`
+
+Delete a comment (tombstone)
+
+#### Synopsis
+
+```console
+Usage: writ comment delete [-C <dir>] <id> [--json]
+```
+
+#### Description
+
+Delete a comment by creating a tombstone operation.
+
+#### Flags
+
+- `-C <dir>`: Run as if writ was started in <dir>
+- `-json`: Output result as JSON
+
+#### Examples
+
+```bash
+writ comment delete 01J8ABC
+writ comment delete 01J8ABC --json
 ```
 
 ### `writ issue create`

@@ -101,6 +101,33 @@ func resolveReviewID(ctx context.Context, store *writ.Store, prefix string) (str
 	return matches[0], nil
 }
 
+func resolveCommentID(ctx context.Context, store *writ.Store, prefix string) (string, error) {
+	if prefix == "" {
+		return "", fmt.Errorf("comment ID required")
+	}
+
+	comments, err := store.Query.Comments(writ.CommentFilter{IncludeDeleted: true})
+	if err != nil {
+		return "", err
+	}
+
+	var matches []string
+	for _, c := range comments {
+		if strings.HasPrefix(c.ObjectID, prefix) {
+			matches = append(matches, c.ObjectID)
+		}
+	}
+
+	if len(matches) == 0 {
+		return "", notFoundError{kind: "comment", id: prefix}
+	}
+	if len(matches) > 1 {
+		return "", fmt.Errorf("ambiguous comment ID prefix %q matches %d comments (%s)", prefix, len(matches), strings.Join(matches, ", "))
+	}
+
+	return matches[0], nil
+}
+
 func resolveIssueRef(ctx context.Context, store *writ.Store, ref string) (scope string, slug string, objectID string, err error) {
 	des, objID, err := state.ParseReference(ref)
 	if err != nil {

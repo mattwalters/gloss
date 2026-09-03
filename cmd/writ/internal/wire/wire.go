@@ -24,8 +24,10 @@ const (
 	KindIssueStatus  = "issue.status"
 	KindIssueLabel   = "issue.label"
 	KindIssueLabels  = "issue.label"
-	KindSyncStatus   = "sync.status"
-	KindSyncResult   = "sync.result"
+	KindSyncStatus    = "sync.status"
+	KindSyncResult    = "sync.result"
+	KindCommentEdit   = "comment.edit"
+	KindCommentDelete = "comment.delete"
 )
 
 // Envelope wraps all machine-readable output in a single versioned container.
