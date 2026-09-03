@@ -652,6 +652,56 @@ func TestReviewsApproveSubjectNormalization(t *testing.T) {
 	}
 }
 
+func TestReviewsApproveOmittedSubjectAttributesToAuthorEmail(t *testing.T) {
+	ctx := context.Background()
+	repoDir, _ := setupConfiguredRepo(t)
+	headHash := runGitCmd(t, repoDir, "rev-parse", "HEAD")[:40]
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	reviewID, err := s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Subjectless Approval Attribution Review",
+		Base:  headHash,
+		Head:  headHash,
+	})
+	if err != nil {
+		t.Fatalf("Create review failed: %v", err)
+	}
+
+	// Approve with omitted Subject
+	if err := s.Reviews.Approve(ctx, reviewID, writ.Approval{
+		Verdict: "approve",
+		Message: "looks good to me",
+	}); err != nil {
+		t.Fatalf("Approve failed: %v", err)
+	}
+
+	// Query the review to assert the materialized approval
+	res, err := s.Query.Review(reviewID)
+	if err != nil {
+		t.Fatalf("Query.Review failed: %v", err)
+	}
+
+	if len(res.Review.Approvals) != 1 {
+		t.Fatalf("expected 1 approval, got %d: %+v", len(res.Review.Approvals), res.Review.Approvals)
+	}
+
+	app := res.Review.Approvals[0]
+	if app.Subject != "email:alice@example.com" {
+		t.Errorf("expected approval subject to attribute to writer email %q, got %q", "email:alice@example.com", app.Subject)
+	}
+	if app.Verdict != "approve" {
+		t.Errorf("expected verdict %q, got %q", "approve", app.Verdict)
+	}
+	if app.Message != "looks good to me" {
+		t.Errorf("expected message %q, got %q", "looks good to me", app.Message)
+	}
+}
+
 // TestReviewsPersonIDLengthBound checks that the person-id length bound
 // (spec/schemas/identifiers.schema.json, maxLength: 320) is enforced on every
 // review write path that accepts a person identifier, not just on comment
