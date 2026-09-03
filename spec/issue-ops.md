@@ -322,3 +322,220 @@ illustrate these mappings.
 | `created_at`, `updated_at`, `closed_at` | Op commit timestamps on respective ops |
 | `comments` | Separate `comment` objects (WRIT-9) referencing `object_id` |
 | `milestone` | Workspace metadata / cycle or project link (WRIT-11) |
+
+---
+
+## Appendix B — Linear Schema Mapping (Normative)
+
+This appendix defines the normative mapping rules for translating Linear
+entities, issue properties, and discussion records into Writ collaborative
+objects and operations (`object_type: "issue"`, `object_type: "workflow-state"`,
+`object_type: "comment"`, `object_type: "document"`, and `object_type: "project"`).
+
+### Scope & Importer Contract
+
+Per ARCHITECTURE.md §Repo strategy and VISION.md §The open core and the hosted
+layer, bridges and importers live in downstream repositories consuming Writ's
+public Go engine API or `--json` CLI plumbing. What belongs in Writ core is the
+normative schema mapping: establishing translation rules so that implementing an
+importer is a mechanical exercise rather than a series of discretionary judgment
+calls.
+
+Conforming importers MUST translate Linear entities and fields according to the
+rules in this appendix.
+
+### Entity & Field Mapping
+
+#### 1. Issue Entity Mapping
+
+A Linear `Issue` maps to an `issue` collaborative object (`object_type: "issue"`).
+
+| Linear Field | Disposition in Writ | Merge Strategy | Details |
+| --- | --- | --- | --- |
+| `title` | `create.title` / `update.title` | `lww` | Issue title. |
+| `description` | `create.description` / `update.description` | `lww` | Markdown body, with Linear-specific XML tags rewritten per §Markdown Dialect Rewriting. |
+| `state` | `set-state.state` | `lww` | Target `workflow-state` object ID (WRIT-104). For basic v1 schema compatibility (where `state` is `"open"` or `"closed"`), Linear states of type `completed` or `canceled` map to `"closed"`, and states of type `backlog`, `unstarted`, or `started` map to `"open"`. |
+| `priority` | `priority` | `lww` | Numeric priority (WRIT-106): 0 = None, 1 = Urgent, 2 = High, 3 = Medium, 4 = Low. |
+| `estimate` | `estimate` | `lww` | Numeric estimate value (WRIT-106). Scale interpretation (Fibonacci, exponential, linear, T-shirt) is left to workspace settings and client display (WRIT-110). |
+| `sortOrder` | position string | `lww` | Fractional indexing position string per WRIT-106 and WRIT-108. |
+| `assignee` / `assignees` | `assign.add` / `assign.remove` | `set-observed-remove` | Scheme-prefixed person identifiers per §Identity Mapping. |
+| `labels` | `label.add` / `label.remove` | `set-observed-remove` | Label name strings. |
+| `relations` (`blocks`, `relatedTo`, `duplicateOf`) | `link` op | `keyed-lww` | `relation: "blocks"`, `"relates"`, `"duplicate"`. |
+| `parent` / `sub-issues` | `link` op | `keyed-lww` | `relation: "parent"` on child issue targeting parent issue ID. |
+| `identifier` (e.g. `WRIT-93`) | `linear:<identifier>` label & description header | `set-observed-remove` / `lww` | Preserved via `linear:<identifier>` label and description provenance header per §Identifier Preservation. |
+| `createdAt`, `updatedAt` | Op commit author timestamps | — | Recorded on op commits. |
+| `creator` | Op commit author | — | Recorded on initial create op commit (or bridge committer with provenance). |
+
+#### 2. Workflow States
+
+A Linear `WorkflowState` maps to a `workflow-state` collaborative object
+(WRIT-104) in the workspace repository:
+
+- `name` (string, `lww`): State display name (e.g. `"Backlog"`, `"In Progress"`, `"Done"`).
+- `type` (string, `lww`): One of the five canonical state types (`backlog`,
+  `unstarted`, `started`, `completed`, `canceled`), matching Linear's state type vocabulary.
+- `position` (string, `lww`): Fractional indexing position string per WRIT-108.
+- `color` (string, `lww`): Hex color code string (e.g. `"#f2c94c"`).
+
+#### 3. Comments
+
+A Linear `Comment` maps to a `comment` collaborative object (`object_type: "comment"`,
+`spec/comments.md`):
+
+- `subject`: `{"object_type": "issue", "object_id": <issue-id>}`.
+- `body`: Comment Markdown text with Linear XML tags rewritten per §Markdown Dialect Rewriting.
+- Threading: Replies map to `comment` objects with `in_reply_to` pointing to the
+  parent comment object ID.
+- `createdAt`, `updatedAt`: Op commit author timestamps.
+
+#### 4. Documents
+
+A Linear `Document` associated with an issue maps to a `document` collaborative
+object (WRIT-105):
+
+- Attached to the issue via a `link` op targeting the document's object ID with
+  `relation: "implementation-plan"` or `relation: "relates"`.
+
+#### 5. Projects
+
+A Linear `Project` maps to a `project` collaborative object (`object_type: "project"`,
+`spec/project-cycle.md`):
+
+- Issue membership in a project is recorded via project membership operations.
+
+### Identity Mapping
+
+Linear identifies actors by internal UUIDs, display names, and optional email
+addresses. Writ identifies actors in operation payloads using scheme-prefixed
+person identifiers ([`spec/identifiers.md`](identifiers.md) §Person identifiers,
+WRIT-102, WRIT-119).
+
+Conforming importers MUST translate actor identities according to the following
+rules:
+
+1. **User with email:** When an email address is available on the Linear user,
+   the importer MUST emit `email:<normalized-email>`, where the address is
+   normalized by the value folding algorithm in `spec/identifiers.md` §The value
+   folding algorithm (trimmed whitespace, lowercase NFC, Unicode default case
+   folding). Example: `email:alice@example.com`.
+2. **User without email:** When no email address is available (e.g. users
+   authenticated via third-party SAML without email disclosure, or deactivated
+   accounts), the importer MUST emit `user:<linear-handle>` (or the slugified user
+   identifier if no handle exists). Example: `user:bob`.
+3. **System and bot actors:** Automated Linear integrations and bot users MUST
+   map to `user:linear` or `user:<bot-name>`.
+4. **Validation and bounds:**
+   - Importers MUST NOT emit bare (colonless) strings; colonless strings are
+     invalid person identifiers and are rejected by Writ schemas.
+   - The scheme MUST match `^[a-z][a-z0-9+.-]*$` and be at most 32 characters.
+   - The normalized value MUST be non-empty and at most 320 Unicode code points.
+   - The total person identifier string MUST NOT exceed the derived bound of
+     353 code points (32 + 1 + 320).
+   - Over-long identifiers MUST be rejected, never truncated.
+   - Schemes never unify: `email:alice@example.com` and `user:alice` are distinct
+     identities in Writ and MUST NOT be merged by the importer.
+
+### Team Scoping
+
+In Linear, workflow states, issue keys, and triage queues are scoped to a team,
+while an organization workspace often contains multiple teams.
+
+Per WRIT-113 ("One workspace = one team") and ARCHITECTURE.md §Workspace scoping:
+- A Writ workspace corresponds to a single team: workflow states, labels, and
+  settings are workspace-global, and there is no `team` collaborative object in
+  v1 core.
+- Importers MUST target one Writ workspace repository per Linear team.
+- Team-level workflow states, labels, and settings map to workspace-global objects
+  within that team's Writ workspace repository.
+- Cross-team relations in Linear (e.g. an issue in Team A blocking an issue in
+  Team B) cannot be represented as native Writ DAG links in v1 because cross-workspace
+  DAG links are not supported. Importers MUST degrade cross-team relations to
+  external Markdown links in the issue description or in a comment.
+
+### Identifier Preservation
+
+Linear uses human-facing, sequential, team-scoped issue identifiers (such as
+`WRIT-93` or `ENG-101`). Writ mints 128-bit random lowercase hexadecimal object
+IDs (`^[0-9a-f]{32}$`, `spec/identifiers.md` §Object identifiers).
+
+Losing the original Linear key breaks references across git commit history, pull
+requests, external documentation, and human memory. Importers MUST preserve the
+original Linear identifier using two complementary mechanisms:
+
+1. **Indexable label:** Add a label formatted as `linear:<identifier>` (e.g.
+   `linear:WRIT-93`, preserving the team prefix and issue number in uppercase ASCII
+   for the key) via an `issue` `label` op (`add: ["linear:<identifier>"]`). This
+   enables fast index queries in the projection (`store.Query.Issues(filter.WithLabel("linear:WRIT-93"))`)
+   without modifying the core issue schema.
+2. **Provenance header:** Prepend a provenance blockquote to the issue description:
+   ```markdown
+   > Imported from Linear [WRIT-93](https://linear.app/<workspace>/issue/WRIT-93/...)
+   ```
+   If the external web URL is unavailable, the header MUST be formatted as:
+   ```markdown
+   > Imported from Linear WRIT-93
+   ```
+
+### Markdown Dialect Rewriting
+
+Linear descriptions and comments use CommonMark augmented with custom XML tags
+for entity references. Importers MUST rewrite these XML tags into standard
+CommonMark / GitHub Flavored Markdown (GFM) before generating `create`, `update`,
+or `comment` op bodies:
+
+1. **Issue references:**
+   `<issue id="..." href="URL">KEY</issue>` MUST be rewritten to `[KEY](URL)`.
+   If `href` is absent, it MUST be rewritten to `KEY`.
+2. **User mentions:**
+   `<mention id="...">@Name</mention>` MUST be rewritten to `@Name`.
+3. **Project references:**
+   `<project id="..." href="URL">Name</project>` MUST be rewritten to `[Name](URL)`.
+   If `href` is absent, it MUST be rewritten to `Name`.
+4. Standard CommonMark and GFM syntax (fenced code blocks, blockquotes, tables,
+   task lists, bold/italics) MUST be preserved verbatim.
+
+### Deliberately Unmapped Concepts & Round-Trip Losses
+
+#### Deliberately Unmapped Concepts
+
+The following Linear concepts deliberately do NOT map to Writ v1 primitives:
+
+1. **Cycles:** Linear cycles represent rolling time-boxed sprint automation and
+   cadences, not static append-only SDLC artifacts. Sprint management belongs to
+   client workflow automation. Importers MAY optionally record cycle membership as
+   a label formatted as `cycle:<name>` (e.g. `cycle:Cycle-42`).
+2. **Initiatives:** High-level portfolio tracking across projects is omitted from
+   Writ v1 core to keep the object graph minimal and execution-focused.
+3. **Triage Queue:** Linear's triage queue is an ephemeral review buffer. Issues
+   in triage enter the Writ workspace backlog directly (with an optional `triage`
+   label or corresponding workflow state).
+4. **SLAs:** Service-level agreement notification timers, risk levels, and
+   escalation rules are server-side automation features out of scope for a
+   local-first, offline-capable git event-sourcing engine.
+5. **Roadmaps & Saved Views:** Visual timeline views, filter queries, and personal
+   view configurations belong to client user interfaces, not canonical repository data.
+6. **Cross-Team Links:** Bounded by the one-workspace-one-team model in v1 (WRIT-113).
+7. **Custom Fields:** Arbitrary organization-defined custom fields not part of
+   the standard issue schema have no native typed representation in v1 core.
+
+#### Round-Trip Data Losses
+
+Because Writ prioritizes an open, minimal, and host-agnostic SDLC substrate in git,
+importing from Linear and subsequent round-trip synchronization incurs the
+following permanent data losses. Importers MUST document these losses and SHOULD
+warn users about them:
+
+- **Cycle cadence & history:** Sprint rolling timelines, velocity history, and
+  cycle auto-rollover configurations are lost.
+- **Initiative hierarchy:** Parent-child associations between projects and
+  multi-team initiatives are lost.
+- **Triage & SLA timers:** Triage entry timestamps, SLA risk warnings, SLA
+  breach timestamps, and response timers are lost.
+- **Native cross-team DAG relations:** Cross-team dependency graphs degrade to
+  unindexed external Markdown links.
+- **Entity internal UUIDs:** Linear's internal UUIDs on issues, comments, labels,
+  and tags are replaced by Writ's 128-bit random IDs (though preserved in
+  provenance headers and `linear:<key>` labels).
+- **XML tag metadata:** Internal UUID attributes on `<issue>`, `<mention>`, and
+  `<project>` tags are lost during CommonMark normalization.
+

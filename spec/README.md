@@ -25,7 +25,7 @@ disagree, the fixtures win and the prose gets fixed.
 | `identifiers.md` | Normative | Workspace-global IDs, repo designators, cross-repo references, workspace repo, reference resolution, and person identifiers |
 | `review-ops.md` | Normative | The review family operation vocabulary (v1): review creation, revisions, status transitions, assignments, approvals, and CI statuses |
 | `comments.md` | Normative | Comment op vocabulary (v1): object model, create/edit/delete ops, threading, anchor reference, GitHub shapes |
-| `issue-ops.md` | Normative | The issue family operation vocabulary (v1): issue creation, metadata updates, state transitions, assignments, labels, and cross-references |
+| `issue-ops.md` | Normative | The issue family operation vocabulary (v1): issue creation, metadata updates, state transitions, assignments, labels, and cross-references (Appendix B: Linear schema mapping) |
 | `project-cycle.md` | Normative | Project and cycle operation vocabularies (v1): workspace-scoped grouping types, creation, status transitions, cycle dates, and issue membership |
 | `repo-ops.md` | Normative | The repository registry operation vocabulary (v1): repository registration, slug updates, and remote URLs |
 | `resolution.md` | Normative | Re-anchoring & orphan degradation (v1): the `resolve(anchor, tree)` ladder, tiebreaks, thresholds, and orphan semantics |
@@ -87,7 +87,7 @@ spec/
 ├── identifiers.md          — normative: workspace-global IDs, references, workspace repo & person identifiers
 ├── review-ops.md           — normative: review family operation vocabulary (v1)
 ├── comments.md             — normative: comment op vocabulary (v1)
-├── issue-ops.md            — normative: issue family operation vocabulary (v1)
+├── issue-ops.md            — normative: issue family operation vocabulary (v1), Linear mapping (Appendix B)
 ├── project-cycle.md        — normative: project & cycle grouping op vocabularies (v1)
 ├── repo-ops.md             — normative: repository registry op vocabulary (v1)
 ├── resolution.md           — normative: re-anchoring & orphan degradation (v1)
