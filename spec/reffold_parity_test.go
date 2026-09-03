@@ -19,44 +19,37 @@ import (
 // one.
 //
 // This test compares the two as source, which is cruder than a behavioural
-// test on purpose: within the range it compares, it fails on any edit made to
-// one copy and not the other, including edits whose behaviour a test table
-// would not distinguish.
-//
-// What it does NOT cover, stated plainly because an overclaiming comment is
-// how the last divergence got past everyone: it compares one window — the
-// block from nfc through ccc — and roughly seventy lines of the shared
-// algorithm sit outside it. FoldValue/foldPersonValue, isASCII, lowerASCII,
-// the shared Caser, the Cherokee bounds, caseFold and hasCherokeeFoldedRune
-// are all unguarded here and rely on TestReffoldNormalizePersonMatchesEngine
-// and the person vectors instead. That is a real gap: changing only
-// personCherokeeHi in reffold.go once passed this test, the drift table and
-// every vector while diverging on six code points, because no fixture used
-// Cherokee's second fold range. The drift table now seeds it.
-//
-// Widening the window is the better fix and is deliberately not done here: the
-// names outside it are not a uniform prefix rename (cherokeeFoldedLo/Hi
-// against personCherokeeLo/Hi, hasCherokeeFoldedRune against
-// personHasCherokee), so it needs its own change rather than a fourth round on
-// this one.
+// test on purpose: it compares the entire shared person normalization
+// algorithm (FoldValue/foldPersonValue down through ccc/personCCC) and fails
+// on any edit made to one copy and not the other, including edits whose
+// behaviour a test table would not distinguish.
 const (
 	engineSource  = "../engine/internal/person/person.go"
-	engineFirst   = "// nfc returns s in Normalization Form C."
+	engineFirst   = "// FoldValue applies the value half of the normalization rule in"
 	engineLast    = "func ccc(r rune) uint8 {"
 	reffoldSource = "reffold.go"
-	reffoldFirst  = "// personNFC returns s in Normalization Form C."
+	reffoldFirst  = "// foldPersonValue applies the value half of the normalization rule in"
 	reffoldLast   = "func personCCC(r rune) uint8 {"
 )
 
 // reffoldRenames maps the reference copy's names onto the engine's. Longest
-// first: personNFCSegment must be rewritten before personNFC.
+// first to prevent prefix collisions (e.g. personNFCSegment before personNFC).
 var reffoldRenames = [][2]string{
-	{"personNFCSegment", "nfcSegment"},
-	{"personSegmentLen", "segmentLen"},
-	{"personCanonicalOrder", "canonicalOrder"},
 	{"personSortRunInsertionMax", "sortRunInsertionMax"},
+	{"personUnicodeVersion", "UnicodeVersion"},
+	{"personCanonicalOrder", "canonicalOrder"},
+	{"personHasCherokee", "hasCherokeeFoldedRune"},
+	{"personCherokeeHi", "cherokeeFoldedHi"},
+	{"personCherokeeLo", "cherokeeFoldedLo"},
+	{"personNFCSegment", "nfcSegment"},
+	{"personLowerASCII", "lowerASCII"},
+	{"personSegmentLen", "segmentLen"},
+	{"foldPersonValue", "FoldValue"},
+	{"personFoldCaser", "foldCaser"},
 	{"personSortByCCC", "sortByCCC"},
 	{"personDecompose", "decompose"},
+	{"personCaseFold", "caseFold"},
+	{"personIsASCII", "isASCII"},
 	{"personCompose", "compose"},
 	{"personCombine", "combine"},
 	{"personCCC", "ccc"},

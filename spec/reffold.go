@@ -53,16 +53,24 @@ func normalizePerson(s string) string {
 }
 
 // foldPersonValue applies the value half of the normalization rule in
-// spec/identifiers.md §Normalization rules, pinned to Unicode
-// personUnicodeVersion: NFC, then Unicode default case folding (UAX #21 §2.3
-// toCasefold, the full C+F mappings, no locale tailoring), then NFC again. One
-// algorithm for every scheme.
+// spec/identifiers.md §Normalization rules, pinned to Unicode personUnicodeVersion:
 //
-// The trailing NFC is not redundant. Case folding does not preserve a normal
-// form — U+017F followed by U+0301 folds to "s" plus U+0301, which is not NFC
-// — so a rule that stopped after folding would give a different answer on a
-// second pass, and normalization runs at more than one layer.
+//  1. NFC
+//  2. Unicode default case folding (UAX #21 §2.3 toCasefold, the full C+F
+//     mappings, no locale tailoring)
+//  3. NFC again
+//
+// One algorithm for every scheme. The trailing NFC is not redundant: case
+// folding does not preserve a normal form, so folding NFC input can leave a
+// composable sequence behind — U+017F followed by U+0301 folds to "s" plus
+// U+0301, which is not NFC — and a rule that stopped after folding would not
+// be idempotent. Normalization is applied at the producer, in the fold and
+// again in the projection, so a rule that changed its answer on the second
+// pass would be the same interop defect it exists to remove.
 func foldPersonValue(s string) string {
+	// ASCII is already NFC, and folding it is ASCII lowercasing, which is
+	// what almost every real identifier needs. TestFoldValueASCIIFastPath
+	// checks the shortcut against the general path rather than assuming it.
 	if personIsASCII(s) {
 		return personLowerASCII(s)
 	}
@@ -95,19 +103,30 @@ func personLowerASCII(s string) string {
 	return string(b)
 }
 
+// personFoldCaser performs Unicode default case folding. cases.Fold documents the
+// returned Caser as stateless and safe for concurrent use, so one is shared.
 var personFoldCaser = cases.Fold()
 
-// Cherokee uppercase folds to itself: CaseFolding.txt maps Cherokee lowercase
-// *up* ("AB70..ABBF; C; 13A0..13EF"), and x/text encodes case mappings as XOR
-// deltas, which cannot express a mapping that is not an involution, so
-// cases.Fold toggles these code points rather than holding them fixed
-// (golang/go#46101). Folding is idempotent by definition, so the toggle is a
-// defect; an implementation that inherited it would never settle.
+// Cherokee uppercase letters case-fold to themselves. Cherokee is the one
+// script whose folding maps lowercase *up* — CaseFolding.txt has
+// "AB70..ABBF; C; 13A0..13EF" and "13F8..13FD; C; 13F0..13F5" — and x/text
+// encodes case mappings as XOR deltas, which cannot express a mapping that is
+// not an involution. cases.Fold therefore toggles these code points instead of
+// holding them fixed: it answers U+AB70 for U+13A0, where CPython, ICU and
+// CaseFolding.txt all answer U+13A0 (golang/go#46101, open since 2021).
+//
+// Folding is idempotent by definition, so a toggle is a defect rather than a
+// tailoring, and a normalization built on it would not settle: U+13A0 and
+// U+AB70 would swap places on every pass.
 const personCherokeeLo, personCherokeeHi = 0x13A0, 0x13F5
 
-// personCaseFold applies Unicode default case folding, holding the Cherokee
-// code points at their correct fixed points. Folding runs separately is exact
-// because toCasefold is context-free.
+// personCaseFold applies Unicode default case folding, holding the Cherokee code
+// points x/text toggles at their correct fixed points.
+//
+// Folding runs of the string separately and copying the fixed points through
+// gives the same answer as folding the whole string would, because toCasefold
+// is context-free: unlike lowercasing, which has the final-sigma rule, no
+// case-folding mapping depends on neighbouring characters.
 func personCaseFold(s string) string {
 	if !personHasCherokee(s) {
 		return personFoldCaser.String(s)
