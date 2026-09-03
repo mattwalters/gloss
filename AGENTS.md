@@ -40,6 +40,12 @@ stubs alone. Same pattern as the rest of the studio.
   we host — consumes that public API with no reach into internals.
 - When you file a Linear ticket, set a priority and an estimate — your
   best judgment, stated once, not discussed.
+- Every commit needs a `Signed-off-by` trailer (DCO, enforced by CI —
+  see CONTRIBUTING.md). Run `git config core.hooksPath .githooks` once
+  per worktree so it's added automatically; a commit that already
+  landed without one is `git commit --amend -s` away from fixed. A
+  fresh worktree doesn't inherit this config — check it before your
+  first commit there, not after CI fails.
 
 ## Layout
 
@@ -54,14 +60,17 @@ Planned monorepo layout (see `ARCHITECTURE.md` for the rationale):
 
 ## Workflow
 
-The pipeline is three composable skills, each in `.agents/skills/`:
+The pipeline is four composable skills, each in `.agents/skills/`:
 `implement-ticket` takes one Linear WRIT ticket to a CI-green draft PR
 in a detached git worktree; `adversarial-review` runs reviewer/fixer
-rounds on an open PR to a mergeable or capped verdict; `dispatch`
-orchestrates a batch of tickets through both of those plus a
-human-approved merge queue. The first two stand alone for a single
-ticket a human is already driving; `dispatch` is for running the
-queue. Read a skill's `SKILL.md` before changing what its stage
-produces; read `dispatch`'s before changing how runs are queued.
+rounds on an open PR to a mergeable or capped verdict; `merge-queue`
+rebases and squash-merges every eligible, approved PR, in an order
+chosen to minimize conflicts, resolving mechanical rebase conflicts
+itself and surfacing anything needing new logic; `dispatch`
+orchestrates a batch of tickets through all three. The first three
+stand alone for a single ticket or PR a human is already driving;
+`dispatch` is for running the queue. Read a skill's `SKILL.md` before
+changing what its stage produces; read `dispatch`'s before changing
+how runs are queued.
 
 Build and test commands will be documented here once code exists.

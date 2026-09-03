@@ -1,25 +1,26 @@
 ---
 name: dispatch
-description: Batch-run the next WRIT tickets from Linear. Picks 5–10 unblocked tickets by priority, has each one planned into its ticket description, plans parallel vs serial execution, gets human approval, then runs each ticket through the implement-ticket and adversarial-review skills to CI-green, reviewed pull requests, and a human-approved merge queue. Use when asked to run the queue, work the next tickets, dispatch a batch, or process Linear tickets in parallel. Do not use for a single ticket a human is already driving — use implement-ticket or adversarial-review directly for that.
+description: Batch-run the next WRIT tickets from Linear. Picks 5–10 unblocked tickets by priority, has each one planned into its ticket description, plans parallel vs serial execution, gets human approval, then runs each ticket through the implement-ticket, adversarial-review, and merge-queue skills to a merged pull request. Use when asked to run the queue, work the next tickets, dispatch a batch, or process Linear tickets in parallel. Do not use for a single ticket a human is already driving — use implement-ticket, adversarial-review, or merge-queue directly for that.
 ---
 
 # Dispatch
 
 You are the orchestrator. You pick a batch of tickets, have each one
 planned, get one human approval on the batch, and then run each ticket
-through the `implement-ticket` and `adversarial-review` skills. Each
-merge waits for a per-ticket human go-ahead; once given, you own merge
-order and timing. You do not write code, read diffs, or debug CI
-yourself — every one of those burns orchestrator context that the
-whole batch depends on. Subagents do the work; you route, count
-rounds, move Linear tickets, and run the merge queue.
+through the `implement-ticket`, `adversarial-review`, and
+`merge-queue` skills. Each merge waits for a per-ticket human
+go-ahead; once given, `merge-queue` owns sequencing. You do not write
+code, read diffs, or debug CI yourself — every one of those burns
+orchestrator context that the whole batch depends on. Subagents do the
+work; you route, count rounds, and move Linear tickets.
 
 This skill is the orchestration policy — picking, waving, approval,
-merge order. What happens to one ticket once it's picked lives in the
-two skills it delegates to, which are equally usable on their own:
+tracking. What happens to one ticket once it's picked lives in the
+three skills it delegates to, each equally usable on its own:
 `implement-ticket` for "just implement WRIT-200", `adversarial-review`
-for "review every open PR". Read their SKILL.md files before changing
-what a stage does; change this file for how runs are queued.
+for "review every open PR", `merge-queue` for "merge everything
+that's approved". Read their SKILL.md files before changing what a
+stage does; change this file for how runs are queued.
 
 Statuses used (Linear team WRIT): `Todo` → `Implementing` → `In Review`
 → `To Merge` → `Done`, with `Needs Attention` for anything that needs a
@@ -146,44 +147,53 @@ the last round found. The ticket rests in `In Review` — a reading
 gate — until the human approves that ticket's merge: in chat, by
 moving the ticket to `To Merge` in Linear themselves, or by having
 pre-authorized it at the batch gate. Any of the three counts. Never
-merge a ticket without one of them.
+tell `merge-queue` to merge a ticket without one of them.
 
 Approval makes a ticket eligible; it does not set the order. The human
-may green-light five at once — sequencing them is still yours, so a
-batch of approvals never turns into merges in whatever order they
-arrived. Move each approved ticket to `To Merge` and merge to minimize
-conflicts: serial chains in their intended order, then whatever
-overlaps least with what just landed. For each merge:
+may green-light five at once — invoke the `merge-queue` skill with all
+of them together and let it work out sequencing and conflicts; its own
+instructions cover ordering, rebasing, mechanical conflict resolution,
+and the squash merge, so nothing here duplicates them.
 
-1. Rebase the branch onto current `origin/main` (do it in the ticket's
-   worktree; if the rebase throws a non-trivial conflict, that is a
-   fixer subagent's job, not yours — spawn one with
-   `adversarial-review/prompts/fixer.md`, naming the conflict). A
-   conflict is a refusal, not a puzzle, whatever model meets it:
-   anything needing new logic or a judgment call goes to a fixer, or to
-   the human — never resolved inline at merge time.
-2. Wait for CI green on the rebased head.
-3. Mark the PR ready and `gh pr merge <number> --squash`.
-4. Move the ticket to `Done` and delete the worktree
-   (`git worktree remove <path>`).
+On `RESULT: merged`, per PR: kick off the next wave's tickets whose
+prerequisites just landed, and post a status update. On `RESULT:
+blocked` (a rebase conflict needs new logic or a judgment call, not
+just combining both sides) or `failed` (CI never went green on the
+rebased head), tell the human which one it was and why — `merge-queue`
+already left the PR and worktree as they were — and carry on with the
+rest of the queue.
 
-After each merge, kick off the next wave's tickets whose prerequisites
-just landed, and post a status update.
+## Cleanup
+
+`merge-queue` deletes the worktree and the remote branch for anything
+it actually merges — that's the only automatic cleanup anywhere in
+this pipeline, and it's deliberate. A ticket that ends up blocked,
+failed, capped, or otherwise sitting in `Needs Attention` keeps its
+worktree and branch indefinitely, on purpose: that state is exactly
+the in-progress context a human or a later fixer needs to pick the
+thread back up, and deleting it on a timer risks destroying something
+nobody's looked at yet.
+
+If a ticket is truly abandoned — cancelled, or the human decides not
+to pursue it — cleaning up its worktree (`git worktree remove`) and
+branch (`git push origin --delete <branch>`) is a human call, not
+something you or any subagent does on your own judgment.
 
 ## Models and effort
 
 Phases name capability tiers, not vendor models: planning and every
 review round want the strongest reasoning model available, because
-both are judgment; implementing to a written plan and fixing findings
-are mid-tier work. Effort high everywhere. Map by harness — this table
-is the canonical reference; `implement-ticket` and `adversarial-review`
-both point back to it:
+both are judgment; implementing to a written plan, fixing findings,
+and resolving a mechanical rebase conflict are all mid-tier work.
+Effort high everywhere. Map by harness — this table is the canonical
+reference; `implement-ticket`, `adversarial-review`, and `merge-queue`
+all point back to it:
 
-| Phase               | Claude Code  | Antigravity            | Codex                     |
-| ------------------- | ------------ | ---------------------- | ------------------------- |
-| Plan                | Opus, high   | gemini-3.7-flash, high | strongest available, high |
-| Implement / fix     | Sonnet, high | gemini-3.7-flash, high | mid-tier, high            |
-| Review (all rounds) | Opus, high   | gemini-3.7-flash, high | strongest available, high |
+| Phase                     | Claude Code  | Antigravity            | Codex                     |
+| ------------------------- | ------------ | ---------------------- | ------------------------- |
+| Plan                      | Opus, high   | gemini-3.7-flash, high | strongest available, high |
+| Implement / fix / rebase  | Sonnet, high | gemini-3.7-flash, high | mid-tier, high            |
+| Review (all rounds)       | Opus, high   | gemini-3.7-flash, high | strongest available, high |
 
 If your harness cannot set a subagent's model, run everything at the
 session model and say so when presenting the batch — degrade loudly,
@@ -199,23 +209,25 @@ Nothing else; the details live on the PRs.
 
 ## Escalation
 
-The planner, `implement-ticket`, and `adversarial-review` each handle
-their own stall — a bad report from any of them already means the
-ticket's been commented on (planner and implement-ticket comment
-directly for a blocked report) and moved to `Needs Attention` (or, for
-a capped review, left in `In Review` with the findings posted). Your
-job on any of those reports, plus a merge-time conflict needing
-judgment: tell the human what stopped it, and carry on with the rest
-of the batch.
+The planner, `implement-ticket`, `adversarial-review`, and
+`merge-queue` each handle their own stall — a bad report from any of
+them already means the ticket's been commented on (planner and
+implement-ticket comment directly for a blocked report) and left
+somewhere sane: `Needs Attention` for an implement blocked/failed, `In
+Review` with findings posted for a capped review, or untouched with
+the conflict named for a merge blocked/failed. Your job on any of
+those reports: tell the human what stopped it, and carry on with the
+rest of the batch.
 
 Keep `blocked` and `failed` distinct when you relay them — collapsing
 both into "it broke" is the one thing not to do here. Blocked means a
-subagent found the ticket's premise doesn't match what it found (a
-stale plan, a bug that doesn't reproduce, an unrelated bug it noticed)
-and needs your judgment before anything else proceeds. Failed means it
-tried the documented path and hit a mechanical wall — CI never went
-green. The human acts on these differently, so say which one it was
-and, for blocked, what the subagent actually found.
+subagent found something that doesn't match what it expected — a
+stale plan, a bug that doesn't reproduce, an unrelated bug it noticed,
+a rebase conflict that needs new logic — and needs your judgment
+before anything else proceeds. Failed means it tried the documented
+path and hit a mechanical wall — CI never went green. The human acts
+on these differently, so say which one it was and, for blocked, what
+the subagent actually found.
 
 Never silently drop a ticket, and never let one ticket's trouble block
 the others.
