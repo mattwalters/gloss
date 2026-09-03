@@ -44,6 +44,7 @@ var rootCommand = &command{
 		commentCmd,
 		issueCmd,
 		reviewCmd,
+		stateCmd,
 		syncCmd,
 		versionCmd,
 		completionCmd,
@@ -141,13 +142,13 @@ var issueCmd = &command{
 var issueCreateCmd = &command{
 	Name:      "create",
 	Short:     "Create a new issue",
-	UsageLine: "Usage: writ issue create [-C <dir>] -title <t> [-description <d>] [-state open|closed] [-fixes <ref>]... [-relates <ref>]...",
+	UsageLine: "Usage: writ issue create [-C <dir>] -title <t> [-description <d>] [-state <s>] [-fixes <ref>]... [-relates <ref>]...",
 	Long:      "Create a new issue.",
 	Flags: []flagSpec{
 		{Name: "C"},
 		{Name: "title"},
 		{Name: "description"},
-		{Name: "state", Values: spec.IssueStates()},
+		{Name: "state"},
 		{Name: "fixes", Repeatable: true},
 		{Name: "relates", Repeatable: true},
 	},
@@ -161,7 +162,7 @@ var issueStatusCmd = &command{
 	Name:      "status",
 	Short:     "View or update issue status",
 	UsageLine: "Usage: writ issue status [-C <dir>] <id> [<state>] [-reason <r>] [--json]",
-	Long:      "View or update issue status.\n\nStates:\n  open, closed",
+	Long:      "View or update issue status.",
 	Flags: []flagSpec{
 		{Name: "C"},
 		{Name: "reason"},
@@ -217,7 +218,7 @@ var issueListCmd = &command{
 	Long:      "List issues.",
 	Flags: []flagSpec{
 		{Name: "C"},
-		{Name: "state", Values: spec.IssueStates(), Repeatable: true},
+		{Name: "state", Repeatable: true},
 		{Name: "assignee", Repeatable: true},
 		{Name: "label", Repeatable: true},
 		{Name: "author", Repeatable: true},
@@ -445,6 +446,78 @@ var reviewListCmd = &command{
 	},
 }
 
+var stateCmd = &command{
+	Name:      "state",
+	Short:     "Manage workflow states (list, create, update)",
+	UsageLine: "Usage: writ state [-C <dir>] <subcommand> [arguments]",
+	Long:      "Manage workflow states.",
+	Flags: []flagSpec{
+		{
+			Name:  "C",
+			Arg:   "<dir>",
+			Usage: "Run as if writ was started in <dir>",
+		},
+	},
+	Subs: []*command{
+		stateListCmd,
+		stateCreateCmd,
+		stateUpdateCmd,
+	},
+}
+
+var stateListCmd = &command{
+	Name:      "list",
+	Short:     "List workflow states",
+	UsageLine: "Usage: writ state list [-C <dir>] [--json]",
+	Long:      "List workflow states ordered by board position.",
+	Flags: []flagSpec{
+		{Name: "C"},
+		{Name: "json"},
+	},
+	Examples: []string{
+		"writ state list",
+		"writ state list --json",
+	},
+}
+
+var stateCreateCmd = &command{
+	Name:      "create",
+	Short:     "Create a workflow state",
+	UsageLine: "Usage: writ state create [-C <dir>] -name <name> -type <type> [-color <c>] [-position <pos>] [-description <d>]",
+	Long:      "Create a new workflow state.",
+	Flags: []flagSpec{
+		{Name: "C"},
+		{Name: "name"},
+		{Name: "type", Values: spec.WorkflowStateTypes()},
+		{Name: "color"},
+		{Name: "position"},
+		{Name: "description"},
+	},
+	Examples: []string{
+		`writ state create -name "In Review" -type started`,
+		`writ state create -name QA -type started -color "#f2c94c" -position f`,
+	},
+}
+
+var stateUpdateCmd = &command{
+	Name:      "update",
+	Short:     "Update a workflow state",
+	UsageLine: "Usage: writ state update [-C <dir>] <id> [-name <name>] [-type <type>] [-color <c>] [-position <pos>] [-description <d>]",
+	Long:      "Update an existing workflow state.",
+	Flags: []flagSpec{
+		{Name: "C"},
+		{Name: "name"},
+		{Name: "type", Values: spec.WorkflowStateTypes()},
+		{Name: "color"},
+		{Name: "position"},
+		{Name: "description"},
+	},
+	Examples: []string{
+		`writ state update 01J8ABC -name "Code Review"`,
+		`writ state update 01J8ABC -position f -color "#e2b93c"`,
+	},
+}
+
 var syncCmd = &command{
 	Name:      "sync",
 	Short:     "Synchronize operations with git remotes",
@@ -533,6 +606,9 @@ func init() {
 		"review link":    func() *flag.FlagSet { fs, _ := newReviewLinkFlagSet(""); return fs },
 		"review status":  func() *flag.FlagSet { fs, _ := newReviewStatusFlagSet(""); return fs },
 		"review list":    func() *flag.FlagSet { fs, _ := newReviewListFlagSet(""); return fs },
+		"state list":     func() *flag.FlagSet { fs, _ := newStateListFlagSet(""); return fs },
+		"state create":   func() *flag.FlagSet { fs, _ := newStateCreateFlagSet(""); return fs },
+		"state update":   func() *flag.FlagSet { fs, _ := newStateUpdateFlagSet(""); return fs },
 		"sync":           func() *flag.FlagSet { fs, _ := newSyncFlagSet(""); return fs },
 	}
 }

@@ -11,7 +11,8 @@ package projection
 // 7: WRIT-117 pinned the person-identifier folding algorithm to NFC, Unicode
 // default case folding, NFC (spec/identifiers.md). Also covers WRIT-102, which
 // 8: WRIT-155 added object_type column to unknown_ops table (spec FC-5).
-const schemaVersion = 8
+// 9: WRIT-104 added workflow_states table.
+const schemaVersion = 9
 
 var projectionTables = []string{
 	"meta",
@@ -39,6 +40,7 @@ var projectionTables = []string{
 	"cycle_issues",
 	"repos",
 	"repo_remotes",
+	"workflow_states",
 }
 
 var tableQueries = map[string]string{
@@ -67,6 +69,7 @@ var tableQueries = map[string]string{
 	"cycle_issues":       "SELECT * FROM cycle_issues ORDER BY cycle_object_id ASC, issue ASC",
 	"repos":              "SELECT * FROM repos ORDER BY object_id ASC",
 	"repo_remotes":       "SELECT * FROM repo_remotes ORDER BY repo_object_id ASC, remote ASC",
+	"workflow_states":    "SELECT * FROM workflow_states ORDER BY object_id ASC",
 }
 
 const schemaSQL = `
@@ -294,4 +297,16 @@ CREATE TABLE IF NOT EXISTS repo_remotes (
     PRIMARY KEY (repo_object_id, remote)
 );
 CREATE INDEX IF NOT EXISTS idx_repo_remotes_repo_object_id ON repo_remotes(repo_object_id);
+
+CREATE TABLE IF NOT EXISTS workflow_states (
+    object_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    position TEXT NOT NULL,
+    color TEXT NOT NULL,
+    description TEXT NOT NULL,
+    op_id TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_workflow_states_position ON workflow_states(position ASC, op_id ASC);
+CREATE INDEX IF NOT EXISTS idx_workflow_states_type ON workflow_states(type);
 `

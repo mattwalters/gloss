@@ -27,6 +27,9 @@ slug: "cli"
 - [`writ review link`](#writ-review-link)
 - [`writ review status`](#writ-review-status)
 - [`writ review list`](#writ-review-list)
+- [`writ state list`](#writ-state-list)
+- [`writ state create`](#writ-state-create)
+- [`writ state update`](#writ-state-update)
 - [`writ sync`](#writ-sync)
 - [`writ version`](#writ-version)
 - [`writ completion`](#writ-completion)
@@ -120,7 +123,7 @@ Create a new issue
 #### Synopsis
 
 ```console
-Usage: writ issue create [-C <dir>] -title <t> [-description <d>] [-state open|closed] [-fixes <ref>]... [-relates <ref>]...
+Usage: writ issue create [-C <dir>] -title <t> [-description <d>] [-state <s>] [-fixes <ref>]... [-relates <ref>]...
 ```
 
 #### Description
@@ -156,9 +159,6 @@ Usage: writ issue status [-C <dir>] <id> [<state>] [-reason <r>] [--json]
 #### Description
 
 View or update issue status.
-
-States:
-  open, closed
 
 #### Flags
 
@@ -565,6 +565,92 @@ writ review list -status open
 writ review list -assignee email:alice@example.com
 writ review list -label area/engine
 writ review list -status open -status draft --json
+```
+
+### `writ state list`
+
+List workflow states
+
+#### Synopsis
+
+```console
+Usage: writ state list [-C <dir>] [--json]
+```
+
+#### Description
+
+List workflow states ordered by board position.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-json`: Output machine-readable JSON
+
+#### Examples
+
+```bash
+writ state list
+writ state list --json
+```
+
+### `writ state create`
+
+Create a workflow state
+
+#### Synopsis
+
+```console
+Usage: writ state create [-C <dir>] -name <name> -type <type> [-color <c>] [-position <pos>] [-description <d>]
+```
+
+#### Description
+
+Create a new workflow state.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-name string`: State display name
+- `-type string`: State type (backlog, unstarted, started, completed, canceled)
+- `-color string`: Hex color client hint
+- `-position string`: Fractional order position
+- `-description string`: State description
+
+#### Examples
+
+```bash
+writ state create -name "In Review" -type started
+writ state create -name QA -type started -color "#f2c94c" -position f
+```
+
+### `writ state update`
+
+Update a workflow state
+
+#### Synopsis
+
+```console
+Usage: writ state update [-C <dir>] <id> [-name <name>] [-type <type>] [-color <c>] [-position <pos>] [-description <d>]
+```
+
+#### Description
+
+Update an existing workflow state.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-name value`: State display name
+- `-type string`: State type (backlog, unstarted, started, completed, canceled)
+- `-color string`: Hex color client hint
+- `-position string`: Fractional order position
+- `-description string`: State description
+
+#### Examples
+
+```bash
+writ state update 01J8ABC -name "Code Review"
+writ state update 01J8ABC -position f -color "#e2b93c"
 ```
 
 ### `writ sync`

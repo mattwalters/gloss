@@ -43,6 +43,11 @@ func TestVocabularyEnumsExtractedFromSchemas(t *testing.T) {
 			got:  spec.ProjectStatuses(),
 			want: []string{"planned", "active", "paused", "completed", "canceled"},
 		},
+		{
+			name: "WorkflowStateTypes",
+			got:  spec.WorkflowStateTypes(),
+			want: []string{"backlog", "unstarted", "started", "completed", "canceled"},
+		},
 	}
 
 	for _, tt := range tests {

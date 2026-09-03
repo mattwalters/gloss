@@ -65,6 +65,12 @@ func FoldCycle(ops []codec.Op) (Cycle, error) {
 	return state.FoldCycle(ops)
 }
 
+// FoldWorkflowState executes deterministic fold reduction on an input set of operations
+// for a workflow-state collaborative object, returning the materialized WorkflowState state.
+func FoldWorkflowState(ops []codec.Op) (WorkflowState, error) {
+	return state.FoldWorkflowState(ops)
+}
+
 // ReviewRules returns the built-in field merge rules for the review-ops vocabulary (v1).
 func ReviewRules() []Rule {
 	return state.ReviewRules()
@@ -83,4 +89,9 @@ func ProjectRules() []Rule {
 // CycleRules returns the built-in field merge rules for the cycle vocabulary (v1).
 func CycleRules() []Rule {
 	return state.CycleRules()
+}
+
+// WorkflowStateRules returns the built-in field merge rules for the workflow-state vocabulary (v1).
+func WorkflowStateRules() []Rule {
+	return state.WorkflowStateRules()
 }

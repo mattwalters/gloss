@@ -72,6 +72,10 @@ type Cycle = state.Cycle
 // produced by FoldRepo.
 type RepoEntry = state.RepoEntry
 
+// WorkflowState represents the materialized state of a workflow-state collaborative object (v1),
+// produced by FoldWorkflowState.
+type WorkflowState = state.WorkflowState
+
 // ResolvedReference represents the outcome of resolving a reference against a repository registry.
 type ResolvedReference = state.ResolvedReference
 

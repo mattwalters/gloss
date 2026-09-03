@@ -120,12 +120,6 @@ func runIssueCreate(ctx context.Context, defaultDir string, args []string, stdou
 		return 2
 	}
 
-	if opts.stateVal != "" && !slices.Contains(spec.IssueStates(), opts.stateVal) {
-		fmt.Fprintf(stderr, "writ issue create: invalid state %q (must be %s)\n", opts.stateVal, spec.FormatOptions(spec.IssueStates()))
-		fs.Usage()
-		return 2
-	}
-
 	targetDir := opts.dir
 	if targetDir == "" {
 		targetDir = "."
@@ -137,6 +131,41 @@ func runIssueCreate(ctx context.Context, defaultDir string, args []string, stdou
 	}
 	defer store.Close()
 
+	var targetStateID string
+	if opts.stateVal != "" {
+		resolvedID, err := resolveStateID(ctx, store, opts.stateVal)
+		if err == nil {
+			targetStateID = resolvedID
+		} else if opts.stateVal == "open" || opts.stateVal == "closed" {
+			targetStateID = opts.stateVal
+		} else {
+			fmt.Fprintf(stderr, "writ issue create: invalid state %q\n", opts.stateVal)
+			fs.Usage()
+			return 2
+		}
+	} else {
+		states, err := store.Query.WorkflowStates(writ.WorkflowStateFilter{})
+		if err == nil && len(states) > 0 {
+			for _, s := range states {
+				if s.WorkflowState.Type == "unstarted" {
+					targetStateID = s.ObjectID
+					break
+				}
+			}
+			if targetStateID == "" {
+				for _, s := range states {
+					if s.WorkflowState.Type == "backlog" {
+						targetStateID = s.ObjectID
+						break
+					}
+				}
+			}
+			if targetStateID == "" {
+				targetStateID = states[0].ObjectID
+			}
+		}
+	}
+
 	id, err := store.Issues.Create(ctx, writ.NewIssue{
 		Title:       opts.title,
 		Description: opts.description,
@@ -145,8 +174,8 @@ func runIssueCreate(ctx context.Context, defaultDir string, args []string, stdou
 		return renderErr(stderr, err)
 	}
 
-	if opts.stateVal != "" {
-		if err := store.Issues.SetState(ctx, id, writ.IssueState{State: opts.stateVal}); err != nil {
+	if targetStateID != "" {
+		if err := store.Issues.SetState(ctx, id, writ.IssueState{State: targetStateID}); err != nil {
 			return renderErr(stderr, err)
 		}
 	}
@@ -166,6 +195,12 @@ func runIssueCreate(ctx context.Context, defaultDir string, args []string, stdou
 	dispState := opts.stateVal
 	if dispState == "" {
 		dispState = "open"
+	}
+	if targetStateID != "" {
+		ws, err := store.Query.WorkflowState(targetStateID)
+		if err == nil && ws.WorkflowState.Name != "" {
+			dispState = ws.WorkflowState.Name
+		}
 	}
 
 	fmt.Fprintf(stdout, "%s (%s) %s\n", id, dispState, opts.title)
@@ -213,23 +248,17 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 		return 2
 	}
 
-	var newState string
 	if len(posArgs) == 1 {
 		if opts.reason != "" {
 			fmt.Fprintln(stderr, "writ issue status: -reason is only valid when setting status")
 			fs.Usage()
 			return 2
 		}
-	} else {
+	}
+
+	if len(posArgs) == 2 {
 		if opts.jsonMode {
 			fmt.Fprintln(stderr, "writ issue status: --json is only valid when viewing status")
-			fs.Usage()
-			return 2
-		}
-
-		newState = posArgs[1]
-		if !slices.Contains(spec.IssueStates(), newState) {
-			fmt.Fprintf(stderr, "writ issue status: invalid status %q (must be %s)\n", newState, spec.FormatOptions(spec.IssueStates()))
 			fs.Usage()
 			return 2
 		}
@@ -246,6 +275,21 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 	}
 	defer store.Close()
 
+	var newState string
+	if len(posArgs) == 2 {
+		rawState := posArgs[1]
+		resolvedID, err := resolveStateID(ctx, store, rawState)
+		if err == nil {
+			newState = resolvedID
+		} else if rawState == "open" || rawState == "closed" {
+			newState = rawState
+		} else {
+			fmt.Fprintf(stderr, "writ issue status: invalid status %q\n", rawState)
+			fs.Usage()
+			return 2
+		}
+	}
+
 	issueID, err := resolveIssueID(ctx, store, posArgs[0])
 	if err != nil {
 		return renderErr(stderr, err)
@@ -253,6 +297,7 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 
 	// 1. Read / View status mode (len(posArgs) == 1)
 	if len(posArgs) == 1 {
+
 		res, err := store.Query.Issue(issueID)
 		if err != nil {
 			return renderErr(stderr, err)
@@ -275,6 +320,11 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 		stateVal := res.Issue.State
 		if stateVal == "" {
 			stateVal = "open"
+		} else {
+			ws, err := store.Query.WorkflowState(stateVal)
+			if err == nil && ws.WorkflowState.Name != "" {
+				stateVal = ws.WorkflowState.Name
+			}
 		}
 		author := authorDisplay(res.Author.Name, res.Author.Email)
 
@@ -331,6 +381,12 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 	}
 
 	// 2. Update / Transition status mode (len(posArgs) == 2)
+	if opts.jsonMode {
+		fmt.Fprintln(stderr, "writ issue status: --json is only valid when viewing status")
+		fs.Usage()
+		return 2
+	}
+
 	if err := store.Issues.SetState(ctx, issueID, writ.IssueState{
 		State:  newState,
 		Reason: opts.reason,
@@ -338,7 +394,13 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 		return renderErr(stderr, err)
 	}
 
-	fmt.Fprintf(stdout, "%s: %s\n", issueID, newState)
+	dispState := newState
+	ws, err := store.Query.WorkflowState(newState)
+	if err == nil && ws.WorkflowState.Name != "" {
+		dispState = ws.WorkflowState.Name
+	}
+
+	fmt.Fprintf(stdout, "%s: %s\n", issueID, dispState)
 	return 0
 }
 
@@ -739,6 +801,13 @@ func runIssueList(ctx context.Context, defaultDir string, args []string, stdout,
 		return 0
 	}
 
+	stateNames := make(map[string]string)
+	if wStates, err := store.Query.WorkflowStates(writ.WorkflowStateFilter{}); err == nil {
+		for _, ws := range wStates {
+			stateNames[ws.ObjectID] = ws.WorkflowState.Name
+		}
+	}
+
 	tw := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
 	for _, iss := range issues {
 		shortID := iss.ObjectID
@@ -748,6 +817,8 @@ func runIssueList(ctx context.Context, defaultDir string, args []string, stdout,
 		stateVal := iss.Issue.State
 		if stateVal == "" {
 			stateVal = "open"
+		} else if name, ok := stateNames[stateVal]; ok && name != "" {
+			stateVal = name
 		}
 		assigneesStr := "-"
 		if len(iss.Issue.Assignees) > 0 {

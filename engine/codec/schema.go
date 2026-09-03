@@ -24,6 +24,7 @@ const envelopeSchemaFile = "op-envelope.schema.json"
 var supportSchemaFiles = []string{
 	"identifiers.schema.json",
 	"anchor.schema.json",
+	"ordering.schema.json",
 }
 
 // vocabularySchemaFiles maps an object type to the vocabulary schema that
@@ -36,12 +37,13 @@ var supportSchemaFiles = []string{
 // up" cannot recur silently. That is what lets a lookup miss below mean one
 // thing only: an object type this implementation has never heard of.
 var vocabularySchemaFiles = map[string]string{
-	"review":  "review-ops.schema.json",
-	"comment": "comment.schema.json",
-	"issue":   "issue-ops.schema.json",
-	"project": "project-ops.schema.json",
-	"cycle":   "cycle-ops.schema.json",
-	"repo":    "repo-ops.schema.json",
+	"review":         "review-ops.schema.json",
+	"comment":        "comment.schema.json",
+	"issue":          "issue-ops.schema.json",
+	"project":        "project-ops.schema.json",
+	"cycle":          "cycle-ops.schema.json",
+	"repo":           "repo-ops.schema.json",
+	"workflow-state": "workflow-state-ops.schema.json",
 }
 
 // vocabularyOpTypes maps an object type to the op types this build defines for
@@ -63,12 +65,13 @@ var vocabularySchemaFiles = map[string]string{
 // closed on the write path costs an error message
 // (spec/op-envelope.md §Producer validation).
 var vocabularyOpTypes = map[string][]string{
-	"review":  {"approval", "assign", "ci-status", "create", "label", "link", "revision", "set-status", "update"},
-	"comment": {"create", "delete", "edit", "resolve"},
-	"issue":   {"assign", "create", "label", "link", "set-state", "update"},
-	"project": {"add-issue", "create", "remove-issue", "set-status", "update"},
-	"cycle":   {"add-issue", "create", "remove-issue", "set-dates", "update"},
-	"repo":    {"add-remote", "create", "set-slug"},
+	"review":         {"approval", "assign", "ci-status", "create", "label", "link", "revision", "set-status", "update"},
+	"comment":        {"create", "delete", "edit", "resolve"},
+	"issue":          {"assign", "create", "label", "link", "set-state", "update"},
+	"project":        {"add-issue", "create", "remove-issue", "set-status", "update"},
+	"cycle":          {"add-issue", "create", "remove-issue", "set-dates", "update"},
+	"repo":           {"add-remote", "create", "set-slug"},
+	"workflow-state": {"create", "update"},
 }
 
 // vocabularyOpVersion is the op version this build defines for every object

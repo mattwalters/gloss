@@ -222,6 +222,7 @@ func Open(path string, opts ...Option) (*Store, error) {
 	s.Drafts = &Drafts{store: s}
 	s.ReadState = &ReadState{store: s}
 	s.Query = &Query{store: s}
+	s.WorkflowStates = &WorkflowStates{store: s}
 
 	return s, nil
 }

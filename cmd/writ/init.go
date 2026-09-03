@@ -337,5 +337,11 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 		}
 	}
 
+	// 8. Seed default workflow states if writable and none exist
+	if initStore, err := writ.Open(repoRoot); err == nil {
+		defer initStore.Close()
+		_ = initStore.WorkflowStates.SeedDefaults(ctx)
+	}
+
 	return 0
 }

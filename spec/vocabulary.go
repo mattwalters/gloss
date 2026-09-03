@@ -9,12 +9,13 @@ import (
 )
 
 type vocabulary struct {
-	reviewStatuses   []string
-	approvalVerdicts []string
-	ciStatusStates   []string
-	linkRelations    []string
-	issueStates      []string
-	projectStatuses  []string
+	reviewStatuses     []string
+	approvalVerdicts   []string
+	ciStatusStates     []string
+	linkRelations      []string
+	issueStates        []string
+	projectStatuses    []string
+	workflowStateTypes []string
 }
 
 func parseSchemaEnum(schemaFile string, jsonPath ...string) []string {
@@ -54,12 +55,13 @@ func parseSchemaEnum(schemaFile string, jsonPath ...string) []string {
 
 var vocabOnce = sync.OnceValue(func() vocabulary {
 	return vocabulary{
-		reviewStatuses:   parseSchemaEnum("review-ops.schema.json", "$defs", "set_status_body", "properties", "status", "enum"),
-		approvalVerdicts: parseSchemaEnum("review-ops.schema.json", "$defs", "approval_body", "properties", "verdict", "enum"),
-		ciStatusStates:   parseSchemaEnum("review-ops.schema.json", "$defs", "ci_status_body", "properties", "state", "enum"),
-		linkRelations:    parseSchemaEnum("review-ops.schema.json", "$defs", "link_body", "properties", "relation", "enum"),
-		issueStates:      parseSchemaEnum("issue-ops.schema.json", "$defs", "set_state_body", "properties", "state", "enum"),
-		projectStatuses:  parseSchemaEnum("project-ops.schema.json", "$defs", "set_status_body", "properties", "status", "enum"),
+		reviewStatuses:     parseSchemaEnum("review-ops.schema.json", "$defs", "set_status_body", "properties", "status", "enum"),
+		approvalVerdicts:   parseSchemaEnum("review-ops.schema.json", "$defs", "approval_body", "properties", "verdict", "enum"),
+		ciStatusStates:     parseSchemaEnum("review-ops.schema.json", "$defs", "ci_status_body", "properties", "state", "enum"),
+		linkRelations:      parseSchemaEnum("review-ops.schema.json", "$defs", "link_body", "properties", "relation", "enum"),
+		issueStates:        []string{"open", "closed"},
+		projectStatuses:    parseSchemaEnum("project-ops.schema.json", "$defs", "set_status_body", "properties", "status", "enum"),
+		workflowStateTypes: parseSchemaEnum("workflow-state-ops.schema.json", "$defs", "state_type", "enum"),
 	}
 })
 
@@ -91,6 +93,11 @@ func IssueStates() []string {
 // ProjectStatuses returns the accepted project status enum values defined in project-ops.schema.json.
 func ProjectStatuses() []string {
 	return slices.Clone(vocabOnce().projectStatuses)
+}
+
+// WorkflowStateTypes returns the accepted workflow state type enum values defined in workflow-state-ops.schema.json.
+func WorkflowStateTypes() []string {
+	return slices.Clone(vocabOnce().workflowStateTypes)
 }
 
 // FormatOptions formats a slice of enum options into a human-readable list,

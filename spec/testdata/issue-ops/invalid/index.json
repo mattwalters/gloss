@@ -22,7 +22,7 @@
   {
     "file": "set-state-unknown-state.json",
     "rejects": "schema",
-    "reason": "state 'in_progress' is not a permitted state enum value"
+    "reason": "state reference must not contain whitespace"
   },
   {
     "file": "assign-empty-body.json",
