@@ -309,7 +309,10 @@ specific revision head.
   Normalized (trimmed, lowercase) per [`spec/identifiers.md`](identifiers.md)
   prior to key evaluation.
 - `message` (string, optional): Text summary or review message explaining the
-  verdict.
+  verdict. The message is an explanation of that specific verdict submission.
+  When a newer `approval` op for the same `(subject, revision)` omits `message`
+  or sets it to empty, the folded approval message resets to empty rather than
+  retaining the prior verdict's note.
 
 #### Authorization & Dismissal Model
 
@@ -425,6 +428,12 @@ published in `spec/testdata/review-ops/field-rules.json`.
 
 Folded review state is `Review{title, description, status, merge_commit, reason, assignees, labels, links, revisions, approvals, ci_statuses}`.
 
+In folded review state, each entry in `approvals` represents the current verdict
+for a `(subject, revision)` pair. The approval's `message` is an explanation of
+that specific verdict submission: when a newer `approval` op for the same
+`(subject, revision)` omits `message` or sets it to empty, the folded approval
+message resets to empty rather than retaining the note from a prior verdict.
+
 Per WRIT-12, **any field without a declared strategy is not merged**; it is
 treated as unknown data, preserved in the DAG, and ignored during fold.
 
@@ -468,6 +477,10 @@ treated as unknown data, preserved in the DAG, and ignored during fold.
   `approval` op with `verdict: "none"`. When folded, a verdict of `"none"`
   causes the subject's vote to present as absent in materialized state, while
   the operation itself remains intact in the DAG.
+- **Approval message lifecycle:** An approval's `message` is tied to the specific
+  verdict submission. When a subsequent `approval` op for the same `(subject, revision)`
+  omits `message` or sets it to empty, the folded approval message resets to empty
+  (`""`) rather than persisting across verdict updates.
 - **CI status updates:** A CI status is superseded by emitting a new
   `ci-status` op with the same `(revision, name)` key.
 - **Link retraction:** A cross-reference link is retracted by emitting a `link`
