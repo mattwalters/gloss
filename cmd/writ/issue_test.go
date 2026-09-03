@@ -1498,3 +1498,240 @@ func TestIssueComment_UsageErrors(t *testing.T) {
 	}
 }
 
+func TestIssueComment_ScopedCommentLookup(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("writ init failed: %s", stderr.String())
+	}
+	commitFile(t, env.repoDir, "README.md", "# Hello", "initial commit")
+
+	// Create an issue and an issue comment
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "create", "-C", env.repoDir,
+		"-title", "Scoped Issue",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue create failed: %s", stderr.String())
+	}
+	issueID := strings.Split(strings.TrimSpace(stdout.String()), " ")[0]
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, issueID,
+		"-m", "Issue comment text",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue comment failed: %s", stderr.String())
+	}
+	issueCommentID := strings.TrimSpace(stdout.String())
+
+	// Open a review and add a review comment
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "open", "-C", env.repoDir,
+		"-title", "Scoped Review",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review open failed: %s", stderr.String())
+	}
+	reviewID := strings.Split(strings.TrimSpace(stdout.String()), " ")[0]
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"review", "comment", "-C", env.repoDir, reviewID,
+		"-m", "Review comment text",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("review comment failed: %s", stderr.String())
+	}
+	reviewCommentID := strings.TrimSpace(stdout.String())
+
+	// 1. Attempt to resolve review comment via writ issue comment: must fail
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, reviewCommentID,
+		"-resolve",
+	}, &stdout, &stderr)
+	if code == 0 {
+		t.Fatalf("expected failure resolving review comment via issue comment, got code 0")
+	}
+	if !strings.Contains(stderr.String(), "no issue with id") {
+		t.Errorf("expected 'no issue with id' error in stderr, got: %s", stderr.String())
+	}
+
+	// Verify review comment is still unresolved
+	store, err := openStore(env.repoDir)
+	if err != nil {
+		t.Fatalf("openStore failed: %v", err)
+	}
+	defer store.Close()
+
+	rcs, err := store.Query.Comments(writ.CommentFilter{
+		SubjectType: "review",
+		SubjectID:   reviewID,
+	})
+	if err != nil {
+		t.Fatalf("query review comments failed: %v", err)
+	}
+	if len(rcs) != 1 || rcs[0].Comment.IsResolved() {
+		t.Errorf("expected review comment to remain unresolved")
+	}
+
+	// 2. Direct comment lookup with issue comment prefix must succeed even though review comments exist
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, issueCommentID[:8],
+		"-m", "Reply to issue comment via prefix",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected direct issue comment prefix lookup to succeed, got %d: %s", code, stderr.String())
+	}
+}
+
+func TestIssueComment_ReplyToNotFound(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("writ init failed: %s", stderr.String())
+	}
+	commitFile(t, env.repoDir, "README.md", "# Hello", "initial commit")
+
+	// Create two issues with one comment each
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "create", "-C", env.repoDir,
+		"-title", "Issue One",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue 1 create failed: %s", stderr.String())
+	}
+	issue1ID := strings.Split(strings.TrimSpace(stdout.String()), " ")[0]
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, issue1ID,
+		"-m", "Comment on Issue One",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue 1 comment failed: %s", stderr.String())
+	}
+	comment1ID := strings.TrimSpace(stdout.String())
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "create", "-C", env.repoDir,
+		"-title", "Issue Two",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue 2 create failed: %s", stderr.String())
+	}
+	issue2ID := strings.Split(strings.TrimSpace(stdout.String()), " ")[0]
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, issue2ID,
+		"-m", "Comment on Issue Two",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue 2 comment failed: %s", stderr.String())
+	}
+	comment2ID := strings.TrimSpace(stdout.String())
+
+	// Valid reply-to on issue 1 succeeds
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, issue1ID,
+		"-reply-to", comment1ID[:8],
+		"-m", "Valid reply on issue 1",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected valid reply to succeed, got %d: %s", code, stderr.String())
+	}
+
+	// 1. Cross-issue resolution: try resolving comment2ID on issue1ID
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, issue1ID,
+		"-reply-to", comment2ID,
+		"-resolve",
+	}, &stdout, &stderr)
+	if code == 0 {
+		t.Fatalf("expected failure for cross-issue comment resolution, got code 0")
+	}
+	expectedErrMsg := fmt.Sprintf("comment %q not found on issue", comment2ID)
+	if !strings.Contains(stderr.String(), expectedErrMsg) {
+		t.Errorf("expected stderr to contain %q, got: %s", expectedErrMsg, stderr.String())
+	}
+
+	// Verify comment 2 on issue 2 was NOT resolved
+	store, err := openStore(env.repoDir)
+	if err != nil {
+		t.Fatalf("openStore failed: %v", err)
+	}
+	defer store.Close()
+
+	c2s, err := store.Query.Comments(writ.CommentFilter{
+		SubjectType: "issue",
+		SubjectID:   issue2ID,
+	})
+	if err != nil {
+		t.Fatalf("query issue 2 comments failed: %v", err)
+	}
+	if len(c2s) != 1 || c2s[0].Comment.IsResolved() {
+		t.Errorf("expected comment on issue 2 to remain unresolved")
+	}
+
+	// 2. Nonexistent comment prefix in -reply-to
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, issue1ID,
+		"-reply-to", "nonexistent123",
+		"-m", "reply text",
+	}, &stdout, &stderr)
+	if code == 0 {
+		t.Fatalf("expected failure for nonexistent -reply-to, got code 0")
+	}
+	expectedNonexistentMsg := `comment "nonexistent123" not found on issue`
+	if !strings.Contains(stderr.String(), expectedNonexistentMsg) {
+		t.Errorf("expected stderr to contain %q, got: %s", expectedNonexistentMsg, stderr.String())
+	}
+
+	// 3. Nonexistent comment prefix in -reply-to with -resolve
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, issue1ID,
+		"-reply-to", "nonexistent456",
+		"-resolve",
+	}, &stdout, &stderr)
+	if code == 0 {
+		t.Fatalf("expected failure for nonexistent -reply-to -resolve, got code 0")
+	}
+	expectedNonexistentMsg2 := `comment "nonexistent456" not found on issue`
+	if !strings.Contains(stderr.String(), expectedNonexistentMsg2) {
+		t.Errorf("expected stderr to contain %q, got: %s", expectedNonexistentMsg2, stderr.String())
+	}
+}
+
+

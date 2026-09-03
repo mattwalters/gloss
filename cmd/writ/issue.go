@@ -439,15 +439,18 @@ func runIssueComment(ctx context.Context, defaultDir string, args []string, stdo
 	var directCommentID string
 	if err != nil {
 		// Check if posArgs[0] is a comment ID prefix
-		comments, cErr := store.Query.Comments(writ.CommentFilter{IncludeDeleted: true})
+		comments, cErr := store.Query.Comments(writ.CommentFilter{
+			SubjectType:    "issue",
+			IncludeDeleted: true,
+		})
 		if cErr == nil {
 			var matches []writ.CommentResult
 			for _, c := range comments {
-				if strings.HasPrefix(c.ObjectID, posArgs[0]) {
+				if strings.HasPrefix(c.ObjectID, posArgs[0]) && c.Comment.Subject.ObjectType == "issue" {
 					matches = append(matches, c)
 				}
 			}
-			if len(matches) == 1 {
+			if len(matches) == 1 && matches[0].Comment.Subject.ObjectID != "" {
 				issueID = matches[0].Comment.Subject.ObjectID
 				directCommentID = matches[0].ObjectID
 				err = nil
@@ -494,26 +497,22 @@ func runIssueComment(ctx context.Context, defaultDir string, args []string, stdo
 			}
 			return renderErr(stderr, fmt.Errorf("ambiguous comment ID prefix %q matches %d comments (%s)", targetCommentLookup, len(matches), strings.Join(matchIDs, ", ")))
 		} else {
-			replyToID = targetCommentLookup
+			return renderErr(stderr, fmt.Errorf("comment %q not found on issue", targetCommentLookup))
 		}
 
-		if matchedComment.ObjectID != "" {
-			parentMap := make(map[string]string, len(comments))
-			for _, c := range comments {
-				if c.Comment.InReplyTo != "" {
-					parentMap[c.ObjectID] = c.Comment.InReplyTo
-				}
+		parentMap := make(map[string]string, len(comments))
+		for _, c := range comments {
+			if c.Comment.InReplyTo != "" {
+				parentMap[c.ObjectID] = c.Comment.InReplyTo
 			}
-			curr := matchedComment.ObjectID
-			visited := make(map[string]bool, len(comments))
-			for parentMap[curr] != "" && !visited[curr] {
-				visited[curr] = true
-				curr = parentMap[curr]
-			}
-			threadRootID = curr
-		} else {
-			threadRootID = replyToID
 		}
+		curr := matchedComment.ObjectID
+		visited := make(map[string]bool, len(comments))
+		for parentMap[curr] != "" && !visited[curr] {
+			visited[curr] = true
+			curr = parentMap[curr]
+		}
+		threadRootID = curr
 	}
 
 	var resolvedBy string
