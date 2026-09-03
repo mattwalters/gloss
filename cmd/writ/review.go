@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"text/tabwriter"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/identity"
 	"github.com/writtendev/writ/engine/state"
+	"github.com/writtendev/writ/spec"
 )
 
 type stringSliceFlag []string
@@ -490,11 +492,8 @@ func runReviewApprove(ctx context.Context, defaultDir string, args []string, std
 		return 2
 	}
 
-	switch opts.verdict {
-	case "approve", "request-changes", "none":
-		// valid
-	default:
-		fmt.Fprintf(stderr, "writ review approve: invalid verdict %q (must be approve, request-changes, or none)\n", opts.verdict)
+	if !slices.Contains(spec.ApprovalVerdicts(), opts.verdict) {
+		fmt.Fprintf(stderr, "writ review approve: invalid verdict %q (must be %s)\n", opts.verdict, spec.FormatOptions(spec.ApprovalVerdicts()))
 		fs.Usage()
 		return 2
 	}
@@ -770,11 +769,8 @@ func runReviewLink(ctx context.Context, defaultDir string, args []string, stdout
 		return 2
 	}
 
-	switch opts.relation {
-	case "fixes", "relates", "none":
-		// valid
-	default:
-		fmt.Fprintf(stderr, "writ review link: invalid relation %q (must be fixes, relates, or none)\n", opts.relation)
+	if !slices.Contains(spec.LinkRelations(), opts.relation) {
+		fmt.Fprintf(stderr, "writ review link: invalid relation %q (must be %s)\n", opts.relation, spec.FormatOptions(spec.LinkRelations()))
 		fs.Usage()
 		return 2
 	}
@@ -909,11 +905,8 @@ func runReviewStatus(ctx context.Context, defaultDir string, args []string, stdo
 		}
 
 		newState = posArgs[1]
-		switch newState {
-		case "draft", "open", "closed", "merged":
-			// valid
-		default:
-			fmt.Fprintf(stderr, "writ review status: invalid status %q (must be draft, open, closed, or merged)\n", newState)
+		if !slices.Contains(spec.ReviewStatuses(), newState) {
+			fmt.Fprintf(stderr, "writ review status: invalid status %q (must be %s)\n", newState, spec.FormatOptions(spec.ReviewStatuses()))
 			fs.Usage()
 			return 2
 		}
