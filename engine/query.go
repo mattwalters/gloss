@@ -36,6 +36,12 @@ type (
 	// IssueResult represents an issue object along with its authorship and timestamps.
 	IssueResult = projection.IssueResult
 
+	// WorkflowStateFilter specifies filter criteria when querying workflow states.
+	WorkflowStateFilter = projection.WorkflowStateFilter
+
+	// WorkflowStateResult represents a workflow state object along with its authorship and timestamps.
+	WorkflowStateResult = projection.WorkflowStateResult
+
 	// CommentResult represents a comment object along with its authorship, timestamps, and anchor resolutions.
 	CommentResult = projection.CommentResult
 
@@ -208,4 +214,28 @@ func (q *Query) Object(id string) (ObjectResult, error) {
 		return ObjectResult{}, err
 	}
 	return q.store.projection.Object(id)
+}
+
+// WorkflowStates executes a list and filter query over workflow states.
+func (q *Query) WorkflowStates(f WorkflowStateFilter) ([]WorkflowStateResult, error) {
+	target, err := q.targetStoreForIssues(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if err := target.maybeAutoRefresh(context.Background()); err != nil {
+		return nil, err
+	}
+	return target.projection.WorkflowStates(f)
+}
+
+// WorkflowState fetches a single workflow state by its object ID, returning ErrNotFound if not found.
+func (q *Query) WorkflowState(id string) (WorkflowStateResult, error) {
+	target, err := q.targetStoreForIssues(context.Background())
+	if err != nil {
+		return WorkflowStateResult{}, err
+	}
+	if err := target.maybeAutoRefresh(context.Background()); err != nil {
+		return WorkflowStateResult{}, err
+	}
+	return target.projection.WorkflowState(id)
 }

@@ -24,6 +24,7 @@ const OrderByTitleDesc = projection.OrderByTitleDesc
 const OrderByUpdatedAtAsc = projection.OrderByUpdatedAtAsc
 const OrderByUpdatedAtDesc = projection.OrderByUpdatedAtDesc
 
+var DefaultWorkflowStates = []NewWorkflowState{{Name: "Backlog", Type: "backlog", Position: "1"}, {Name: "Todo", Type: "unstarted", Position: "V"}, {Name: "In Progress", Type: "started", Position: "k"}, {Name: "Done", Type: "completed", Position: "s"}, {Name: "Canceled", Type: "canceled", Position: "zV"}}
 var ErrAuth = writsync.ErrAuth
 var ErrCycle = state.ErrCycle
 var ErrDuplicateOpID = state.ErrDuplicateOpID
@@ -46,6 +47,7 @@ func FoldCycle(ops []codec.Op) (Cycle, error)
 func FoldIssue(ops []codec.Op) (Issue, error)
 func FoldProject(ops []codec.Op) (Project, error)
 func FoldReview(ops []codec.Op) (Review, error)
+func FoldWorkflowState(ops []codec.Op) (WorkflowState, error)
 func IssueRules() []Rule
 func NormalizePerson(s string) string
 func Open(path string, opts ...Option) (*Store, error)
@@ -61,6 +63,7 @@ func WithSigner(signer Signer) Option
 func WithTargetRefs(refs ...string) Option
 func WithWorkspace(path string) Option
 func WithoutAutoRefresh() Option
+func WorkflowStateRules() []Rule
 
 type Anchor = resolve.Anchor
 
@@ -163,7 +166,7 @@ func (*Issues) Comment(ctx context.Context, id string, c NewComment) (string, er
 func (*Issues) Create(ctx context.Context, n NewIssue) (string, error)
 func (*Issues) Label(ctx context.Context, id string, add, remove []string) error
 func (*Issues) Link(ctx context.Context, id string, l Link) error
-func (*Issues) SetState(ctx context.Context, id string, state IssueState) error
+func (*Issues) SetState(ctx context.Context, id string, st IssueState) error
 func (*Issues) Update(ctx context.Context, id string, edit IssueEdit) error
 
 type Link = state.Link
@@ -184,6 +187,14 @@ type NewReview struct {
 	Description string `json:"description,omitempty"`
 	Base string `json:"base,omitempty"`
 	Head string `json:"head,omitempty"`
+}
+
+type NewWorkflowState struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Position string `json:"position,omitempty"`
+	Color string `json:"color,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 type NormalizeRule = state.NormalizeRule
@@ -216,6 +227,8 @@ func (*Query) Objects(f ObjectFilter) ([]ObjectResult, error)
 func (*Query) Review(id string) (ReviewResult, error)
 func (*Query) Reviews(f ReviewFilter) ([]ReviewResult, error)
 func (*Query) Threads(subjectType, subjectID string) ([]CommentThread, error)
+func (*Query) WorkflowState(id string) (WorkflowStateResult, error)
+func (*Query) WorkflowStates(f WorkflowStateFilter) ([]WorkflowStateResult, error)
 
 type ReadState struct {
 	// unexported fields
@@ -275,6 +288,7 @@ type Store struct {
 	Drafts *Drafts
 	ReadState *ReadState
 	Query *Query
+	WorkflowStates *WorkflowStates
 	Workspace *Workspace
 	// unexported fields
 }
@@ -321,6 +335,27 @@ type TypeUnsynced struct {
 
 type UnknownOp = state.UnknownOp
 
+type WorkflowState = state.WorkflowState
+
+type WorkflowStateEdit struct {
+	Name *string `json:"name,omitempty"`
+	Type *string `json:"type,omitempty"`
+	Position *string `json:"position,omitempty"`
+	Color *string `json:"color,omitempty"`
+	Description *string `json:"description,omitempty"`
+}
+
+type WorkflowStateFilter = projection.WorkflowStateFilter
+
+type WorkflowStateResult = projection.WorkflowStateResult
+
+type WorkflowStates struct {
+	// unexported fields
+}
+func (*WorkflowStates) Create(ctx context.Context, nws NewWorkflowState) (string, error)
+func (*WorkflowStates) SeedDefaults(ctx context.Context) error
+func (*WorkflowStates) Update(ctx context.Context, id string, edit WorkflowStateEdit) error
+
 type Workspace struct {
 	// unexported fields
 }
@@ -329,6 +364,7 @@ func (*Workspace) IsConfigured() bool
 func (*Workspace) Register(ctx context.Context, slug string, remotes []string) error
 func (*Workspace) Repos(ctx context.Context) ([]RepoEntry, error)
 func (*Workspace) Resolve(ctx context.Context, reference string) (ResolvedReference, error)
+func (*Workspace) SeedDefaults(ctx context.Context) error
 
 type WorkspaceInfo struct {
 	LocalRepoID string `json:"local_repo_id,omitempty"`
@@ -737,6 +773,8 @@ func (*DB) SetSyncCursor(remote, refName, tip string, lastSyncedAt time.Time) er
 func (*DB) String() string
 func (*DB) SyncCursors(remote string) ([]SyncCursor, error)
 func (*DB) Threads(subjectType, subjectID string) ([]state.CommentThread, error)
+func (*DB) WorkflowState(id string) (WorkflowStateResult, error)
+func (*DB) WorkflowStates(f WorkflowStateFilter) ([]WorkflowStateResult, error)
 
 type Draft struct {
 	DraftID string `json:"draft_id"`
@@ -864,6 +902,21 @@ type SyncCursor struct {
 	RefName string `json:"ref_name"`
 	Tip string `json:"tip"`
 	LastSyncedAt time.Time `json:"last_synced_at"`
+}
+
+type WorkflowStateFilter struct {
+	Type []string
+	OrderBy OrderBy
+	Limit int
+	Offset int
+}
+
+type WorkflowStateResult struct {
+	ObjectID string `json:"object_id"`
+	Author Author `json:"author"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	WorkflowState state.WorkflowState `json:"workflow_state"`
 }
 
 package resolve // github.com/writtendev/writ/engine/resolve
@@ -1095,6 +1148,7 @@ func FoldIssue(ops []codec.Op) (Issue, error)
 func FoldProject(ops []codec.Op) (Project, error)
 func FoldRepo(ops []codec.Op) (RepoEntry, error)
 func FoldReview(ops []codec.Op) (Review, error)
+func FoldWorkflowState(ops []codec.Op) (WorkflowState, error)
 func IssueRules() []Rule
 func NormalizePerson(s string) string
 func ParseCommentSubject(raw []byte) (CommentSubject, error)
@@ -1103,6 +1157,7 @@ func ProjectRules() []Rule
 func RepoRules() []Rule
 func ResolveReference(ref string, localRepoID string, registry []RepoEntry) (ResolvedReference, error)
 func ReviewRules() []Rule
+func WorkflowStateRules() []Rule
 
 type Anchor = resolve.Anchor
 
@@ -1261,6 +1316,15 @@ type UnknownOp struct {
 	ObjectType string `json:"object_type"`
 	OpType string `json:"op_type"`
 	OpVersion int64 `json:"op_version"`
+}
+
+type WorkflowState struct {
+	Name string `json:"name,omitempty"`
+	Type string `json:"type,omitempty"`
+	Position string `json:"position,omitempty"`
+	Color string `json:"color,omitempty"`
+	Description string `json:"description,omitempty"`
+	UnknownOps []UnknownOp `json:"unknown_ops,omitempty"`
 }
 
 package sync // github.com/writtendev/writ/engine/sync

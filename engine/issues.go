@@ -153,8 +153,8 @@ func (i *Issues) Update(ctx context.Context, id string, edit IssueEdit) error {
 	return nil
 }
 
-// SetState transitions the issue state (e.g. "open", "closed") with an optional reason.
-func (i *Issues) SetState(ctx context.Context, id string, state IssueState) error {
+// SetState transitions the issue state (e.g. "open", "closed", or a workflow state reference) with an optional reason.
+func (i *Issues) SetState(ctx context.Context, id string, st IssueState) error {
 	target, _, err := i.targetStore(ctx)
 	if err != nil {
 		return err
@@ -165,11 +165,11 @@ func (i *Issues) SetState(ctx context.Context, id string, state IssueState) erro
 	if id == "" {
 		return fmt.Errorf("writ: issue id cannot be empty")
 	}
-	if state.State == "" {
+	if st.State == "" {
 		return fmt.Errorf("writ: issue state cannot be empty")
 	}
-	if !slices.Contains(spec.IssueStates(), state.State) {
-		return fmt.Errorf("writ: invalid state %q (must be %s)", state.State, spec.FormatOptions(spec.IssueStates()))
+	if _, _, err := state.ParseReference(st.State); err != nil {
+		return fmt.Errorf("writ: invalid issue state reference: %w", err)
 	}
 
 	if err := target.maybeAutoRefresh(ctx); err != nil {
@@ -186,10 +186,10 @@ func (i *Issues) SetState(ctx context.Context, id string, state IssueState) erro
 	}
 
 	body := map[string]any{
-		"state": state.State,
+		"state": st.State,
 	}
-	if state.Reason != "" {
-		body["reason"] = state.Reason
+	if st.Reason != "" {
+		body["reason"] = st.Reason
 	}
 
 	bodyBytes, err := json.Marshal(body)

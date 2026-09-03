@@ -56,6 +56,11 @@ func flagEnumChoices(flagName string, cmdPath []string) string {
 		return strings.Join(spec.LinkRelations(), " ")
 	case "sort":
 		return "created_at_asc created_at_desc updated_at_asc updated_at_desc title_asc title_desc"
+	case "type":
+		if p == "state create" || p == "state update" {
+			return strings.Join(spec.WorkflowStateTypes(), " ")
+		}
+		return ""
 	default:
 		return ""
 	}

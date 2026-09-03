@@ -1,0 +1,47 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/0123456789abcdef/workflow-state",
+      "commit": "d5ce029fdaab1271461476aee5444374a043b926"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/0123456789abcdef/workflow-state",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "5721fc156ce24f346f47954a4779cc89499ba62f",
+          "tree": "5eda01637e6842b617cfc618553a6261367dc199",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create workflow-state/ws-ordering\n",
+          "signed": true
+        },
+        {
+          "sha": "16d26796ecd8c601e934e417d875375d881b91d3",
+          "tree": "ee8224ec8fd095ca177f6a398b70aeb7ea5e3694",
+          "parents": [
+            "5721fc156ce24f346f47954a4779cc89499ba62f"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: update workflow-state/ws-ordering\n",
+          "signed": true
+        },
+        {
+          "sha": "d5ce029fdaab1271461476aee5444374a043b926",
+          "tree": "f6b07f153602e6bef696a066da8e14ac0e9afe8f",
+          "parents": [
+            "16d26796ecd8c601e934e417d875375d881b91d3"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:02:00Z",
+          "message": "writ: update workflow-state/ws-ordering\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

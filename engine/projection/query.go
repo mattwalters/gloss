@@ -33,11 +33,20 @@ type ReviewResult struct {
 
 // IssueResult represents an issue object along with its authorship and timestamps.
 type IssueResult struct {
-	ObjectID  string     `json:"object_id"`
-	Author    Author     `json:"author"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
+	ObjectID  string      `json:"object_id"`
+	Author    Author      `json:"author"`
+	CreatedAt time.Time   `json:"created_at"`
+	UpdatedAt time.Time   `json:"updated_at"`
 	Issue     state.Issue `json:"issue"`
+}
+
+// WorkflowStateResult represents a workflow state object along with its authorship and timestamps.
+type WorkflowStateResult struct {
+	ObjectID      string              `json:"object_id"`
+	Author        Author              `json:"author"`
+	CreatedAt     time.Time           `json:"created_at"`
+	UpdatedAt     time.Time           `json:"updated_at"`
+	WorkflowState state.WorkflowState `json:"workflow_state"`
 }
 
 // ResolvedPosition describes the resolved anchor position for a comment side.
@@ -365,10 +374,15 @@ func (d *DB) Issues(f IssueFilter) ([]IssueResult, error) {
 	sb.WriteString("FROM issues i JOIN objects o ON o.object_id = i.object_id WHERE 1=1")
 
 	if len(f.State) > 0 {
-		sb.WriteString(" AND i.state IN (" + placeholders(len(f.State)) + ")")
-		for _, s := range f.State {
-			args = append(args, s)
+		sb.WriteString(" AND (")
+		for idx, s := range f.State {
+			if idx > 0 {
+				sb.WriteString(" OR ")
+			}
+			sb.WriteString("(i.state = ? OR (i.state = 'open' AND LOWER(?) IN ('open', 'unstarted')) OR (i.state = 'closed' AND LOWER(?) IN ('closed', 'completed')) OR EXISTS (SELECT 1 FROM workflow_states ws WHERE ws.object_id = i.state AND (LOWER(ws.name) = LOWER(?) OR LOWER(ws.type) = LOWER(?))))")
+			args = append(args, s, s, s, s, s)
 		}
+		sb.WriteString(")")
 	}
 
 	if len(f.Author) > 0 {
@@ -1636,5 +1650,208 @@ func (d *DB) Repo(objectID string) (state.RepoEntry, error) {
 		Remotes:     remotes,
 		IsWorkspace: rr.isWorkspace == 1,
 		UnknownOps:  unknownOps,
+	}, nil
+}
+
+// WorkflowStates executes a list and filter query over workflow states.
+func (d *DB) WorkflowStates(f WorkflowStateFilter) ([]WorkflowStateResult, error) {
+	if d == nil || d.db == nil {
+		return nil, fmt.Errorf("projection: database is closed")
+	}
+
+	var sb strings.Builder
+	var args []any
+
+	sb.WriteString("SELECT ws.object_id, ws.name, ws.type, ws.position, ws.color, ws.description, ")
+	sb.WriteString("o.author_name, o.author_email, o.created_at, o.updated_at, o.last_op_id ")
+	sb.WriteString("FROM workflow_states ws JOIN objects o ON o.object_id = ws.object_id WHERE 1=1")
+
+	if len(f.Type) > 0 {
+		sb.WriteString(" AND ws.type IN (" + placeholders(len(f.Type)) + ")")
+		for _, t := range f.Type {
+			args = append(args, t)
+		}
+	}
+
+	switch f.OrderBy {
+	case OrderByCreatedAtAsc:
+		sb.WriteString(" ORDER BY o.created_at ASC, ws.object_id ASC")
+	case OrderByCreatedAtDesc:
+		sb.WriteString(" ORDER BY o.created_at DESC, ws.object_id DESC")
+	case OrderByUpdatedAtAsc:
+		sb.WriteString(" ORDER BY o.updated_at ASC, ws.object_id ASC")
+	case OrderByUpdatedAtDesc:
+		sb.WriteString(" ORDER BY o.updated_at DESC, ws.object_id DESC")
+	case OrderByTitleAsc:
+		sb.WriteString(" ORDER BY ws.name ASC, ws.object_id ASC")
+	case OrderByTitleDesc:
+		sb.WriteString(" ORDER BY ws.name DESC, ws.object_id DESC")
+	default:
+		sb.WriteString(" ORDER BY ws.position ASC, o.last_op_id ASC")
+	}
+
+	appendLimitOffset(&sb, &args, f.Limit, f.Offset)
+
+	rows, err := d.db.Query(sb.String(), args...)
+	if err != nil {
+		return nil, fmt.Errorf("projection: query workflow states: %w", err)
+	}
+	defer rows.Close()
+
+	type rawState struct {
+		objectID    string
+		name        string
+		stateType   string
+		position    string
+		color       string
+		description string
+		authorName  string
+		authorEmail string
+		createdAt   int64
+		updatedAt   int64
+		lastOpID    string
+	}
+
+	var rawStates []rawState
+	var objectIDs []string
+
+	for rows.Next() {
+		var rs rawState
+		if err := rows.Scan(
+			&rs.objectID, &rs.name, &rs.stateType, &rs.position, &rs.color, &rs.description,
+			&rs.authorName, &rs.authorEmail, &rs.createdAt, &rs.updatedAt, &rs.lastOpID,
+		); err != nil {
+			return nil, fmt.Errorf("projection: scan workflow state: %w", err)
+		}
+		rawStates = append(rawStates, rs)
+		objectIDs = append(objectIDs, rs.objectID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("projection: scan workflow states rows: %w", err)
+	}
+
+	unknownMap := make(map[string][]state.UnknownOp)
+	if len(objectIDs) > 0 {
+		uRows, err := d.queryIn("SELECT object_id, op_id, object_type, op_type, op_version FROM unknown_ops WHERE object_id IN (?) ORDER BY object_id ASC, op_index ASC", objectIDs)
+		if err != nil {
+			return nil, fmt.Errorf("projection: query unknown_ops: %w", err)
+		}
+		for uRows.Next() {
+			var objID, opID, objType, opType string
+			var opVersion int64
+			if err := uRows.Scan(&objID, &opID, &objType, &opType, &opVersion); err != nil {
+				uRows.Close()
+				return nil, fmt.Errorf("projection: scan unknown op: %w", err)
+			}
+			unknownMap[objID] = append(unknownMap[objID], state.UnknownOp{
+				Commit:     opID,
+				ObjectType: objType,
+				OpType:     opType,
+				OpVersion:  opVersion,
+			})
+		}
+		uRows.Close()
+	}
+
+	results := make([]WorkflowStateResult, 0, len(rawStates))
+	for _, rs := range rawStates {
+		results = append(results, WorkflowStateResult{
+			ObjectID: rs.objectID,
+			Author: Author{
+				Name:  rs.authorName,
+				Email: rs.authorEmail,
+			},
+			CreatedAt: time.Unix(rs.createdAt, 0).UTC(),
+			UpdatedAt: time.Unix(rs.updatedAt, 0).UTC(),
+			WorkflowState: state.WorkflowState{
+				Name:        rs.name,
+				Type:        rs.stateType,
+				Position:    rs.position,
+				Color:       rs.color,
+				Description: rs.description,
+				UnknownOps:  unknownMap[rs.objectID],
+			},
+		})
+	}
+	return results, nil
+}
+
+// WorkflowState fetches a single workflow state by its object ID, returning ErrNotFound if not found.
+func (d *DB) WorkflowState(id string) (WorkflowStateResult, error) {
+	if d == nil || d.db == nil {
+		return WorkflowStateResult{}, fmt.Errorf("projection: database is closed")
+	}
+	if id == "" {
+		return WorkflowStateResult{}, fmt.Errorf("projection: workflow state id cannot be empty")
+	}
+
+	var rs struct {
+		objectID    string
+		name        string
+		stateType   string
+		position    string
+		color       string
+		description string
+		authorName  string
+		authorEmail string
+		createdAt   int64
+		updatedAt   int64
+		lastOpID    string
+	}
+
+	query := "SELECT ws.object_id, ws.name, ws.type, ws.position, ws.color, ws.description, " +
+		"o.author_name, o.author_email, o.created_at, o.updated_at, o.last_op_id " +
+		"FROM workflow_states ws JOIN objects o ON o.object_id = ws.object_id WHERE ws.object_id = ?"
+
+	err := d.db.QueryRow(query, id).Scan(
+		&rs.objectID, &rs.name, &rs.stateType, &rs.position, &rs.color, &rs.description,
+		&rs.authorName, &rs.authorEmail, &rs.createdAt, &rs.updatedAt, &rs.lastOpID,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return WorkflowStateResult{}, ErrNotFound
+		}
+		return WorkflowStateResult{}, fmt.Errorf("projection: query workflow state %s: %w", id, err)
+	}
+
+	var unknownOps []state.UnknownOp
+	uRows, err := d.db.Query("SELECT op_id, object_type, op_type, op_version FROM unknown_ops WHERE object_id = ? ORDER BY op_index ASC", id)
+	if err != nil {
+		return WorkflowStateResult{}, fmt.Errorf("projection: query unknown_ops: %w", err)
+	}
+	defer uRows.Close()
+	for uRows.Next() {
+		var opID, objType, opType string
+		var opVersion int64
+		if err := uRows.Scan(&opID, &objType, &opType, &opVersion); err != nil {
+			return WorkflowStateResult{}, fmt.Errorf("projection: scan unknown op: %w", err)
+		}
+		unknownOps = append(unknownOps, state.UnknownOp{
+			Commit:     opID,
+			ObjectType: objType,
+			OpType:     opType,
+			OpVersion:  opVersion,
+		})
+	}
+	if err := uRows.Err(); err != nil {
+		return WorkflowStateResult{}, fmt.Errorf("projection: iterate unknown_ops: %w", err)
+	}
+
+	return WorkflowStateResult{
+		ObjectID: rs.objectID,
+		Author: Author{
+			Name:  rs.authorName,
+			Email: rs.authorEmail,
+		},
+		CreatedAt: time.Unix(rs.createdAt, 0).UTC(),
+		UpdatedAt: time.Unix(rs.updatedAt, 0).UTC(),
+		WorkflowState: state.WorkflowState{
+			Name:        rs.name,
+			Type:        rs.stateType,
+			Position:    rs.position,
+			Color:       rs.color,
+			Description: rs.description,
+			UnknownOps:  unknownOps,
+		},
 	}, nil
 }

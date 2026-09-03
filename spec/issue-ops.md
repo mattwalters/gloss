@@ -123,7 +123,7 @@ The issue family defines six operation types for `op_version: 1`:
 | --- | --- | --- |
 | `create` | `{"title": string, "description"?: string}` | Issue creation and initial description. |
 | `update` | `{"title"?: string, "description"?: string}` | Metadata edits (title, description). |
-| `set-state` | `{"state": "open"\|"closed", "reason"?: string}` | State transitions and optional reason. |
+| `set-state` | `{"state": reference, "reason"?: string}` | State transitions and optional reason. |
 | `assign` | `{"add"?: [person-id], "remove"?: [person-id]}` | Add or remove assignees. |
 | `label` | `{"add"?: [string], "remove"?: [string]}` | Add or remove labels. |
 | `link` | `{"target": reference, "target_type"?: string, "relation": "fixes"\|"relates"\|"none"}` | Associate or retract cross-references. |
@@ -174,7 +174,7 @@ An empty `{}` update body is invalid.
 
 ### 3. `set-state`
 
-Transitions the issue state between open and closed.
+Transitions the issue state to reference a `workflow-state` collaborative object (or legacy string `"open"` or `"closed"`).
 
 ```jsonc
 {
@@ -183,15 +183,24 @@ Transitions the issue state between open and closed.
   "op_type": "set-state",
   "op_version": 1,
   "body": {
-    "state": "closed",
-    "reason": "not_planned"
+    "state": "0123456789abcdef0123456789abcdef",
+    "reason": "completed"
   }
 }
 ```
 
-- `state` (string, required): One of `"open"`, `"closed"`.
+- `state` (reference string, required): Reference string targeting a `workflow-state`
+  collaborative object ID (per [`spec/identifiers.md`](identifiers.md)), or legacy `"open"` / `"closed"`.
 - `reason` (string, optional): Explanation for the state change (e.g. `"completed"`,
   `"not_planned"`, or a free-form human string).
+
+#### Unknown-State Reference Semantics
+
+In an eventually-consistent log, an issue referencing an unknown, missing, or unfetched
+state ID MUST fold cleanly without rejection or error. Referential integrity is not
+enforceable across independent append-only writer logs. Clients project and render such
+issues into an "Unknown" board column until the defining `workflow-state` operation arrives,
+at which point the reference heals automatically.
 
 ### 4. `assign`
 

@@ -1,0 +1,52 @@
+name: workflow-state-ordering
+description: >
+  Workflow state object ws-ordering created with position '1', then sequentially
+  reordered across columns using fractional index positions 'V' and 'k'.
+
+refs:
+  - name: refs/writ/0123456789abcdef/workflow-state
+    history:
+      - commits:
+          - id: alice-create
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            op:
+              object_id: ws-ordering
+              object_type: workflow-state
+              op_type: create
+              op_version: 1
+              body:
+                name: "Backlog"
+                type: "backlog"
+                position: "1"
+                color: "#737373"
+                description: "Initial backlog position"
+            expect: accept
+
+          - id: alice-move-to-mid
+            parents: [alice-create]
+            author: alice
+            timestamp: 2026-01-01T00:01:00Z
+            op:
+              object_id: ws-ordering
+              object_type: workflow-state
+              op_type: update
+              op_version: 1
+              body:
+                position: "V"
+                description: "Moved to middle column"
+            expect: accept
+
+          - id: alice-move-to-end
+            parents: [alice-move-to-mid]
+            author: alice
+            timestamp: 2026-01-01T00:02:00Z
+            op:
+              object_id: ws-ordering
+              object_type: workflow-state
+              op_type: update
+              op_version: 1
+              body:
+                position: "k"
+                description: "Moved further right"
+            expect: accept

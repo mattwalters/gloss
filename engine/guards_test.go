@@ -397,14 +397,13 @@ func TestIssuesDomainGuards(t *testing.T) {
 		t.Fatalf("Create issue failed: %v", err)
 	}
 
-	t.Run("SetState invalid state enum", func(t *testing.T) {
-		err := s.Issues.SetState(ctx, issueID, writ.IssueState{State: "resolved"})
+	t.Run("SetState invalid state reference", func(t *testing.T) {
+		err := s.Issues.SetState(ctx, issueID, writ.IssueState{State: "invalid state with spaces"})
 		if err == nil {
-			t.Fatal("expected error for invalid state 'resolved', got nil")
+			t.Fatal("expected error for invalid state reference, got nil")
 		}
-		want := `writ: invalid state "resolved" (must be open or closed)`
-		if err.Error() != want {
-			t.Errorf("got error %q, want %q", err.Error(), want)
+		if !strings.Contains(err.Error(), "invalid issue state reference") {
+			t.Errorf("got error %q, want reference validation error", err.Error())
 		}
 	})
 

@@ -175,11 +175,7 @@
       "type": "object",
       "properties": {
         "state": {
-          "type": "string",
-          "enum": [
-            "open",
-            "closed"
-          ]
+          "$ref": "https://writ.dev/spec/identifiers.schema.json#/$defs/reference"
         },
         "reason": {
           "type": "string"

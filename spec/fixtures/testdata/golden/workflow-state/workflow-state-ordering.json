@@ -1,0 +1,14 @@
+{
+  "objects": [
+    {
+      "object_id": "ws-ordering",
+      "workflow_state": {
+        "name": "Backlog",
+        "type": "backlog",
+        "position": "k",
+        "color": "#737373",
+        "description": "Moved further right"
+      }
+    }
+  ]
+}

@@ -67,6 +67,14 @@ type ObjectFilter struct {
 	Offset         int
 }
 
+// WorkflowStateFilter specifies filter criteria when querying workflow states.
+type WorkflowStateFilter struct {
+	Type    []string
+	OrderBy OrderBy
+	Limit   int
+	Offset  int
+}
+
 // escapeLike escapes special SQLite LIKE pattern characters (%, _, \) so that
 // the text is matched literally as a substring.
 func escapeLike(s string) string {

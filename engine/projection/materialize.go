@@ -342,6 +342,30 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 			}
 		}
 
+	case "workflow-state":
+		ws, err := state.FoldWorkflowState(ops)
+		if err != nil {
+			return fmt.Errorf("projection: fold workflow-state %s: %w", objectID, err)
+		}
+
+		_, err = tx.Exec(
+			"INSERT INTO workflow_states (object_id, name, type, position, color, description) VALUES (?, ?, ?, ?, ?, ?)",
+			objectID, ws.Name, ws.Type, ws.Position, ws.Color, ws.Description,
+		)
+		if err != nil {
+			return fmt.Errorf("projection: insert workflow_state %s: %w", objectID, err)
+		}
+
+		for i, u := range ws.UnknownOps {
+			_, err = tx.Exec(
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, object_type, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?, ?)",
+				objectID, u.Commit, u.ObjectType, u.OpType, u.OpVersion, i,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert unknown op %s: %w", u.Commit, err)
+			}
+		}
+
 	default:
 		// Preserved-but-unreduced ops: record in unknown_ops
 		for i, op := range ops {
@@ -398,6 +422,7 @@ func deleteObjectState(tx *sql.Tx, objectID string) error {
 		"DELETE FROM cycle_issues WHERE cycle_object_id = ?",
 		"DELETE FROM repos WHERE object_id = ?",
 		"DELETE FROM repo_remotes WHERE repo_object_id = ?",
+		"DELETE FROM workflow_states WHERE object_id = ?",
 	}
 	for _, q := range queries {
 		if _, err := tx.Exec(q, objectID); err != nil {

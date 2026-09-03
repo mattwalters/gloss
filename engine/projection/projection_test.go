@@ -22,10 +22,9 @@ func TestOpenCloseMemory(t *testing.T) {
 
 	// The literal is deliberate: bumping the projection schema has to be a
 	// conscious edit, because it is what makes an existing checkout rebuild
-	// its cache. WRIT-155 took it to 8 so projections holding unknown_ops
-	// without object_type are dropped rather than queried without it.
-	if v := projection.SchemaVersion(); v != 8 {
-		t.Fatalf("expected schema version 8, got %d", v)
+	// its cache. WRIT-104 took it to 9 for workflow_states table.
+	if v := projection.SchemaVersion(); v != 9 {
+		t.Fatalf("expected schema version 9, got %d", v)
 	}
 
 	var version string

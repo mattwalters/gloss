@@ -55,6 +55,9 @@ type Store struct {
 	// Query provides read queries over reviews, issues, comments, threads, and objects.
 	Query *Query
 
+	// WorkflowStates provides workflow state creation, updates, and default seeding.
+	WorkflowStates *WorkflowStates
+
 	// Workspace provides repository registry discovery, registration, and cross-repo resolution.
 	Workspace *Workspace
 

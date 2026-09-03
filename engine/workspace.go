@@ -49,6 +49,18 @@ func (w *Workspace) IsConfigured() bool {
 	return w != nil && w.configured
 }
 
+// SeedDefaults creates the five default starter workflow states in the workspace repository if none exist.
+func (w *Workspace) SeedDefaults(ctx context.Context) error {
+	if w.IsConfigured() {
+		wsStore, err := w.getStore(ctx)
+		if err != nil {
+			return err
+		}
+		return wsStore.WorkflowStates.SeedDefaults(ctx)
+	}
+	return w.store.WorkflowStates.SeedDefaults(ctx)
+}
+
 func (w *Workspace) getStore(ctx context.Context) (*Store, error) {
 	if !w.IsConfigured() {
 		return nil, ErrWorkspaceUnconfigured

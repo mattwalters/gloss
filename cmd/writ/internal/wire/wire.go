@@ -28,6 +28,7 @@ const (
 	KindSyncResult    = "sync.result"
 	KindCommentEdit   = "comment.edit"
 	KindCommentDelete = "comment.delete"
+	KindStateList     = "state.list"
 )
 
 // Envelope wraps all machine-readable output in a single versioned container.
@@ -649,4 +650,39 @@ func FromCommentThread(t state.CommentThread) CommentThread {
 		Replies:    replies,
 		UnknownOps: unknownOps,
 	}
+}
+
+// StateSummary represents summary information about a workflow state in wire format.
+type StateSummary struct {
+	ObjectID    string    `json:"object_id"`
+	Name        string    `json:"name"`
+	Type        string    `json:"type"`
+	Position    string    `json:"position"`
+	Color       string    `json:"color,omitempty"`
+	Description string    `json:"description,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// FromWorkflowStateResult converts a domain WorkflowStateResult to a wire StateSummary.
+func FromWorkflowStateResult(r writ.WorkflowStateResult) StateSummary {
+	return StateSummary{
+		ObjectID:    r.ObjectID,
+		Name:        r.WorkflowState.Name,
+		Type:        r.WorkflowState.Type,
+		Position:    r.WorkflowState.Position,
+		Color:       r.WorkflowState.Color,
+		Description: r.WorkflowState.Description,
+		CreatedAt:   r.CreatedAt,
+		UpdatedAt:   r.UpdatedAt,
+	}
+}
+
+// FromWorkflowStateResultSummaries converts a slice of domain WorkflowStateResults to wire StateSummaries.
+func FromWorkflowStateResultSummaries(results []writ.WorkflowStateResult) []StateSummary {
+	summaries := make([]StateSummary, len(results))
+	for i, r := range results {
+		summaries[i] = FromWorkflowStateResult(r)
+	}
+	return summaries
 }
