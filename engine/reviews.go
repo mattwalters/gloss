@@ -285,8 +285,12 @@ func (r *Reviews) SetStatus(ctx context.Context, id string, status ReviewStatus)
 		return fmt.Errorf("writ: auto refresh: %w", err)
 	}
 
-	if _, err := r.store.projection.Review(id); err != nil {
+	res, err := r.store.projection.Review(id)
+	if err != nil {
 		return err
+	}
+	if res.Review.Status == "merged" {
+		return fmt.Errorf("writ: cannot transition review %s out of \"merged\" status", id)
 	}
 
 	frontier, err := r.store.projection.Frontier(id)
