@@ -268,6 +268,64 @@ strategy requires a spec amendment.
 - **Registers hold values.** A value stored at a key is stored verbatim, so any JSON type reproduces byte-for-byte; `null` does not, and makes the operation uninterpretable per §7.1.
 - **Why this is not `lww` or a set:** Registers scoped to a key — one vote per (voter, revision), one status per (revision, check name) — need a later write under one key to leave the others alone. Plain `lww` would collapse them to a single register; a set has no notion of a value being replaced.
 
+### Document section strategy: `multi-value` (decided ahead of document vocabulary)
+
+For long-form text documents (`document`), Writ defines the `multi-value`
+register strategy (ARCHITECTURE.md §Document concurrency model). The strategy is
+named and specified here to fix its reduction semantics and client-boundary
+properties ahead of the document vocabulary and schemas. `multi-value` will
+enter the active runtime catalogue (`KnownCatalogueStrategies` and test vectors)
+alongside the `document` object type in the implementing ticket.
+
+#### Semantics and reduction rules
+
+- **Target data type:** Document section body.
+- **Initial state:** Unset / empty string `""`.
+- **Reduction:**
+  - An operation writing the section body asserts a version of the text.
+  - **Concurrent edits:** When two or more operations writing the body are
+    concurrent ($u \parallel v$ in the restricted DAG), all concurrent versions
+    are preserved in the folded state. The fold never merges text, never picks a
+    winner, and never emits conflict markers.
+  - **Causal collapse:** An operation $w$ that causally succeeds concurrent
+    operations ($u \prec w$ and $v \prec w$) supersedes them. Only causally
+    maximal writes — writes not succeeded by any other write in the object's
+    causal DAG — are retained in the register. When a subsequent write causally
+    observes all conflicting versions, the register collapses back to a single
+    settled value.
+- **Result and output shape:**
+  - **Settled (single maximal write):** Serialized as a single string:
+    `body = "..."`.
+  - **Conflicted (multiple concurrent maximal writes):** Serialized as a JSON
+    array of strings sorted in canonical code unit order:
+    `body = ["...", "..."]`. Both versions are preserved as data; neither is
+    invented.
+- **Input validity (§7.1):** The value is a string. A value of any other JSON
+  type — `null` included — makes the whole operation uninterpretable per §7.1.
+
+#### The client-capability line
+
+Fold is strictly deterministic and pure: it preserves conflicting versions as
+data and performs no presentation or synthesis. Presentation of conflicts is
+strictly a **client capability**:
+- A client MAY render conflicts using git-style `<<<<<<<` markers, a
+  side-by-side split view, or an interactive version picker.
+- Presentation is entirely a client choice; the storage format and fold engine
+  remain boring, deterministic, and pure.
+- Live collaborative editing (such as ephemeral in-memory CRDTs) lives inside
+  the client session and does not touch canonical durable storage.
+
+#### The anyone-can-resolve property
+
+In git, conflict resolution is tied to a merge event and can only be performed
+by whoever merges. Under Writ's concurrency model:
+- There is no designated merge event and no privileged merger.
+- A conflict appears in everyone's folded state simultaneously as soon as
+  concurrent operations are fetched.
+- **Anyone can resolve the conflict:** Any collaborator can append an ordinary
+  edit operation that causally references all conflicting operations, providing
+  the resolved text and collapsing the register back to a single settled string.
+
 ## 6. Anchors and external references
 
 Comment anchors (`spec/anchors.md`) and external references are **opaque to fold**:
@@ -386,6 +444,7 @@ implementations:
 - JSON object fields are serialized canonically per `spec/canonicalization.md`.
 - Collections derived from `append` strategies are ordered by the total order $L$.
 - Collections derived from `set-union` and `set-observed-remove` are serialized as JSON arrays sorted in canonical code unit order.
+- Conflicted multi-value registers (`multi-value`) are serialized as JSON arrays of strings sorted in canonical code unit order.
 
 ## 9. Conformance data
 
