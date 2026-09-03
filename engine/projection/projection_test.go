@@ -207,30 +207,36 @@ func TestPragmasConfigured(t *testing.T) {
 	// Verify that a freshly checked out connection from the pool inherits these pragmas via DSN.
 	t.Run("FileDB_NewConn", func(t *testing.T) {
 		ctx := context.Background()
-		conn, err := db.DB().Conn(ctx)
+		conn1, err := db.DB().Conn(ctx)
 		if err != nil {
-			t.Fatalf("get conn: %v", err)
+			t.Fatalf("get conn1: %v", err)
 		}
-		defer conn.Close()
+		defer conn1.Close()
+
+		conn2, err := db.DB().Conn(ctx)
+		if err != nil {
+			t.Fatalf("get conn2: %v", err)
+		}
+		defer conn2.Close()
 
 		var busyTimeout, foreignKeys, synchronous int
-		if err := conn.QueryRowContext(ctx, "PRAGMA busy_timeout").Scan(&busyTimeout); err != nil {
-			t.Fatalf("conn: query busy_timeout failed: %v", err)
+		if err := conn2.QueryRowContext(ctx, "PRAGMA busy_timeout").Scan(&busyTimeout); err != nil {
+			t.Fatalf("conn2: query busy_timeout failed: %v", err)
 		}
 		if busyTimeout != 5000 {
-			t.Errorf("conn: expected busy_timeout=5000, got %d", busyTimeout)
+			t.Errorf("conn2: expected busy_timeout=5000, got %d", busyTimeout)
 		}
-		if err := conn.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&foreignKeys); err != nil {
-			t.Fatalf("conn: query foreign_keys failed: %v", err)
+		if err := conn2.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&foreignKeys); err != nil {
+			t.Fatalf("conn2: query foreign_keys failed: %v", err)
 		}
 		if foreignKeys != 1 {
-			t.Errorf("conn: expected foreign_keys=1, got %d", foreignKeys)
+			t.Errorf("conn2: expected foreign_keys=1, got %d", foreignKeys)
 		}
-		if err := conn.QueryRowContext(ctx, "PRAGMA synchronous").Scan(&synchronous); err != nil {
-			t.Fatalf("conn: query synchronous failed: %v", err)
+		if err := conn2.QueryRowContext(ctx, "PRAGMA synchronous").Scan(&synchronous); err != nil {
+			t.Fatalf("conn2: query synchronous failed: %v", err)
 		}
 		if synchronous != 1 {
-			t.Errorf("conn: expected synchronous=1, got %d", synchronous)
+			t.Errorf("conn2: expected synchronous=1, got %d", synchronous)
 		}
 	})
 
