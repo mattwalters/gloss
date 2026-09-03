@@ -464,3 +464,110 @@ func TestRefresh_TargetRefTagBeatsBranch(t *testing.T) {
 		t.Errorf("code_tips[release] = %s, want tag %s", tip, tagCommit.String())
 	}
 }
+
+func TestRefreshIncrementalEmptyObjectType(t *testing.T) {
+	ctx := context.Background()
+	_, store := createTestStore(t, "0123456789abcdef")
+
+	db, err := projection.Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open projection failed: %v", err)
+	}
+	defer db.Close()
+
+	// 1. Initial op: create review
+	env1 := makeReviewEnv("rev-empty-type", "create", 1, map[string]any{
+		"title": "Initial Title",
+	})
+	op1, err := store.Append(ctx, env1, nil)
+	if err != nil {
+		t.Fatalf("store.Append env1 failed: %v", err)
+	}
+
+	stats1, err := db.Refresh(store)
+	if err != nil {
+		t.Fatalf("Refresh 1 failed: %v", err)
+	}
+	if len(stats1.Changed) != 1 || stats1.Changed[0].ObjectType != "review" {
+		t.Fatalf("unexpected stats1: %+v", stats1)
+	}
+
+	// 2. Incremental delta op for rev-empty-type where ObjectType is omitted/empty
+	payload := []byte(`{"body":{"title":"Updated Title"},"object_id":"rev-empty-type","object_type":"review","op_type":"update","op_version":1}`)
+	op2 := codec.Op{
+		ID: "op-update-2",
+		Envelope: codec.Envelope{
+			ObjectID:   "rev-empty-type",
+			ObjectType: "", // omitted / empty in delta batch
+			OpType:     "update",
+			OpVersion:  1,
+			Body:       []byte(`{"title":"Updated Title"}`),
+			Raw:        payload,
+		},
+		Parents: []string{op1.ID},
+		Author: codec.Identity{
+			Name:  "Test Writer",
+			Email: "writer@example.com",
+			When:  time.Unix(1700000001, 0).UTC(),
+		},
+		Committer: codec.Identity{
+			Name:  "Test Writer",
+			Email: "writer@example.com",
+			When:  time.Unix(1700000001, 0).UTC(),
+		},
+		Message: "writ: update review/rev-empty-type\n",
+	}
+
+	deltaEnum := &dag.EnumerateResult{
+		Ops: map[string][]codec.Op{
+			"rev-empty-type": {op2},
+		},
+		Cursors: dag.CursorSet{
+			"refs/writ/0123456789abcdef/review": "op-update-2",
+		},
+		DecodedCommits: 1,
+	}
+
+	stats2, err := db.Refresh(store, projection.WithEnumOverrideForTest(deltaEnum))
+	if err != nil {
+		t.Fatalf("Refresh 2 failed: %v", err)
+	}
+	if len(stats2.Changed) != 1 {
+		t.Fatalf("expected 1 changed object in stats2, got %d", len(stats2.Changed))
+	}
+	if stats2.Changed[0].ObjectType != "review" {
+		t.Errorf("stats2.Changed[0].ObjectType = %q, want %q", stats2.Changed[0].ObjectType, "review")
+	}
+	if stats2.Changed[0].Created {
+		t.Errorf("stats2.Changed[0].Created = true, want false")
+	}
+}
+
+func TestDetermineObjectTypePrecedence(t *testing.T) {
+	// 1. Create op beats other ops even when not first
+	ops := []codec.Op{
+		{Envelope: codec.Envelope{ObjectType: "review", OpType: "update"}},
+		{Envelope: codec.Envelope{ObjectType: "issue", OpType: "create"}},
+	}
+	if got := projection.DetermineObjectType(ops); got != "issue" {
+		t.Errorf("got %q, want 'issue'", got)
+	}
+
+	// 2. First non-empty ObjectType when no create op
+	ops2 := []codec.Op{
+		{Envelope: codec.Envelope{ObjectType: "", OpType: "update"}},
+		{Envelope: codec.Envelope{ObjectType: "review", OpType: "update"}},
+	}
+	if got := projection.DetermineObjectType(ops2); got != "review" {
+		t.Errorf("got %q, want 'review'", got)
+	}
+
+	// 3. Fallback when all empty
+	ops3 := []codec.Op{
+		{Envelope: codec.Envelope{ObjectType: "", OpType: "update"}},
+	}
+	if got := projection.DetermineObjectType(ops3); got != "" {
+		t.Errorf("got %q, want ''", got)
+	}
+}
+

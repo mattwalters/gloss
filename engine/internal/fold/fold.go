@@ -58,6 +58,26 @@ func opMatchesRule(op codec.Op, r Rule) bool {
 	return true
 }
 
+// determineObjectType determines the object type from an ops slice, matching the
+// precedence in engine/projection/materialize.go: prioritize create ops with non-empty
+// ObjectType, then first non-empty ObjectType, then ops[0].ObjectType if non-empty, else "".
+func determineObjectType(ops []codec.Op) string {
+	for _, op := range ops {
+		if op.OpType == "create" && op.ObjectType != "" {
+			return op.ObjectType
+		}
+	}
+	for _, op := range ops {
+		if op.ObjectType != "" {
+			return op.ObjectType
+		}
+	}
+	if len(ops) > 0 {
+		return ops[0].ObjectType
+	}
+	return ""
+}
+
 // Fold executes deterministic fold reduction on an input set of operations
 // against declared field merge rules, returning the resulting ObjectState.
 func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
@@ -66,7 +86,7 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 	}
 
 	objectID := ops[0].ObjectID
-	objectType := ops[0].ObjectType
+	objectType := determineObjectType(ops)
 
 	orderedOps, err := OrderWithTStar(ops)
 	if err != nil {
