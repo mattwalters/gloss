@@ -953,6 +953,17 @@ func runReviewStatus(ctx context.Context, defaultDir string, args []string, stdo
 		}
 
 		if opts.jsonMode {
+			var labelNames []string
+			for _, l := range res.Review.Labels {
+				displayName := l
+				if lbl, err := store.Query.Label(l); err == nil {
+					displayName = lbl.Label.Name
+				}
+				labelNames = append(labelNames, displayName)
+			}
+			sort.Strings(labelNames)
+			res.Review.Labels = labelNames
+
 			wireReview := wire.FromReviewResult(res)
 			if err := emitJSON(stdout, wire.KindReviewStatus, wireReview); err != nil {
 				fmt.Fprintf(stderr, "writ review status: marshal json: %v\n", err)

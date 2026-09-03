@@ -125,7 +125,7 @@ The issue family defines six operation types for `op_version: 1`:
 | `update` | `{"title"?: string, "description"?: string}` | Metadata edits (title, description). |
 | `set-state` | `{"state": reference, "reason"?: string}` | State transitions and optional reason. |
 | `assign` | `{"add"?: [person-id], "remove"?: [person-id]}` | Add or remove assignees. |
-| `label` | `{"add"?: [reference], "remove"?: [reference]}` | Add or remove labels (referencing label object IDs, FC-16). |
+| `label` | `{"add"?: [reference], "remove"?: [string]}` | Add or remove labels (referencing label object IDs, FC-16; remove accepts legacy strings). |
 | `link` | `{"target": reference, "target_type"?: string, "relation": "fixes"\|"relates"\|"none"}` | Associate or retract cross-references. |
 
 ### 1. `create`
@@ -247,7 +247,7 @@ Adds or removes labels on the issue. In v1, label operations reference collabora
 ```
 
 - `add` (array of label references, optional): Label object identifiers or references to add.
-- `remove` (array of label references, optional): Label object identifiers or references to remove.
+- `remove` (array of non-empty strings, optional): Label object identifiers, references, or legacy bare strings to remove.
 
 At least one of `add` or `remove` MUST be present and contain at least one item.
 An empty `{}` body or empty arrays (`"remove": []`) are invalid.

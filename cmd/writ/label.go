@@ -491,32 +491,10 @@ func resolveLabelID(ctx context.Context, store *writ.Store, target string) (stri
 }
 
 func resolveLabelReference(ctx context.Context, store *writ.Store, target string) (string, error) {
-	if isCanonicalHexID(target) || isQualifiedID(target) {
+	if isQualifiedID(target) {
 		return target, nil
 	}
-	labels, err := store.Query.Labels(writ.LabelFilter{})
-	if err != nil {
-		return target, nil
-	}
-	var matches []writ.LabelResult
-	for _, l := range labels {
-		if l.ObjectID == target || strings.HasPrefix(l.ObjectID, target) || strings.EqualFold(l.Label.Name, target) {
-			matches = append(matches, l)
-		}
-	}
-	if len(matches) == 1 {
-		return matches[0].ObjectID, nil
-	}
-	if len(matches) > 1 {
-		for _, m := range matches {
-			if m.ObjectID == target || m.Label.Name == target {
-				return m.ObjectID, nil
-			}
-		}
-		return "", fmt.Errorf("ambiguous label reference %q matches %d labels", target, len(matches))
-	}
-	// Fallback to target string as-is (e.g. legacy bare string or dangling reference)
-	return target, nil
+	return resolveLabelID(ctx, store, target)
 }
 
 func resolveLabelsForModification(ctx context.Context, store *writ.Store, currentLabels, add, remove []string) ([]string, []string, error) {
@@ -532,9 +510,11 @@ func resolveLabelsForModification(ctx context.Context, store *writ.Store, curren
 	}
 
 	for _, r := range remove {
+		var removedAny bool
 		// If r resolves to a known label ID, remove that ID
 		if id, err := resolveLabelID(ctx, store, r); err == nil {
 			resolvedRemove = append(resolvedRemove, id)
+			removedAny = true
 		}
 		// Also if current object carries r verbatim (e.g. legacy string), remove that too
 		foundVerbatim := false
@@ -545,11 +525,19 @@ func resolveLabelsForModification(ctx context.Context, store *writ.Store, curren
 			}
 		}
 		if foundVerbatim {
-			resolvedRemove = append(resolvedRemove, r)
+			if len(resolvedRemove) == 0 || resolvedRemove[len(resolvedRemove)-1] != r {
+				resolvedRemove = append(resolvedRemove, r)
+			}
+			removedAny = true
 		} else if isCanonicalHexID(r) || isQualifiedID(r) {
-			resolvedRemove = append(resolvedRemove, r)
-		} else {
-			resolvedRemove = append(resolvedRemove, r)
+			if len(resolvedRemove) == 0 || resolvedRemove[len(resolvedRemove)-1] != r {
+				resolvedRemove = append(resolvedRemove, r)
+			}
+			removedAny = true
+		}
+
+		if !removedAny {
+			return nil, nil, fmt.Errorf("label %q not found", r)
 		}
 	}
 

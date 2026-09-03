@@ -367,3 +367,68 @@ func TestWorkspaceIssueThreadsRouting(t *testing.T) {
 		t.Errorf("thread comment text = %q", threads[0].Comment.Text)
 	}
 }
+
+func TestWorkspace_ReviewLabelFilter(t *testing.T) {
+	ctx := context.Background()
+
+	wsDir, _ := setupTestRepoWithID(t, "Workspace Admin", "admin@example.com")
+	repoDir, _ := setupTestRepoWithID(t, "Alice Dev", "alice@example.com")
+
+	store, err := writ.Open(repoDir, writ.WithWorkspace(wsDir), writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open store: %v", err)
+	}
+	defer store.Close()
+
+	// Create label "bug" in workspace
+	labelID, err := store.Labels.Create(ctx, writ.NewLabel{
+		Name:  "bug",
+		Color: "#ff0000",
+	})
+	if err != nil {
+		t.Fatalf("Labels.Create: %v", err)
+	}
+
+	// Create review in project repo
+	reviewID, err := store.Reviews.Create(ctx, writ.NewReview{
+		Title: "Fix worker pool hang",
+		Base:  "0000000000000000000000000000000000000001",
+		Head:  "0000000000000000000000000000000000000002",
+	})
+	if err != nil {
+		t.Fatalf("Reviews.Create: %v", err)
+	}
+
+	// Attach label to review
+	if err := store.Reviews.Label(ctx, reviewID, []string{labelID}, nil); err != nil {
+		t.Fatalf("Reviews.Label: %v", err)
+	}
+
+	// Query reviews by label name "bug" from local store handle
+	reviews, err := store.Query.Reviews(writ.ReviewFilter{
+		Label: []string{"bug"},
+	})
+	if err != nil {
+		t.Fatalf("Query.Reviews by label name: %v", err)
+	}
+	if len(reviews) != 1 {
+		t.Fatalf("expected 1 review matching label 'bug', got %d", len(reviews))
+	}
+	if reviews[0].ObjectID != reviewID {
+		t.Errorf("review.ObjectID = %q, want %q", reviews[0].ObjectID, reviewID)
+	}
+
+	// Query reviews by label ID
+	reviewsByID, err := store.Query.Reviews(writ.ReviewFilter{
+		Label: []string{labelID},
+	})
+	if err != nil {
+		t.Fatalf("Query.Reviews by label ID: %v", err)
+	}
+	if len(reviewsByID) != 1 {
+		t.Fatalf("expected 1 review matching label ID, got %d", len(reviewsByID))
+	}
+	if reviewsByID[0].ObjectID != reviewID {
+		t.Errorf("review.ObjectID = %q, want %q", reviewsByID[0].ObjectID, reviewID)
+	}
+}

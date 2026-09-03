@@ -3,6 +3,7 @@ package writ
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/writtendev/writ/engine/projection"
 )
@@ -105,6 +106,38 @@ func (q *Query) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 	}
 	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
 		return nil, err
+	}
+	if len(f.Label) > 0 && q.store.Workspace != nil && q.store.Workspace.IsConfigured() {
+		labels, err := q.Labels(LabelFilter{})
+		if err == nil {
+			expanded := make([]string, len(f.Label))
+			copy(expanded, f.Label)
+			seen := make(map[string]bool)
+			for _, l := range expanded {
+				seen[l] = true
+			}
+			for _, req := range f.Label {
+				target := req
+				if idx := strings.Index(req, "#"); idx >= 0 && idx < len(req)-1 {
+					target = req[idx+1:]
+				}
+				for _, l := range labels {
+					if strings.EqualFold(l.Label.Name, req) || strings.EqualFold(l.Label.Name, target) {
+						if !seen[l.ObjectID] {
+							seen[l.ObjectID] = true
+							expanded = append(expanded, l.ObjectID)
+						}
+					}
+					if l.ObjectID == req || l.ObjectID == target || strings.HasPrefix(l.ObjectID, target) {
+						if !seen[l.Label.Name] {
+							seen[l.Label.Name] = true
+							expanded = append(expanded, l.Label.Name)
+						}
+					}
+				}
+			}
+			f.Label = expanded
+		}
 	}
 	return q.store.projection.Reviews(f)
 }

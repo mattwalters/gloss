@@ -132,6 +132,62 @@ func TestLabel_CLI_Commands(t *testing.T) {
 	if !strings.Contains(stdout.String(), "Labels:      defect") {
 		t.Errorf("expected Labels: defect in issue status, got: %s", stdout.String())
 	}
+
+	// 7. Verify typo on add fails cleanly with not found error
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "label", "-C", env.repoDir, "--add", "bugg", issueID}, &stdout, &stderr)
+	if code == 0 {
+		t.Fatalf("expected error adding non-existent label 'bugg', got success")
+	}
+	if !strings.Contains(stderr.String(), `label "bugg" not found`) {
+		t.Errorf("expected 'label \"bugg\" not found' in stderr, got: %s", stderr.String())
+	}
+
+	// 8. Create and attach a label containing spaces
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"label", "create", "-C", env.repoDir,
+		"-name", "needs triage",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("label create 'needs triage' failed: %s", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "label", "-C", env.repoDir, "--add", "needs triage", issueID}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue label --add 'needs triage' failed: %s", stderr.String())
+	}
+
+	// 9. Remove label with spaces by name without schema violation or error
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "label", "-C", env.repoDir, "--remove", "needs triage", issueID}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue label --remove 'needs triage' failed: %s", stderr.String())
+	}
+
+	// 10. Remove defect by name
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "label", "-C", env.repoDir, "--remove", "defect", issueID}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue label --remove defect failed: %s", stderr.String())
+	}
+
+	// 11. Verify typo on remove fails cleanly
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "label", "-C", env.repoDir, "--remove", "nonexistent", issueID}, &stdout, &stderr)
+	if code == 0 {
+		t.Fatalf("expected error removing non-existent label, got success")
+	}
+	if !strings.Contains(stderr.String(), `label "nonexistent" not found`) {
+		t.Errorf("expected 'label \"nonexistent\" not found' in stderr, got: %s", stderr.String())
+	}
 }
 
 func TestLabel_Migrate(t *testing.T) {

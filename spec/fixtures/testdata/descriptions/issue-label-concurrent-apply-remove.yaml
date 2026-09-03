@@ -1,4 +1,4 @@
-name: label-concurrent-apply-remove
+name: issue-label-concurrent-apply-remove
 description: >
   Demonstrates label reference addition and removal on an issue under concurrent writers.
   Writer 1 removes a label reference while Writer 2 concurrently adds it.

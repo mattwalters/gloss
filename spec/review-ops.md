@@ -122,7 +122,7 @@ The review family defines nine operation types for `op_version: 1`:
 | `assign` | `{"add"?: [person-id], "remove"?: [person-id]}` | Add or remove review assignees (requested reviewers). |
 | `approval` | `{"revision": oid, "verdict": enum, "subject"?: person-id, "message"?: string}` | Review vote (`approve`, `request-changes`, `none`). |
 | `ci-status` | `{"revision": oid, "name": string, "state": enum, "url"?: string, "description"?: string, "started_at"?: timestamp, "completed_at"?: timestamp, "external_id"?: string}` | CI check result on a revision head. |
-| `label` | `{"add"?: [reference], "remove"?: [reference]}` | Add or remove review labels (referencing label object IDs, FC-16). |
+| `label` | `{"add"?: [reference], "remove"?: [string]}` | Add or remove review labels (referencing label object IDs, FC-16; remove accepts legacy strings). |
 | `link` | `{"target": reference, "target_type"?: string, "relation": "fixes"\|"relates"\|"none"}` | Associate or retract cross-references (e.g. closes issue). |
 
 ### 1. `create`
@@ -390,7 +390,7 @@ Adds or removes labels on the review. In v1, label operations reference collabor
 ```
 
 - `add` (array of label references, optional): Label object identifiers or references to attach to the review.
-- `remove` (array of label references, optional): Label object identifiers or references to remove from the review.
+- `remove` (array of non-empty strings, optional): Label object identifiers, references, or legacy bare strings to remove.
 
 At least one of `add` or `remove` MUST be present and contain at least one item.
 An empty `{}` body or empty arrays (`"add": []`) are invalid.

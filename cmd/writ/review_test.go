@@ -1283,6 +1283,16 @@ func TestReview_LabelAndLink(t *testing.T) {
 	reviewID := strings.Split(strings.TrimSpace(stdout.String()), " ")[0]
 	shortID := reviewID[:8]
 
+	// Create label objects used in test
+	for _, lbl := range []string{"area/engine", "wip", "needs-docs"} {
+		stdout.Reset()
+		stderr.Reset()
+		code = run(context.Background(), []string{"label", "create", "-C", env.repoDir, "-name", lbl}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("label create %s failed: %s", lbl, stderr.String())
+		}
+	}
+
 	// 2. Add labels: area/engine and wip
 	stdout.Reset()
 	stderr.Reset()

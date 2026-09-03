@@ -310,6 +310,17 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 		}
 
 		if opts.jsonMode {
+			var labelNames []string
+			for _, l := range res.Issue.Labels {
+				displayName := l
+				if lbl, err := store.Query.Label(l); err == nil {
+					displayName = lbl.Label.Name
+				}
+				labelNames = append(labelNames, displayName)
+			}
+			sort.Strings(labelNames)
+			res.Issue.Labels = labelNames
+
 			wireIssue := wire.FromIssueResult(res, threads)
 			if err := emitJSON(stdout, wire.KindIssueStatus, wireIssue); err != nil {
 				fmt.Fprintf(stderr, "writ issue status: marshal json: %v\n", err)

@@ -939,6 +939,16 @@ func TestIssue_Label(t *testing.T) {
 		}
 	})
 
+	// Create label objects used in subsequent subtests
+	for _, lbl := range []string{"frontend", "bug", "documentation", "api"} {
+		stdout.Reset()
+		stderr.Reset()
+		code = run(context.Background(), []string{"label", "create", "-C", env.repoDir, "-name", lbl}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("label create %s failed: %s", lbl, stderr.String())
+		}
+	}
+
 	// 3. Add multiple labels using repeated -add
 	t.Run("add_labels", func(t *testing.T) {
 		stdout.Reset()
