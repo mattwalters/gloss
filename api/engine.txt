@@ -640,6 +640,23 @@ type SigningKey struct {
 
 type WriterID string
 
+package order // github.com/writtendev/writ/engine/order
+
+const Alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+const MaxChar = 'z'
+const MidChar = 'V'
+const MinChar = '0'
+
+var ErrEmptyKey = errors.New("order: position key must not be empty")
+var ErrInvalidCharacter = errors.New("order: position key contains invalid character")
+var ErrInvalidRange = errors.New("order: before must be less than after")
+var ErrTrailingZero = errors.New("order: position key must not end with '0'")
+
+func Between(before, after string) (string, error)
+func Compare(posA, opIDA, posB, opIDB string) int
+func Less(posA, opIDA, posB, opIDB string) bool
+func Validate(key string) error
+
 package projection // github.com/writtendev/writ/engine/projection
 
 const GroupByAssignee GroupKey = "assignee"
