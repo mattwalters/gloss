@@ -311,3 +311,104 @@ func TestWire_FromIssueLabels(t *testing.T) {
 	}
 }
 
+func TestWire_FromIssueResult(t *testing.T) {
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	issRes := writ.IssueResult{
+		ObjectID:  "i-123",
+		Author:    projection.Author{Name: "Alice", Email: "alice@example.com"},
+		CreatedAt: now,
+		UpdatedAt: now,
+		Issue: state.Issue{
+			Title:       "Test Issue",
+			Description: "Details",
+			State:       "open",
+		},
+	}
+
+	// 1. Empty threads
+	wireIssue := wire.FromIssueResult(issRes, nil)
+	if wireIssue.ObjectID != "i-123" || wireIssue.Title != "Test Issue" {
+		t.Errorf("unexpected issue mapping: %+v", wireIssue)
+	}
+	if wireIssue.Comments == nil {
+		t.Errorf("expected non-nil Comments slice")
+	}
+
+	env := wire.Envelope{
+		SchemaVersion: wire.CurrentSchemaVersion,
+		Kind:          wire.KindIssueStatus,
+		Data:          wireIssue,
+	}
+	b, err := json.Marshal(env)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	jsonStr := string(b)
+	if !strings.Contains(jsonStr, `"comments":[]`) {
+		t.Errorf("expected empty comments to serialize as [], got: %s", jsonStr)
+	}
+
+	// 2. Populated threads
+	resolved := true
+	threads := []state.CommentThread{
+		{
+			ObjectID: "c-root",
+			Comment: state.Comment{
+				Subject: state.CommentSubject{
+					ObjectType: "issue",
+					ObjectID:   "i-123",
+				},
+				Text:       "Root issue comment",
+				Resolved:   &resolved,
+				ResolvedBy: "user:bob",
+			},
+			Replies: []state.CommentThread{
+				{
+					ObjectID: "c-reply",
+					Comment: state.Comment{
+						Subject: state.CommentSubject{
+							ObjectType: "issue",
+							ObjectID:   "i-123",
+						},
+						InReplyTo: "c-root",
+						Text:      "Nested reply",
+					},
+				},
+			},
+		},
+	}
+
+	wireWithThreads := wire.FromIssueResult(issRes, threads)
+	if len(wireWithThreads.Comments) != 1 {
+		t.Fatalf("expected 1 comment thread, got %d", len(wireWithThreads.Comments))
+	}
+	if wireWithThreads.Comments[0].ObjectID != "c-root" {
+		t.Errorf("expected root comment ID 'c-root', got %q", wireWithThreads.Comments[0].ObjectID)
+	}
+	if !wireWithThreads.Comments[0].Comment.Resolved {
+		t.Errorf("expected root comment to be resolved")
+	}
+	if wireWithThreads.Comments[0].Comment.ResolvedBy != "user:bob" {
+		t.Errorf("expected resolved_by 'user:bob', got %q", wireWithThreads.Comments[0].Comment.ResolvedBy)
+	}
+	if len(wireWithThreads.Comments[0].Replies) != 1 {
+		t.Fatalf("expected 1 reply, got %d", len(wireWithThreads.Comments[0].Replies))
+	}
+	if wireWithThreads.Comments[0].Replies[0].ObjectID != "c-reply" {
+		t.Errorf("expected reply comment ID 'c-reply', got %q", wireWithThreads.Comments[0].Replies[0].ObjectID)
+	}
+
+	b2, err := json.Marshal(wire.Envelope{
+		SchemaVersion: wire.CurrentSchemaVersion,
+		Kind:          wire.KindIssueStatus,
+		Data:          wireWithThreads,
+	})
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	jsonWithThreads := string(b2)
+	if !strings.Contains(jsonWithThreads, `"comments":[{"object_id":"c-root"`) {
+		t.Errorf("expected serialized comments thread, got: %s", jsonWithThreads)
+	}
+}
+

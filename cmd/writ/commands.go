@@ -67,7 +67,7 @@ var initCmd = &command{
 
 var issueCmd = &command{
 	Name:      "issue",
-	Short:     "Manage issues (create, status, assign, list, link, label)",
+	Short:     "Manage issues (create, status, comment, assign, list, link, label)",
 	UsageLine: "Usage: writ issue [-C <dir>] <subcommand> [arguments]",
 	Long:      "Manage issues.",
 	Flags: []flagSpec{
@@ -80,6 +80,7 @@ var issueCmd = &command{
 	Subs: []*command{
 		issueCreateCmd,
 		issueStatusCmd,
+		issueCommentCmd,
 		issueAssignCmd,
 		issueListCmd,
 		issueLinkCmd,
@@ -120,6 +121,26 @@ var issueStatusCmd = &command{
 		"writ issue status 01J8ABC",
 		`writ issue status 01J8ABC closed -reason "resolved in #42"`,
 		"writ issue status 01J8ABC --json",
+	},
+}
+
+var issueCommentCmd = &command{
+	Name:      "comment",
+	Short:     "Add a comment to an issue or resolve a thread",
+	UsageLine: "Usage: writ issue comment [-C <dir>] <id> [-m <text>] [-reply-to <comment-id>] [-resolve] [-unresolve]",
+	Long:      "Add a comment to an issue or resolve/unresolve a comment thread.",
+	Flags: []flagSpec{
+		{Name: "C"},
+		{Name: "m"},
+		{Name: "reply-to"},
+		{Name: "resolve"},
+		{Name: "unresolve"},
+	},
+	Examples: []string{
+		`writ issue comment 01J8ABC -m "Investigating this now"`,
+		`writ issue comment 01J8ABC -m "Fixed in main" -reply-to 01J8DEF`,
+		`writ issue comment 01J8ABC -reply-to 01J8DEF -resolve`,
+		`writ issue comment 01J8ABC -reply-to 01J8DEF -m "Resolved after testing" -resolve`,
 	},
 }
 
@@ -447,6 +468,7 @@ func init() {
 		"init":           func() *flag.FlagSet { fs, _ := newInitFlagSet(""); return fs },
 		"issue create":   func() *flag.FlagSet { fs, _ := newIssueCreateFlagSet(""); return fs },
 		"issue status":   func() *flag.FlagSet { fs, _ := newIssueStatusFlagSet(""); return fs },
+		"issue comment":  func() *flag.FlagSet { fs, _ := newIssueCommentFlagSet(""); return fs },
 		"issue assign":   func() *flag.FlagSet { fs, _ := newIssueAssignFlagSet(""); return fs },
 		"issue list":     func() *flag.FlagSet { fs, _ := newIssueListFlagSet(""); return fs },
 		"issue link":     func() *flag.FlagSet { fs, _ := newIssueLinkFlagSet(""); return fs },

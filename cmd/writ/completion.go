@@ -148,7 +148,7 @@ _writ() {
             fi
             case "$subcmd" in
                 issue)
-                    COMPREPLY=($(compgen -W "create status assign list link label" -- "$cur"))
+                    COMPREPLY=($(compgen -W "create status comment assign list link label" -- "$cur"))
                     return 0
                     ;;
                 review)
@@ -163,7 +163,7 @@ _writ() {
                     COMPREPLY=($(compgen -W "-C -h -help --help" -- "$cur"))
                     return 0
                 fi
-                COMPREPLY=($(compgen -W "create status assign list link label" -- "$cur"))
+                COMPREPLY=($(compgen -W "create status comment assign list link label" -- "$cur"))
                 return 0
             fi
             case "$subcmd" in
@@ -196,6 +196,12 @@ _writ() {
                     done
                     if [ $pos_count -eq 1 ]; then
                         COMPREPLY=($(compgen -W "open closed" -- "$cur"))
+                        return 0
+                    fi
+                    ;;
+                comment)
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "-C -m -reply-to -resolve -unresolve -h -help --help" -- "$cur"))
                         return 0
                     fi
                     ;;
@@ -398,7 +404,7 @@ _writ() {
                         '1:command:(init issue review sync version completion help)' \
                         '2:subcommand:->help_subcommand'
                     case $line[1] in
-                        issue) _values 'issue subcommand' create status assign list link label ;;
+                        issue) _values 'issue subcommand' create status comment assign list link label ;;
                         review) _values 'review subcommand' open comment approve assign label link status list ;;
                     esac
                     ;;
@@ -429,6 +435,7 @@ _writ_issue() {
             subcommands=(
                 'create:Create a new issue'
                 'status:View or update issue status'
+                'comment:Add a comment to an issue or resolve a thread'
                 'assign:Add or remove issue assignees'
                 'list:List issues'
                 'link:Manage issue cross-reference links'
@@ -456,6 +463,16 @@ _writ_issue() {
                         '(-h -help --help)'{-h,-help,--help}'[Show help]' \
                         '1:issue ID:' \
                         '2:state:(open closed)'
+                    ;;
+                comment)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '-m[Comment message text]:message:' \
+                        '-reply-to[Comment ID to reply to]:comment ID:' \
+                        '-resolve[Mark comment thread as resolved]' \
+                        '-unresolve[Mark comment thread as unresolved]' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]' \
+                        '1:issue ID:'
                     ;;
                 assign)
                     _arguments -s -S \
@@ -709,7 +726,7 @@ complete -c writ -n '__fish_writ_using_command completion' -f -a 'bash zsh fish'
 
 # Subcommands for help
 complete -c writ -n '__fish_writ_needs_subcommand help' -f -a 'init issue review sync version completion help'
-complete -c writ -n '__fish_writ_needs_subcommand help issue' -f -a 'create status assign list link label'
+complete -c writ -n '__fish_writ_needs_subcommand help issue' -f -a 'create status comment assign list link label'
 complete -c writ -n '__fish_writ_needs_subcommand help review' -f -a 'open comment approve assign label link status list'
 
 # Flags for commands`)

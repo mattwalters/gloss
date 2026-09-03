@@ -12,6 +12,7 @@ slug: "cli"
 - [`writ init`](#writ-init)
 - [`writ issue create`](#writ-issue-create)
 - [`writ issue status`](#writ-issue-status)
+- [`writ issue comment`](#writ-issue-comment)
 - [`writ issue assign`](#writ-issue-assign)
 - [`writ issue list`](#writ-issue-list)
 - [`writ issue link`](#writ-issue-link)
@@ -116,6 +117,37 @@ States:
 writ issue status 01J8ABC
 writ issue status 01J8ABC closed -reason "resolved in #42"
 writ issue status 01J8ABC --json
+```
+
+### `writ issue comment`
+
+Add a comment to an issue or resolve a thread
+
+#### Synopsis
+
+```console
+Usage: writ issue comment [-C <dir>] <id> [-m <text>] [-reply-to <comment-id>] [-resolve] [-unresolve]
+```
+
+#### Description
+
+Add a comment to an issue or resolve/unresolve a comment thread.
+
+#### Flags
+
+- `-C <dir>`: Run as if writ was started in <dir>
+- `-m <text>`: Comment text <text>
+- `-reply-to <comment-id>`: Comment ID <comment-id> to reply to
+- `-resolve`: Mark comment thread as resolved, attributed to writ.personId, else email:<user.email>
+- `-unresolve`: Mark comment thread as unresolved, preserving the recorded resolver
+
+#### Examples
+
+```bash
+writ issue comment 01J8ABC -m "Investigating this now"
+writ issue comment 01J8ABC -m "Fixed in main" -reply-to 01J8DEF
+writ issue comment 01J8ABC -reply-to 01J8DEF -resolve
+writ issue comment 01J8ABC -reply-to 01J8DEF -m "Resolved after testing" -resolve
 ```
 
 ### `writ issue assign`

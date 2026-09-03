@@ -240,6 +240,7 @@ Fetches detailed status and folded state for a single issue.
 | `assignees` | array of strings | Assignees as scheme-prefixed person identifiers (`email:alice@example.com`, `user:alice`), converged from concurrent add/remove operations. |
 | `labels` | array of strings | Labels attached to the issue, converged from concurrent add/remove operations. |
 | `links` | array of objects | Cross-reference links: `[ { "target": string, "target_type": string, "relation": string } ]`. `target` is either a bare object ID (same repo) or `<repo-id>#<object-id>` (cross-repo). |
+| `comments` | array of objects | Threaded comments attached to the issue: `[ CommentThread ]`. |
 | `unknown_ops` | array of objects | Preserved forward-compatibility operations: `[ { "commit": string, "op_type": string, "op_version": integer } ]`. |
 
 #### Example Output
@@ -268,6 +269,7 @@ Fetches detailed status and folded state for a single issue.
         "relation": "fixes"
       }
     ],
+    "comments": [],
     "unknown_ops": []
   }
 }
