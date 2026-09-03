@@ -917,6 +917,9 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 				for _, r := range frs {
 					if opMatchesRule(op, r) {
 						if val, present := op.Body[fieldName]; present && val != nil {
+							// Empty scalar contract (spec/fold.md §5.1): empty strings
+							// (including person identifiers that normalize to empty) are
+							// preserved in the generic fold map as deliberate scalar writes.
 							if s, ok := val.(string); ok && fieldName == "resolved_by" && op.OpType == "resolve" {
 								val = normalizePerson(s)
 							}

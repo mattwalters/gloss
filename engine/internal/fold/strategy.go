@@ -55,6 +55,9 @@ func newLWWAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 
 func (a *lwwAccumulator) Apply(op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	if val, ok := body[a.field]; ok && val != nil {
+		// Empty scalar contract (spec/fold.md §5.1): empty strings (including
+		// person identifiers that normalize to empty) are preserved in the
+		// generic fold map as deliberate scalar writes.
 		if s, ok := val.(string); ok && a.field == "resolved_by" && op.OpType == "resolve" {
 			val = person.NormalizePerson(s)
 		}

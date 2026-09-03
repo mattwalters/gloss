@@ -463,6 +463,13 @@ the consequence of the one that does.
   them. Where a `keyed-lww` key component is derived from a person identifier,
   the value stored under that key reads back normalized as well: normalizing an
   identifier for keying and then storing the payload verbatim is non-conforming.
+- **Scalar registers (`lww`) retain normalized strings:** While rule 3 defines
+  normalized person identifiers as containing at least one character, and set
+  strategies (`spec/fold.md` §5.3, §5.4) drop elements that normalize to empty,
+  scalar registers governed by `lww` (`spec/fold.md` §5.1) — such as comment
+  `resolved_by` — retain normalized strings (including `""` when non-conforming
+  input normalizes to empty) in the normative generic fold map. See `spec/fold.md`
+  §5.1 for the scalar register rule and the unified empty-value contract.
 
 **What the schema can and cannot say.** The `person-id` definition in
 [`schemas/identifiers.schema.json`](schemas/identifiers.schema.json) enforces

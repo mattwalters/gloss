@@ -135,3 +135,68 @@ func FuzzReffoldNormalizePersonMatchesEngine(f *testing.F) {
 		}
 	})
 }
+
+func TestReffoldEmptyScalars(t *testing.T) {
+	rules, err := spec.FieldRules()
+	if err != nil {
+		t.Fatalf("spec.FieldRules: %v", err)
+	}
+
+	ops := []spec.MergeOp{
+		{
+			ID:        "c-create",
+			Time:      1767225600,
+			ObjectID:  "c-spec-scalar",
+			OpType:    "create",
+			OpVersion: 1,
+			Body: map[string]any{
+				"subject": map[string]any{
+					"object_type": "review",
+					"object_id":   "r-1",
+				},
+				"text": "Initial text",
+			},
+		},
+		{
+			ID:        "c-edit",
+			Parents:   []string{"c-create"},
+			Time:      1767225660,
+			ObjectID:  "c-spec-scalar",
+			OpType:    "edit",
+			OpVersion: 1,
+			Body: map[string]any{
+				"text": "",
+			},
+		},
+		{
+			ID:        "c-resolve",
+			Parents:   []string{"c-edit"},
+			Time:      1767225720,
+			ObjectID:  "c-spec-scalar",
+			OpType:    "resolve",
+			OpVersion: 1,
+			Body: map[string]any{
+				"resolved":    true,
+				"resolved_by": "   ",
+			},
+		},
+	}
+
+	res, err := spec.Fold(ops, rules)
+	if err != nil {
+		t.Fatalf("spec.Fold failed: %v", err)
+	}
+
+	if val, ok := res.State["text"]; !ok {
+		t.Errorf("expected 'text' in spec.Fold state")
+	} else if val != "" {
+		t.Errorf("expected 'text' to be %q, got %q", "", val)
+	}
+
+	if val, ok := res.State["resolved_by"]; !ok {
+		t.Errorf("expected 'resolved_by' in spec.Fold state")
+	} else if val != "" {
+		t.Errorf("expected 'resolved_by' to be %q, got %q", "", val)
+	}
+}
+
