@@ -23,8 +23,9 @@ func TestCompletion_Bash(t *testing.T) {
 
 	// Verify all subcommands mentioned
 	expectedWords := []string{
-		"init", "issue", "review", "sync", "completion", "help",
+		"init", "comment", "issue", "review", "sync", "completion", "help",
 		"open", "comment", "approve", "status", "list", "create", "assign", "link", "label",
+		"edit", "delete",
 		"approve", "request-changes", "draft", "merged", "closed",
 	}
 	for _, word := range expectedWords {
@@ -61,8 +62,9 @@ func TestCompletion_Zsh(t *testing.T) {
 	}
 
 	expectedWords := []string{
-		"init", "issue", "review", "sync", "completion", "help",
+		"init", "comment", "issue", "review", "sync", "completion", "help",
 		"open", "comment", "approve", "status", "list", "create", "assign", "link", "label",
+		"edit", "delete",
 		"approve", "request-changes", "draft", "merged", "closed",
 	}
 	for _, word := range expectedWords {
@@ -98,8 +100,9 @@ func TestCompletion_Fish(t *testing.T) {
 	}
 
 	expectedWords := []string{
-		"init", "issue", "review", "sync", "completion", "help",
+		"init", "comment", "issue", "review", "sync", "completion", "help",
 		"open", "comment", "approve", "status", "list", "create", "assign", "link", "label",
+		"edit", "delete",
 		"approve", "request-changes", "draft", "merged", "closed",
 	}
 	for _, word := range expectedWords {
@@ -109,7 +112,7 @@ func TestCompletion_Fish(t *testing.T) {
 	}
 
 	// Verify Round 2 Finding 1 & 2: __fish_writ_needs_subcommand and __fish_writ_args exist
-	if !strings.Contains(script, "__fish_writ_needs_subcommand issue") || !strings.Contains(script, "__fish_writ_args") {
+	if !strings.Contains(script, "__fish_writ_needs_subcommand issue") || !strings.Contains(script, "__fish_writ_needs_subcommand comment") || !strings.Contains(script, "__fish_writ_args") {
 		t.Errorf("fish completion missing __fish_writ_needs_subcommand or __fish_writ_args")
 	}
 

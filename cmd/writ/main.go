@@ -55,6 +55,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return runCompletion(args[1:], stdout, stderr)
 	case "init":
 		return runInit(ctx, defaultDir, args[1:], stdout, stderr)
+	case "comment":
+		return runComment(ctx, defaultDir, args[1:], stdout, stderr)
 	case "issue":
 		return runIssue(ctx, defaultDir, args[1:], stdout, stderr)
 	case "review":

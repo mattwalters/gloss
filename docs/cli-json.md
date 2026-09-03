@@ -21,7 +21,7 @@ All plumbing commands emit a single top-level JSON document on `stdout` adhering
 | Field | Type | Description |
 |---|---|---|
 | `schema_version` | integer | Envelope schema version (currently `1`). Bumps only on breaking changes. |
-| `kind` | string | Discriminator for the payload schema (e.g. `review.list`, `review.status`, `issue.list`, `issue.status`, `issue.label`, `sync.status`, `sync.result`). |
+| `kind` | string | Discriminator for the payload schema (e.g. `review.list`, `review.status`, `issue.list`, `issue.status`, `issue.label`, `sync.status`, `sync.result`, `comment.edit`, `comment.delete`). |
 | `data` | object or array | Verb-specific payload structure. |
 
 ---
@@ -376,6 +376,94 @@ Synchronizes operations with remote git repositories (fetches, pushes, and refre
 
 ---
 
+### `writ comment edit <comment-id> -m <new-text> --json`
+
+Updates the text content of an existing comment and returns the refreshed comment state.
+
+- **Envelope `kind`**: `"comment.edit"`
+- **`data` Type**: `Comment` object
+
+#### `Comment` Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `object_id` | string | 32-character lowercase hex identifier for the comment. |
+| `subject` | object | Target subject: `{ "object_type": string, "object_id": string }`. |
+| `author` | object | Author identity: `{ "name": string, "email": string }`. |
+| `created_at` | string | Creation timestamp in RFC 3339 UTC (`...Z`). |
+| `updated_at` | string | Last modification timestamp in RFC 3339 UTC (`...Z`). |
+| `text` | string | Text content of the comment. |
+| `in_reply_to` | string (optional) | Object ID of the parent comment if this is a threaded reply. |
+| `anchor` | object (optional) | Anchor location describing where the comment is positioned. |
+| `deleted` | boolean | `true` if the comment has been tombstoned/deleted; `false` otherwise. |
+| `resolved` | boolean | `true` if the thread is marked as resolved; `false` otherwise. |
+| `resolved_by` | string (optional) | Person identifier who resolved the thread. |
+| `positions` | array (optional) | Resolved source positions. |
+| `unknown_ops` | array | Preserved unrecognized operations on this comment. |
+
+#### Example Output
+
+```json
+{
+  "schema_version": 1,
+  "kind": "comment.edit",
+  "data": {
+    "object_id": "c-root",
+    "subject": {
+      "object_type": "review",
+      "object_id": "r-7f3a"
+    },
+    "author": {
+      "name": "Alice Example",
+      "email": "alice@example.test"
+    },
+    "created_at": "2026-01-01T00:00:00Z",
+    "updated_at": "2026-01-01T00:05:00Z",
+    "text": "Updated comment text",
+    "deleted": false,
+    "resolved": false,
+    "unknown_ops": []
+  }
+}
+```
+
+---
+
+### `writ comment delete <comment-id> --json`
+
+Marks an existing comment as deleted (tombstone) and returns the refreshed comment state with `deleted: true`.
+
+- **Envelope `kind`**: `"comment.delete"`
+- **`data` Type**: `Comment` object
+
+#### Example Output
+
+```json
+{
+  "schema_version": 1,
+  "kind": "comment.delete",
+  "data": {
+    "object_id": "c-root",
+    "subject": {
+      "object_type": "review",
+      "object_id": "r-7f3a"
+    },
+    "author": {
+      "name": "Alice Example",
+      "email": "alice@example.test"
+    },
+    "created_at": "2026-01-01T00:00:00Z",
+    "updated_at": "2026-01-01T00:05:00Z",
+    "text": "Original comment text",
+    "deleted": true,
+    "resolved": false,
+    "unknown_ops": []
+  }
+}
+```
+
+---
+
 ## 4. Worked `jq` Examples
 
 ### List open reviews
@@ -416,4 +504,14 @@ writ review status <id> --json | jq 'all(.data.ci_statuses[]; .state == "success
 ### List labels on an issue
 ```bash
 writ issue label <id> --json | jq -r '.data.labels[]'
+```
+
+### Edit a comment and extract its updated text
+```bash
+writ comment edit <id> -m "new text" --json | jq -r '.data.text'
+```
+
+### Check if a comment is deleted
+```bash
+writ comment delete <id> --json | jq '.data.deleted'
 ```

@@ -109,7 +109,7 @@ _writ() {
             COMPREPLY=($(compgen -W "-C -h -help --help" -- "$cur"))
             return 0
         fi
-        COMPREPLY=($(compgen -W "init issue review sync version completion help" -- "$cur"))
+        COMPREPLY=($(compgen -W "init comment issue review sync version completion help" -- "$cur"))
         return 0
     fi
 
@@ -129,6 +129,30 @@ _writ() {
                 return 0
             fi
             ;;
+        comment)
+            if [ -z "$subcmd" ]; then
+                if [[ "$cur" == -* ]]; then
+                    COMPREPLY=($(compgen -W "-C -h -help --help" -- "$cur"))
+                    return 0
+                fi
+                COMPREPLY=($(compgen -W "edit delete" -- "$cur"))
+                return 0
+            fi
+            case "$subcmd" in
+                edit)
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "-C -m -json --json -h -help --help" -- "$cur"))
+                        return 0
+                    fi
+                    ;;
+                delete)
+                    if [[ "$cur" == -* ]]; then
+                        COMPREPLY=($(compgen -W "-C -json --json -h -help --help" -- "$cur"))
+                        return 0
+                    fi
+                    ;;
+            esac
+            ;;
         sync)
             if [[ "$cur" == -* ]]; then
                 COMPREPLY=($(compgen -W "-C -status --status -json --json -h -help --help" -- "$cur"))
@@ -143,10 +167,14 @@ _writ() {
             ;;
         help)
             if [ -z "$subcmd" ]; then
-                COMPREPLY=($(compgen -W "init issue review sync version completion help" -- "$cur"))
+                COMPREPLY=($(compgen -W "init comment issue review sync version completion help" -- "$cur"))
                 return 0
             fi
             case "$subcmd" in
+                comment)
+                    COMPREPLY=($(compgen -W "edit delete" -- "$cur"))
+                    return 0
+                    ;;
                 issue)
                     COMPREPLY=($(compgen -W "create status comment assign list link label" -- "$cur"))
                     return 0
@@ -367,6 +395,7 @@ _writ() {
         command)
             commands=(
                 'init:Initialize writ configuration'
+                'comment:Manage comments'
                 'issue:Manage issues'
                 'review:Manage code reviews'
                 'sync:Synchronize collaborative SDLC operations'
@@ -383,6 +412,9 @@ _writ() {
                         '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
                         '(-h -help --help)'{-h,-help,--help}'[Show help]' \
                         '*:remote:_git_remotes'
+                    ;;
+                comment)
+                    _writ_comment
                     ;;
                 sync)
                     _arguments -s -S \
@@ -401,9 +433,10 @@ _writ() {
                     ;;
                 help)
                     _arguments -s -S \
-                        '1:command:(init issue review sync version completion help)' \
+                        '1:command:(init comment issue review sync version completion help)' \
                         '2:subcommand:->help_subcommand'
                     case $line[1] in
+                        comment) _values 'comment subcommand' edit delete ;;
                         issue) _values 'issue subcommand' create status comment assign list link label ;;
                         review) _values 'review subcommand' open comment approve assign label link status list ;;
                     esac
@@ -413,6 +446,49 @@ _writ() {
                     ;;
                 review)
                     _writ_review
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_writ_comment() {
+    local curcontext="$curcontext" state line
+    typeset -A opt_args
+
+    _arguments -C \
+        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+        '(-h -help --help)'{-h,-help,--help}'[Show help information]' \
+        '1: :->subcommand' \
+        '*:: :->args'
+
+    case $state in
+        subcommand)
+            local -a subcommands
+            subcommands=(
+                'edit:Edit an existing comment'
+                'delete:Delete a comment (tombstone)'
+            )
+            _describe -t subcommands 'comment subcommand' subcommands
+            ;;
+        args)
+            case $line[1] in
+                edit)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '-m[Comment message]:message:' \
+                        '--json[Output result as JSON]' \
+                        '-json[Output result as JSON]' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]' \
+                        '1:comment ID:'
+                    ;;
+                delete)
+                    _arguments -s -S \
+                        '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
+                        '--json[Output result as JSON]' \
+                        '-json[Output result as JSON]' \
+                        '(-h -help --help)'{-h,-help,--help}'[Show help]' \
+                        '1:comment ID:'
                     ;;
             esac
             ;;
@@ -707,6 +783,13 @@ complete -c writ -l help -s h -d 'Show help information'
 	}
 
 	fmt.Fprintln(w, `
+# Subcommands for comment`)
+	for _, sub := range commentCmd.Subs {
+		fmt.Fprintf(w, "complete -c writ -n '__fish_writ_needs_subcommand comment' -f -a '%s' -d '%s'\n",
+			sub.Name, escapeFishDesc(sub.Short))
+	}
+
+	fmt.Fprintln(w, `
 # Subcommands for issue`)
 	for _, sub := range issueCmd.Subs {
 		fmt.Fprintf(w, "complete -c writ -n '__fish_writ_needs_subcommand issue' -f -a '%s' -d '%s'\n",
@@ -725,7 +808,8 @@ complete -c writ -l help -s h -d 'Show help information'
 complete -c writ -n '__fish_writ_using_command completion' -f -a 'bash zsh fish'
 
 # Subcommands for help
-complete -c writ -n '__fish_writ_needs_subcommand help' -f -a 'init issue review sync version completion help'
+complete -c writ -n '__fish_writ_needs_subcommand help' -f -a 'init comment issue review sync version completion help'
+complete -c writ -n '__fish_writ_needs_subcommand help comment' -f -a 'edit delete'
 complete -c writ -n '__fish_writ_needs_subcommand help issue' -f -a 'create status comment assign list link label'
 complete -c writ -n '__fish_writ_needs_subcommand help review' -f -a 'open comment approve assign label link status list'
 
