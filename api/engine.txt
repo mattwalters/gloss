@@ -186,6 +186,8 @@ type NewReview struct {
 	Head string `json:"head,omitempty"`
 }
 
+type NormalizeRule = state.NormalizeRule
+
 type ObjectChange = projection.ObjectChange
 
 type ObjectFilter = projection.ObjectFilter
@@ -1176,6 +1178,12 @@ type Link struct {
 	Relation string `json:"relation"`
 }
 
+type NormalizeRule struct {
+	Value string `json:"value,omitempty"`
+	Items string `json:"items,omitempty"`
+	Key []string `json:"key,omitempty"`
+}
+
 type ObjectState struct {
 	ObjectID string `json:"object_id"`
 	ObjectType string `json:"object_type,omitempty"`
@@ -1245,6 +1253,7 @@ type Rule struct {
 	Strategy string `json:"strategy"`
 	Key []string `json:"key,omitempty"`
 	Lattice []string `json:"lattice,omitempty"`
+	Normalize *NormalizeRule `json:"normalize,omitempty"`
 }
 
 type UnknownOp struct {

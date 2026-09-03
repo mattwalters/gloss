@@ -8,14 +8,22 @@ import (
 	"github.com/writtendev/writ/engine/codec"
 )
 
+// NormalizeRule specifies normalization attributes for an (op_type, field) merge rule.
+type NormalizeRule struct {
+	Value string   `json:"value,omitempty"`
+	Items string   `json:"items,omitempty"`
+	Key   []string `json:"key,omitempty"`
+}
+
 // Rule specifies the merge strategy and parameters for an (op_type, op_version, field) tuple.
 type Rule struct {
-	OpType    string   `json:"op_type,omitempty"`
-	OpVersion int64    `json:"op_version,omitempty"`
-	Field     string   `json:"field"`
-	Strategy  string   `json:"strategy"`
-	Key       []string `json:"key,omitempty"`
-	Lattice   []string `json:"lattice,omitempty"`
+	OpType    string         `json:"op_type,omitempty"`
+	OpVersion int64          `json:"op_version,omitempty"`
+	Field     string         `json:"field"`
+	Strategy  string         `json:"strategy"`
+	Key       []string       `json:"key,omitempty"`
+	Lattice   []string       `json:"lattice,omitempty"`
+	Normalize *NormalizeRule `json:"normalize,omitempty"`
 }
 
 // OpRef identifies an operation in an object's total order sequence L
@@ -200,7 +208,7 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 			for _, r := range fieldRules {
 				if opMatchesRule(o.Op, r) {
 					acc := accumulators[fieldName]
-					if err := acc.Apply(o.Op, bm, rbm); err != nil {
+					if err := acc.Apply(r, o.Op, bm, rbm); err != nil {
 						return ObjectState{}, fmt.Errorf("fold: applying op %s to field %q: %w", o.Op.ID, fieldName, err)
 					}
 					break

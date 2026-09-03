@@ -16,7 +16,7 @@ var CommentRules = []Rule{
 	{OpType: "edit", OpVersion: 1, Field: "text", Strategy: "lww"},
 	{OpType: "delete", OpVersion: 1, Field: "deleted", Strategy: "tombstone"},
 	{OpType: "resolve", OpVersion: 1, Field: "resolved", Strategy: "lww"},
-	{OpType: "resolve", OpVersion: 1, Field: "resolved_by", Strategy: "lww"},
+	{OpType: "resolve", OpVersion: 1, Field: "resolved_by", Strategy: "lww", Normalize: &NormalizeRule{Value: "person"}},
 }
 
 // CommentFold represents the folded state of a comment collaborative object before

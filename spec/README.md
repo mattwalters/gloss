@@ -41,6 +41,7 @@ disagree, the fixtures win and the prose gets fixed.
 | `schemas/cycle-ops.schema.json` | Normative | JSON Schema (draft 2020-12) for cycle operation payloads |
 | `schemas/repo-ops.schema.json` | Normative | JSON Schema (draft 2020-12) for repository registry operation payloads |
 | `schemas/resolution.schema.json` | Normative | JSON Schema (draft 2020-12) for the resolution outcome object |
+| `schemas/field-rules.schema.json` | Normative | JSON Schema (draft 2020-12) for field merge rule declarations (`field-rules.json`) |
 | `testdata/canonicalization/vectors.json` | Normative | Canonicalization test vectors: input → exact canonical bytes, or input → rejection |
 | `testdata/ordering/vectors.json` | Normative | Fractional indexing test vectors: generation across boundaries, canonical validation, and comparison |
 | `testdata/ref-names/vectors.json` | Normative | Ref-naming test vectors (valid/invalid) and pinned refspecs |
@@ -109,7 +110,8 @@ spec/
 │   ├── project-ops.schema.json — draft 2020-12 schema for project operation payloads
 │   ├── cycle-ops.schema.json — draft 2020-12 schema for cycle operation payloads
 │   ├── repo-ops.schema.json — draft 2020-12 schema for repository registry operation payloads
-│   └── resolution.schema.json — draft 2020-12 schema for the resolution outcome object
+│   ├── resolution.schema.json — draft 2020-12 schema for the resolution outcome object
+│   └── field-rules.schema.json — draft 2020-12 schema for field merge rule declarations
 ├── testdata/
 │   ├── canonicalization/   — encoding vectors (valid and rejected inputs)
 │   ├── ordering/           — fractional indexing test vectors (validation, generation, comparison)

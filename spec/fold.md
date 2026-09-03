@@ -193,6 +193,22 @@ NOT invent default merge behaviors for undeclared fields.
 Counters are deliberately omitted from this catalogue; adding a counter
 strategy requires a spec amendment.
 
+### Declarative rule tables and normalization attributes
+
+Field merge rules are declared in machine-readable tables (`field-rules.json`, conforming to `schemas/field-rules.schema.json`). Each entry defines the merge behavior for an `(op_type, op_version, field)` tuple:
+- `op_type` (string): The operation type.
+- `op_version` (integer): The operation schema version.
+- `field` (string): The target field in the operation body.
+- `strategy` (string): Exactly one strategy from the closed catalogue.
+- `key` (array of strings, required for `keyed-lww`): The ordered list of body fields forming the composite key.
+- `lattice` (array of strings, required for `lattice`): The ordered elements of the semilattice.
+- `normalize` (optional object): Declarative normalization configuration specifying the structural position and algorithm:
+  - `value`: Normalization algorithm (e.g. `"person"`) applied to scalar values (`lww`, `keyed-lww`).
+  - `items`: Normalization algorithm (e.g. `"person"`) applied to collection elements (`set-observed-remove`, `set-union`).
+  - `key`: Ordered list of key component names whose values are normalized (e.g. as person) in `keyed-lww`.
+
+**Vocabulary-blind accumulators:** Accumulators execute normalization solely based on these rule declarations, remaining completely vocabulary-blind. A reducer MUST NOT inspect operation types or field names to dispatch normalization (such as checking for `op_type == "assign"` or `field == "resolved_by"`); all normalization is driven exclusively by the declarative `normalize` attribute in the rule table.
+
 ### Unified empty-value contract
 
 The generic fold map (`map[string]any`) is the single normative representation of folded state across implementations and preserves written values deterministically:
@@ -274,7 +290,7 @@ Typed domain serializations (such as language-specific state structs) MAY omit e
 - **Reduction:** As operations are consumed in total order $L$, an operation writing the field replaces the value stored at its own key $k$ and leaves every other key untouched — that is, `lww` applied independently within each key.
 - **Result:** For each key, the value written by the latest operation in $L$ bearing that key. Entries are serialized as a list of `{key, value}` records ordered by their key tuples, compared component-wise.
 - **Key components are strings.** Every declared key component an operation carries MUST be a string. One that is a number, a boolean, an object, an array or `null` makes the whole operation uninterpretable per §7.1. A key component the body omits entirely is a different case and is not rejected: it contributes the empty component, except where a domain-specific key component resolution rule applies (see below). A value the strategy stores is under the register rule below, not this one.
-- **Normalization:** Where a body field carries a person identifier, the normalization of `spec/identifiers.md` applies to the **stored value** exactly as it applies to the key component derived from it. A reducer MUST NOT normalize a person identifier for keying and then store it verbatim: where `approval.subject` is a string, the folded entry's key component and its value are the same normalized string. A non-string `subject` is schema-invalid against `person-id` (`spec/schemas/identifiers.schema.json`) and, being a key component, makes its operation uninterpretable.
+- **Normalization:** Where a rule declares normalization (`normalize.value` or `normalize.key`), the normalization of `spec/identifiers.md` applies to the declared structural positions. A reducer MUST NOT normalize a person identifier for keying and then store it verbatim: where a rule declares normalization for a key component and for its value (such as `approval.subject`), the folded entry's key component and its value are the same normalized string. A non-string key component is schema-invalid and, being a key component, makes its operation uninterpretable per §7.1.
 - **Approval subject resolution:** In `approval` operations, an omitted or empty-after-normalization `subject` defaults to the op commit author's normalized email identifier (`email:<author.email>`) rather than contributing the empty string `""`. Both the key component for `subject` and the stored value for `approval.subject` in materialized state retain this effective normalized subject.
 - **Registers hold values.** A value stored at a key is stored verbatim, so any JSON type reproduces byte-for-byte; `null` does not, and makes the operation uninterpretable per §7.1.
 - **Why this is not `lww` or a set:** Registers scoped to a key — one vote per (voter, revision), one status per (revision, check name) — need a later write under one key to leave the others alone. Plain `lww` would collapse them to a single register; a set has no notion of a value being replaced.

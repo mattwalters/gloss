@@ -39,13 +39,19 @@
     "op_type": "assign",
     "op_version": 1,
     "field": "add",
-    "strategy": "set-observed-remove"
+    "strategy": "set-observed-remove",
+    "normalize": {
+      "items": "person"
+    }
   },
   {
     "op_type": "assign",
     "op_version": 1,
     "field": "remove",
-    "strategy": "set-observed-remove"
+    "strategy": "set-observed-remove",
+    "normalize": {
+      "items": "person"
+    }
   },
   {
     "op_type": "label",

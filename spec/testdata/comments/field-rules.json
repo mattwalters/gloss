@@ -45,6 +45,9 @@
     "op_type": "resolve",
     "op_version": 1,
     "field": "resolved_by",
-    "strategy": "lww"
+    "strategy": "lww",
+    "normalize": {
+      "value": "person"
+    }
   }
 ]

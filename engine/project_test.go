@@ -20,6 +20,14 @@ func TestProjectRulesDriftGuard(t *testing.T) {
 	var expectedRules []writ.Rule
 	for _, r := range allRules {
 		if r.Vocabulary == "project" {
+			var norm *writ.NormalizeRule
+			if r.Normalize != nil {
+				norm = &writ.NormalizeRule{
+					Value: r.Normalize.Value,
+					Items: r.Normalize.Items,
+					Key:   r.Normalize.Key,
+				}
+			}
 			expectedRules = append(expectedRules, writ.Rule{
 				OpType:    r.OpType,
 				OpVersion: r.OpVersion,
@@ -27,6 +35,7 @@ func TestProjectRulesDriftGuard(t *testing.T) {
 				Strategy:  r.Strategy,
 				Key:       r.Key,
 				Lattice:   r.Lattice,
+				Normalize: norm,
 			})
 		}
 	}

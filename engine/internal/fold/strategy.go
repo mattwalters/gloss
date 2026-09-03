@@ -11,8 +11,8 @@ import (
 
 // Accumulator defines the interface for state reducers in the closed strategy catalogue.
 type Accumulator interface {
-	// Apply updates the accumulator with an operation in total order L.
-	Apply(op codec.Op, body map[string]any, rawBody map[string]json.RawMessage) error
+	// Apply updates the accumulator with an operation in total order L according to the matched rule.
+	Apply(rule Rule, op codec.Op, body map[string]any, rawBody map[string]json.RawMessage) error
 	// HasValue returns true if at least one operation has contributed to this accumulator.
 	HasValue() bool
 	// Result returns the folded value for this field in serialized representation.
@@ -53,12 +53,12 @@ func newLWWAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 	return &lwwAccumulator{field: rule.Field}, nil
 }
 
-func (a *lwwAccumulator) Apply(op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
+func (a *lwwAccumulator) Apply(rule Rule, op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	if val, ok := body[a.field]; ok && val != nil {
 		// Empty scalar contract (spec/fold.md §5.1): empty strings (including
 		// person identifiers that normalize to empty) are preserved in the
 		// generic fold map as deliberate scalar writes.
-		if s, ok := val.(string); ok && a.field == "resolved_by" && op.OpType == "resolve" {
+		if s, ok := val.(string); ok && rule.Normalize != nil && rule.Normalize.Value == "person" {
 			val = person.NormalizePerson(s)
 		}
 		a.val = val
@@ -81,7 +81,7 @@ func newCreateOnceAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 	return &createOnceAccumulator{field: rule.Field}, nil
 }
 
-func (a *createOnceAccumulator) Apply(_ codec.Op, body map[string]any, rawBody map[string]json.RawMessage) error {
+func (a *createOnceAccumulator) Apply(_ Rule, _ codec.Op, body map[string]any, rawBody map[string]json.RawMessage) error {
 	if !a.hasVal {
 		if raw, ok := rawBody[a.field]; ok && len(raw) > 0 && string(raw) != "null" {
 			a.val = raw
@@ -111,16 +111,22 @@ func newSetUnionAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 	}, nil
 }
 
-func (a *setUnionAccumulator) Apply(_ codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
+func (a *setUnionAccumulator) Apply(rule Rule, _ codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	raw, ok := body[a.field]
 	if !ok || raw == nil {
 		return nil
 	}
 	a.hasSet = true
+	normalizeItem := func(it string) string {
+		if rule.Normalize != nil && rule.Normalize.Items == "person" {
+			return person.NormalizePerson(it)
+		}
+		return it
+	}
 	// Elements that are the empty string are dropped (spec/fold.md §5.3).
 	add := func(item string) {
-		if item != "" {
-			a.set[item] = true
+		if norm := normalizeItem(item); norm != "" {
+			a.set[norm] = true
 		}
 	}
 	// Every item is a string: an op carrying anything else at this field is
@@ -178,7 +184,7 @@ func newSetObservedRemoveAccumulator(rule Rule, reach ReachOracle) (Accumulator,
 	}, nil
 }
 
-func (a *setObservedRemoveAccumulator) Apply(op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
+func (a *setObservedRemoveAccumulator) Apply(rule Rule, op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	var adds, removes []string
 	if a.field == "add" || a.field == "remove" {
 		if m, ok := body["add"].(map[string]any); ok {
@@ -213,7 +219,7 @@ func (a *setObservedRemoveAccumulator) Apply(op codec.Op, body map[string]any, _
 	// is taken verbatim. Items that are empty after normalization are dropped
 	// from both sides of the OR-set, whatever the op type (spec/fold.md §5.4).
 	normalizeItem := func(it string) string {
-		if op.OpType == "assign" {
+		if rule.Normalize != nil && rule.Normalize.Items == "person" {
 			return person.NormalizePerson(it)
 		}
 		return it
@@ -269,7 +275,7 @@ func newAppendAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 	return &appendAccumulator{field: rule.Field}, nil
 }
 
-func (a *appendAccumulator) Apply(_ codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
+func (a *appendAccumulator) Apply(_ Rule, _ codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	raw, ok := body[a.field]
 	if !ok || raw == nil {
 		return nil
@@ -313,7 +319,7 @@ func newTombstoneAccumulator(rule Rule, reach ReachOracle) (Accumulator, error) 
 	}, nil
 }
 
-func (a *tombstoneAccumulator) Apply(op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
+func (a *tombstoneAccumulator) Apply(_ Rule, op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	val, hasField := body[a.field]
 	if op.OpType == "delete" || (hasField && val == true) {
 		a.deletes = append(a.deletes, op.ID)
@@ -368,7 +374,7 @@ func newLatticeAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 	}, nil
 }
 
-func (a *latticeAccumulator) Apply(_ codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
+func (a *latticeAccumulator) Apply(_ Rule, _ codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
 	raw, ok := body[a.field]
 	if !ok || raw == nil {
 		return nil
@@ -417,7 +423,15 @@ func newKeyedLWWAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 	}, nil
 }
 
-func (a *keyedLWWAccumulator) Apply(op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
+func (a *keyedLWWAccumulator) Apply(rule Rule, op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
+	normVal := rule.Normalize != nil && rule.Normalize.Value == "person"
+	normKeys := make(map[string]bool)
+	if rule.Normalize != nil {
+		for _, k := range rule.Normalize.Key {
+			normKeys[k] = true
+		}
+	}
+
 	val, ok := body[a.field]
 	if !ok {
 		if a.field == "subject" && op.OpType == "approval" && op.Author.Email != "" {
@@ -425,10 +439,10 @@ func (a *keyedLWWAccumulator) Apply(op codec.Op, body map[string]any, _ map[stri
 		} else {
 			return nil
 		}
-	} else if a.field == "subject" && op.OpType == "approval" {
+	} else if normVal {
 		if s, isStr := val.(string); isStr {
 			norm := person.NormalizePerson(s)
-			if norm == "" && op.Author.Email != "" {
+			if norm == "" && a.field == "subject" && op.OpType == "approval" && op.Author.Email != "" {
 				norm = person.NormalizePerson("email:" + op.Author.Email)
 			}
 			val = norm
@@ -443,11 +457,11 @@ func (a *keyedLWWAccumulator) Apply(op codec.Op, body map[string]any, _ map[stri
 		// An absent one contributes the empty component, except for approval
 		// subject which falls back to the commit author's email.
 		vStr, _ := body[kf].(string)
-		if kf == "subject" && op.OpType == "approval" {
+		if normKeys[kf] {
 			vStr = person.NormalizePerson(vStr)
-			if vStr == "" && op.Author.Email != "" {
-				vStr = person.NormalizePerson("email:" + op.Author.Email)
-			}
+		}
+		if vStr == "" && kf == "subject" && op.OpType == "approval" && op.Author.Email != "" {
+			vStr = person.NormalizePerson("email:" + op.Author.Email)
 		}
 		key = append(key, vStr)
 	}
