@@ -306,6 +306,10 @@ companion.</p>
 <p>No binary storage format for canonical data. Binary means no diff, no merge,
 no delta compression — and git <em>is</em> the append-only log already. Commits are
 the entries; refs are the head pointers.</p>
+<p>No anonymous intake format or in-git public issue submissions. Writing an
+operation requires push access to a <code>refs/writ/*</code> namespace, which public bug
+reporters do not have. Writ does not build an anonymous write protocol or
+authorization layer; public intake belongs in a bridge or intake bot.</p>
 <h2 id="whats-hard-and-what-isnt-solved">What&rsquo;s hard, and what isn&rsquo;t solved</h2>
 <p><strong>Comment anchoring across force-pushes</strong> is the genuinely hard problem in
 this space. Writ anchors to content — blob hash plus hunk context, dual-sided
@@ -326,6 +330,16 @@ people quickly is the axis where a server-backed tool wins today.</p>
 <p><strong>Identity mapping</strong> from signing keys to directory identities is deliberately
 out of spec scope, and it is exactly what an organization deploying this would
 ask about first.</p>
+<p><strong>Public issue intake.</strong> Writing a writ operation requires push access to
+<code>refs/writ/&lt;writer-id&gt;/*</code>. A stranger filing a bug on an open-source project
+does not have it. Writ is built for the work of a team that already has commit
+access; it structurally cannot let unauthenticated strangers write ops without
+an account. The answer is an intake bot — a writer with push credentials that
+accepts reports from a public webhook, form, or email, attributing reporters
+truthfully via <code>user:</code> person identifiers (such as <code>user:github-octocat</code>)
+without inventing fake email addresses. For many open-source projects, the
+honest answer is to keep GitHub Issues as the public front door and use Writ
+for everything behind it.</p>
 <h2 id="the-spec-is-the-fixtures">The spec is the fixtures</h2>
 <p>The standard is not the prose. It is the conformance corpus: fixture
 repositories exercising concurrent edits on every type, multi-device writers,
