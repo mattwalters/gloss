@@ -12,6 +12,7 @@ import (
 
 	"github.com/writtendev/writ/cmd/writ/internal/wire"
 	"github.com/writtendev/writ/engine"
+	"github.com/writtendev/writ/engine/identity"
 	"github.com/writtendev/writ/engine/state"
 	"github.com/writtendev/writ/spec"
 )
@@ -54,6 +55,8 @@ func runIssue(ctx context.Context, defaultDir string, args []string, stdout, std
 		return runIssueCreate(ctx, targetDir, args[1:], stdout, stderr)
 	case "status":
 		return runIssueStatus(ctx, targetDir, args[1:], stdout, stderr)
+	case "comment":
+		return runIssueComment(ctx, targetDir, args[1:], stdout, stderr)
 	case "assign":
 		return runIssueAssign(ctx, targetDir, args[1:], stdout, stderr)
 	case "list":
@@ -255,8 +258,13 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 			return renderErr(stderr, err)
 		}
 
+		threads, err := store.Query.Threads("issue", issueID)
+		if err != nil {
+			return renderErr(stderr, err)
+		}
+
 		if opts.jsonMode {
-			wireIssue := wire.FromIssueResult(res)
+			wireIssue := wire.FromIssueResult(res, threads)
 			if err := emitJSON(stdout, wire.KindIssueStatus, wireIssue); err != nil {
 				fmt.Fprintf(stderr, "writ issue status: marshal json: %v\n", err)
 				return 1
@@ -314,6 +322,11 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 				fmt.Fprintf(stdout, "  %s %s (%s)\n", link.Relation, link.Target, outcome)
 			}
 		}
+
+		if len(threads) > 0 {
+			fmt.Fprintln(stdout, "Comments:")
+			renderCommentThreads(stdout, threads, 1)
+		}
 		return 0
 	}
 
@@ -326,6 +339,235 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 	}
 
 	fmt.Fprintf(stdout, "%s: %s\n", issueID, newState)
+	return 0
+}
+
+func renderCommentThreads(w io.Writer, threads []state.CommentThread, depth int) {
+	indent := strings.Repeat("  ", depth)
+	for _, t := range threads {
+		var annotation string
+		if t.Comment.Deleted {
+			annotation = " (deleted)"
+		} else if t.Comment.IsResolved() {
+			if t.Comment.ResolvedBy != "" {
+				annotation = fmt.Sprintf(" (resolved by %s)", t.Comment.ResolvedBy)
+			} else {
+				annotation = " (resolved)"
+			}
+		}
+
+		if t.Comment.Text != "" {
+			fmt.Fprintf(w, "%s[%s] %s%s\n", indent, t.ObjectID, t.Comment.Text, annotation)
+		} else {
+			fmt.Fprintf(w, "%s[%s]%s\n", indent, t.ObjectID, annotation)
+		}
+		if len(t.Replies) > 0 {
+			renderCommentThreads(w, t.Replies, depth+1)
+		}
+	}
+}
+
+type issueCommentOpts struct {
+	dir       string
+	message   string
+	replyTo   string
+	resolve   bool
+	unresolve bool
+}
+
+func newIssueCommentFlagSet(defaultDir string) (*flag.FlagSet, *issueCommentOpts) {
+	fs := flag.NewFlagSet("issue comment", flag.ContinueOnError)
+	opts := &issueCommentOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
+	fs.StringVar(&opts.message, "m", "", "Comment text `<text>`")
+	fs.StringVar(&opts.replyTo, "reply-to", "", "Comment ID `<comment-id>` to reply to")
+	fs.BoolVar(&opts.resolve, "resolve", false, "Mark comment thread as resolved, attributed to writ.personId, else email:<user.email>")
+	fs.BoolVar(&opts.unresolve, "unresolve", false, "Mark comment thread as unresolved, preserving the recorded resolver")
+	fs.Usage = func() {
+		renderUsage(fs.Output(), []string{"issue", "comment"}, issueCommentCmd)
+	}
+	return fs, opts
+}
+
+func runIssueComment(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+	fs, opts := newIssueCommentFlagSet(defaultDir)
+	fs.SetOutput(stderr)
+
+	posArgs, err := parseArgs(fs, args)
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+
+	if len(posArgs) == 0 || posArgs[0] == "" {
+		fmt.Fprintln(stderr, "writ issue comment: issue ID is required")
+		fs.Usage()
+		return 2
+	}
+	if len(posArgs) > 1 {
+		fmt.Fprintf(stderr, "writ issue comment: unexpected arguments: %s\n", strings.Join(posArgs[1:], " "))
+		fs.Usage()
+		return 2
+	}
+
+	if opts.resolve && opts.unresolve {
+		fmt.Fprintln(stderr, "writ issue comment: cannot specify both -resolve and -unresolve")
+		fs.Usage()
+		return 2
+	}
+
+	if opts.message == "" && !opts.resolve && !opts.unresolve {
+		fmt.Fprintln(stderr, "writ issue comment: -m is required (or specify -resolve / -unresolve)")
+		fs.Usage()
+		return 2
+	}
+
+	targetDir := opts.dir
+	if targetDir == "" {
+		targetDir = "."
+	}
+
+	store, err := openStore(targetDir)
+	if err != nil {
+		return renderErr(stderr, err)
+	}
+	defer store.Close()
+
+	issueID, err := resolveIssueID(ctx, store, posArgs[0])
+	var directCommentID string
+	if err != nil {
+		// Check if posArgs[0] is a comment ID prefix
+		comments, cErr := store.Query.Comments(writ.CommentFilter{IncludeDeleted: true})
+		if cErr == nil {
+			var matches []writ.CommentResult
+			for _, c := range comments {
+				if strings.HasPrefix(c.ObjectID, posArgs[0]) {
+					matches = append(matches, c)
+				}
+			}
+			if len(matches) == 1 {
+				issueID = matches[0].Comment.Subject.ObjectID
+				directCommentID = matches[0].ObjectID
+				err = nil
+			} else if len(matches) > 1 {
+				return renderErr(stderr, fmt.Errorf("ambiguous ID prefix %q matches multiple comments", posArgs[0]))
+			}
+		}
+	}
+	if err != nil {
+		return renderErr(stderr, err)
+	}
+
+	targetCommentLookup := opts.replyTo
+	if targetCommentLookup == "" && directCommentID != "" {
+		targetCommentLookup = directCommentID
+	}
+
+	var replyToID string
+	var threadRootID string
+
+	if targetCommentLookup != "" {
+		comments, err := store.Query.Comments(writ.CommentFilter{
+			SubjectType:    "issue",
+			SubjectID:      issueID,
+			IncludeDeleted: true,
+		})
+		if err != nil {
+			return renderErr(stderr, err)
+		}
+		var matches []writ.CommentResult
+		for _, c := range comments {
+			if strings.HasPrefix(c.ObjectID, targetCommentLookup) {
+				matches = append(matches, c)
+			}
+		}
+		var matchedComment writ.CommentResult
+		if len(matches) == 1 {
+			matchedComment = matches[0]
+			replyToID = matches[0].ObjectID
+		} else if len(matches) > 1 {
+			var matchIDs []string
+			for _, m := range matches {
+				matchIDs = append(matchIDs, m.ObjectID)
+			}
+			return renderErr(stderr, fmt.Errorf("ambiguous comment ID prefix %q matches %d comments (%s)", targetCommentLookup, len(matches), strings.Join(matchIDs, ", ")))
+		} else {
+			replyToID = targetCommentLookup
+		}
+
+		if matchedComment.ObjectID != "" {
+			parentMap := make(map[string]string, len(comments))
+			for _, c := range comments {
+				if c.Comment.InReplyTo != "" {
+					parentMap[c.ObjectID] = c.Comment.InReplyTo
+				}
+			}
+			curr := matchedComment.ObjectID
+			visited := make(map[string]bool, len(comments))
+			for parentMap[curr] != "" && !visited[curr] {
+				visited[curr] = true
+				curr = parentMap[curr]
+			}
+			threadRootID = curr
+		} else {
+			threadRootID = replyToID
+		}
+	}
+
+	var resolvedBy string
+	if opts.resolve {
+		writer := store.Writer()
+		resolvedBy = writer.PersonID
+		if resolvedBy == "" {
+			if writer.PersonIDErr != nil {
+				return renderErr(stderr, fmt.Errorf("writ: no resolver identity: %w", writer.PersonIDErr))
+			}
+			return renderErr(stderr, fmt.Errorf("writ: no resolver identity: configure %s (for example %q) or user.email", identity.PersonIDKey, "user:alice"))
+		}
+	}
+
+	var commentID string
+	if opts.message != "" {
+		cid, err := store.Issues.Comment(ctx, issueID, writ.NewComment{
+			Text:      opts.message,
+			InReplyTo: replyToID,
+		})
+		if err != nil {
+			return renderErr(stderr, err)
+		}
+		commentID = cid
+	}
+
+	if opts.resolve || opts.unresolve {
+		resolveTarget := threadRootID
+		if resolveTarget == "" {
+			if commentID != "" {
+				resolveTarget = commentID
+			} else {
+				return renderErr(stderr, fmt.Errorf("writ issue comment: comment or thread ID is required to resolve"))
+			}
+		}
+
+		if err := store.Comments.Resolve(ctx, resolveTarget, writ.CommentResolve{
+			Resolved:   opts.resolve,
+			ResolvedBy: resolvedBy,
+		}); err != nil {
+			return renderErr(stderr, err)
+		}
+
+		if commentID == "" {
+			action := "resolved"
+			if opts.unresolve {
+				action = "unresolved"
+			}
+			fmt.Fprintf(stdout, "%s (%s)\n", resolveTarget, action)
+			return 0
+		}
+	}
+
+	fmt.Fprintln(stdout, commentID)
 	return 0
 }
 

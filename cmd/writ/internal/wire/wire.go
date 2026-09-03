@@ -130,18 +130,19 @@ type IssueLink struct {
 
 // Issue is the full detail view of an issue collaborative object.
 type Issue struct {
-	ObjectID    string      `json:"object_id"`
-	Title       string      `json:"title"`
-	Description string      `json:"description,omitempty"`
-	State       string      `json:"state"`
-	Reason      string      `json:"reason,omitempty"`
-	Author      Author      `json:"author"`
-	CreatedAt   time.Time   `json:"created_at"`
-	UpdatedAt   time.Time   `json:"updated_at"`
-	Assignees   []string    `json:"assignees"`
-	Labels      []string    `json:"labels"`
-	Links       []IssueLink `json:"links"`
-	UnknownOps  []UnknownOp `json:"unknown_ops"`
+	ObjectID    string          `json:"object_id"`
+	Title       string          `json:"title"`
+	Description string          `json:"description,omitempty"`
+	State       string          `json:"state"`
+	Reason      string          `json:"reason,omitempty"`
+	Author      Author          `json:"author"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+	Assignees   []string        `json:"assignees"`
+	Labels      []string        `json:"labels"`
+	Links       []IssueLink     `json:"links"`
+	Comments    []CommentThread `json:"comments"`
+	UnknownOps  []UnknownOp     `json:"unknown_ops"`
 }
 
 // IssueLabels represents the labels attached to an issue.
@@ -374,9 +375,9 @@ func FromIssueResultSummaries(issues []writ.IssueResult) []IssueSummary {
 	return out
 }
 
-// FromIssueResult converts a writ.IssueResult into a full detail Issue wire struct.
+// FromIssueResult converts a writ.IssueResult and its comment threads into a full detail Issue wire struct.
 // Collections are always initialized to empty non-nil slices so they serialize as `[]`.
-func FromIssueResult(r writ.IssueResult) Issue {
+func FromIssueResult(r writ.IssueResult, threads []state.CommentThread) Issue {
 	assignees := r.Issue.Assignees
 	if assignees == nil {
 		assignees = []string{}
@@ -392,6 +393,10 @@ func FromIssueResult(r writ.IssueResult) Issue {
 			TargetType: l.TargetType,
 			Relation:   l.Relation,
 		}
+	}
+	comments := make([]CommentThread, len(threads))
+	for i, t := range threads {
+		comments[i] = FromCommentThread(t)
 	}
 	unknownOps := make([]UnknownOp, len(r.Issue.UnknownOps))
 	for i, u := range r.Issue.UnknownOps {
@@ -414,6 +419,7 @@ func FromIssueResult(r writ.IssueResult) Issue {
 		Assignees:   assignees,
 		Labels:      labels,
 		Links:       links,
+		Comments:    comments,
 		UnknownOps:  unknownOps,
 	}
 }

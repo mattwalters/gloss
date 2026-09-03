@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/writtendev/writ/cmd/writ/internal/wire"
 	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/identity"
 )
@@ -1068,3 +1070,431 @@ func TestIssue_Label(t *testing.T) {
 		}
 	})
 }
+
+func TestIssueComment_Workflow(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("writ init failed: %s", stderr.String())
+	}
+	commitFile(t, env.repoDir, "README.md", "# Hello", "initial commit")
+
+	// 1. Create an issue
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "create", "-C", env.repoDir,
+		"-title", "Investigate timeout on worker shutdown",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue create failed: %s", stderr.String())
+	}
+	createOut := strings.TrimSpace(stdout.String())
+	issueID := strings.Split(createOut, " ")[0]
+	if len(issueID) != 32 {
+		t.Fatalf("unexpected issue ID: %q", issueID)
+	}
+
+	// Verify status initially has no Comments section
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "status", "-C", env.repoDir, issueID}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue status failed: %s", stderr.String())
+	}
+	if strings.Contains(stdout.String(), "Comments:") {
+		t.Errorf("status should not contain Comments: when empty, got: %s", stdout.String())
+	}
+
+	// Verify status --json initially has "comments":[]
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "status", "-C", env.repoDir, issueID, "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue status --json failed: %s", stderr.String())
+	}
+	var envJSON wire.Envelope
+	if err := json.Unmarshal(stdout.Bytes(), &envJSON); err != nil {
+		t.Fatalf("unmarshal json: %v", err)
+	}
+	issueJSON, ok := envJSON.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("expected Data map in json envelope")
+	}
+	commentsField, hasComments := issueJSON["comments"]
+	if !hasComments {
+		t.Fatalf("expected 'comments' field in issue json")
+	}
+	commentsArr, ok := commentsField.([]any)
+	if !ok || len(commentsArr) != 0 {
+		t.Fatalf("expected empty comments array in issue json, got: %v", commentsField)
+	}
+
+	// 2. Post first root comment
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, issueID,
+		"-m", "Worker processes are hanging during SIGTERM",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue comment failed: %s", stderr.String())
+	}
+	commentID1 := strings.TrimSpace(stdout.String())
+	if len(commentID1) != 32 {
+		t.Fatalf("unexpected comment ID format: %q", commentID1)
+	}
+
+	// 3. Post reply using prefix matching for issue ID and comment ID
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, issueID[:8],
+		"-m", "Represents a leak in the channel drain loop",
+		"-reply-to", commentID1[:8],
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue comment reply failed: %s", stderr.String())
+	}
+	replyID1 := strings.TrimSpace(stdout.String())
+	if len(replyID1) != 32 {
+		t.Fatalf("unexpected reply comment ID format: %q", replyID1)
+	}
+
+	// 4. Post second root comment
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, issueID,
+		"-m", "Added reproduction test case in repro_test.go",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("second issue comment failed: %s", stderr.String())
+	}
+	commentID2 := strings.TrimSpace(stdout.String())
+
+	// 5. Verify human status rendering with hierarchy
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "status", "-C", env.repoDir, issueID}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue status failed: %s", stderr.String())
+	}
+	statusStr := stdout.String()
+	if !strings.Contains(statusStr, "Comments:\n") {
+		t.Errorf("expected 'Comments:' header in status output: %s", statusStr)
+	}
+	expectedRoot1 := fmt.Sprintf("  [%s] Worker processes are hanging during SIGTERM", commentID1)
+	expectedReply1 := fmt.Sprintf("    [%s] Represents a leak in the channel drain loop", replyID1)
+	expectedRoot2 := fmt.Sprintf("  [%s] Added reproduction test case in repro_test.go", commentID2)
+	if !strings.Contains(statusStr, expectedRoot1) {
+		t.Errorf("missing root comment 1 in status: %s", statusStr)
+	}
+	if !strings.Contains(statusStr, expectedReply1) {
+		t.Errorf("missing reply 1 in status: %s", statusStr)
+	}
+	if !strings.Contains(statusStr, expectedRoot2) {
+		t.Errorf("missing root comment 2 in status: %s", statusStr)
+	}
+
+	// 6. Verify status --json contains full threaded tree
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "status", "-C", env.repoDir, issueID, "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue status --json failed: %s", stderr.String())
+	}
+	var statusEnv struct {
+		Kind string     `json:"kind"`
+		Data wire.Issue `json:"data"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &statusEnv); err != nil {
+		t.Fatalf("unmarshal json: %v", err)
+	}
+	var thread1, thread2 *wire.CommentThread
+	for i := range statusEnv.Data.Comments {
+		if statusEnv.Data.Comments[i].ObjectID == commentID1 {
+			thread1 = &statusEnv.Data.Comments[i]
+		} else if statusEnv.Data.Comments[i].ObjectID == commentID2 {
+			thread2 = &statusEnv.Data.Comments[i]
+		}
+	}
+	if thread1 == nil {
+		t.Fatalf("thread 1 (%s) not found in comments json", commentID1)
+	}
+	if thread2 == nil {
+		t.Fatalf("thread 2 (%s) not found in comments json", commentID2)
+	}
+	if len(thread1.Replies) != 1 {
+		t.Fatalf("expected 1 reply under thread 1, got %d", len(thread1.Replies))
+	}
+	if thread1.Replies[0].ObjectID != replyID1 {
+		t.Errorf("expected reply object_id %s, got %s", replyID1, thread1.Replies[0].ObjectID)
+	}
+	if len(thread2.Replies) != 0 {
+		t.Fatalf("expected 0 replies under thread 2, got %d", len(thread2.Replies))
+	}
+
+	// 7. Resolve first thread with -resolve
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, issueID,
+		"-reply-to", replyID1[:8],
+		"-resolve",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue comment -resolve failed: %s", stderr.String())
+	}
+	resolveOut := strings.TrimSpace(stdout.String())
+	if resolveOut != fmt.Sprintf("%s (resolved)", commentID1) {
+		t.Errorf("expected '%s (resolved)', got %q", commentID1, resolveOut)
+	}
+
+	// Verify store state
+	store, err := writ.Open(env.repoDir)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer store.Close()
+	comments, err := store.Query.Comments(writ.CommentFilter{SubjectType: "issue", SubjectID: issueID})
+	if err != nil {
+		t.Fatalf("query comments: %v", err)
+	}
+	for _, c := range comments {
+		if c.ObjectID == commentID1 {
+			if !c.Comment.IsResolved() {
+				t.Errorf("expected comment 1 to be resolved")
+			}
+			if c.Comment.ResolvedBy != "email:alice@example.com" {
+				t.Errorf("expected resolvedBy 'email:alice@example.com', got %q", c.Comment.ResolvedBy)
+			}
+		}
+	}
+
+	// Verify human status displays (resolved by email:alice@example.com)
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "status", "-C", env.repoDir, issueID}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue status failed: %s", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), fmt.Sprintf("[%s] Worker processes are hanging during SIGTERM (resolved by email:alice@example.com)", commentID1)) {
+		t.Errorf("expected resolved annotation in status output: %s", stdout.String())
+	}
+
+	// 8. Post reply with -unresolve
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, issueID,
+		"-reply-to", commentID1,
+		"-m", "Reopening: still reproduces on Go 1.26",
+		"-unresolve",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue comment reply with -unresolve failed: %s", stderr.String())
+	}
+	replyID2 := strings.TrimSpace(stdout.String())
+	if len(replyID2) != 32 {
+		t.Fatalf("unexpected replyID2: %q", replyID2)
+	}
+
+	// Verify thread is now unresolved
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "status", "-C", env.repoDir, issueID}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue status failed: %s", stderr.String())
+	}
+	if strings.Contains(stdout.String(), "(resolved") {
+		t.Errorf("expected thread to be unresolved, got: %s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), fmt.Sprintf("[%s] Reopening: still reproduces on Go 1.26", replyID2)) {
+		t.Errorf("expected reply 2 in status: %s", stdout.String())
+	}
+
+	// 9. Direct targeting using comment ID as positional argument
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, commentID1[:8],
+		"-resolve",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue comment direct resolve failed: %s", stderr.String())
+	}
+	if strings.TrimSpace(stdout.String()) != fmt.Sprintf("%s (resolved)", commentID1) {
+		t.Errorf("expected '%s (resolved)', got %q", commentID1, stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, commentID1[:8],
+		"-unresolve",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue comment direct unresolve failed: %s", stderr.String())
+	}
+	if strings.TrimSpace(stdout.String()) != fmt.Sprintf("%s (unresolved)", commentID1) {
+		t.Errorf("expected '%s (unresolved)', got %q", commentID1, stdout.String())
+	}
+
+	// Direct reply using comment ID as positional argument
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, commentID1,
+		"-m", "Direct reply via comment ID",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue comment direct reply failed: %s", stderr.String())
+	}
+	directReplyID := strings.TrimSpace(stdout.String())
+	if len(directReplyID) != 32 {
+		t.Fatalf("unexpected directReplyID: %q", directReplyID)
+	}
+}
+
+func TestIssueComment_ResolverIdentity(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("writ init failed: %s", stderr.String())
+	}
+	commitFile(t, env.repoDir, "README.md", "# Hello", "initial commit")
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "create", "-C", env.repoDir,
+		"-title", "Test Identity Issue",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue create failed: %s", stderr.String())
+	}
+	issueID := strings.Split(strings.TrimSpace(stdout.String()), " ")[0]
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, issueID,
+		"-m", "Need resolution",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue comment failed: %s", stderr.String())
+	}
+	commentID := strings.TrimSpace(stdout.String())
+
+	// Configure invalid personId that has no scheme (e.g. "alice"), causing PersonIDErr
+	setGitConfig(t, env.repoDir, identity.PersonIDKey, "alice_without_scheme")
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "comment", "-C", env.repoDir, issueID,
+		"-reply-to", commentID,
+		"-resolve",
+	}, &stdout, &stderr)
+	if code == 0 {
+		t.Fatalf("expected failure with invalid person identity, got 0")
+	}
+	if !strings.Contains(stderr.String(), "writ.personId") || !strings.Contains(stderr.String(), "missing scheme") {
+		t.Errorf("expected diagnosis naming writ.personId and missing scheme in stderr, got: %s", stderr.String())
+	}
+}
+
+func TestIssueComment_UsageErrors(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("writ init failed: %s", stderr.String())
+	}
+	commitFile(t, env.repoDir, "README.md", "# Hello", "initial commit")
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "create", "-C", env.repoDir,
+		"-title", "Usage Errors Issue",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue create failed: %s", stderr.String())
+	}
+	issueID := strings.Split(strings.TrimSpace(stdout.String()), " ")[0]
+
+	// 1. Missing issue ID
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "comment", "-C", env.repoDir}, &stdout, &stderr)
+	if code != 2 {
+		t.Errorf("expected exit code 2 for missing issue ID, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "issue ID is required") {
+		t.Errorf("expected 'issue ID is required' in stderr, got: %s", stderr.String())
+	}
+
+	// 2. Unexpected arguments
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "comment", "-C", env.repoDir, issueID, "unexpected", "-m", "hi"}, &stdout, &stderr)
+	if code != 2 {
+		t.Errorf("expected exit code 2 for unexpected arguments, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "unexpected arguments") {
+		t.Errorf("expected 'unexpected arguments' in stderr, got: %s", stderr.String())
+	}
+
+	// 3. Mutually exclusive -resolve and -unresolve
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "comment", "-C", env.repoDir, issueID, "-resolve", "-unresolve"}, &stdout, &stderr)
+	if code != 2 {
+		t.Errorf("expected exit code 2 for mutually exclusive resolve flags, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "cannot specify both -resolve and -unresolve") {
+		t.Errorf("expected 'cannot specify both -resolve and -unresolve' in stderr, got: %s", stderr.String())
+	}
+
+	// 4. Missing -m without resolve/unresolve
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "comment", "-C", env.repoDir, issueID}, &stdout, &stderr)
+	if code != 2 {
+		t.Errorf("expected exit code 2 for missing -m, got %d", code)
+	}
+	if !strings.Contains(stderr.String(), "-m is required") {
+		t.Errorf("expected '-m is required' in stderr, got: %s", stderr.String())
+	}
+
+	// 5. Resolve without comment or thread target
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "comment", "-C", env.repoDir, issueID, "-resolve"}, &stdout, &stderr)
+	if code == 0 {
+		t.Errorf("expected failure when resolving issue ID directly without comment target, got 0")
+	}
+	if !strings.Contains(stderr.String(), "comment or thread ID is required to resolve") {
+		t.Errorf("expected 'comment or thread ID is required to resolve' in stderr, got: %s", stderr.String())
+	}
+
+	// 6. Unknown issue ID
+	stdout.Reset()
+	stderr.Reset()
+	nonexistentID := "00000000000000000000000000000000"
+	code = run(context.Background(), []string{"issue", "comment", "-C", env.repoDir, nonexistentID, "-m", "text"}, &stdout, &stderr)
+	if code == 0 {
+		t.Errorf("expected failure for nonexistent issue ID, got 0")
+	}
+}
+
