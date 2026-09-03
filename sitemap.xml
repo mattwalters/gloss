@@ -28,6 +28,8 @@
   </url><url>
     <loc>/spec/issue-ops/</loc>
   </url><url>
+    <loc>/spec/label-ops/</loc>
+  </url><url>
     <loc>/spec/op-envelope/</loc>
   </url><url>
     <loc>/spec/ordering/</loc>
