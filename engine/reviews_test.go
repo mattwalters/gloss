@@ -948,3 +948,74 @@ func TestReviewsUpdateRejectsEmptyTitle(t *testing.T) {
 		t.Errorf("title changed after the refused update: %q", res.Review.Title)
 	}
 }
+
+func TestReviewsSetStatusRejectsTransitionOutOfMerged(t *testing.T) {
+	repoDir, _ := setupConfiguredRepo(t)
+	headHash := strings.TrimSpace(runGitCmd(t, repoDir, "rev-parse", "HEAD"))
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	ctx := context.Background()
+	id, err := s.Reviews.Create(ctx, writ.NewReview{
+		Title: "Merged Review Test",
+		Base:  headHash,
+		Head:  headHash,
+	})
+	if err != nil {
+		t.Fatalf("Create review failed: %v", err)
+	}
+
+	if err := s.Reviews.SetStatus(ctx, id, writ.ReviewStatus{
+		Status: "merged",
+	}); err != nil {
+		t.Fatalf("SetStatus to merged failed: %v", err)
+	}
+
+	ident, _ := identity.ParseWriterID("0123456789abcdef")
+	dagStore, err := dag.Open(repoDir, identity.Identity{WriterID: ident})
+	if err != nil {
+		t.Fatalf("dag.Open failed: %v", err)
+	}
+	enumRes, err := dagStore.Enumerate()
+	if err != nil {
+		t.Fatalf("dagStore.Enumerate failed: %v", err)
+	}
+	initialOpCount := len(enumRes.Ops[id])
+
+	for _, targetStatus := range []string{"open", "draft", "closed", "merged"} {
+		err := s.Reviews.SetStatus(ctx, id, writ.ReviewStatus{
+			Status: targetStatus,
+		})
+		if err == nil {
+			t.Errorf("expected transition to %q to fail, got nil", targetStatus)
+			continue
+		}
+		expectedErr := "cannot transition review " + id + " out of \"merged\" status"
+		if !strings.Contains(err.Error(), expectedErr) {
+			t.Errorf("status %q: got error %q, want it to contain %q", targetStatus, err.Error(), expectedErr)
+		}
+	}
+
+	// Assert no additional ops were appended
+	enumResAfter, err := dagStore.Enumerate()
+	if err != nil {
+		t.Fatalf("dagStore.Enumerate after failed: %v", err)
+	}
+	if len(enumResAfter.Ops[id]) != initialOpCount {
+		t.Errorf("op count changed: before=%d, after=%d", initialOpCount, len(enumResAfter.Ops[id]))
+	}
+
+	// Assert review status remains "merged"
+	res, err := s.Query.Review(id)
+	if err != nil {
+		t.Fatalf("Query.Review failed: %v", err)
+	}
+	if res.Review.Status != "merged" {
+		t.Errorf("got status %q, want %q", res.Review.Status, "merged")
+	}
+}
+
