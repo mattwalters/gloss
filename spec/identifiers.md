@@ -613,19 +613,26 @@ reference = [ repo-id "#" ] object-id
 
 ### Length bound
 
-A reference string is at most **513 code points**. The number has been in
-[`identifiers.schema.json`](schemas/identifiers.schema.json) since WRIT-16 and
-is written down here for the first time; it is a resource bound on a string
-stored permanently in an append-only log, exactly as the person-identifier
-bound is, and it is likewise enforced **by rejection, never by truncation** —
-a truncated reference points at a different object, or at nothing.
+A reference string is at most **289 code points**. The bound is a resource
+bound on a string stored permanently in an append-only log, exactly as the
+person-identifier bound is, and it is likewise enforced **by rejection, never
+by truncation** — a truncated reference points at a different object, or at
+nothing.
+
+The bound is derived from the reference grammar and envelope constraints:
+32 lowercase hexadecimal characters for `repo-id`, 1 delimiter character (`#`),
+and at most 256 characters for `object_id` (bounded by
+[`schemas/op-envelope.schema.json`](schemas/op-envelope.schema.json)), yielding
+32 + 1 + 256 = 289 code points. Stating the derived bound gives validators
+operating on flat reference strings an exact ceiling without requiring
+multi-field inspection.
 
 The unit is code points, and the distinction is observable here rather than
 theoretical: `reference`'s pattern is `^([0-9a-f]{32}#)?[^#\s]+$`, whose
 second half admits non-ASCII. Most bounded strings in the schemas are paired
 with an ASCII-only pattern, which makes the units indistinguishable and the
 question moot; `person-id`, `reference` and the anchor schema's `line` (WRIT-154)
-are the three that are not. The bound is bracketed at 512 / 513 / 514 in all
+are the three that are not. The bound is bracketed at 288 / 289 / 290 in all
 three units under [`testdata/references/`](testdata/references/), and
 `TestReferenceLengthUnitIsCodePoints` computes the witness that separates each
 unit from the corpus itself.
@@ -634,18 +641,7 @@ Producers do not carry a second copy of this number. `codec.BuildCommit`, the
 only constructor of an op commit, validates every body against its vocabulary
 schema (WRIT-129), and the schemas `$ref` this definition — so a producer that
 tried to write an over-long `target` is refused before the commit exists, by
-the same 513 the fixtures enforce.
-
-Unlike the person-identifier bound, **513 is not derived from this grammar**.
-The repo-id half is fixed at 32 hex characters and the envelope bounds
-`object_id` at 256 printable-ASCII characters, so the longest reference the
-format can actually produce is 32 + 1 + 256 = 289 code points; 513 reads as
-256 + 1 + 256, a two-envelope-id form the pattern does not admit. The
-practical consequence is that the object-id half of a reference may carry up
-to 480 code points of arbitrary non-ASCII, wider than the envelope's own bound
-on the same value. The number is recorded here as it stands — narrowing it is
-a spec amendment with fixture consequences, tracked as WRIT-157 — and an
-implementation MUST enforce 513 until that lands.
+the same 289 the fixtures enforce.
 
 ### Short forms and presentation
 

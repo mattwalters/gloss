@@ -17,7 +17,7 @@ import (
 // It does, and not because anything here guards it. codec.BuildCommit — the
 // sole commit constructor — validates every op body against its vocabulary
 // schema (WRIT-129, PR #100), and review-ops.schema.json's link_body.target
-// $refs identifiers.schema.json#/$defs/reference, whose maxLength is 513. So
+// $refs identifiers.schema.json#/$defs/reference, whose maxLength is 289. So
 // the bound reaches the write path through the schema the fixtures already
 // pin, with no second copy of the number in Go. That is the outcome to
 // prefer: a reference-length constant in engine/ would be a rule stated
@@ -26,7 +26,7 @@ import (
 // requireCommitOID next door is the case that does earn a domain-side guard,
 // and the difference is instructive. "main" is a value a caller types on
 // purpose, and the fix — resolve the ref first — is only obvious if the error
-// names the field. A 514-code-point reference is not something anyone types;
+// names the field. A 290-code-point reference is not something anyone types;
 // it is a program handing over a string it never bounded, and a schema
 // violation is a truthful answer to it.
 //
@@ -47,31 +47,31 @@ func TestLinkTargetLengthBoundIsEnforcedOnTheProducerPath(t *testing.T) {
 		t.Fatalf("Create review failed: %v", err)
 	}
 
-	// 513 code points and 1026 bytes. A producer counting octets would refuse
+	// 289 code points and 578 bytes. A producer counting octets would refuse
 	// this one, so accepting it is what pins the unit on the write path the
 	// way spec/testdata/references/valid/at-limit-multibyte.json pins it in
 	// the corpus.
-	atLimit := strings.Repeat("é", 513)
-	if got := len([]rune(atLimit)); got != 513 || len(atLimit) != 1026 {
-		t.Fatalf("test setup: atLimit is %d code points / %d bytes, want 513 / 1026", got, len(atLimit))
+	atLimit := strings.Repeat("é", 289)
+	if got := len([]rune(atLimit)); got != 289 || len(atLimit) != 578 {
+		t.Fatalf("test setup: atLimit is %d code points / %d bytes, want 289 / 578", got, len(atLimit))
 	}
 	if err := s.Reviews.Link(ctx, reviewID, writ.Link{
 		Target:     atLimit,
 		TargetType: "issue",
 		Relation:   "fixes",
 	}); err != nil {
-		t.Fatalf("a 513-code-point target is inside the bound and must be accepted: %v", err)
+		t.Fatalf("a 289-code-point target is inside the bound and must be accepted: %v", err)
 	}
 
-	// 514 code points, one over.
-	overLimit := strings.Repeat("a", 514)
+	// 290 code points, one over.
+	overLimit := strings.Repeat("a", 290)
 	err = s.Reviews.Link(ctx, reviewID, writ.Link{
 		Target:     overLimit,
 		TargetType: "issue",
 		Relation:   "fixes",
 	})
 	if err == nil {
-		t.Fatal("a 514-code-point target is over the bound and must be refused")
+		t.Fatal("a 290-code-point target is over the bound and must be refused")
 	}
 	var reject *codec.RejectError
 	if !errors.As(err, &reject) {
