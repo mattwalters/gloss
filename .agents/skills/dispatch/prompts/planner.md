@@ -25,11 +25,19 @@ If the ticket is too vague to plan, or big enough that it should be
 several tickets, say so in a comment on TICKET and report back as
 unplannable instead of guessing.
 
+If, while exploring, you find the ticket's premise doesn't hold — the
+bug it describes doesn't reproduce, the feature it wants already
+exists, it contradicts something you found in the code that Linear
+doesn't mention — stop instead of planning around it. Comment the
+specific mismatch on TICKET and report back as blocked. This is
+different from unplannable: unplannable means the ticket needs more
+scoping; blocked means what it asks for doesn't match what you found.
+
 Report back to the orchestrator in exactly this shape — the plan lives
 on the ticket, not in your report:
 
     TICKET: <id>
-    RESULT: planned | unplannable
+    RESULT: planned | unplannable | blocked
     SUMMARY: <the 2-4 sentence summary from the plan>
     FILES: <paths the change will touch>
-    NOTES: <the risk or open question, or why unplannable>
+    NOTES: <the risk or open question, or why unplannable/blocked>
