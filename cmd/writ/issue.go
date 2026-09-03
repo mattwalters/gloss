@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -335,9 +336,18 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 			assignees = "-"
 		}
 
+		var labelNames []string
+		for _, l := range res.Issue.Labels {
+			displayName := l
+			if lbl, err := store.Query.Label(l); err == nil {
+				displayName = lbl.Label.Name
+			}
+			labelNames = append(labelNames, displayName)
+		}
+		sort.Strings(labelNames)
 		var labels string
-		if len(res.Issue.Labels) > 0 {
-			labels = strings.Join(res.Issue.Labels, ", ")
+		if len(labelNames) > 0 {
+			labels = strings.Join(labelNames, ", ")
 		} else {
 			labels = "-"
 		}
@@ -979,34 +989,58 @@ func runIssueLabel(ctx context.Context, defaultDir string, args []string, stdout
 		return renderErr(stderr, err)
 	}
 
+	res, err := store.Query.Issue(issueID)
+	if err != nil {
+		return renderErr(stderr, err)
+	}
+
 	if len(opts.add) == 0 && len(opts.remove) == 0 {
-		res, err := store.Query.Issue(issueID)
-		if err != nil {
-			return renderErr(stderr, err)
+		var labelNames []string
+		for _, l := range res.Issue.Labels {
+			displayName := l
+			if lbl, err := store.Query.Label(l); err == nil {
+				displayName = lbl.Label.Name
+			}
+			labelNames = append(labelNames, displayName)
 		}
+		sort.Strings(labelNames)
 		if opts.jsonMode {
-			if err := emitJSON(stdout, wire.KindIssueLabel, wire.FromIssueLabels(issueID, res.Issue.Labels)); err != nil {
+			if err := emitJSON(stdout, wire.KindIssueLabel, wire.FromIssueLabels(issueID, labelNames)); err != nil {
 				fmt.Fprintf(stderr, "writ issue label: marshal json: %v\n", err)
 				return 1
 			}
 			return 0
 		}
-		for _, l := range res.Issue.Labels {
+		for _, l := range labelNames {
 			fmt.Fprintln(stdout, l)
 		}
 		return 0
 	}
 
-	if err := store.Issues.Label(ctx, issueID, opts.add, opts.remove); err != nil {
+	resolvedAdd, resolvedRemove, err := resolveLabelsForModification(ctx, store, res.Issue.Labels, opts.add, opts.remove)
+	if err != nil {
+		return renderErr(stderr, err)
+	}
+
+	if err := store.Issues.Label(ctx, issueID, resolvedAdd, resolvedRemove); err != nil {
 		return renderErr(stderr, err)
 	}
 
 	if opts.jsonMode {
-		res, err := store.Query.Issue(issueID)
+		updatedRes, err := store.Query.Issue(issueID)
 		if err != nil {
 			return renderErr(stderr, err)
 		}
-		if err := emitJSON(stdout, wire.KindIssueLabel, wire.FromIssueLabels(issueID, res.Issue.Labels)); err != nil {
+		var labelNames []string
+		for _, l := range updatedRes.Issue.Labels {
+			displayName := l
+			if lbl, err := store.Query.Label(l); err == nil {
+				displayName = lbl.Label.Name
+			}
+			labelNames = append(labelNames, displayName)
+		}
+		sort.Strings(labelNames)
+		if err := emitJSON(stdout, wire.KindIssueLabel, wire.FromIssueLabels(issueID, labelNames)); err != nil {
 			fmt.Fprintf(stderr, "writ issue label: marshal json: %v\n", err)
 			return 1
 		}

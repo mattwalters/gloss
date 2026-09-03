@@ -125,7 +125,7 @@ The issue family defines six operation types for `op_version: 1`:
 | `update` | `{"title"?: string, "description"?: string}` | Metadata edits (title, description). |
 | `set-state` | `{"state": reference, "reason"?: string}` | State transitions and optional reason. |
 | `assign` | `{"add"?: [person-id], "remove"?: [person-id]}` | Add or remove assignees. |
-| `label` | `{"add"?: [string], "remove"?: [string]}` | Add or remove labels. |
+| `label` | `{"add"?: [reference], "remove"?: [reference]}` | Add or remove labels (referencing label object IDs, FC-16). |
 | `link` | `{"target": reference, "target_type"?: string, "relation": "fixes"\|"relates"\|"none"}` | Associate or retract cross-references. |
 
 ### 1. `create`
@@ -231,7 +231,7 @@ evaluated. Byte-exact equality after normalisation determines element identity.
 
 ### 5. `label`
 
-Adds or removes labels on the issue.
+Adds or removes labels on the issue. In v1, label operations reference collaborative `label` object identifiers (`spec/identifiers.md#reference`). Unknown or unfetched label references fold cleanly without rejection per `spec/forward-compatibility.md` rule `FC-16`. Historical bare-string labels fold normally under the OR-set as legacy references.
 
 ```jsonc
 {
@@ -240,14 +240,14 @@ Adds or removes labels on the issue.
   "op_type": "label",
   "op_version": 1,
   "body": {
-    "add": ["bug", "priority/high"],
-    "remove": ["needs-triage"]
+    "add": ["0123456789abcdef0123456789abcdef"],
+    "remove": ["fedcba9876543210fedcba9876543210"]
   }
 }
 ```
 
-- `add` (array of non-empty strings, optional): Label names to add.
-- `remove` (array of non-empty strings, optional): Label names to remove.
+- `add` (array of label references, optional): Label object identifiers or references to add.
+- `remove` (array of label references, optional): Label object identifiers or references to remove.
 
 At least one of `add` or `remove` MUST be present and contain at least one item.
 An empty `{}` body or empty arrays (`"remove": []`) are invalid.

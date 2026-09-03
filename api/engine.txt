@@ -45,10 +45,12 @@ func FoldComment(ops []codec.Op) (Comment, error)
 func FoldComments(ops []codec.Op) ([]CommentThread, error)
 func FoldCycle(ops []codec.Op) (Cycle, error)
 func FoldIssue(ops []codec.Op) (Issue, error)
+func FoldLabel(ops []codec.Op) (Label, error)
 func FoldProject(ops []codec.Op) (Project, error)
 func FoldReview(ops []codec.Op) (Review, error)
 func FoldWorkflowState(ops []codec.Op) (WorkflowState, error)
 func IssueRules() []Rule
+func LabelRules() []Rule
 func NormalizePerson(s string) string
 func Open(path string, opts ...Option) (*Store, error)
 func ParseCommentSubject(raw []byte) (CommentSubject, error)
@@ -169,6 +171,24 @@ func (*Issues) Link(ctx context.Context, id string, l Link) error
 func (*Issues) SetState(ctx context.Context, id string, st IssueState) error
 func (*Issues) Update(ctx context.Context, id string, edit IssueEdit) error
 
+type Label = state.Label
+
+type LabelEdit struct {
+	Name *string `json:"name,omitempty"`
+	Color *string `json:"color,omitempty"`
+	Description *string `json:"description,omitempty"`
+}
+
+type LabelFilter = projection.LabelFilter
+
+type LabelResult = projection.LabelResult
+
+type Labels struct {
+	// unexported fields
+}
+func (*Labels) Create(ctx context.Context, nl NewLabel) (string, error)
+func (*Labels) Update(ctx context.Context, id string, edit LabelEdit) error
+
 type Link = state.Link
 
 type NewComment struct {
@@ -179,6 +199,12 @@ type NewComment struct {
 
 type NewIssue struct {
 	Title string `json:"title"`
+	Description string `json:"description,omitempty"`
+}
+
+type NewLabel struct {
+	Name string `json:"name"`
+	Color string `json:"color,omitempty"`
 	Description string `json:"description,omitempty"`
 }
 
@@ -222,6 +248,8 @@ func (*Query) Comments(f CommentFilter) ([]CommentResult, error)
 func (*Query) GroupIssues(by GroupKey, f IssueFilter) ([]Group, error)
 func (*Query) Issue(id string) (IssueResult, error)
 func (*Query) Issues(f IssueFilter) ([]IssueResult, error)
+func (*Query) Label(id string) (LabelResult, error)
+func (*Query) Labels(f LabelFilter) ([]LabelResult, error)
 func (*Query) Object(id string) (ObjectResult, error)
 func (*Query) Objects(f ObjectFilter) ([]ObjectResult, error)
 func (*Query) Review(id string) (ReviewResult, error)
@@ -289,6 +317,7 @@ type Store struct {
 	ReadState *ReadState
 	Query *Query
 	WorkflowStates *WorkflowStates
+	Labels *Labels
 	Workspace *Workspace
 	// unexported fields
 }
@@ -756,6 +785,8 @@ func (*DB) Frontier(objectID string) ([]string, error)
 func (*DB) GroupIssues(by GroupKey, f IssueFilter) ([]Group, error)
 func (*DB) Issue(objectID string) (IssueResult, error)
 func (*DB) Issues(f IssueFilter) ([]IssueResult, error)
+func (*DB) Label(id string) (LabelResult, error)
+func (*DB) Labels(f LabelFilter) ([]LabelResult, error)
 func (*DB) ListDrafts(filter DraftFilter) ([]Draft, error)
 func (*DB) LocalDB() *sql.DB
 func (*DB) MarkRead(objectID, lastReadOpID string, readAt time.Time) error
@@ -818,6 +849,20 @@ type IssueResult struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Issue state.Issue `json:"issue"`
+}
+
+type LabelFilter struct {
+	OrderBy OrderBy
+	Limit int
+	Offset int
+}
+
+type LabelResult struct {
+	ObjectID string `json:"object_id"`
+	Author Author `json:"author"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Label state.Label `json:"label"`
 }
 
 type ObjectChange struct {
@@ -1145,11 +1190,13 @@ func FoldComment(ops []codec.Op) (Comment, error)
 func FoldComments(ops []codec.Op) ([]CommentThread, error)
 func FoldCycle(ops []codec.Op) (Cycle, error)
 func FoldIssue(ops []codec.Op) (Issue, error)
+func FoldLabel(ops []codec.Op) (Label, error)
 func FoldProject(ops []codec.Op) (Project, error)
 func FoldRepo(ops []codec.Op) (RepoEntry, error)
 func FoldReview(ops []codec.Op) (Review, error)
 func FoldWorkflowState(ops []codec.Op) (WorkflowState, error)
 func IssueRules() []Rule
+func LabelRules() []Rule
 func NormalizePerson(s string) string
 func ParseCommentSubject(raw []byte) (CommentSubject, error)
 func ParseReference(ref string) (designator string, objectID string, err error)
@@ -1224,6 +1271,13 @@ type Issue struct {
 	Assignees []string `json:"assignees,omitempty"`
 	Labels []string `json:"labels,omitempty"`
 	Links []Link `json:"links,omitempty"`
+	UnknownOps []UnknownOp `json:"unknown_ops,omitempty"`
+}
+
+type Label struct {
+	Name string `json:"name,omitempty"`
+	Color string `json:"color,omitempty"`
+	Description string `json:"description,omitempty"`
 	UnknownOps []UnknownOp `json:"unknown_ops,omitempty"`
 }
 

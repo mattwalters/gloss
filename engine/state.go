@@ -76,6 +76,10 @@ type RepoEntry = state.RepoEntry
 // produced by FoldWorkflowState.
 type WorkflowState = state.WorkflowState
 
+// Label represents the materialized state of a label collaborative object (v1),
+// produced by FoldLabel.
+type Label = state.Label
+
 // ResolvedReference represents the outcome of resolving a reference against a repository registry.
 type ResolvedReference = state.ResolvedReference
 

@@ -497,3 +497,91 @@ func TestReviewLabelsAndLinksDetails(t *testing.T) {
 		t.Errorf("link mismatch: got %+v", link)
 	}
 }
+
+func TestLabelsQuery(t *testing.T) {
+	db := setupSeededDB(t)
+	defer db.Close()
+
+	rawDB := db.DB()
+	execSQL(t, rawDB, "INSERT INTO labels (object_id, name, color, description, author_name, author_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"lbl-1", "bug", "#d73a4a", "Bug report", "Alice", "alice@example.com", 1000, 1000)
+	execSQL(t, rawDB, "INSERT INTO labels (object_id, name, color, description, author_name, author_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"lbl-2", "feature", "#a2eeef", "New feature", "Bob", "bob@example.com", 1100, 1100)
+
+	labels, err := db.Labels(projection.LabelFilter{})
+	if err != nil {
+		t.Fatalf("Labels() failed: %v", err)
+	}
+	if len(labels) != 2 {
+		t.Fatalf("expected 2 labels, got %d", len(labels))
+	}
+	if labels[0].Label.Name != "bug" || labels[1].Label.Name != "feature" {
+		t.Errorf("unexpected labels order: %+v", labels)
+	}
+
+	l, err := db.Label("lbl-1")
+	if err != nil {
+		t.Fatalf("Label(lbl-1) failed: %v", err)
+	}
+	if l.Label.Name != "bug" || l.Label.Color != "#d73a4a" {
+		t.Errorf("unexpected label: %+v", l)
+	}
+
+	_, err = db.Label("nonexistent")
+	if err == nil {
+		t.Errorf("expected error for nonexistent label, got nil")
+	}
+}
+
+func TestLabelMatchingByNameAndID(t *testing.T) {
+	db := setupSeededDB(t)
+	defer db.Close()
+
+	rawDB := db.DB()
+	labelID := "0123456789abcdef0123456789abcdef"
+	execSQL(t, rawDB, "INSERT INTO labels (object_id, name, color, description, author_name, author_email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		labelID, "bug", "#d73a4a", "Bug report", "Alice", "alice@example.com", 1000, 1000)
+
+	// iss-1 in setupSeededDB has bare string label "bug"
+	// 1. Filter by canonical label ID matches iss-1 because "bug" resolves to labelID
+	res, err := db.Issues(projection.IssueFilter{Label: []string{labelID}})
+	if err != nil {
+		t.Fatalf("Issues(Label ID) failed: %v", err)
+	}
+	found := false
+	for _, issue := range res {
+		if issue.ObjectID == "iss-1" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected iss-1 to match when filtering by label ID %s", labelID)
+	}
+
+	// 2. Add iss-5 with label = labelID
+	insertObject(t, rawDB, "iss-5", "issue", 1, "op-iss-5", "Alice", "alice@example.com", 2600, 2600)
+	execSQL(t, rawDB, "INSERT INTO issues (object_id, title, description, state, reason) VALUES (?, ?, ?, ?, ?)",
+		"iss-5", "Issue with label ID", "Test", "open", "")
+	execSQL(t, rawDB, "INSERT INTO issue_labels (issue_object_id, label) VALUES (?, ?)", "iss-5", labelID)
+
+	// 3. Filter by label name "bug" matches both iss-1 (bare "bug") and iss-5 (label ID)
+	resByName, err := db.Issues(projection.IssueFilter{Label: []string{"bug"}})
+	if err != nil {
+		t.Fatalf("Issues(Label name) failed: %v", err)
+	}
+	hasIss1 := false
+	hasIss5 := false
+	for _, issue := range resByName {
+		if issue.ObjectID == "iss-1" {
+			hasIss1 = true
+		}
+		if issue.ObjectID == "iss-5" {
+			hasIss5 = true
+		}
+	}
+	if !hasIss1 || !hasIss5 {
+		t.Errorf("expected both iss-1 and iss-5 to match label 'bug', got %d results", len(resByName))
+	}
+}
+

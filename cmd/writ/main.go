@@ -63,6 +63,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return runReview(ctx, defaultDir, args[1:], stdout, stderr)
 	case "state":
 		return runState(ctx, defaultDir, args[1:], stdout, stderr)
+	case "label":
+		return runLabel(ctx, defaultDir, args[1:], stdout, stderr)
 	case "sync":
 		return runSync(ctx, defaultDir, args[1:], stdout, stderr)
 	case "version":

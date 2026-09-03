@@ -21,7 +21,7 @@ All plumbing commands emit a single top-level JSON document on `stdout` adhering
 | Field | Type | Description |
 |---|---|---|
 | `schema_version` | integer | Envelope schema version (currently `1`). Bumps only on breaking changes. |
-| `kind` | string | Discriminator for the payload schema (e.g. `review.list`, `review.status`, `issue.list`, `issue.status`, `issue.label`, `sync.status`, `sync.result`, `comment.edit`, `comment.delete`). |
+| `kind` | string | Discriminator for the payload schema (e.g. `review.list`, `review.status`, `issue.list`, `issue.status`, `issue.label`, `label.list`, `sync.status`, `sync.result`, `comment.edit`, `comment.delete`). |
 | `data` | object or array | Verb-specific payload structure. |
 
 ---
@@ -459,6 +459,45 @@ Marks an existing comment as deleted (tombstone) and returns the refreshed comme
     "resolved": false,
     "unknown_ops": []
   }
+}
+```
+
+---
+
+### `writ label list --json`
+
+Lists labels across the workspace.
+
+- **Envelope `kind`**: `"label.list"`
+- **`data` Type**: Array of `LabelSummary` objects (`[]LabelSummary`)
+
+#### `LabelSummary` Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `object_id` | string | 32-character lowercase hex identifier for the label. |
+| `name` | string | Display name of the label. |
+| `color` | string | Hex color client hint (e.g. `"#d73a4a"`). |
+| `description` | string | Optional description of the label. |
+| `created_at` | string | Creation timestamp in RFC 3339 UTC (`...Z`). |
+| `updated_at` | string | Last modification timestamp in RFC 3339 UTC (`...Z`). |
+
+#### Example Output
+
+```json
+{
+  "schema_version": 1,
+  "kind": "label.list",
+  "data": [
+    {
+      "object_id": "0123456789abcdef0123456789abcdef",
+      "name": "bug",
+      "color": "#d73a4a",
+      "description": "Something isn't working",
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z"
+    }
+  ]
 }
 ```
 

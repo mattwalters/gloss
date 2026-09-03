@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -706,7 +707,17 @@ func runReviewLabel(ctx context.Context, defaultDir string, args []string, stdou
 		return renderErr(stderr, err)
 	}
 
-	if err := store.Reviews.Label(ctx, reviewID, opts.add, opts.remove); err != nil {
+	res, err := store.Query.Review(reviewID)
+	if err != nil {
+		return renderErr(stderr, err)
+	}
+
+	resolvedAdd, resolvedRemove, err := resolveLabelsForModification(ctx, store, res.Review.Labels, opts.add, opts.remove)
+	if err != nil {
+		return renderErr(stderr, err)
+	}
+
+	if err := store.Reviews.Label(ctx, reviewID, resolvedAdd, resolvedRemove); err != nil {
 		return renderErr(stderr, err)
 	}
 
@@ -963,9 +974,18 @@ func runReviewStatus(ctx context.Context, defaultDir string, args []string, stdo
 			assignees = "-"
 		}
 
+		var labelNames []string
+		for _, l := range res.Review.Labels {
+			displayName := l
+			if lbl, err := store.Query.Label(l); err == nil {
+				displayName = lbl.Label.Name
+			}
+			labelNames = append(labelNames, displayName)
+		}
+		sort.Strings(labelNames)
 		var labels string
-		if len(res.Review.Labels) > 0 {
-			labels = strings.Join(res.Review.Labels, ", ")
+		if len(labelNames) > 0 {
+			labels = strings.Join(labelNames, ", ")
 		} else {
 			labels = "-"
 		}

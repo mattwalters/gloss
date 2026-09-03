@@ -45,6 +45,7 @@ var rootCommand = &command{
 		issueCmd,
 		reviewCmd,
 		stateCmd,
+		labelCmd,
 		syncCmd,
 		versionCmd,
 		completionCmd,
@@ -518,6 +519,90 @@ var stateUpdateCmd = &command{
 	},
 }
 
+var labelCmd = &command{
+	Name:      "label",
+	Short:     "Manage labels (list, create, edit, migrate)",
+	UsageLine: "Usage: writ label [-C <dir>] <subcommand> [arguments]",
+	Long:      "Manage labels.",
+	Flags: []flagSpec{
+		{
+			Name:  "C",
+			Arg:   "<dir>",
+			Usage: "Run as if writ was started in <dir>",
+		},
+	},
+	Subs: []*command{
+		labelListCmd,
+		labelCreateCmd,
+		labelEditCmd,
+		labelMigrateCmd,
+	},
+}
+
+var labelListCmd = &command{
+	Name:      "list",
+	Short:     "List labels",
+	UsageLine: "Usage: writ label list [-C <dir>] [--json]",
+	Long:      "List labels.",
+	Flags: []flagSpec{
+		{Name: "C"},
+		{Name: "json"},
+	},
+	Examples: []string{
+		"writ label list",
+		"writ label list --json",
+	},
+}
+
+var labelCreateCmd = &command{
+	Name:      "create",
+	Short:     "Create a label",
+	UsageLine: "Usage: writ label create [-C <dir>] -name <name> [-color <c>] [-description <d>]",
+	Long:      "Create a new label.",
+	Flags: []flagSpec{
+		{Name: "C"},
+		{Name: "name"},
+		{Name: "color"},
+		{Name: "description"},
+	},
+	Examples: []string{
+		`writ label create -name bug`,
+		`writ label create -name bug -color "#d73a4a" -description "Something isn't working"`,
+	},
+}
+
+var labelEditCmd = &command{
+	Name:      "edit",
+	Short:     "Edit a label",
+	UsageLine: "Usage: writ label edit [-C <dir>] <id> [-name <name>] [-color <c>] [-description <d>]",
+	Long:      "Edit an existing label.",
+	Flags: []flagSpec{
+		{Name: "C"},
+		{Name: "name"},
+		{Name: "color"},
+		{Name: "description"},
+	},
+	Examples: []string{
+		`writ label edit 01J8ABC -color "#e2b93c"`,
+		`writ label edit bug -name defect`,
+	},
+}
+
+var labelMigrateCmd = &command{
+	Name:      "migrate",
+	Short:     "Migrate legacy bare-string labels to collaborative label objects",
+	UsageLine: "Usage: writ label migrate [-C <dir>] [--json]",
+	Long:      "Migrate legacy bare-string labels across issues and reviews into collaborative label objects.",
+	Flags: []flagSpec{
+		{Name: "C"},
+		{Name: "json"},
+	},
+	Examples: []string{
+		"writ label migrate",
+		"writ label migrate --json",
+	},
+}
+
 var syncCmd = &command{
 	Name:      "sync",
 	Short:     "Synchronize operations with git remotes",
@@ -609,6 +694,10 @@ func init() {
 		"state list":     func() *flag.FlagSet { fs, _ := newStateListFlagSet(""); return fs },
 		"state create":   func() *flag.FlagSet { fs, _ := newStateCreateFlagSet(""); return fs },
 		"state update":   func() *flag.FlagSet { fs, _ := newStateUpdateFlagSet(""); return fs },
+		"label list":     func() *flag.FlagSet { fs, _ := newLabelListFlagSet(""); return fs },
+		"label create":   func() *flag.FlagSet { fs, _ := newLabelCreateFlagSet(""); return fs },
+		"label edit":     func() *flag.FlagSet { fs, _ := newLabelEditFlagSet(""); return fs },
+		"label migrate":  func() *flag.FlagSet { fs, _ := newLabelMigrateFlagSet(""); return fs },
 		"sync":           func() *flag.FlagSet { fs, _ := newSyncFlagSet(""); return fs },
 	}
 }

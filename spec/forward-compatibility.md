@@ -207,6 +207,22 @@ MUST NOT:
 5. Guess semantics or apply fallback interpretation to unknown op types or future
    versions.
 
+## Unknown object references (referential tolerance)
+
+In an eventually-consistent, append-only distributed event log, operations
+frequently reference collaborative objects that may not have arrived in the
+local replica yet (for example, an issue referencing a newly created label or
+workflow state authored on an unmerged concurrent branch).
+
+An op referencing an object ID not present in the local store MUST fold normally
+without error or rejection (`FC-16`); readers MUST NOT drop or reject operations
+due to unresolvable object references. The referencing state carries the
+unresolved ID and automatically heals when the target object's operations
+arrive. Rejection on unknown references is prohibited because attempting to
+enforce cross-object referential integrity across independent append-only writer
+logs would cause replicas with different fetch histories to compute diverging
+state from the same operations, violating convergence.
+
 ## Normative rules summary
 
 | Rule ID | Statement | Subsystem |
@@ -226,6 +242,7 @@ MUST NOT:
 | `FC-13` | Projection caches MUST be fully rebuildable from the raw DAG without losing or mutating uninterpretable ops. | Projection |
 | `FC-14` | Sync transport MUST NOT filter, prune, or inspect ops based on op type, version, or interpretability. | Sync |
 | `FC-15` | An uninterpretable op MUST NOT invalidate or fail the containing collaborative object or other valid ops in the DAG. | Engine / DAG |
+| `FC-16` | An op referencing an object ID not present in the local store MUST fold normally without error; readers MUST NOT drop or reject operations due to unresolvable object references. The referencing state carries the unresolved ID and heals when the target object's operations arrive. | Fold / Projection |
 
 ## Conformance fixtures
 

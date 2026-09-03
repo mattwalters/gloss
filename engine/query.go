@@ -42,6 +42,12 @@ type (
 	// WorkflowStateResult represents a workflow state object along with its authorship and timestamps.
 	WorkflowStateResult = projection.WorkflowStateResult
 
+	// LabelFilter specifies filter criteria when querying labels.
+	LabelFilter = projection.LabelFilter
+
+	// LabelResult represents a label object along with its authorship and timestamps.
+	LabelResult = projection.LabelResult
+
 	// CommentResult represents a comment object along with its authorship, timestamps, and anchor resolutions.
 	CommentResult = projection.CommentResult
 
@@ -238,4 +244,28 @@ func (q *Query) WorkflowState(id string) (WorkflowStateResult, error) {
 		return WorkflowStateResult{}, err
 	}
 	return target.projection.WorkflowState(id)
+}
+
+// Labels executes a list and filter query over labels.
+func (q *Query) Labels(f LabelFilter) ([]LabelResult, error) {
+	target, err := q.targetStoreForIssues(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if err := target.maybeAutoRefresh(context.Background()); err != nil {
+		return nil, err
+	}
+	return target.projection.Labels(f)
+}
+
+// Label fetches a single label by its object ID, returning ErrNotFound if not found.
+func (q *Query) Label(id string) (LabelResult, error) {
+	target, err := q.targetStoreForIssues(context.Background())
+	if err != nil {
+		return LabelResult{}, err
+	}
+	if err := target.maybeAutoRefresh(context.Background()); err != nil {
+		return LabelResult{}, err
+	}
+	return target.projection.Label(id)
 }

@@ -200,3 +200,12 @@ type Cycle struct {
 	Issues      []string    `json:"issues,omitempty"`
 	UnknownOps  []UnknownOp `json:"unknown_ops,omitempty"`
 }
+
+// Label represents the materialized state of a label collaborative object (v1),
+// produced by FoldLabel.
+type Label struct {
+	Name        string      `json:"name,omitempty"`
+	Color       string      `json:"color,omitempty"`
+	Description string      `json:"description,omitempty"`
+	UnknownOps  []UnknownOp `json:"unknown_ops,omitempty"`
+}

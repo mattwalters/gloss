@@ -58,6 +58,9 @@ type Store struct {
 	// WorkflowStates provides workflow state creation, updates, and default seeding.
 	WorkflowStates *WorkflowStates
 
+	// Labels provides label creation and updates.
+	Labels *Labels
+
 	// Workspace provides repository registry discovery, registration, and cross-repo resolution.
 	Workspace *Workspace
 

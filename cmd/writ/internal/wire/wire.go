@@ -29,6 +29,7 @@ const (
 	KindCommentEdit   = "comment.edit"
 	KindCommentDelete = "comment.delete"
 	KindStateList     = "state.list"
+	KindLabelList     = "label.list"
 )
 
 // Envelope wraps all machine-readable output in a single versioned container.
@@ -686,3 +687,35 @@ func FromWorkflowStateResultSummaries(results []writ.WorkflowStateResult) []Stat
 	}
 	return summaries
 }
+
+// LabelSummary represents a label object in wire listings.
+type LabelSummary struct {
+	ObjectID    string    `json:"object_id"`
+	Name        string    `json:"name"`
+	Color       string    `json:"color,omitempty"`
+	Description string    `json:"description,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// FromLabelResult converts a domain LabelResult to a wire LabelSummary.
+func FromLabelResult(r writ.LabelResult) LabelSummary {
+	return LabelSummary{
+		ObjectID:    r.ObjectID,
+		Name:        r.Label.Name,
+		Color:       r.Label.Color,
+		Description: r.Label.Description,
+		CreatedAt:   r.CreatedAt,
+		UpdatedAt:   r.UpdatedAt,
+	}
+}
+
+// FromLabelResultSummaries converts a slice of domain LabelResults to wire LabelSummaries.
+func FromLabelResultSummaries(results []writ.LabelResult) []LabelSummary {
+	summaries := make([]LabelSummary, len(results))
+	for i, r := range results {
+		summaries[i] = FromLabelResult(r)
+	}
+	return summaries
+}
+
