@@ -348,9 +348,10 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 			return fmt.Errorf("projection: fold workflow-state %s: %w", objectID, err)
 		}
 
+		posOpID := workflowStatePositionOpID(orderedOps)
 		_, err = tx.Exec(
-			"INSERT INTO workflow_states (object_id, name, type, position, color, description) VALUES (?, ?, ?, ?, ?, ?)",
-			objectID, ws.Name, ws.Type, ws.Position, ws.Color, ws.Description,
+			"INSERT INTO workflow_states (object_id, name, type, position, color, description, op_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			objectID, ws.Name, ws.Type, ws.Position, ws.Color, ws.Description, posOpID,
 		)
 		if err != nil {
 			return fmt.Errorf("projection: insert workflow_state %s: %w", objectID, err)
@@ -599,4 +600,28 @@ func materializeCommitTree(s storage.Storer, commitHash string) (map[string][]by
 		return nil, fmt.Errorf("read tree files for commit %s: %w", commitHash, err)
 	}
 	return files, nil
+}
+
+func workflowStatePositionOpID(orderedOps []codec.Op) string {
+	var posOpID string
+	for _, op := range orderedOps {
+		if op.ObjectType != "workflow-state" || op.OpVersion != 1 {
+			continue
+		}
+		var body map[string]any
+		if len(op.Body) > 0 {
+			if err := json.Unmarshal(op.Body, &body); err != nil {
+				continue
+			}
+		}
+		if body == nil {
+			continue
+		}
+		if op.OpType == "create" || op.OpType == "update" {
+			if _, ok := body["position"].(string); ok {
+				posOpID = op.ID
+			}
+		}
+	}
+	return posOpID
 }

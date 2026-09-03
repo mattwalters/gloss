@@ -304,8 +304,9 @@ CREATE TABLE IF NOT EXISTS workflow_states (
     type TEXT NOT NULL,
     position TEXT NOT NULL,
     color TEXT NOT NULL,
-    description TEXT NOT NULL
+    description TEXT NOT NULL,
+    op_id TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_workflow_states_position ON workflow_states(position ASC);
+CREATE INDEX IF NOT EXISTS idx_workflow_states_position ON workflow_states(position ASC, op_id ASC);
 CREATE INDEX IF NOT EXISTS idx_workflow_states_type ON workflow_states(type);
 `

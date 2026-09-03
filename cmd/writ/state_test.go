@@ -99,6 +99,21 @@ func TestState_CLI_Commands(t *testing.T) {
 		t.Fatalf("expected Peer Review in list: %s", stdout.String())
 	}
 
+	// 4b. writ state update clearing color
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"state", "update", "-C", env.repoDir,
+		stateID,
+		"-color", "",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("state update to clear color failed with %d; stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "updated") {
+		t.Fatalf("unexpected state update output: %q", stdout.String())
+	}
+
 	// 5. Create issue referencing the new state by name
 	stdout.Reset()
 	stderr.Reset()

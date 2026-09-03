@@ -198,3 +198,59 @@ func TestWorkflowStatesWorkspaceScoping(t *testing.T) {
 		t.Fatalf("expected 5 states from workspace, got %d", len(states))
 	}
 }
+
+func TestWorkflowStatesIdenticalPositionTiebreakAndStability(t *testing.T) {
+	ctx := context.Background()
+	dir, _ := setupTestRepoWithID(t, "alice", "alice@writ.dev")
+	s, err := writ.Open(dir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	// 1. Create two workflow states with identical position "V"
+	_, err = s.WorkflowStates.Create(ctx, writ.NewWorkflowState{
+		Name:     "Col Alpha",
+		Type:     "started",
+		Position: "V",
+	})
+	if err != nil {
+		t.Fatalf("Create s1: %v", err)
+	}
+
+	_, err = s.WorkflowStates.Create(ctx, writ.NewWorkflowState{
+		Name:     "Col Beta",
+		Type:     "unstarted",
+		Position: "V",
+	})
+	if err != nil {
+		t.Fatalf("Create s2: %v", err)
+	}
+
+	states, err := s.Query.WorkflowStates(writ.WorkflowStateFilter{})
+	if err != nil {
+		t.Fatalf("Query.WorkflowStates: %v", err)
+	}
+	if len(states) != 2 {
+		t.Fatalf("expected 2 states, got %d", len(states))
+	}
+	firstID := states[0].ObjectID
+	secondID := states[1].ObjectID
+
+	// 2. Update metadata (e.g. name/color) on the first state without touching position
+	newName := "Col Alpha Updated"
+	if err := s.WorkflowStates.Update(ctx, firstID, writ.WorkflowStateEdit{
+		Name: &newName,
+	}); err != nil {
+		t.Fatalf("Update s1: %v", err)
+	}
+
+	statesAfter, err := s.Query.WorkflowStates(writ.WorkflowStateFilter{})
+	if err != nil {
+		t.Fatalf("Query.WorkflowStates after update: %v", err)
+	}
+	if statesAfter[0].ObjectID != firstID || statesAfter[1].ObjectID != secondID {
+		t.Fatalf("state order flipped after unrelated metadata update! got %s, %s; want %s, %s",
+			statesAfter[0].ObjectID, statesAfter[1].ObjectID, firstID, secondID)
+	}
+}

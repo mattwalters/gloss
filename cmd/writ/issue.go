@@ -133,16 +133,35 @@ func runIssueCreate(ctx context.Context, defaultDir string, args []string, stdou
 
 	var targetStateID string
 	if opts.stateVal != "" {
-		if opts.stateVal == "open" || opts.stateVal == "closed" {
+		resolvedID, err := resolveStateID(ctx, store, opts.stateVal)
+		if err == nil {
+			targetStateID = resolvedID
+		} else if opts.stateVal == "open" || opts.stateVal == "closed" {
 			targetStateID = opts.stateVal
 		} else {
-			resolvedID, err := resolveStateID(ctx, store, opts.stateVal)
-			if err == nil {
-				targetStateID = resolvedID
-			} else {
-				fmt.Fprintf(stderr, "writ issue create: invalid state %q\n", opts.stateVal)
-				fs.Usage()
-				return 2
+			fmt.Fprintf(stderr, "writ issue create: invalid state %q\n", opts.stateVal)
+			fs.Usage()
+			return 2
+		}
+	} else {
+		states, err := store.Query.WorkflowStates(writ.WorkflowStateFilter{})
+		if err == nil && len(states) > 0 {
+			for _, s := range states {
+				if s.WorkflowState.Type == "unstarted" {
+					targetStateID = s.ObjectID
+					break
+				}
+			}
+			if targetStateID == "" {
+				for _, s := range states {
+					if s.WorkflowState.Type == "backlog" {
+						targetStateID = s.ObjectID
+						break
+					}
+				}
+			}
+			if targetStateID == "" {
+				targetStateID = states[0].ObjectID
 			}
 		}
 	}
@@ -176,7 +195,8 @@ func runIssueCreate(ctx context.Context, defaultDir string, args []string, stdou
 	dispState := opts.stateVal
 	if dispState == "" {
 		dispState = "open"
-	} else if targetStateID != "" {
+	}
+	if targetStateID != "" {
 		ws, err := store.Query.WorkflowState(targetStateID)
 		if err == nil && ws.WorkflowState.Name != "" {
 			dispState = ws.WorkflowState.Name
@@ -258,17 +278,15 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 	var newState string
 	if len(posArgs) == 2 {
 		rawState := posArgs[1]
-		if rawState == "open" || rawState == "closed" {
+		resolvedID, err := resolveStateID(ctx, store, rawState)
+		if err == nil {
+			newState = resolvedID
+		} else if rawState == "open" || rawState == "closed" {
 			newState = rawState
 		} else {
-			resolvedID, err := resolveStateID(ctx, store, rawState)
-			if err == nil {
-				newState = resolvedID
-			} else {
-				fmt.Fprintf(stderr, "writ issue status: invalid status %q\n", rawState)
-				fs.Usage()
-				return 2
-			}
+			fmt.Fprintf(stderr, "writ issue status: invalid status %q\n", rawState)
+			fs.Usage()
+			return 2
 		}
 	}
 

@@ -187,13 +187,15 @@ func runStateCreate(ctx context.Context, defaultDir string, args []string, stdou
 }
 
 type stateUpdateOpts struct {
-	dir         string
-	name        string
-	nameSet     bool
-	stateType   string
-	position    string
-	color       string
-	description string
+	dir            string
+	name           string
+	nameSet        bool
+	stateType      string
+	position       string
+	color          string
+	colorSet       bool
+	description    string
+	descriptionSet bool
 }
 
 func newStateUpdateFlagSet(defaultDir string) (*flag.FlagSet, *stateUpdateOpts) {
@@ -224,6 +226,15 @@ func runStateUpdate(ctx context.Context, defaultDir string, args []string, stdou
 		return 2
 	}
 
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "color":
+			opts.colorSet = true
+		case "description":
+			opts.descriptionSet = true
+		}
+	})
+
 	if len(posArgs) == 0 {
 		fmt.Fprintln(stderr, "writ state update: state ID is required")
 		fs.Usage()
@@ -235,7 +246,7 @@ func runStateUpdate(ctx context.Context, defaultDir string, args []string, stdou
 		return 2
 	}
 
-	hasField := opts.nameSet || opts.stateType != "" || opts.position != "" || opts.color != "" || opts.description != ""
+	hasField := opts.nameSet || opts.stateType != "" || opts.position != "" || opts.colorSet || opts.descriptionSet
 	if !hasField {
 		fmt.Fprintln(stderr, "writ state update: at least one update flag is required")
 		fs.Usage()
@@ -268,10 +279,10 @@ func runStateUpdate(ctx context.Context, defaultDir string, args []string, stdou
 	if opts.position != "" {
 		edit.Position = &opts.position
 	}
-	if opts.color != "" {
+	if opts.colorSet {
 		edit.Color = &opts.color
 	}
-	if opts.description != "" {
+	if opts.descriptionSet {
 		edit.Description = &opts.description
 	}
 
@@ -288,6 +299,9 @@ func resolveStateID(ctx context.Context, store *writ.Store, target string) (stri
 	if err != nil {
 		return "", err
 	}
+	if len(states) == 0 {
+		return "", fmt.Errorf("no workflow states defined")
+	}
 	var matches []writ.WorkflowStateResult
 	for _, s := range states {
 		if s.ObjectID == target || strings.HasPrefix(s.ObjectID, target) || strings.EqualFold(s.WorkflowState.Name, target) {
@@ -300,5 +314,32 @@ func resolveStateID(ctx context.Context, store *writ.Store, target string) (stri
 	if len(matches) > 1 {
 		return "", fmt.Errorf("ambiguous state reference %q matches %d states", target, len(matches))
 	}
+
+	// If no match by ID or Name, check for aliases and semantic type matches
+	if strings.EqualFold(target, "closed") {
+		for _, s := range states {
+			if s.WorkflowState.Type == "completed" {
+				return s.ObjectID, nil
+			}
+		}
+	}
+	if strings.EqualFold(target, "open") {
+		for _, s := range states {
+			if s.WorkflowState.Type == "unstarted" {
+				return s.ObjectID, nil
+			}
+		}
+		for _, s := range states {
+			if s.WorkflowState.Type == "backlog" {
+				return s.ObjectID, nil
+			}
+		}
+	}
+	for _, s := range states {
+		if strings.EqualFold(s.WorkflowState.Type, target) {
+			return s.ObjectID, nil
+		}
+	}
+
 	return "", fmt.Errorf("state %q not found", target)
 }

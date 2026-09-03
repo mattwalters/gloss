@@ -1,7 +1,9 @@
 name: workflow-state-ordering
 description: >
-  Workflow state object ws-ordering created with position '1', then sequentially
-  reordered across columns using fractional index positions 'V' and 'k'.
+  Two independent writers (Alice and Bob) concurrently create distinct workflow-state
+  objects (ws-ordering-alice and ws-ordering-bob) with identical fractional positions ('V')
+  at the same timestamp. Verifies deterministic tiebreak ordering by op_id ASC, and that
+  subsequent metadata updates on one object do not disturb the deterministic position tiebreak.
 
 refs:
   - name: refs/writ/0123456789abcdef/workflow-state
@@ -11,42 +13,49 @@ refs:
             author: alice
             timestamp: 2026-01-01T00:00:00Z
             op:
-              object_id: ws-ordering
+              object_id: ws-ordering-alice
               object_type: workflow-state
               op_type: create
               op_version: 1
               body:
-                name: "Backlog"
-                type: "backlog"
-                position: "1"
-                color: "#737373"
-                description: "Initial backlog position"
+                name: "Alice Review"
+                type: "started"
+                position: "V"
+                color: "#3b82f6"
+                description: "Alice state created with position V"
             expect: accept
 
-          - id: alice-move-to-mid
-            parents: [alice-create]
-            author: alice
+  - name: refs/writ/fedcba9876543210/workflow-state
+    history:
+      - commits:
+          - id: bob-create
+            author: bob
+            timestamp: 2026-01-01T00:00:00Z
+            op:
+              object_id: ws-ordering-bob
+              object_type: workflow-state
+              op_type: create
+              op_version: 1
+              body:
+                name: "Bob Triage"
+                type: "unstarted"
+                position: "V"
+                color: "#10b981"
+                description: "Bob state concurrently created with identical position V"
+            expect: accept
+
+          - id: bob-update
+            parents: [bob-create]
+            author: bob
             timestamp: 2026-01-01T00:01:00Z
             op:
-              object_id: ws-ordering
+              object_id: ws-ordering-bob
               object_type: workflow-state
               op_type: update
               op_version: 1
               body:
-                position: "V"
-                description: "Moved to middle column"
+                name: "Bob Triage Renamed"
+                color: "#059669"
+                description: "Bob updated metadata without touching position"
             expect: accept
 
-          - id: alice-move-to-end
-            parents: [alice-move-to-mid]
-            author: alice
-            timestamp: 2026-01-01T00:02:00Z
-            op:
-              object_id: ws-ordering
-              object_type: workflow-state
-              op_type: update
-              op_version: 1
-              body:
-                position: "k"
-                description: "Moved further right"
-            expect: accept

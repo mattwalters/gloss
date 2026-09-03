@@ -2,7 +2,11 @@
   "refs": [
     {
       "name": "refs/writ/0123456789abcdef/workflow-state",
-      "commit": "d5ce029fdaab1271461476aee5444374a043b926"
+      "commit": "d01c43a37d2011e360a9c54bf562bad1eaacb92f"
+    },
+    {
+      "name": "refs/writ/fedcba9876543210/workflow-state",
+      "commit": "3e6f9a9bb7c749fd9edea654222987aedd016259"
     }
   ],
   "generations": [
@@ -11,34 +15,38 @@
       "index": 0,
       "commits": [
         {
-          "sha": "5721fc156ce24f346f47954a4779cc89499ba62f",
-          "tree": "5eda01637e6842b617cfc618553a6261367dc199",
+          "sha": "d01c43a37d2011e360a9c54bf562bad1eaacb92f",
+          "tree": "1a9f8d949e3adf5742ff2b274f9f448adc454391",
           "parents": [],
           "author": "Alice Example \u003calice@example.test\u003e",
           "timestamp": "2026-01-01T00:00:00Z",
-          "message": "writ: create workflow-state/ws-ordering\n",
+          "message": "writ: create workflow-state/ws-ordering-alice\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/fedcba9876543210/workflow-state",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "fc2b779e7c931d360df3eb952f19f54b1e9550c2",
+          "tree": "a83f1d7ba51bf9438388ecf7168956ada390777a",
+          "parents": [],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create workflow-state/ws-ordering-bob\n",
           "signed": true
         },
         {
-          "sha": "16d26796ecd8c601e934e417d875375d881b91d3",
-          "tree": "ee8224ec8fd095ca177f6a398b70aeb7ea5e3694",
+          "sha": "3e6f9a9bb7c749fd9edea654222987aedd016259",
+          "tree": "26cc1b3bf155ca2537f843e61fc12e3ffa7d1fbb",
           "parents": [
-            "5721fc156ce24f346f47954a4779cc89499ba62f"
+            "fc2b779e7c931d360df3eb952f19f54b1e9550c2"
           ],
-          "author": "Alice Example \u003calice@example.test\u003e",
+          "author": "Bob Example \u003cbob@example.test\u003e",
           "timestamp": "2026-01-01T00:01:00Z",
-          "message": "writ: update workflow-state/ws-ordering\n",
-          "signed": true
-        },
-        {
-          "sha": "d5ce029fdaab1271461476aee5444374a043b926",
-          "tree": "f6b07f153602e6bef696a066da8e14ac0e9afe8f",
-          "parents": [
-            "16d26796ecd8c601e934e417d875375d881b91d3"
-          ],
-          "author": "Alice Example \u003calice@example.test\u003e",
-          "timestamp": "2026-01-01T00:02:00Z",
-          "message": "writ: update workflow-state/ws-ordering\n",
+          "message": "writ: update workflow-state/ws-ordering-bob\n",
           "signed": true
         }
       ]

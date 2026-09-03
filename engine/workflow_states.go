@@ -67,6 +67,9 @@ func (ws *WorkflowStates) Create(ctx context.Context, nws NewWorkflowState) (str
 
 	pos := nws.Position
 	if pos == "" {
+		if err := target.maybeAutoRefresh(ctx); err != nil {
+			return "", fmt.Errorf("writ: auto refresh: %w", err)
+		}
 		existing, err := target.projection.WorkflowStates(WorkflowStateFilter{})
 		if err != nil {
 			return "", fmt.Errorf("writ: query workflow states for position: %w", err)

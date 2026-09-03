@@ -42,7 +42,7 @@ func TestIssue_RoundTrip_SingleRepo(t *testing.T) {
 	}
 
 	createOut := strings.TrimSpace(stdout.String())
-	idRe := regexp.MustCompile(`^([0-9a-f]{32}) \(open\) Bug: Crash on startup$`)
+	idRe := regexp.MustCompile(`^([0-9a-f]{32}) \(Todo\) Bug: Crash on startup$`)
 	matches := idRe.FindStringSubmatch(createOut)
 	if len(matches) < 2 {
 		t.Fatalf("unexpected issue create output: %q", createOut)
@@ -61,8 +61,8 @@ func TestIssue_RoundTrip_SingleRepo(t *testing.T) {
 	if !strings.Contains(listOut, shortID) {
 		t.Errorf("list output missing short ID %s: %s", shortID, listOut)
 	}
-	if !strings.Contains(listOut, "open") {
-		t.Errorf("list output missing status 'open': %s", listOut)
+	if !strings.Contains(listOut, "Todo") {
+		t.Errorf("list output missing status 'Todo': %s", listOut)
 	}
 	if !strings.Contains(listOut, "Bug: Crash on startup") {
 		t.Errorf("list output missing title: %s", listOut)
@@ -85,8 +85,8 @@ func TestIssue_RoundTrip_SingleRepo(t *testing.T) {
 	if !strings.Contains(statusOut, "Title:       Bug: Crash on startup") {
 		t.Errorf("status output missing Title: %s", statusOut)
 	}
-	if !strings.Contains(statusOut, "State:       open") {
-		t.Errorf("status output missing State: open: %s", statusOut)
+	if !strings.Contains(statusOut, "State:       Todo") {
+		t.Errorf("status output missing State: Todo: %s", statusOut)
 	}
 	if !strings.Contains(statusOut, "Alice") {
 		t.Errorf("status output missing Author Alice: %s", statusOut)
@@ -149,7 +149,7 @@ func TestIssue_RoundTrip_SingleRepo(t *testing.T) {
 		t.Fatalf("issue status transition to closed failed with %d; stderr: %s", code, stderr.String())
 	}
 
-	// 7. Verify status reflects closed and reason
+	// 7. Verify status reflects closed and reason (resolved to Done workflow state)
 	stdout.Reset()
 	stderr.Reset()
 	code = run(context.Background(), []string{"issue", "status", "-C", env.repoDir, issueID}, &stdout, &stderr)
@@ -157,14 +157,14 @@ func TestIssue_RoundTrip_SingleRepo(t *testing.T) {
 		t.Fatalf("issue status after close failed: %s", stderr.String())
 	}
 	statusClosedOut := stdout.String()
-	if !strings.Contains(statusClosedOut, "State:       closed") {
-		t.Errorf("status missing State: closed: %s", statusClosedOut)
+	if !strings.Contains(statusClosedOut, "State:       Done") {
+		t.Errorf("status missing State: Done: %s", statusClosedOut)
 	}
 	if !strings.Contains(statusClosedOut, "Reason:      not_planned") {
 		t.Errorf("status missing Reason: not_planned: %s", statusClosedOut)
 	}
 
-	// 8. Verify issue list -state closed returns it, and -state open does not
+	// 8. Verify issue list -state closed and -state Done return it, and -state open / -state Todo do not
 	stdout.Reset()
 	stderr.Reset()
 	code = run(context.Background(), []string{"issue", "list", "-C", env.repoDir, "-state", "closed"}, &stdout, &stderr)
@@ -177,12 +177,32 @@ func TestIssue_RoundTrip_SingleRepo(t *testing.T) {
 
 	stdout.Reset()
 	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "list", "-C", env.repoDir, "-state", "Done"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue list -state Done failed: %s", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), shortID) {
+		t.Errorf("issue list -state Done missing issue %s: %s", shortID, stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
 	code = run(context.Background(), []string{"issue", "list", "-C", env.repoDir, "-state", "open"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("issue list -state open failed: %s", stderr.String())
 	}
 	if strings.Contains(stdout.String(), shortID) {
 		t.Errorf("issue list -state open should not contain closed issue %s: %s", shortID, stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "list", "-C", env.repoDir, "-state", "Todo"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue list -state Todo failed: %s", stderr.String())
+	}
+	if strings.Contains(stdout.String(), shortID) {
+		t.Errorf("issue list -state Todo should not contain closed issue %s: %s", shortID, stdout.String())
 	}
 }
 
@@ -213,7 +233,7 @@ func TestIssue_Create_OptionalFlags(t *testing.T) {
 	}
 
 	createOut := strings.TrimSpace(stdout.String())
-	idRe := regexp.MustCompile(`^([0-9a-f]{32}) \(closed\) Pre-closed issue with links$`)
+	idRe := regexp.MustCompile(`^([0-9a-f]{32}) \(Done\) Pre-closed issue with links$`)
 	matches := idRe.FindStringSubmatch(createOut)
 	if len(matches) < 2 {
 		t.Fatalf("unexpected issue create output: %q", createOut)
@@ -227,8 +247,8 @@ func TestIssue_Create_OptionalFlags(t *testing.T) {
 		t.Fatalf("issue status failed: %s", stderr.String())
 	}
 	statusOut := stdout.String()
-	if !strings.Contains(statusOut, "State:       closed") {
-		t.Errorf("status missing State: closed: %s", statusOut)
+	if !strings.Contains(statusOut, "State:       Done") {
+		t.Errorf("status missing State: Done: %s", statusOut)
 	}
 	if !strings.Contains(statusOut, "fixes "+ref1) {
 		t.Errorf("status missing fixes link: %s", statusOut)
@@ -302,7 +322,7 @@ func TestIssue_WorkspaceRouting_DoD1(t *testing.T) {
 	}
 
 	createOut := strings.TrimSpace(stdout.String())
-	idRe := regexp.MustCompile(`^([0-9a-f]{32}) \(open\) Routed Issue$`)
+	idRe := regexp.MustCompile(`^([0-9a-f]{32}) \(Todo\) Routed Issue$`)
 	matches := idRe.FindStringSubmatch(createOut)
 	if len(matches) < 2 {
 		t.Fatalf("unexpected issue create output: %q", createOut)
@@ -407,7 +427,7 @@ func TestIssue_CrossRepoReference_DoD2(t *testing.T) {
 		t.Fatalf("issue create failed: %s", stderr.String())
 	}
 	createOut := strings.TrimSpace(stdout.String())
-	idRe := regexp.MustCompile(`^([0-9a-f]{32}) \(open\) Issue with cross-repo link$`)
+	idRe := regexp.MustCompile(`^([0-9a-f]{32}) \(Todo\) Issue with cross-repo link$`)
 	matches := idRe.FindStringSubmatch(createOut)
 	if len(matches) < 2 {
 		t.Fatalf("unexpected create output: %q", createOut)
@@ -1733,5 +1753,86 @@ func TestIssueComment_ReplyToNotFound(t *testing.T) {
 		t.Errorf("expected stderr to contain %q, got: %s", expectedNonexistentMsg2, stderr.String())
 	}
 }
+
+func TestIssue_WorkflowStateDefaultsAndFiltering(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("writ init failed: %s", stderr.String())
+	}
+	commitFile(t, env.repoDir, "README.md", "# Hello", "init")
+
+	// 1. Issue created without --state defaults to Todo (unstarted)
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "create", "-C", env.repoDir, "-title", "Fix bug"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue create failed: %s", stderr.String())
+	}
+	createOut := strings.TrimSpace(stdout.String())
+	idRe := regexp.MustCompile(`^([0-9a-f]{32}) \(Todo\) Fix bug$`)
+	matches := idRe.FindStringSubmatch(createOut)
+	if len(matches) < 2 {
+		t.Fatalf("expected (Todo) in issue create output, got %q", createOut)
+	}
+	issueID := matches[1]
+
+	// 2. Issue list shows Todo, and -state Todo / -state open match it
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "list", "-C", env.repoDir, "-state", "Todo"}, &stdout, &stderr)
+	if code != 0 || !strings.Contains(stdout.String(), issueID[:8]) {
+		t.Fatalf("issue list -state Todo failed to return issue: %s", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "list", "-C", env.repoDir, "-state", "open"}, &stdout, &stderr)
+	if code != 0 || !strings.Contains(stdout.String(), issueID[:8]) {
+		t.Fatalf("issue list -state open failed to return issue in Todo: %s", stdout.String())
+	}
+
+	// 3. writ issue status <id> closed resolves to completed workflow state (Done)
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "status", "-C", env.repoDir, issueID, "closed"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue status closed failed: %s", stderr.String())
+	}
+
+	// 4. View status shows Done
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "status", "-C", env.repoDir, issueID}, &stdout, &stderr)
+	if code != 0 || !strings.Contains(stdout.String(), "State:       Done") {
+		t.Fatalf("expected State: Done, got: %s", stdout.String())
+	}
+
+	// 5. Querying -state Done and -state closed returns it; -state open / -state Todo returns 0
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "list", "-C", env.repoDir, "-state", "Done"}, &stdout, &stderr)
+	if code != 0 || !strings.Contains(stdout.String(), issueID[:8]) {
+		t.Fatalf("issue list -state Done failed to return closed issue: %s", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "list", "-C", env.repoDir, "-state", "closed"}, &stdout, &stderr)
+	if code != 0 || !strings.Contains(stdout.String(), issueID[:8]) {
+		t.Fatalf("issue list -state closed failed to return issue in Done: %s", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "list", "-C", env.repoDir, "-state", "open"}, &stdout, &stderr)
+	if code != 0 || strings.Contains(stdout.String(), issueID[:8]) {
+		t.Fatalf("issue list -state open should not return closed issue: %s", stdout.String())
+	}
+}
+
 
 
