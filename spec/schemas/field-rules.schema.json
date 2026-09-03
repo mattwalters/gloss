@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://writ.dev/spec/field-rules.schema.json",
+  "title": "Writ field merge rule declarations (v1)",
+  "description": "Declarative field merge rule declarations: strategies, keys, lattices, and normalization attributes per (op_type, field) tuple. Normative text: spec/fold.md. additionalProperties is deliberately never false: unknown fields are preserved and ignored.",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/field-rule"
+  },
+  "$defs": {
+    "field-rule": {
+      "type": "object",
+      "properties": {
+        "op_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Operation type to which this rule applies."
+        },
+        "op_version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Operation version to which this rule applies."
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the field in the operation body."
+        },
+        "strategy": {
+          "type": "string",
+          "enum": [
+            "lww",
+            "create-once",
+            "set-union",
+            "set-observed-remove",
+            "append",
+            "tombstone",
+            "lattice",
+            "keyed-lww"
+          ],
+          "description": "Closed catalogue merge strategy from spec/fold.md."
+        },
+        "key": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "description": "Ordered list of key components for keyed-lww strategy."
+        },
+        "lattice": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "description": "Ordered elements of the semilattice for lattice strategy."
+        },
+        "normalize": {
+          "$ref": "#/$defs/normalize-rule"
+        }
+      },
+      "required": [
+        "op_type",
+        "op_version",
+        "field",
+        "strategy"
+      ]
+    },
+    "normalize-rule": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string",
+          "enum": [
+            "person"
+          ],
+          "description": "Normalization algorithm applied to scalar values."
+        },
+        "items": {
+          "type": "string",
+          "enum": [
+            "person"
+          ],
+          "description": "Normalization algorithm applied to collection elements/items."
+        },
+        "key": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "description": "Key components normalized per algorithm (e.g. as person)."
+        }
+      }
+    }
+  }
+}

@@ -20,6 +20,14 @@ func TestReviewRulesDriftGuard(t *testing.T) {
 	var expectedRules []s.Rule
 	for _, r := range allRules {
 		if r.Vocabulary == "review-ops" {
+			var norm *s.NormalizeRule
+			if r.Normalize != nil {
+				norm = &s.NormalizeRule{
+					Value: r.Normalize.Value,
+					Items: r.Normalize.Items,
+					Key:   r.Normalize.Key,
+				}
+			}
 			expectedRules = append(expectedRules, s.Rule{
 				OpType:    r.OpType,
 				OpVersion: r.OpVersion,
@@ -27,6 +35,7 @@ func TestReviewRulesDriftGuard(t *testing.T) {
 				Strategy:  r.Strategy,
 				Key:       r.Key,
 				Lattice:   r.Lattice,
+				Normalize: norm,
 			})
 		}
 	}
@@ -1170,11 +1179,22 @@ func TestFoldReviewMixedFlatAndNestedShapes(t *testing.T) {
 	}
 	var fieldRules []spec.FieldRule
 	for _, r := range s.ReviewRules() {
+		var norm *spec.NormalizeRule
+		if r.Normalize != nil {
+			norm = &spec.NormalizeRule{
+				Value: r.Normalize.Value,
+				Items: r.Normalize.Items,
+				Key:   r.Normalize.Key,
+			}
+		}
 		fieldRules = append(fieldRules, spec.FieldRule{
 			OpType:    r.OpType,
 			OpVersion: r.OpVersion,
 			Field:     r.Field,
 			Strategy:  r.Strategy,
+			Key:       r.Key,
+			Lattice:   r.Lattice,
+			Normalize: norm,
 		})
 	}
 	refRes, err := spec.Fold(mergeOps, fieldRules)

@@ -936,7 +936,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 							// Empty scalar contract (spec/fold.md §5.1): empty strings
 							// (including person identifiers that normalize to empty) are
 							// preserved in the generic fold map as deliberate scalar writes.
-							if s, ok := val.(string); ok && fieldName == "resolved_by" && op.OpType == "resolve" {
+							if s, ok := val.(string); ok && r.NormalizesValue() {
 								val = normalizePerson(s)
 							}
 							state[fieldName] = val
@@ -968,10 +968,16 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 					if opMatchesRule(op, r) {
 						if raw, present := op.Body[fieldName]; present {
 							hasSet = true
+							normalizeItem := func(it string) string {
+								if r.NormalizesItems() {
+									return normalizePerson(it)
+								}
+								return it
+							}
 							// Elements that are the empty string are dropped (spec/fold.md §5.3).
 							add := func(item string) {
-								if item != "" {
-									unionSet[item] = true
+								if norm := normalizeItem(item); norm != "" {
+									unionSet[norm] = true
 								}
 							}
 							// Every item is a string: an op carrying anything
@@ -1055,7 +1061,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 							// after normalization are dropped from both sides of the
 							// OR-set, whatever the op type (spec/fold.md §5.4).
 							normalizeItem := func(it string) string {
-								if op.OpType == "assign" {
+								if r.NormalizesItems() {
 									return normalizePerson(it)
 								}
 								return it
@@ -1225,10 +1231,10 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 							} else {
 								continue
 							}
-						} else if fieldName == "subject" && op.OpType == "approval" {
+						} else if rule.NormalizesValue() {
 							if s, isStr := val.(string); isStr {
 								norm := normalizePerson(s)
-								if norm == "" && op.Author.Email != "" {
+								if norm == "" && fieldName == "subject" && op.OpType == "approval" && op.Author.Email != "" {
 									norm = normalizePerson("email:" + op.Author.Email)
 								}
 								val = norm
@@ -1242,11 +1248,11 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 							// empty component, except for approval subject which
 							// falls back to the commit author's email.
 							vStr, _ := op.Body[kf].(string)
-							if kf == "subject" && op.OpType == "approval" {
+							if rule.NormalizesKey(kf) {
 								vStr = normalizePerson(vStr)
-								if vStr == "" && op.Author.Email != "" {
-									vStr = normalizePerson("email:" + op.Author.Email)
-								}
+							}
+							if vStr == "" && kf == "subject" && op.OpType == "approval" && op.Author.Email != "" {
+								vStr = normalizePerson("email:" + op.Author.Email)
 							}
 							key = append(key, vStr)
 						}

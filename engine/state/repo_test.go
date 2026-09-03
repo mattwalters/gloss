@@ -20,6 +20,14 @@ func TestRepoRulesDriftGuard(t *testing.T) {
 	var expectedRules []s.Rule
 	for _, r := range allRules {
 		if r.Vocabulary == "repo" {
+			var norm *s.NormalizeRule
+			if r.Normalize != nil {
+				norm = &s.NormalizeRule{
+					Value: r.Normalize.Value,
+					Items: r.Normalize.Items,
+					Key:   r.Normalize.Key,
+				}
+			}
 			expectedRules = append(expectedRules, s.Rule{
 				OpType:    r.OpType,
 				OpVersion: r.OpVersion,
@@ -27,6 +35,7 @@ func TestRepoRulesDriftGuard(t *testing.T) {
 				Strategy:  r.Strategy,
 				Key:       r.Key,
 				Lattice:   r.Lattice,
+				Normalize: norm,
 			})
 		}
 	}

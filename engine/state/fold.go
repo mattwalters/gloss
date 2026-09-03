@@ -7,14 +7,22 @@ import (
 	"github.com/writtendev/writ/engine/internal/fold"
 )
 
+// NormalizeRule specifies normalization attributes for an (op_type, field) merge rule.
+type NormalizeRule struct {
+	Value string   `json:"value,omitempty"`
+	Items string   `json:"items,omitempty"`
+	Key   []string `json:"key,omitempty"`
+}
+
 // Rule specifies the merge strategy and parameters for an (op_type, op_version, field) tuple.
 type Rule struct {
-	OpType    string   `json:"op_type,omitempty"`
-	OpVersion int64    `json:"op_version,omitempty"`
-	Field     string   `json:"field"`
-	Strategy  string   `json:"strategy"`
-	Key       []string `json:"key,omitempty"`
-	Lattice   []string `json:"lattice,omitempty"`
+	OpType    string         `json:"op_type,omitempty"`
+	OpVersion int64          `json:"op_version,omitempty"`
+	Field     string         `json:"field"`
+	Strategy  string         `json:"strategy"`
+	Key       []string       `json:"key,omitempty"`
+	Lattice   []string       `json:"lattice,omitempty"`
+	Normalize *NormalizeRule `json:"normalize,omitempty"`
 }
 
 // Sentinels re-exported from internal/fold.
@@ -35,6 +43,14 @@ var (
 func internalRules(rules []Rule) []fold.Rule {
 	out := make([]fold.Rule, len(rules))
 	for i, r := range rules {
+		var norm *fold.NormalizeRule
+		if r.Normalize != nil {
+			norm = &fold.NormalizeRule{
+				Value: r.Normalize.Value,
+				Items: r.Normalize.Items,
+				Key:   r.Normalize.Key,
+			}
+		}
 		out[i] = fold.Rule{
 			OpType:    r.OpType,
 			OpVersion: r.OpVersion,
@@ -42,6 +58,7 @@ func internalRules(rules []Rule) []fold.Rule {
 			Strategy:  r.Strategy,
 			Key:       r.Key,
 			Lattice:   r.Lattice,
+			Normalize: norm,
 		}
 	}
 	return out
