@@ -61,6 +61,9 @@ type Store struct {
 	// Labels provides label creation and updates.
 	Labels *Labels
 
+	// Documents provides document and section operations.
+	Documents *Documents
+
 	// Workspace provides repository registry discovery, registration, and cross-repo resolution.
 	Workspace *Workspace
 

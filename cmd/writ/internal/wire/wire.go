@@ -30,6 +30,12 @@ const (
 	KindCommentDelete = "comment.delete"
 	KindStateList     = "state.list"
 	KindLabelList     = "label.list"
+	KindDocList       = "doc.list"
+	KindDocShow       = "doc.show"
+	KindDocCreate     = "doc.create"
+	KindDocEdit       = "doc.edit"
+	KindDocLink       = "doc.link"
+	KindDocSection    = "doc.section"
 )
 
 // Envelope wraps all machine-readable output in a single versioned container.
@@ -717,5 +723,122 @@ func FromLabelResultSummaries(results []writ.LabelResult) []LabelSummary {
 		summaries[i] = FromLabelResult(r)
 	}
 	return summaries
+}
+
+// DocumentSummary represents a document in a list view.
+type DocumentSummary struct {
+	ObjectID  string    `json:"object_id"`
+	Title     string    `json:"title"`
+	Author    Author    `json:"author"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Labels    []string  `json:"labels"`
+	Sections  int       `json:"sections"`
+}
+
+// Section represents a document section.
+type Section struct {
+	ObjectID   string    `json:"object_id"`
+	DocumentID string    `json:"document_id"`
+	Position   string    `json:"position"`
+	Title      string    `json:"title,omitempty"`
+	Body       any       `json:"body"` // string or []string
+	Conflicted bool      `json:"conflicted"`
+	Deleted    bool      `json:"deleted"`
+	Author     Author    `json:"author"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// DocumentLink represents a cross-reference link attached to a document.
+type DocumentLink struct {
+	Target     string `json:"target"`
+	TargetType string `json:"target_type,omitempty"`
+	Relation   string `json:"relation"`
+}
+
+// Document is the full detail view of a document collaborative object.
+type Document struct {
+	ObjectID  string         `json:"object_id"`
+	Title     string         `json:"title"`
+	Author    Author         `json:"author"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	Labels    []string       `json:"labels"`
+	Links     []DocumentLink `json:"links"`
+	Sections  []Section      `json:"sections"`
+}
+
+// FromDocumentResult converts a domain DocumentResult to a wire Document.
+func FromDocumentResult(d writ.DocumentResult) Document {
+	links := make([]DocumentLink, len(d.Document.Links))
+	for i, l := range d.Document.Links {
+		links[i] = DocumentLink{
+			Target:     l.Target,
+			TargetType: l.TargetType,
+			Relation:   l.Relation,
+		}
+	}
+	sections := make([]Section, len(d.Sections))
+	for i, s := range d.Sections {
+		sections[i] = FromSectionResult(s)
+	}
+	labels := d.Document.Labels
+	if labels == nil {
+		labels = []string{}
+	}
+	return Document{
+		ObjectID:  d.ObjectID,
+		Title:     d.Document.Title,
+		Author:    Author{Name: d.Author.Name, Email: d.Author.Email},
+		CreatedAt: d.CreatedAt,
+		UpdatedAt: d.UpdatedAt,
+		Labels:    labels,
+		Links:     links,
+		Sections:  sections,
+	}
+}
+
+// FromSectionResult converts a domain SectionResult to a wire Section.
+func FromSectionResult(s writ.SectionResult) Section {
+	var body any
+	if s.Section.IsConflicted() {
+		body = s.Section.ConflictBodies()
+	} else {
+		body = s.Section.SettledBody()
+	}
+	return Section{
+		ObjectID:   s.ObjectID,
+		DocumentID: s.Section.DocumentID,
+		Position:   s.Section.Position,
+		Title:      s.Section.Title,
+		Body:       body,
+		Conflicted: s.Section.IsConflicted(),
+		Deleted:    s.Section.Deleted,
+		Author:     Author{Name: s.Author.Name, Email: s.Author.Email},
+		CreatedAt:  s.CreatedAt,
+		UpdatedAt:  s.UpdatedAt,
+	}
+}
+
+// FromDocumentResults converts a slice of domain DocumentResults to wire DocumentSummaries.
+func FromDocumentResults(docs []writ.DocumentResult) []DocumentSummary {
+	res := make([]DocumentSummary, len(docs))
+	for i, d := range docs {
+		labels := d.Document.Labels
+		if labels == nil {
+			labels = []string{}
+		}
+		res[i] = DocumentSummary{
+			ObjectID:  d.ObjectID,
+			Title:     d.Document.Title,
+			Author:    Author{Name: d.Author.Name, Email: d.Author.Email},
+			CreatedAt: d.CreatedAt,
+			UpdatedAt: d.UpdatedAt,
+			Labels:    labels,
+			Sections:  len(d.Sections),
+		}
+	}
+	return res
 }
 

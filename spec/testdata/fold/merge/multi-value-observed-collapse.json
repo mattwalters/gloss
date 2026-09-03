@@ -1,0 +1,49 @@
+{
+  "name": "multi-value-observed-collapse",
+  "description": "A subsequent write that causally follows concurrent writes collapses the multi-value register back to a single settled string",
+  "object_id": "obj-1",
+  "fields": {
+    "body": { "strategy": "multi-value" }
+  },
+  "ops": [
+    {
+      "id": "op-root",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "body": "Initial body"
+      }
+    },
+    {
+      "id": "op-a",
+      "parents": ["op-root"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "body": "Version A"
+      }
+    },
+    {
+      "id": "op-b",
+      "parents": ["op-root"],
+      "time": 300,
+      "object_id": "obj-1",
+      "body": {
+        "body": "Version B"
+      }
+    },
+    {
+      "id": "op-c-resolve",
+      "parents": ["op-a", "op-b"],
+      "time": 400,
+      "object_id": "obj-1",
+      "body": {
+        "body": "Resolved single version"
+      }
+    }
+  ],
+  "expected_state": {
+    "body": "Resolved single version"
+  }
+}

@@ -12,6 +12,12 @@ slug: "cli"
 - [`writ init`](#writ-init)
 - [`writ comment edit`](#writ-comment-edit)
 - [`writ comment delete`](#writ-comment-delete)
+- [`writ doc create`](#writ-doc-create)
+- [`writ doc list`](#writ-doc-list)
+- [`writ doc show`](#writ-doc-show)
+- [`writ doc edit`](#writ-doc-edit)
+- [`writ doc link`](#writ-doc-link)
+- [`writ doc section`](#writ-doc-section)
 - [`writ issue create`](#writ-issue-create)
 - [`writ issue status`](#writ-issue-status)
 - [`writ issue comment`](#writ-issue-comment)
@@ -119,6 +125,163 @@ Delete a comment by creating a tombstone operation.
 writ comment delete 01J8ABC
 writ comment delete 01J8ABC --json
 ```
+
+### `writ doc create`
+
+Create a document
+
+#### Synopsis
+
+```console
+Usage: writ doc create [-C <dir>] [-t <title>] [--link <target:relation>] [--label <l>] [--json]
+```
+
+#### Description
+
+Create a new collaborative document object.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-t string`: Document title
+- `-link value`: Link in target:relation[:type] format (repeatable)
+- `-label value`: Label to attach (repeatable)
+- `-json`: Output machine-readable JSON
+
+#### Examples
+
+```bash
+writ doc create -t "RFC: Collaborative SDLC"
+writ doc create -t "Design Doc" --link issue-42:plan --label architecture --json
+```
+
+### `writ doc list`
+
+List documents
+
+#### Synopsis
+
+```console
+Usage: writ doc list [-C <dir>] [--label <l>] [--json]
+```
+
+#### Description
+
+List documents.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-label value`: Filter by label (repeatable)
+- `-json`: Output machine-readable JSON
+
+#### Examples
+
+```bash
+writ doc list
+writ doc list --label rfc --json
+```
+
+### `writ doc show`
+
+Show document details and sections
+
+#### Synopsis
+
+```console
+Usage: writ doc show [-C <dir>] <id> [--json]
+```
+
+#### Description
+
+Display document metadata and ordered sections, including visual markers for any conflicted section bodies.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-json`: Output machine-readable JSON
+
+#### Examples
+
+```bash
+writ doc show 01J8ABC
+writ doc show 01J8ABC --json
+```
+
+### `writ doc edit`
+
+Edit document metadata
+
+#### Synopsis
+
+```console
+Usage: writ doc edit [-C <dir>] <id> [-t <title>] [--label <l>] [--remove-label <l>] [--json]
+```
+
+#### Description
+
+Update document title or labels.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-t string`: New title
+- `-label value`: Add label (repeatable)
+- `-remove-label value`: Remove label (repeatable)
+- `-json`: Output machine-readable JSON
+
+#### Examples
+
+```bash
+writ doc edit 01J8ABC -t "RFC: Architecture (Updated)"
+writ doc edit 01J8ABC --label approved --remove-label draft
+```
+
+### `writ doc link`
+
+Attach a link to a document
+
+#### Synopsis
+
+```console
+Usage: writ doc link [-C <dir>] <id> --target <target> --relation <relation> [--target-type <type>] [--json]
+```
+
+#### Description
+
+Attach or update a cross-reference link on a document.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-target string`: Target entity identifier
+- `-relation string`: Relationship predicate
+- `-target-type string`: Optional target type
+- `-json`: Output machine-readable JSON
+
+#### Examples
+
+```bash
+writ doc link 01J8ABC --target issue-105 --relation implementation-plan
+```
+
+### `writ doc section`
+
+Manage document sections (add, edit, move, delete)
+
+#### Synopsis
+
+```console
+Usage: writ doc section [-C <dir>] <subcommand> [arguments]
+```
+
+#### Description
+
+Manage sections within collaborative documents.
+
+#### Flags
+
+- `-C <dir>`: Run as if writ was started in <dir>
 
 ### `writ issue create`
 

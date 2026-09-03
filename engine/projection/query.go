@@ -24,10 +24,10 @@ type Author struct {
 
 // ReviewResult represents a code review object along with its authorship and timestamps.
 type ReviewResult struct {
-	ObjectID  string      `json:"object_id"`
-	Author    Author      `json:"author"`
-	CreatedAt time.Time   `json:"created_at"`
-	UpdatedAt time.Time   `json:"updated_at"`
+	ObjectID  string       `json:"object_id"`
+	Author    Author       `json:"author"`
+	CreatedAt time.Time    `json:"created_at"`
+	UpdatedAt time.Time    `json:"updated_at"`
 	Review    state.Review `json:"review"`
 }
 
@@ -58,6 +58,30 @@ type LabelResult struct {
 	Label     state.Label `json:"label"`
 }
 
+// SectionResult represents a document section object along with its authorship and timestamps.
+type SectionResult struct {
+	ObjectID  string        `json:"object_id"`
+	Author    Author        `json:"author"`
+	CreatedAt time.Time     `json:"created_at"`
+	UpdatedAt time.Time     `json:"updated_at"`
+	Section   state.Section `json:"section"`
+}
+
+// DocumentResult represents a document object along with its authorship, timestamps, and ordered sections.
+type DocumentResult struct {
+	ObjectID  string          `json:"object_id"`
+	Author    Author          `json:"author"`
+	CreatedAt time.Time       `json:"created_at"`
+	UpdatedAt time.Time       `json:"updated_at"`
+	Document  state.Document  `json:"document"`
+	Sections  []SectionResult `json:"sections,omitempty"`
+}
+
+// DocumentFilter specifies filter criteria when querying documents.
+type DocumentFilter struct {
+	Labels []string
+}
+
 // ResolvedPosition describes the resolved anchor position for a comment side.
 type ResolvedPosition struct {
 	Side      string `json:"side"`
@@ -80,7 +104,7 @@ type CommentResult struct {
 	Author    Author             `json:"author"`
 	CreatedAt time.Time          `json:"created_at"`
 	UpdatedAt time.Time          `json:"updated_at"`
-	Comment   state.Comment       `json:"comment"`
+	Comment   state.Comment      `json:"comment"`
 	Resolved  []ResolvedPosition `json:"resolved,omitempty"`
 }
 
@@ -2101,3 +2125,221 @@ func appendLabelFilter(sb *strings.Builder, args *[]any, tableName, alias, objID
 	}
 }
 
+// Documents executes a list and filter query over documents, returning documents with their ordered sections.
+func (d *DB) Documents(f DocumentFilter) ([]DocumentResult, error) {
+	var conditions []string
+	var args []any
+
+	if len(f.Labels) > 0 {
+		placeholders := make([]string, len(f.Labels))
+		for i, label := range f.Labels {
+			placeholders[i] = "?"
+			args = append(args, label)
+		}
+		conditions = append(conditions, fmt.Sprintf(
+			"d.object_id IN (SELECT document_id FROM document_labels WHERE label IN (%s) GROUP BY document_id HAVING COUNT(DISTINCT label) = %d)",
+			strings.Join(placeholders, ", "), len(f.Labels),
+		))
+	}
+
+	query := "SELECT d.object_id, d.title, d.state_json, " +
+		"o.author_name, o.author_email, o.created_at, o.updated_at " +
+		"FROM documents d JOIN objects o ON o.object_id = d.object_id"
+
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+	query += " ORDER BY o.created_at ASC, d.object_id ASC"
+
+	rows, err := d.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("projection: query documents: %w", err)
+	}
+	defer rows.Close()
+
+	type rawDoc struct {
+		objectID    string
+		title       string
+		stateJSON   string
+		authorName  string
+		authorEmail string
+		createdAt   int64
+		updatedAt   int64
+	}
+
+	var rawDocs []rawDoc
+	var docIDs []string
+	for rows.Next() {
+		var rd rawDoc
+		if err := rows.Scan(&rd.objectID, &rd.title, &rd.stateJSON, &rd.authorName, &rd.authorEmail, &rd.createdAt, &rd.updatedAt); err != nil {
+			return nil, fmt.Errorf("projection: scan document: %w", err)
+		}
+		rawDocs = append(rawDocs, rd)
+		docIDs = append(docIDs, rd.objectID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("projection: iterate documents: %w", err)
+	}
+
+	if len(rawDocs) == 0 {
+		return []DocumentResult{}, nil
+	}
+
+	sectionsByDoc, err := d.loadSectionsForDocuments(docIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([]DocumentResult, len(rawDocs))
+	for i, rd := range rawDocs {
+		var docState state.Document
+		if err := json.Unmarshal([]byte(rd.stateJSON), &docState); err != nil {
+			return nil, fmt.Errorf("projection: unmarshal document state for %s: %w", rd.objectID, err)
+		}
+		results[i] = DocumentResult{
+			ObjectID: rd.objectID,
+			Author: Author{
+				Name:  rd.authorName,
+				Email: rd.authorEmail,
+			},
+			CreatedAt: time.Unix(rd.createdAt, 0).UTC(),
+			UpdatedAt: time.Unix(rd.updatedAt, 0).UTC(),
+			Document:  docState,
+			Sections:  sectionsByDoc[rd.objectID],
+		}
+	}
+	return results, nil
+}
+
+func (d *DB) loadSectionsForDocuments(docIDs []string) (map[string][]SectionResult, error) {
+	sectionsByDoc := make(map[string][]SectionResult)
+	if len(docIDs) == 0 {
+		return sectionsByDoc, nil
+	}
+
+	placeholders := make([]string, len(docIDs))
+	args := make([]any, len(docIDs))
+	for i, id := range docIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(
+		"SELECT s.object_id, s.document_id, s.position, s.op_id, s.title, s.state_json, "+
+			"o.author_name, o.author_email, o.created_at, o.updated_at "+
+			"FROM sections s JOIN objects o ON o.object_id = s.object_id "+
+			"WHERE s.document_id IN (%s) AND s.deleted = 0 "+
+			"ORDER BY s.position ASC, s.op_id ASC",
+		strings.Join(placeholders, ", "),
+	)
+
+	rows, err := d.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("projection: query sections: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var objID, docID, pos, opID, title, stateJSON, authorName, authorEmail string
+		var createdAt, updatedAt int64
+		if err := rows.Scan(&objID, &docID, &pos, &opID, &title, &stateJSON, &authorName, &authorEmail, &createdAt, &updatedAt); err != nil {
+			return nil, fmt.Errorf("projection: scan section: %w", err)
+		}
+
+		var secState state.Section
+		if err := json.Unmarshal([]byte(stateJSON), &secState); err != nil {
+			return nil, fmt.Errorf("projection: unmarshal section state for %s: %w", objID, err)
+		}
+
+		sectionsByDoc[docID] = append(sectionsByDoc[docID], SectionResult{
+			ObjectID: objID,
+			Author: Author{
+				Name:  authorName,
+				Email: authorEmail,
+			},
+			CreatedAt: time.Unix(createdAt, 0).UTC(),
+			UpdatedAt: time.Unix(updatedAt, 0).UTC(),
+			Section:   secState,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("projection: iterate sections: %w", err)
+	}
+	return sectionsByDoc, nil
+}
+
+// Document fetches a single document by its object ID, returning ErrNotFound if not found.
+func (d *DB) Document(id string) (DocumentResult, error) {
+	query := "SELECT d.object_id, d.title, d.state_json, " +
+		"o.author_name, o.author_email, o.created_at, o.updated_at " +
+		"FROM documents d JOIN objects o ON o.object_id = d.object_id WHERE d.object_id = ?"
+
+	var objID, title, stateJSON, authorName, authorEmail string
+	var createdAt, updatedAt int64
+	err := d.db.QueryRow(query, id).Scan(
+		&objID, &title, &stateJSON, &authorName, &authorEmail, &createdAt, &updatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return DocumentResult{}, ErrNotFound
+		}
+		return DocumentResult{}, fmt.Errorf("projection: query document %s: %w", id, err)
+	}
+
+	var docState state.Document
+	if err := json.Unmarshal([]byte(stateJSON), &docState); err != nil {
+		return DocumentResult{}, fmt.Errorf("projection: unmarshal document state for %s: %w", id, err)
+	}
+
+	sectionsByDoc, err := d.loadSectionsForDocuments([]string{id})
+	if err != nil {
+		return DocumentResult{}, err
+	}
+
+	return DocumentResult{
+		ObjectID: objID,
+		Author: Author{
+			Name:  authorName,
+			Email: authorEmail,
+		},
+		CreatedAt: time.Unix(createdAt, 0).UTC(),
+		UpdatedAt: time.Unix(updatedAt, 0).UTC(),
+		Document:  docState,
+		Sections:  sectionsByDoc[id],
+	}, nil
+}
+
+// Section fetches a single document section by its object ID, returning ErrNotFound if not found.
+func (d *DB) Section(id string) (SectionResult, error) {
+	query := "SELECT s.object_id, s.document_id, s.position, s.op_id, s.title, s.state_json, " +
+		"o.author_name, o.author_email, o.created_at, o.updated_at " +
+		"FROM sections s JOIN objects o ON o.object_id = s.object_id WHERE s.object_id = ?"
+
+	var objID, docID, pos, opID, title, stateJSON, authorName, authorEmail string
+	var createdAt, updatedAt int64
+	err := d.db.QueryRow(query, id).Scan(
+		&objID, &docID, &pos, &opID, &title, &stateJSON, &authorName, &authorEmail, &createdAt, &updatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return SectionResult{}, ErrNotFound
+		}
+		return SectionResult{}, fmt.Errorf("projection: query section %s: %w", id, err)
+	}
+
+	var secState state.Section
+	if err := json.Unmarshal([]byte(stateJSON), &secState); err != nil {
+		return SectionResult{}, fmt.Errorf("projection: unmarshal section state for %s: %w", id, err)
+	}
+
+	return SectionResult{
+		ObjectID: objID,
+		Author: Author{
+			Name:  authorName,
+			Email: authorEmail,
+		},
+		CreatedAt: time.Unix(createdAt, 0).UTC(),
+		UpdatedAt: time.Unix(updatedAt, 0).UTC(),
+		Section:   secState,
+	}, nil
+}

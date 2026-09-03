@@ -31,6 +31,7 @@ var strategyCatalogue = map[string]StrategyFactory{
 	"tombstone":           newTombstoneAccumulator,
 	"lattice":             newLatticeAccumulator,
 	"keyed-lww":           newKeyedLWWAccumulator,
+	"multi-value":         newMultiValueAccumulator,
 }
 
 // NewAccumulator instantiates an Accumulator for the specified rule and reachability oracle.
@@ -500,3 +501,74 @@ func (a *keyedLWWAccumulator) Result() (any, error) {
 	}
 	return keyed, nil
 }
+
+// 9. Multi-Value Register
+type multiValueWrite struct {
+	opID string
+	val  string
+}
+
+type multiValueAccumulator struct {
+	field  string
+	reach  ReachOracle
+	writes []multiValueWrite
+}
+
+func newMultiValueAccumulator(rule Rule, reach ReachOracle) (Accumulator, error) {
+	return &multiValueAccumulator{
+		field: rule.Field,
+		reach: reach,
+	}, nil
+}
+
+func (a *multiValueAccumulator) Apply(rule Rule, op codec.Op, body map[string]any, _ map[string]json.RawMessage) error {
+	raw, ok := body[a.field]
+	if !ok || raw == nil {
+		return nil
+	}
+	if s, ok := raw.(string); ok {
+		a.writes = append(a.writes, multiValueWrite{opID: op.ID, val: s})
+	}
+	return nil
+}
+
+func (a *multiValueAccumulator) HasValue() bool {
+	return len(a.writes) > 0
+}
+
+func (a *multiValueAccumulator) Result() (any, error) {
+	if len(a.writes) == 0 {
+		return "", nil
+	}
+	var maximal []multiValueWrite
+	for i, w1 := range a.writes {
+		superseded := false
+		for j, w2 := range a.writes {
+			if i != j && a.reach.IsAncestor(w1.opID, w2.opID) {
+				superseded = true
+				break
+			}
+		}
+		if !superseded {
+			maximal = append(maximal, w1)
+		}
+	}
+	seen := make(map[string]bool)
+	var vals []string
+	for _, w := range maximal {
+		if !seen[w.val] {
+			seen[w.val] = true
+			vals = append(vals, w.val)
+		}
+	}
+	sort.Strings(vals)
+	if len(vals) == 1 {
+		return vals[0], nil
+	}
+	res := make([]any, len(vals))
+	for i, v := range vals {
+		res[i] = v
+	}
+	return res, nil
+}
+

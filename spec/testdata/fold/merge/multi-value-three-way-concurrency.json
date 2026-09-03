@@ -1,0 +1,53 @@
+{
+  "name": "multi-value-three-way-concurrency",
+  "description": "Three concurrent writes to a multi-value register are all preserved in canonical code unit sorted order",
+  "object_id": "obj-1",
+  "fields": {
+    "body": { "strategy": "multi-value" }
+  },
+  "ops": [
+    {
+      "id": "op-root",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "body": "Root"
+      }
+    },
+    {
+      "id": "op-a",
+      "parents": ["op-root"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "body": "Cherry"
+      }
+    },
+    {
+      "id": "op-b",
+      "parents": ["op-root"],
+      "time": 300,
+      "object_id": "obj-1",
+      "body": {
+        "body": "Apple"
+      }
+    },
+    {
+      "id": "op-c",
+      "parents": ["op-root"],
+      "time": 400,
+      "object_id": "obj-1",
+      "body": {
+        "body": "Banana"
+      }
+    }
+  ],
+  "expected_state": {
+    "body": [
+      "Apple",
+      "Banana",
+      "Cherry"
+    ]
+  }
+}

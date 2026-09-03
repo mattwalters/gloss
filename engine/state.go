@@ -60,6 +60,14 @@ type Issue = state.Issue
 // Link represents a cross-reference link attached to an issue.
 type Link = state.Link
 
+// Document represents the materialized state of a document collaborative object (v1),
+// produced by FoldDocument.
+type Document = state.Document
+
+// Section represents the materialized state of a document section collaborative object (v1),
+// produced by FoldSection.
+type Section = state.Section
+
 // Project represents the materialized state of a project collaborative object (v1),
 // produced by FoldProject.
 type Project = state.Project
