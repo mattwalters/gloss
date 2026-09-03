@@ -19,13 +19,20 @@ LDFLAGS = -X $(PKG)/internal/version.Version=$(VERSION)
 # `make -s hugo-version` in .github/workflows/docs.yml.
 HUGO_VERSION := 0.165.0
 
-.PHONY: build test install api api-check api-compat cli-docs cli-docs-check snapshot release hugo-version docs docs-serve casts render-tape
+.PHONY: build test fuzz install api api-check api-compat cli-docs cli-docs-check snapshot release hugo-version docs docs-serve casts render-tape
 
 build:
 	go build ./...
 
 test:
 	go test ./...
+
+FUZZTIME ?= 30s
+
+fuzz: ## Run Go fuzz targets for a bounded duration (FUZZTIME, default 30s each)
+	go test -fuzz=^FuzzReffoldNormalizePersonMatchesEngine$$ -fuzztime=$(FUZZTIME) ./spec
+	go test -fuzz=^FuzzPayloadRoundTrip$$ -fuzztime=$(FUZZTIME) ./engine/codec
+	go test -fuzz=^FuzzResolve$$ -fuzztime=$(FUZZTIME) ./engine/resolve
 
 install: ## Build and install writ into Go's bin dir
 	go install -ldflags "$(LDFLAGS)" ./cmd/writ
