@@ -27,7 +27,7 @@ Signing rides git's existing commit-signature machinery (SSH signing preferred �
 
 ### Object types (spec'd from day one, even where clients come later)
 
-Repo-scoped: `review` (base/head, revisions, status, approvals, ci-statuses), `comment` (threaded, anchored). Approvals and CI statuses are operations on `review`, not standalone collaborative objects (amended with WRIT-8; see `spec/review-ops.md`). Workspace-scoped (living in the designated **workspace-home** repo — a role any repo can play, see §Workspace scoping below): `issue` (`Issue{title, description, state, reason, assignees, labels, links}`; amended with WRIT-10; see `spec/issue-ops.md`), `project`, `cycle`, repository registry (`repo`), membership metadata. Object IDs and cross-references are workspace-global (`<repo-id>#<object-id>` or bare `<object-id>` for repo-local references, where IDs are 128-bit random lowercase hex strings; decided and spec'd in `spec/identifiers.md`, WRIT-16) so "issue in repo A fixed by review in repo B" is representable — the one-graph query is the point. Normative detail for review operations: `spec/review-ops.md`; for issue operations: `spec/issue-ops.md`; for project and cycle operations: `spec/project-cycle.md`; for repository registry operations: `spec/repo-ops.md`.
+Repo-scoped: `review` (base/head, revisions, status, approvals, ci-statuses), `comment` (threaded, anchored). Approvals and CI statuses are operations on `review`, not standalone collaborative objects (amended with WRIT-8; see `spec/review-ops.md`). Workspace-scoped (living in the designated **workspace-home** repo — a role any repo can play, see §Workspace scoping below): `issue` (`Issue{title, description, state, reason, assignees, labels, links}`; amended with WRIT-10; see `spec/issue-ops.md`), `project`, `cycle`, `document` (sections with multi-value register concurrency, upcoming; see §Document concurrency model), repository registry (`repo`), membership metadata. Object IDs and cross-references are workspace-global (`<repo-id>#<object-id>` or bare `<object-id>` for repo-local references, where IDs are 128-bit random lowercase hex strings; decided and spec'd in `spec/identifiers.md`, WRIT-16) so "issue in repo A fixed by review in repo B" is representable — the one-graph query is the point. Normative detail for review operations: `spec/review-ops.md`; for issue operations: `spec/issue-ops.md`; for project and cycle operations: `spec/project-cycle.md`; for repository registry operations: `spec/repo-ops.md`; for document concurrency: see §Document concurrency model.
 
 ### Workspace scoping (amended with WRIT-113)
 
@@ -112,6 +112,58 @@ genuinely static Linux binaries since static-linking cgo against glibc
 breaks NSS lookups at runtime. `CGO_ENABLED=0` cross-compilation has none of
 that: it's `GOOS`/`GOARCH` and nothing else, from any host. Full benchmark,
 method, and reproduction steps: `docs/spikes/writ-60-sqlite-driver/`.
+
+## Document concurrency model: sections, multi-value registers, conflicts as data (decided; rationale preserved)
+
+Settled design for how Writ handles concurrent edits to long-form text, ahead of specifying a `document` object type. Recording the reasoning because three plausible alternatives were considered and rejected, and each will look attractive again to whoever picks this up.
+
+### The decision
+
+**Documents are split into sections, and each section's body is a multi-value register.** On concurrent edits, every version is preserved. A later edit that causally observes them collapses back to one. The fold never merges text and never picks a winner.
+
+```
+settled:     body = "..."
+conflicted:  body = ["...", "..."]     both preserved, neither invented
+```
+
+**Clients render the conflict.** Presentation may show git-style `<<<<<<<` markers, a side-by-side view, or an interactive version picker — presentation is strictly a client choice. Resolution is an ordinary edit op that causally follows both versions.
+
+This is the same line already drawn twice: merge queues and branch protection are coordination services; collaborative editing is a client capability. Sophisticated machinery lives above the format; the format stays boring and deterministic.
+
+### Why not a sequence CRDT (Yjs, Automerge, Loro)
+
+They are excellent and they are the wrong dependency here.
+
+- **Their updates are opaque binary.** Op payloads would stop being canonical JSON — which is what signatures and content-addressing are computed over.
+- **VISION says no.** "No binary storage formats for the canonical data — binary means no diff, no merge, no delta compression."
+- **It would make Yjs the spec.** Conformance fixtures containing binary CRDT updates mean an independent implementation must reimplement that library byte-for-byte to conform. For a project selling a neutral, independently-implementable convention, that is not a dependency but a surrender.
+- **CGO.** Every mature option reaches Go through a Rust core, which undoes WRIT-60's pure-Go decision and the six-target static release matrix that followed from it.
+
+A sequence CRDT is still the right tool for **live co-editing inside a client session** — ephemeral, in-memory, never durable. That option stays open and costs the format nothing.
+
+### Why not three-way merge in the fold
+
+Tempting — it is what git does, the audience resolves conflicts routinely, and conflict markers are more honest than a CRDT silently interleaving two people's paragraphs into a sentence neither wrote.
+
+The problem is conformance surface. "Three-way merge" in a spec means an independent implementation must produce **byte-identical** output, which requires pinning: the diff algorithm (Myers, histogram and patience produce different hunks), the merge variant (`ort` vs `recursive`, `diff3` vs `zdiff3` markers), exact marker syntax, and a reduction for **N** concurrent edits — three-way merge takes exactly two sides and one base, and the op DAG can produce five. That is plausibly a larger spec than everything else combined, for a feature that is not the core product.
+
+Multi-value register gets the same user-visible outcome — *two humans disagreed, you decide* — with nothing to specify beyond "keep them all."
+
+### Why sections rather than whole documents
+
+A conflict should be scoped to the paragraph two people both touched, not the whole document because someone fixed a typo in the intro. Same reason git conflicts are per-hunk.
+
+Sections also give comments somewhere to anchor, the same way comments anchor to code, which makes document review work like code review rather than being a second mechanism.
+
+### One property better than git
+
+In git, whoever merges resolves. Here there is no merge event — the conflict appears in everyone's fold simultaneously, so **anyone can resolve it** with a normal edit. That falls out for free and is worth stating in the spec, because it is genuinely nicer and readers will expect git's rule.
+
+### Open questions for the implementing ticket
+
+- Are sections their own collaborative objects, or an ordered structure inside one document object? Sections-as-objects makes conflicts and anchoring natural; it also multiplies object count.
+- Section ordering uses fractional indexing, same mechanism as workflow-state positions.
+- Does multi-value register become a general per-field strategy available elsewhere, alongside `lww` and `set-observed-remove`? Probably yes — any field where silent loss is unacceptable wants it — but it is overkill for a title.
 
 ## Repo strategy: one monorepo
 
