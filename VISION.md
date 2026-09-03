@@ -58,7 +58,7 @@ Reviews belong to code repos. But much of project management is team-scoped — 
 
 ## Non-goals
 
-Not a forge; not git hosting. No P2P networking (see Radicle for that mission, done properly). No PM-tool feature parity in the near term. No binary storage formats for the canonical data (binary = no diff, no merge, no delta compression; git _is_ the append-only log — commits are the entries, refs are the head pointers). Columnar/DuckDB exports are a derived local projection, never committed.
+Not a forge; not git hosting. No P2P networking (see Radicle for that mission, done properly). No PM-tool feature parity in the near term. No binary storage formats for the canonical data (binary = no diff, no merge, no delta compression; git _is_ the append-only log — commits are the entries, refs are the head pointers). Columnar/DuckDB exports are a derived local projection, never committed. No anonymous or in-git public issue intake: writing an operation requires push access to `refs/writ/<writer-id>/*`, which public bug reporters lack. Writ provides no authorization model or anonymous write path at the format level; public intake is externalized to an intake bot or bridge, or teams keep forge issues as their public front door.
 
 ## Sequencing conviction
 

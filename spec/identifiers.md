@@ -171,6 +171,15 @@ that has none produces an identifier that looks routable and is not, and it
 puts a domain nobody controls into a permanent record. `user:` exists exactly
 so that an actor without an email address does not need one.
 
+**Public intake bots and third-party attribution.** The `user:` scheme also
+serves downstream intake bots that bridge public issue reports from external
+services (such as GitHub Issues, web forms, or bug bounty platforms) into Writ
+operations. An intake bot importing a ticket from an external contributor
+records `user:github-octocat` or `user:<service>-<id>`. This states truthfully
+what identity is known, avoiding synthesized email addresses (such as
+`octocat@users.noreply.github.com` or fictional domains) that look routable and
+are not.
+
 ### Parsing: split on the first colon
 
 An implementation MUST split a person identifier at its **first** colon: the

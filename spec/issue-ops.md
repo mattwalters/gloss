@@ -70,6 +70,31 @@ workspace.
 - **Fold driver and total ordering:** The deterministic total order $L$ and
   concurrency resolution are specified in `spec/fold.md` (WRIT-12).
 
+### Public Issue Intake and Bot Attribution
+
+Writ does not define an anonymous or in-band public issue submission protocol in
+the format. Every Writ operation is a git commit requiring push access to
+`refs/writ/<writer-id>/*`. External contributors and anonymous bug reporters
+without repository push access cannot write operations directly.
+
+Public issue intake is externalized to downstream intake bridges and bots:
+
+- **Intake bots author operations:** An intake bot runs as a designated git
+  writer with its own `writer-id` and push credentials. It accepts bug reports
+  from external interfaces (webhooks, public web forms, email, or forge issues
+  such as GitHub Issues) and commits standard `create` and `comment` operations
+  into the workspace repository.
+- **Truthful attribution via `user:` person identifiers:** When attributing
+  external reporters (for example in description headers, comments, or assignees),
+  intake bots MUST use scheme-prefixed person identifiers per
+  [`spec/identifiers.md`](identifiers.md) §Person identifiers. External accounts
+  without verified email addresses are recorded using the `user:` scheme
+  (e.g. `user:github-<handle>` or `user:<service>-<id>`), preserving honest origin
+  identity without synthesizing fictional email addresses.
+- **Forge issues as a front door:** Projects taking public reports may continue
+  to use forge issues (such as GitHub Issues) as their public front door, using
+  bidirectional bridges to mirror accepted issues into Writ.
+
 ## Envelope Binding
 
 Every issue operation is carried in a git commit whose `op.json` payload
