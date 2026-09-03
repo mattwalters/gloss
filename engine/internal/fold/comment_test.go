@@ -233,3 +233,76 @@ func TestFoldCommentUnknownSubjectFields(t *testing.T) {
 		t.Errorf("custom_field lost: %+v", parsed)
 	}
 }
+
+func TestFoldCommentGenericEmptyScalars(t *testing.T) {
+	baseTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	ops := []codec.Op{
+		{
+			ID: "c-create",
+			Envelope: codec.Envelope{
+				ObjectID:   "c-scalar",
+				ObjectType: "comment",
+				OpType:     "create",
+				OpVersion:  1,
+				Body:       []byte(`{"subject":{"object_type":"review","object_id":"r-1"},"text":"Initial text"}`),
+			},
+			Author: codec.Identity{When: baseTime},
+		},
+		{
+			ID:      "c-edit",
+			Parents: []string{"c-create"},
+			Envelope: codec.Envelope{
+				ObjectID:   "c-scalar",
+				ObjectType: "comment",
+				OpType:     "edit",
+				OpVersion:  1,
+				Body:       []byte(`{"text":""}`),
+			},
+			Author: codec.Identity{When: baseTime.Add(time.Minute)},
+		},
+		{
+			ID:      "c-resolve",
+			Parents: []string{"c-edit"},
+			Envelope: codec.Envelope{
+				ObjectID:   "c-scalar",
+				ObjectType: "comment",
+				OpType:     "resolve",
+				OpVersion:  1,
+				Body:       []byte(`{"resolved":true,"resolved_by":"   "}`),
+			},
+			Author: codec.Identity{When: baseTime.Add(2 * time.Minute)},
+		},
+	}
+
+	res, err := fold.Fold(ops, fold.CommentRules)
+	if err != nil {
+		t.Fatalf("fold.Fold failed: %v", err)
+	}
+
+	// Generic fold state MUST retain "" for empty scalars
+	if val, ok := res.State["text"]; !ok {
+		t.Errorf("expected 'text' present in fold state")
+	} else if val != "" {
+		t.Errorf("expected 'text' to be %q, got %q", "", val)
+	}
+
+	if val, ok := res.State["resolved_by"]; !ok {
+		t.Errorf("expected 'resolved_by' present in fold state")
+	} else if val != "" {
+		t.Errorf("expected 'resolved_by' to be %q, got %q", "", val)
+	}
+
+	// In addition, FoldComment should extract these empty scalars
+	cf, err := fold.FoldComment(ops)
+	if err != nil {
+		t.Fatalf("fold.FoldComment failed: %v", err)
+	}
+	if cf.Text != "" {
+		t.Errorf("expected cf.Text to be empty string, got %q", cf.Text)
+	}
+	if cf.ResolvedBy != "" {
+		t.Errorf("expected cf.ResolvedBy to be empty string, got %q", cf.ResolvedBy)
+	}
+}
+

@@ -193,6 +193,15 @@ NOT invent default merge behaviors for undeclared fields.
 Counters are deliberately omitted from this catalogue; adding a counter
 strategy requires a spec amendment.
 
+### Unified empty-value contract
+
+The generic fold map (`map[string]any`) is the single normative representation of folded state across implementations and preserves written values deterministically:
+- In scalar registers (`lww`, §5.1), an operation writing an empty scalar (such as `text: ""` or a person identifier that normalizes to `""`) sets the register to `""` in the generic fold map.
+- In collection strategies (`set-union` §5.3, `set-observed-remove` §5.4), elements that are empty (or normalize to empty) are dropped from the set. An operation whose elements are all dropped still counts as a write of the field, recording an empty collection in the generic fold map.
+- In list strategies (`append` §5.5), an operation writing an empty list records `[]` in the generic fold map.
+
+Typed domain serializations (such as language-specific state structs) MAY omit empty scalar values (`""` / zero values) and empty collections (`[]`) via serialization tags (e.g. `omitempty` or `omitzero`) rather than emitting them. Such omissions are a typed view and wire-serialization convenience; the underlying generic fold state remains normative and retains the empty values.
+
 ---
 
 ### Detailed strategy specifications
@@ -200,6 +209,7 @@ strategy requires a spec amendment.
 #### 1. `lww` (Last-Writer-Wins)
 - **Initial state:** `null` / unset (or schema default).
 - **Reduction:** As operations are consumed in total order $L$, if an operation's `body` specifies a value for the field, that value replaces the current state.
+- **Empty scalar writes:** An operation writing an empty scalar value — such as `text: ""` or a person identifier that normalizes to `""` (`spec/identifiers.md` §Person identifiers) — sets the register to `""` in the generic fold map. Unlike set strategies (§5.3, §5.4) where empty elements are dropped from collections, scalar registers retain empty strings in normative generic folded state: setting a scalar to empty is a deliberate edit, distinct from the field never having been written. Typed domain serializations MAY omit empty scalar values (e.g. via `omitempty`) rather than emitting them.
 - **Result:** The value written by the latest operation in $L$ that specified the field.
 - **The value is stored verbatim,** so any JSON type reproduces byte-for-byte through canonical encoding and this strategy imposes no type constraint of its own. A field whose value is `null` makes the whole operation uninterpretable per §7.1: `null` is not a value written, it is a write claimed with no value in it.
 

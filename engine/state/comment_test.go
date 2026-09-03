@@ -1,6 +1,7 @@
 package state_test
 
 import (
+	"encoding/json"
 	"math/rand"
 	"path/filepath"
 	"reflect"
@@ -196,3 +197,83 @@ func TestFoldCommentUnknownOps(t *testing.T) {
 		t.Errorf("unexpected thread UnknownOp: %+v", threads[0].UnknownOps[0])
 	}
 }
+
+func TestFoldCommentEmptyValues(t *testing.T) {
+	baseTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	ops := []codec.Op{
+		{
+			ID: "c-create",
+			Envelope: codec.Envelope{
+				ObjectID:   "c-empty-val",
+				ObjectType: "comment",
+				OpType:     "create",
+				OpVersion:  1,
+				Body:       []byte(`{"subject":{"object_type":"review","object_id":"r-1"},"text":"Initial text"}`),
+			},
+			Author: codec.Identity{When: baseTime},
+		},
+		{
+			ID:      "c-edit",
+			Parents: []string{"c-create"},
+			Envelope: codec.Envelope{
+				ObjectID:   "c-empty-val",
+				ObjectType: "comment",
+				OpType:     "edit",
+				OpVersion:  1,
+				Body:       []byte(`{"text":""}`),
+			},
+			Author: codec.Identity{When: baseTime.Add(time.Minute)},
+		},
+		{
+			ID:      "c-resolve",
+			Parents: []string{"c-edit"},
+			Envelope: codec.Envelope{
+				ObjectID:   "c-empty-val",
+				ObjectType: "comment",
+				OpType:     "resolve",
+				OpVersion:  1,
+				Body:       []byte(`{"resolved":true,"resolved_by":"   "}`),
+			},
+			Author: codec.Identity{When: baseTime.Add(2 * time.Minute)},
+		},
+	}
+
+	c, err := s.FoldComment(ops)
+	if err != nil {
+		t.Fatalf("s.FoldComment failed: %v", err)
+	}
+
+	// 1. Verify in-memory typed values reflect empty strings
+	if c.Text != "" {
+		t.Errorf("expected empty c.Text in memory, got %q", c.Text)
+	}
+	if c.ResolvedBy != "" {
+		t.Errorf("expected empty c.ResolvedBy in memory, got %q", c.ResolvedBy)
+	}
+	if !c.IsResolved() {
+		t.Errorf("expected c.IsResolved() to be true")
+	}
+
+	// 2. Verify JSON serialization omits the empty fields via omitempty tags
+	b, err := json.Marshal(c)
+	if err != nil {
+		t.Fatalf("marshaling comment: %v", err)
+	}
+
+	var rawMap map[string]any
+	if err := json.Unmarshal(b, &rawMap); err != nil {
+		t.Fatalf("unmarshaling comment JSON: %v", err)
+	}
+
+	if _, ok := rawMap["text"]; ok {
+		t.Errorf("expected 'text' field to be omitted from JSON via omitempty, got: %v", rawMap["text"])
+	}
+	if _, ok := rawMap["resolved_by"]; ok {
+		t.Errorf("expected 'resolved_by' field to be omitted from JSON via omitempty, got: %v", rawMap["resolved_by"])
+	}
+	if resolved, ok := rawMap["resolved"].(bool); !ok || !resolved {
+		t.Errorf("expected 'resolved': true in JSON, got: %v", rawMap["resolved"])
+	}
+}
+
