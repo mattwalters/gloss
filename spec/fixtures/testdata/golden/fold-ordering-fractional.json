@@ -1,0 +1,57 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/0123456789abcdef/review",
+      "commit": "17edcd3307639d851dc80867f0750cc8297f5901"
+    },
+    {
+      "name": "refs/writ/fedcba9876543210/review",
+      "commit": "a1c25775b57d501e93bda51b449d45588f8f193d"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/0123456789abcdef/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "5e0a2155bddd5e6ebc9cecacf372774bf4ca30d4",
+          "tree": "3b589236268d311e034afc7ac5c11b7d67e5c264",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create review/r-fractional-order\n",
+          "signed": true
+        },
+        {
+          "sha": "17edcd3307639d851dc80867f0750cc8297f5901",
+          "tree": "6d8c7d5e96b294b183f3a930245e62994ace1852",
+          "parents": [
+            "5e0a2155bddd5e6ebc9cecacf372774bf4ca30d4"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: update review/r-fractional-order\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/fedcba9876543210/review",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "a1c25775b57d501e93bda51b449d45588f8f193d",
+          "tree": "781f961e7ebf6ea39815053585c7b26aa452c3df",
+          "parents": [
+            "5e0a2155bddd5e6ebc9cecacf372774bf4ca30d4"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: update review/r-fractional-order\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

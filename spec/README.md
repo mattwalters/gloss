@@ -23,6 +23,7 @@ disagree, the fixtures win and the prose gets fixed.
 | `anchors.md` | Normative | Content-based comment anchors (v1): the dual-sided anchor object, context capture, re-anchoring and orphaning |
 | `fold.md` | Normative | Fold semantics: the input model, causality-monotone effective time `t*`, the deterministic total order, concurrency rules, the closed per-field merge strategy catalogue, tombstones, and state serialization |
 | `identifiers.md` | Normative | Workspace-global IDs, repo designators, cross-repo references, workspace repo, reference resolution, and person identifiers |
+| `ordering.md` | Normative | Fractional indexing & shared ordering primitive: byte-comparable base-62 strings, canonical form, boundary generation, and op-id tiebreak |
 | `review-ops.md` | Normative | The review family operation vocabulary (v1): review creation, revisions, status transitions, assignments, approvals, and CI statuses |
 | `comments.md` | Normative | Comment op vocabulary (v1): object model, create/edit/delete ops, threading, anchor reference, GitHub shapes |
 | `issue-ops.md` | Normative | The issue family operation vocabulary (v1): issue creation, metadata updates, state transitions, assignments, labels, and cross-references (Appendix B: Linear schema mapping) |
@@ -32,6 +33,7 @@ disagree, the fixtures win and the prose gets fixed.
 | `schemas/op-envelope.schema.json` | Normative | JSON Schema (draft 2020-12) for the payload half of the envelope |
 | `schemas/anchor.schema.json` | Normative | JSON Schema (draft 2020-12) for the anchor object |
 | `schemas/identifiers.schema.json` | Normative | JSON Schema (draft 2020-12) for identifiers, references, and the repo registry |
+| `schemas/ordering.schema.json` | Normative | JSON Schema (draft 2020-12) for the fractional index position key |
 | `schemas/review-ops.schema.json` | Normative | JSON Schema (draft 2020-12) for the review operations family |
 | `schemas/comment.schema.json` | Normative | JSON Schema (draft 2020-12) for comment op payloads |
 | `schemas/issue-ops.schema.json` | Normative | JSON Schema (draft 2020-12) for the issue operations family |
@@ -40,6 +42,7 @@ disagree, the fixtures win and the prose gets fixed.
 | `schemas/repo-ops.schema.json` | Normative | JSON Schema (draft 2020-12) for repository registry operation payloads |
 | `schemas/resolution.schema.json` | Normative | JSON Schema (draft 2020-12) for the resolution outcome object |
 | `testdata/canonicalization/vectors.json` | Normative | Canonicalization test vectors: input → exact canonical bytes, or input → rejection |
+| `testdata/ordering/vectors.json` | Normative | Fractional indexing test vectors: generation across boundaries, canonical validation, and comparison |
 | `testdata/ref-names/vectors.json` | Normative | Ref-naming test vectors (valid/invalid) and pinned refspecs |
 | `testdata/envelopes/` | Normative | Envelope payload instances, valid and invalid; `invalid/index.json` records each expected rejection |
 | `testdata/forward-compat/` | Normative | Forward-compatibility instances (unknown types, future versions, unknown fields) and synthetic reader profile (+ index.json) |
@@ -85,6 +88,7 @@ spec/
 ├── anchors.md              — normative: content-based comment anchors (v1)
 ├── fold.md                 — normative: fold semantics, total order, and merge strategy catalogue
 ├── identifiers.md          — normative: workspace-global IDs, references, workspace repo & person identifiers
+├── ordering.md             — normative: fractional indexing & shared ordering primitive
 ├── review-ops.md           — normative: review family operation vocabulary (v1)
 ├── comments.md             — normative: comment op vocabulary (v1)
 ├── issue-ops.md            — normative: issue family operation vocabulary (v1), Linear mapping (Appendix B)
@@ -98,6 +102,7 @@ spec/
 │   ├── op-envelope.schema.json — draft 2020-12 schema for the op payload
 │   ├── anchor.schema.json  — draft 2020-12 schema for the anchor object
 │   ├── identifiers.schema.json — draft 2020-12 schema for identifiers & references
+│   ├── ordering.schema.json — draft 2020-12 schema for the fractional index position key
 │   ├── review-ops.schema.json  — draft 2020-12 schema for review operations
 │   ├── comment.schema.json — draft 2020-12 schema for comment op payloads
 │   ├── issue-ops.schema.json — draft 2020-12 schema for issue operations
@@ -107,6 +112,7 @@ spec/
 │   └── resolution.schema.json — draft 2020-12 schema for the resolution outcome object
 ├── testdata/
 │   ├── canonicalization/   — encoding vectors (valid and rejected inputs)
+│   ├── ordering/           — fractional indexing test vectors (validation, generation, comparison)
 │   ├── ref-names/          — ref-naming vectors (valid/invalid) and pinned refspecs
 │   ├── envelopes/          — payload instances: valid/ and invalid/ with index.json
 │   ├── forward-compat/     — forward-compatibility test corpus: ops/, reader-profile.json, index.json

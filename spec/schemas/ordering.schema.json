@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://writ.dev/spec/ordering.schema.json",
+  "title": "Writ fractional indexing and ordering primitive (v1)",
+  "description": "Shared ordering primitive: lexicographical base-62 strings with op-id tiebreak. Normative text: spec/ordering.md. additionalProperties is deliberately never false: unknown fields are preserved and ignored.",
+  "$ref": "#/$defs/position",
+  "$defs": {
+    "position": {
+      "type": "string",
+      "pattern": "^[0-9A-Za-z]*[1-9A-Za-z]$",
+      "description": "Fractional index position key: non-empty base-62 ASCII string without trailing '0'."
+    }
+  }
+}

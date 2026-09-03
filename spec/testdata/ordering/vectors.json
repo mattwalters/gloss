@@ -1,0 +1,109 @@
+{
+  "validation": [
+    { "key": "V", "valid": true },
+    { "key": "1", "valid": true },
+    { "key": "a", "valid": true },
+    { "key": "z", "valid": true },
+    { "key": "01", "valid": true },
+    { "key": "0V", "valid": true },
+    { "key": "aV", "valid": true },
+    { "key": "a0V", "valid": true },
+    { "key": "a01", "valid": true },
+    { "key": "zzV", "valid": true },
+    { "key": "0001", "valid": true },
+    { "key": "abcXYZ123", "valid": true },
+    { "key": "", "valid": false, "reason": "empty" },
+    { "key": "0", "valid": false, "reason": "trailing-zero" },
+    { "key": "a0", "valid": false, "reason": "trailing-zero" },
+    { "key": "V0", "valid": false, "reason": "trailing-zero" },
+    { "key": "00", "valid": false, "reason": "trailing-zero" },
+    { "key": "010", "valid": false, "reason": "trailing-zero" },
+    { "key": "a-b", "valid": false, "reason": "invalid-character" },
+    { "key": "a b", "valid": false, "reason": "invalid-character" },
+    { "key": "a_b", "valid": false, "reason": "invalid-character" },
+    { "key": "a.b", "valid": false, "reason": "invalid-character" },
+    { "key": "a!b", "valid": false, "reason": "invalid-character" },
+    { "key": "a/b", "valid": false, "reason": "invalid-character" }
+  ],
+  "generation": [
+    { "name": "empty collection", "before": "", "after": "", "expected": "V" },
+    { "name": "before V", "before": "", "after": "V", "expected": "F" },
+    { "name": "before F", "before": "", "after": "F", "expected": "7" },
+    { "name": "before 1", "before": "", "after": "1", "expected": "0V" },
+    { "name": "before 0V", "before": "", "after": "0V", "expected": "0F" },
+    { "name": "before 01", "before": "", "after": "01", "expected": "00V" },
+    { "name": "after V", "before": "V", "after": "", "expected": "k" },
+    { "name": "after k", "before": "k", "after": "", "expected": "s" },
+    { "name": "after z", "before": "z", "after": "", "expected": "zV" },
+    { "name": "after zV", "before": "zV", "after": "", "expected": "zk" },
+    { "name": "after zz", "before": "zz", "after": "", "expected": "zzV" },
+    { "name": "between a and c", "before": "a", "after": "c", "expected": "b" },
+    { "name": "between a and b", "before": "a", "after": "b", "expected": "aV" },
+    { "name": "between a and aV", "before": "a", "after": "aV", "expected": "aF" },
+    { "name": "between aF and aV", "before": "aF", "after": "aV", "expected": "aN" },
+    { "name": "between aV and b", "before": "aV", "after": "b", "expected": "ak" },
+    { "name": "between a and an", "before": "a", "after": "an", "expected": "aO" },
+    { "name": "between an and b", "before": "an", "after": "b", "expected": "at" },
+    { "name": "between a and a1", "before": "a", "after": "a1", "expected": "a0V" },
+    { "name": "between a0V and a1", "before": "a0V", "after": "a1", "expected": "a0k" },
+    { "name": "between az and b", "before": "az", "after": "b", "expected": "azV" }
+  ],
+  "comparison": [
+    {
+      "name": "different position asc",
+      "pos_a": "a",
+      "op_id_a": "1111111111111111111111111111111111111111",
+      "pos_b": "b",
+      "op_id_b": "1111111111111111111111111111111111111111",
+      "expected": -1
+    },
+    {
+      "name": "different position desc",
+      "pos_a": "b",
+      "op_id_a": "1111111111111111111111111111111111111111",
+      "pos_b": "a",
+      "op_id_b": "1111111111111111111111111111111111111111",
+      "expected": 1
+    },
+    {
+      "name": "same position, tiebreak by op_id asc",
+      "pos_a": "aV",
+      "op_id_a": "1111111111111111111111111111111111111111",
+      "pos_b": "aV",
+      "op_id_b": "2222222222222222222222222222222222222222",
+      "expected": -1
+    },
+    {
+      "name": "same position, tiebreak by op_id desc",
+      "pos_a": "aV",
+      "op_id_a": "2222222222222222222222222222222222222222",
+      "pos_b": "aV",
+      "op_id_b": "1111111111111111111111111111111111111111",
+      "expected": 1
+    },
+    {
+      "name": "identical position and op_id",
+      "pos_a": "aV",
+      "op_id_a": "1111111111111111111111111111111111111111",
+      "pos_b": "aV",
+      "op_id_b": "1111111111111111111111111111111111111111",
+      "expected": 0
+    },
+    {
+      "name": "position dominates over op_id",
+      "pos_a": "a",
+      "op_id_a": "ffffffffffffffffffffffffffffffffffffffff",
+      "pos_b": "a0V",
+      "op_id_b": "0000000000000000000000000000000000000000",
+      "expected": -1
+    },
+    {
+      "name": "prefix position ordering",
+      "pos_a": "a0V",
+      "op_id_a": "ffffffffffffffffffffffffffffffffffffffff",
+      "pos_b": "a1",
+      "op_id_b": "0000000000000000000000000000000000000000",
+      "expected": -1
+    }
+  ]
+}
