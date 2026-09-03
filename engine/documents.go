@@ -185,11 +185,12 @@ func (d *Documents) Update(ctx context.Context, id string, edit DocumentEdit) er
 		return err
 	}
 
+	frontier, err := target.projection.Frontier(id)
+	if err != nil {
+		return fmt.Errorf("writ: get frontier: %w", err)
+	}
+
 	if edit.Title != nil {
-		frontier, err := target.projection.Frontier(id)
-		if err != nil {
-			return fmt.Errorf("writ: get frontier: %w", err)
-		}
 		bodyBytes, err := json.Marshal(map[string]any{"title": *edit.Title})
 		if err != nil {
 			return fmt.Errorf("writ: marshal update body: %w", err)
@@ -201,16 +202,14 @@ func (d *Documents) Update(ctx context.Context, id string, edit DocumentEdit) er
 			OpVersion:  1,
 			Body:       bodyBytes,
 		}
-		if _, err := target.dagStore.Append(ctx, env, frontier); err != nil {
+		newTip, err := target.dagStore.Append(ctx, env, frontier)
+		if err != nil {
 			return fmt.Errorf("writ: append document update: %w", err)
 		}
+		frontier = []string{newTip.ID}
 	}
 
 	if edit.Labels != nil {
-		frontier, err := target.projection.Frontier(id)
-		if err != nil {
-			return fmt.Errorf("writ: get frontier: %w", err)
-		}
 		body := make(map[string]any)
 		if len(edit.Labels.Add) > 0 {
 			body["add"] = edit.Labels.Add
@@ -333,30 +332,60 @@ func (d *Documents) AddSection(ctx context.Context, docID string, ns NewSection)
 		pos = ns.Position
 	} else if ns.After != "" || ns.Before != "" {
 		var afterPos, beforePos string
-		if ns.After != "" {
-			found := false
-			for _, s := range docRes.Sections {
+		if ns.After != "" && ns.Before != "" {
+			afterIdx := -1
+			beforeIdx := -1
+			for i, s := range docRes.Sections {
 				if s.ObjectID == ns.After {
+					afterIdx = i
 					afterPos = s.Section.Position
-					found = true
-					break
+				}
+				if s.ObjectID == ns.Before {
+					beforeIdx = i
+					beforePos = s.Section.Position
 				}
 			}
-			if !found {
+			if afterIdx == -1 {
 				return "", fmt.Errorf("writ: section %s not found in document", ns.After)
 			}
-		}
-		if ns.Before != "" {
-			found := false
-			for _, s := range docRes.Sections {
-				if s.ObjectID == ns.Before {
-					beforePos = s.Section.Position
-					found = true
+			if beforeIdx == -1 {
+				return "", fmt.Errorf("writ: section %s not found in document", ns.Before)
+			}
+		} else if ns.After != "" {
+			afterIdx := -1
+			for i, s := range docRes.Sections {
+				if s.ObjectID == ns.After {
+					afterIdx = i
+					afterPos = s.Section.Position
 					break
 				}
 			}
-			if !found {
+			if afterIdx == -1 {
+				return "", fmt.Errorf("writ: section %s not found in document", ns.After)
+			}
+			for j := afterIdx + 1; j < len(docRes.Sections); j++ {
+				if docRes.Sections[j].Section.Position > afterPos {
+					beforePos = docRes.Sections[j].Section.Position
+					break
+				}
+			}
+		} else if ns.Before != "" {
+			beforeIdx := -1
+			for i, s := range docRes.Sections {
+				if s.ObjectID == ns.Before {
+					beforeIdx = i
+					beforePos = s.Section.Position
+					break
+				}
+			}
+			if beforeIdx == -1 {
 				return "", fmt.Errorf("writ: section %s not found in document", ns.Before)
+			}
+			for j := beforeIdx - 1; j >= 0; j-- {
+				if docRes.Sections[j].Section.Position < beforePos {
+					afterPos = docRes.Sections[j].Section.Position
+					break
+				}
 			}
 		}
 		var bErr error
@@ -472,6 +501,9 @@ func (d *Documents) MoveSection(ctx context.Context, sectionID string, afterID, 
 	if afterID == "" && beforeID == "" {
 		return fmt.Errorf("writ: at least one of after or before must be specified to move section")
 	}
+	if afterID == sectionID || beforeID == sectionID {
+		return fmt.Errorf("writ: cannot move section relative to itself")
+	}
 
 	if err := target.maybeAutoRefresh(ctx); err != nil {
 		return fmt.Errorf("writ: auto refresh: %w", err)
@@ -487,31 +519,68 @@ func (d *Documents) MoveSection(ctx context.Context, sectionID string, afterID, 
 		return err
 	}
 
-	var afterPos, beforePos string
-	if afterID != "" {
-		found := false
-		for _, s := range doc.Sections {
-			if s.ObjectID == afterID {
-				afterPos = s.Section.Position
-				found = true
-				break
-			}
-		}
-		if !found {
-			return fmt.Errorf("writ: section %s not found in document", afterID)
+	var remaining []SectionResult
+	for _, s := range doc.Sections {
+		if s.ObjectID != sectionID {
+			remaining = append(remaining, s)
 		}
 	}
-	if beforeID != "" {
-		found := false
-		for _, s := range doc.Sections {
+
+	var afterPos, beforePos string
+	if afterID != "" && beforeID != "" {
+		afterIdx := -1
+		beforeIdx := -1
+		for i, s := range remaining {
+			if s.ObjectID == afterID {
+				afterIdx = i
+				afterPos = s.Section.Position
+			}
 			if s.ObjectID == beforeID {
+				beforeIdx = i
 				beforePos = s.Section.Position
-				found = true
+			}
+		}
+		if afterIdx == -1 {
+			return fmt.Errorf("writ: section %s not found in document", afterID)
+		}
+		if beforeIdx == -1 {
+			return fmt.Errorf("writ: section %s not found in document", beforeID)
+		}
+	} else if afterID != "" {
+		afterIdx := -1
+		for i, s := range remaining {
+			if s.ObjectID == afterID {
+				afterIdx = i
+				afterPos = s.Section.Position
 				break
 			}
 		}
-		if !found {
+		if afterIdx == -1 {
+			return fmt.Errorf("writ: section %s not found in document", afterID)
+		}
+		for j := afterIdx + 1; j < len(remaining); j++ {
+			if remaining[j].Section.Position > afterPos {
+				beforePos = remaining[j].Section.Position
+				break
+			}
+		}
+	} else if beforeID != "" {
+		beforeIdx := -1
+		for i, s := range remaining {
+			if s.ObjectID == beforeID {
+				beforeIdx = i
+				beforePos = s.Section.Position
+				break
+			}
+		}
+		if beforeIdx == -1 {
 			return fmt.Errorf("writ: section %s not found in document", beforeID)
+		}
+		for j := beforeIdx - 1; j >= 0; j-- {
+			if remaining[j].Section.Position < beforePos {
+				afterPos = remaining[j].Section.Position
+				break
+			}
 		}
 	}
 

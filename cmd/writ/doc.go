@@ -337,7 +337,11 @@ func runDocShow(ctx context.Context, defaultDir string, args []string, stdout, s
 		}
 		secTitle := sec.Section.Title
 		if secTitle == "" {
-			secTitle = fmt.Sprintf("Section %s", sec.ObjectID[:8])
+			shortID := sec.ObjectID
+			if len(shortID) > 8 {
+				shortID = shortID[:8]
+			}
+			secTitle = fmt.Sprintf("Section %s", shortID)
 		}
 		fmt.Fprintf(stdout, "## %s\n\n", secTitle)
 
@@ -715,6 +719,7 @@ func runDocSectionAdd(ctx context.Context, defaultDir string, args []string, std
 
 type docSectionEditOpts struct {
 	dir      string
+	title    string
 	message  string
 	file     string
 	jsonMode bool
@@ -724,6 +729,7 @@ func newDocSectionEditFlagSet(defaultDir string) (*flag.FlagSet, *docSectionEdit
 	fs := flag.NewFlagSet("doc section edit", flag.ContinueOnError)
 	opts := &docSectionEditOpts{}
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in <dir>")
+	fs.StringVar(&opts.title, "t", "", "Section title")
 	fs.StringVar(&opts.message, "m", "", "New section body")
 	fs.StringVar(&opts.file, "F", "", "Read new section body from file ('-' for stdin)")
 	fs.BoolVar(&opts.jsonMode, "json", false, "Output machine-readable JSON")
@@ -760,8 +766,8 @@ func runDocSectionEdit(ctx context.Context, defaultDir string, args []string, st
 		fmt.Fprintf(stderr, "writ doc section edit: %v\n", err)
 		return 2
 	}
-	if opts.message == "" && opts.file == "" {
-		fmt.Fprintln(stderr, "writ doc section edit: -m or -F is required")
+	if opts.title == "" && opts.message == "" && opts.file == "" {
+		fmt.Fprintln(stderr, "writ doc section edit: at least one of -t, -m, or -F is required")
 		fs.Usage()
 		return 2
 	}
@@ -782,8 +788,16 @@ func runDocSectionEdit(ctx context.Context, defaultDir string, args []string, st
 		return renderErr(stderr, err)
 	}
 
-	if err := store.Documents.EditSection(ctx, secID, body); err != nil {
-		return renderErr(stderr, err)
+	if opts.title != "" {
+		if err := store.Documents.UpdateSection(ctx, secID, writ.SectionEdit{Title: &opts.title}); err != nil {
+			return renderErr(stderr, err)
+		}
+	}
+
+	if opts.message != "" || opts.file != "" {
+		if err := store.Documents.EditSection(ctx, secID, body); err != nil {
+			return renderErr(stderr, err)
+		}
 	}
 
 	if opts.jsonMode {

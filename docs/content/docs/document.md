@@ -66,9 +66,10 @@ writ doc section add 01J8ABC -t "Specification" -F spec.md --after 01J8SEC
 
 ### section edit
 
-Update an existing section's body text. Committing a new body observes prior heads and resolves any existing edit conflicts.
+Update an existing section's title or body text. Committing a new body observes prior heads and resolves any existing edit conflicts.
 
 ```bash
+writ doc section edit 01J8SEC -t "New Title"
 writ doc section edit 01J8SEC -m "Updated section body text."
 writ doc section edit 01J8SEC -F updated_spec.md
 ```

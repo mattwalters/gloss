@@ -329,3 +329,172 @@ func TestDocumentsSectionConcurrencyAndResolution(t *testing.T) {
 		t.Errorf("SettledBody = %q, want 'Resolved content'", secRes.Section.SettledBody())
 	}
 }
+
+func TestAddSectionAndMoveSectionBounding(t *testing.T) {
+	ctx := context.Background()
+	repoDir, _ := setupConfiguredRepo(t)
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	docID, err := s.Documents.Create(ctx, writ.NewDocument{
+		Title: "Ordering Test Document",
+	})
+	if err != nil {
+		t.Fatalf("Create doc: %v", err)
+	}
+
+	secA, err := s.Documents.AddSection(ctx, docID, writ.NewSection{Title: "A", Body: "Body A"})
+	if err != nil {
+		t.Fatalf("Add A: %v", err)
+	}
+	secB, err := s.Documents.AddSection(ctx, docID, writ.NewSection{Title: "B", Body: "Body B"})
+	if err != nil {
+		t.Fatalf("Add B: %v", err)
+	}
+	secC, err := s.Documents.AddSection(ctx, docID, writ.NewSection{Title: "C", Body: "Body C"})
+	if err != nil {
+		t.Fatalf("Add C: %v", err)
+	}
+
+	// 1. Add section D after A (without before). It must be placed between A and B, not after C.
+	secD, err := s.Documents.AddSection(ctx, docID, writ.NewSection{Title: "D", Body: "Body D", After: secA})
+	if err != nil {
+		t.Fatalf("Add D after A: %v", err)
+	}
+
+	docRes, err := s.Query.Document(docID)
+	if err != nil {
+		t.Fatalf("Query doc: %v", err)
+	}
+	wantOrder := []string{secA, secD, secB, secC}
+	if len(docRes.Sections) != len(wantOrder) {
+		t.Fatalf("Sections count = %d, want %d", len(docRes.Sections), len(wantOrder))
+	}
+	for i, wantID := range wantOrder {
+		if docRes.Sections[i].ObjectID != wantID {
+			t.Errorf("Section[%d] = %s (%s), want %s", i, docRes.Sections[i].ObjectID, docRes.Sections[i].Section.Title, wantID)
+		}
+	}
+
+	// 2. Add section E before B (without after). In [A, D, B, C], it must be placed between D and B.
+	secE, err := s.Documents.AddSection(ctx, docID, writ.NewSection{Title: "E", Body: "Body E", Before: secB})
+	if err != nil {
+		t.Fatalf("Add E before B: %v", err)
+	}
+
+	docRes, err = s.Query.Document(docID)
+	if err != nil {
+		t.Fatalf("Query doc: %v", err)
+	}
+	wantOrder = []string{secA, secD, secE, secB, secC}
+	for i, wantID := range wantOrder {
+		if docRes.Sections[i].ObjectID != wantID {
+			t.Errorf("Section[%d] = %s (%s), want %s", i, docRes.Sections[i].ObjectID, docRes.Sections[i].Section.Title, wantID)
+		}
+	}
+
+	// 3. Move C after D (without before). Current order: [A, D, E, B, C].
+	// Moving C after D should place C between D and E: [A, D, C, E, B].
+	if err := s.Documents.MoveSection(ctx, secC, secD, ""); err != nil {
+		t.Fatalf("Move C after D: %v", err)
+	}
+
+	docRes, err = s.Query.Document(docID)
+	if err != nil {
+		t.Fatalf("Query doc: %v", err)
+	}
+	wantOrder = []string{secA, secD, secC, secE, secB}
+	for i, wantID := range wantOrder {
+		if docRes.Sections[i].ObjectID != wantID {
+			t.Errorf("After move C, Section[%d] = %s (%s), want %s", i, docRes.Sections[i].ObjectID, docRes.Sections[i].Section.Title, wantID)
+		}
+	}
+
+	// 4. Move B before C (without after). Current order: [A, D, C, E, B].
+	// Moving B before C should place B between D and C: [A, D, B, C, E].
+	if err := s.Documents.MoveSection(ctx, secB, "", secC); err != nil {
+		t.Fatalf("Move B before C: %v", err)
+	}
+
+	docRes, err = s.Query.Document(docID)
+	if err != nil {
+		t.Fatalf("Query doc: %v", err)
+	}
+	wantOrder = []string{secA, secD, secB, secC, secE}
+	for i, wantID := range wantOrder {
+		if docRes.Sections[i].ObjectID != wantID {
+			t.Errorf("After move B, Section[%d] = %s (%s), want %s", i, docRes.Sections[i].ObjectID, docRes.Sections[i].Section.Title, wantID)
+		}
+	}
+
+	// 5. Move relative to self should error
+	if err := s.Documents.MoveSection(ctx, secB, secB, ""); err == nil {
+		t.Errorf("expected error moving section relative to itself, got nil")
+	}
+	if err := s.Documents.MoveSection(ctx, secB, "", secB); err == nil {
+		t.Errorf("expected error moving section relative to itself, got nil")
+	}
+}
+
+func TestDocumentUpdateLinearFrontier(t *testing.T) {
+	ctx := context.Background()
+	repoDir, _ := setupConfiguredRepo(t)
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	docID, err := s.Documents.Create(ctx, writ.NewDocument{
+		Title: "Initial Title",
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	newTitle := "Updated Title"
+	if err := s.Documents.Update(ctx, docID, writ.DocumentEdit{
+		Title:  &newTitle,
+		Labels: &writ.DocumentLabelEdit{Add: []string{"rfc"}},
+	}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	enumRes, err := writ.StoreDAGStore(s).Enumerate()
+	if err != nil {
+		t.Fatalf("Enumerate: %v", err)
+	}
+
+	var updateOp, labelOp codec.Op
+	for _, op := range enumRes.Ops[docID] {
+		if op.OpType == "update" {
+			updateOp = op
+		} else if op.OpType == "label" {
+			labelOp = op
+		}
+	}
+
+	if updateOp.ID == "" {
+		t.Fatalf("expected update op in dagStore, found none")
+	}
+	if labelOp.ID == "" {
+		t.Fatalf("expected label op in dagStore, found none")
+	}
+
+	foundParent := false
+	for _, p := range labelOp.Parents {
+		if p == updateOp.ID {
+			foundParent = true
+			break
+		}
+	}
+	if !foundParent {
+		t.Errorf("labelOp.Parents = %v, want to contain updateOp.ID %s", labelOp.Parents, updateOp.ID)
+	}
+}
+

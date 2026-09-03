@@ -752,16 +752,18 @@ var docSectionAddCmd = &command{
 
 var docSectionEditCmd = &command{
 	Name:      "edit",
-	Short:     "Edit a section body",
-	UsageLine: "Usage: writ doc section edit [-C <dir>] <section-id> [-m <body> | -F <file>] [--json]",
-	Long:      "Update a section's body, resolving any existing edit conflicts.",
+	Short:     "Edit a section title or body",
+	UsageLine: "Usage: writ doc section edit [-C <dir>] <section-id> [-t <title>] [-m <body> | -F <file>] [--json]",
+	Long:      "Update a section's title or body, resolving any existing edit conflicts.",
 	Flags: []flagSpec{
 		{Name: "C", Arg: "<dir>", Usage: "Run as if writ was started in <dir>"},
+		{Name: "t", Arg: "<title>", Usage: "Section title"},
 		{Name: "m", Arg: "<body>", Usage: "New section body"},
 		{Name: "F", Arg: "<file>", Usage: "Read new body from file ('-' for stdin)"},
 		{Name: "json", Usage: "Output machine-readable JSON"},
 	},
 	Examples: []string{
+		`writ doc section edit 01J8SEC -t "New Title"`,
 		`writ doc section edit 01J8SEC -m "Updated section text"`,
 		`writ doc section edit 01J8SEC -F draft.md`,
 	},

@@ -8,6 +8,9 @@ import (
 	"testing"
 
 	"github.com/writtendev/writ/cmd/writ/internal/wire"
+	"github.com/writtendev/writ/engine/codec"
+	"github.com/writtendev/writ/engine/dag"
+	"github.com/writtendev/writ/engine/identity"
 )
 
 func TestDoc_CLI_Commands(t *testing.T) {
@@ -128,15 +131,27 @@ func TestDoc_CLI_Commands(t *testing.T) {
 		t.Fatalf("doc section move failed with %d; stderr: %s", code, stderr.String())
 	}
 
-	// 9. writ doc section edit
+	// 9. writ doc section edit: test updating title only via -t
 	stdout.Reset()
 	stderr.Reset()
 	code = run(context.Background(), []string{
 		"doc", "section", "edit", "-C", env.repoDir, sec1ID,
+		"-t", "Motivation & Background",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("doc section edit -t failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	// Also test editing both -t and -m
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"doc", "section", "edit", "-C", env.repoDir, sec1ID,
+		"-t", "Motivation",
 		"-m", "Updated motivation text.",
 	}, &stdout, &stderr)
 	if code != 0 {
-		t.Fatalf("doc section edit failed with %d; stderr: %s", code, stderr.String())
+		t.Fatalf("doc section edit -t -m failed with %d; stderr: %s", code, stderr.String())
 	}
 
 	// 10. writ doc show
@@ -192,5 +207,62 @@ func TestDoc_CLI_Commands(t *testing.T) {
 	}
 	if strings.Contains(stdout.String(), "## Design") {
 		t.Fatalf("deleted section still present in doc show: %s", stdout.String())
+	}
+}
+
+func TestDocShow_UntitledShortSectionID(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("writ init failed with %d; stderr: %s", code, stderr.String())
+	}
+	commitFile(t, env.repoDir, "README.md", "# Hello", "initial commit")
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"doc", "create", "-C", env.repoDir,
+		"-t", "Doc With Short Section ID",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("doc create failed with %d; stderr: %s", code, stderr.String())
+	}
+	docID := strings.TrimSpace(stdout.String())
+
+	ident, err := identity.Load(context.Background(), env.repoDir)
+	if err != nil {
+		t.Fatalf("identity.Load: %v", err)
+	}
+	dagStore, err := dag.Open(env.repoDir, ident)
+	if err != nil {
+		t.Fatalf("dag.Open: %v", err)
+	}
+	bodyBytes, _ := json.Marshal(map[string]any{
+		"document_id": docID,
+		"position":    "a1",
+		"body":        "Short object ID section body.",
+	})
+	secEnv := codec.Envelope{
+		ObjectID:   "sec-1",
+		ObjectType: "section",
+		OpType:     "create",
+		OpVersion:  1,
+		Body:       bodyBytes,
+	}
+	if _, err := dagStore.Append(context.Background(), secEnv, nil); err != nil {
+		t.Fatalf("dagStore.Append: %v", err)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"doc", "show", "-C", env.repoDir, docID}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("doc show failed with %d; stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "## Section sec-1") {
+		t.Fatalf("expected '## Section sec-1' in output, got:\n%s", stdout.String())
 	}
 }
