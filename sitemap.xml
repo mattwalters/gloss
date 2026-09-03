@@ -46,6 +46,8 @@
   </url><url>
     <loc>/spec/signing/</loc>
   </url><url>
+    <loc>/spec/workflow-state-ops/</loc>
+  </url><url>
     <loc>/cli/</loc>
   </url><url>
     <loc>/docs/</loc>
