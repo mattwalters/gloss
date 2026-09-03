@@ -55,6 +55,7 @@ func TestHelp_Command(t *testing.T) {
 			{"issue", "assign"},
 			{"issue", "list"},
 			{"issue", "link"},
+			{"issue", "label"},
 		}
 
 		for _, sc := range subcmds {
@@ -121,6 +122,8 @@ func TestHelp_FlagsRouting(t *testing.T) {
 		{"issue", "list", "--help"},
 		{"issue", "link", "-h"},
 		{"issue", "link", "--help"},
+		{"issue", "label", "-h"},
+		{"issue", "label", "--help"},
 		{"review", "-h"},
 		{"review", "--help"},
 		{"review", "open", "-h"},

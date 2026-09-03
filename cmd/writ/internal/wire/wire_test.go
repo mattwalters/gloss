@@ -267,3 +267,47 @@ func TestWire_CommentThreadMapping(t *testing.T) {
 	}
 }
 
+func TestWire_FromIssueLabels(t *testing.T) {
+	// 1. With labels
+	wl := wire.FromIssueLabels("iss-1", []string{"bug", "urgent"})
+	if wl.ObjectID != "iss-1" {
+		t.Errorf("expected ObjectID 'iss-1', got %q", wl.ObjectID)
+	}
+	if len(wl.Labels) != 2 || wl.Labels[0] != "bug" || wl.Labels[1] != "urgent" {
+		t.Errorf("unexpected labels: %v", wl.Labels)
+	}
+
+	env := wire.Envelope{
+		SchemaVersion: wire.CurrentSchemaVersion,
+		Kind:          wire.KindIssueLabel,
+		Data:          wl,
+	}
+	b, err := json.Marshal(env)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	jsonStr := string(b)
+	if !strings.Contains(jsonStr, `"kind":"issue.label"`) {
+		t.Errorf("expected kind 'issue.label', got: %s", jsonStr)
+	}
+	if !strings.Contains(jsonStr, `"labels":["bug","urgent"]`) {
+		t.Errorf("expected serialized labels, got: %s", jsonStr)
+	}
+
+	// 2. Nil labels must serialize as []
+	wlEmpty := wire.FromIssueLabels("iss-2", nil)
+	envEmpty := wire.Envelope{
+		SchemaVersion: wire.CurrentSchemaVersion,
+		Kind:          wire.KindIssueLabel,
+		Data:          wlEmpty,
+	}
+	bEmpty, err := json.Marshal(envEmpty)
+	if err != nil {
+		t.Fatalf("json.Marshal empty failed: %v", err)
+	}
+	jsonEmptyStr := string(bEmpty)
+	if !strings.Contains(jsonEmptyStr, `"labels":[]`) {
+		t.Errorf("expected empty labels to serialize as [], got: %s", jsonEmptyStr)
+	}
+}
+

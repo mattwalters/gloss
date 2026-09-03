@@ -190,6 +190,18 @@ func TestGolden_IssueStatus_LinksAndUnknownOps(t *testing.T) {
 	compareOrUpdateGolden(t, "issue_status_links.json", stdout.Bytes())
 }
 
+func TestGolden_IssueLabel(t *testing.T) {
+	repoDir := loadFixtureRepo(t, "issue-concurrent-triage")
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"issue", "label", "-C", repoDir, "i-concurrent", "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue label --json failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	compareOrUpdateGolden(t, "issue_labels.json", stdout.Bytes())
+}
+
 func TestGolden_SyncStatus(t *testing.T) {
 	_, aliceDir, _ := setupSyncTestHarness(t)
 	ctx := context.Background()
@@ -255,6 +267,7 @@ func TestDeterminism_AllReadVerbs(t *testing.T) {
 		{"review", "status", "-C", repoDir, "r-mixed", "--json"},
 		{"issue", "list", "-C", issueRepoDir, "--json"},
 		{"issue", "status", "-C", issueRepoDir, "i-concurrent", "--json"},
+		{"issue", "label", "-C", issueRepoDir, "i-concurrent", "--json"},
 	}
 
 	for _, cmd := range readCommands {
@@ -285,6 +298,7 @@ func TestEveryReadVerbHasJSON(t *testing.T) {
 		{name: "review status", args: []string{"review", "status", "-h"}},
 		{name: "issue list", args: []string{"issue", "list", "-h"}},
 		{name: "issue status", args: []string{"issue", "status", "-h"}},
+		{name: "issue label", args: []string{"issue", "label", "-h"}},
 		{name: "sync", args: []string{"sync", "-h"}},
 	}
 

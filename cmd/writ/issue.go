@@ -60,6 +60,8 @@ func runIssue(ctx context.Context, defaultDir string, args []string, stdout, std
 		return runIssueList(ctx, targetDir, args[1:], stdout, stderr)
 	case "link":
 		return runIssueLink(ctx, targetDir, args[1:], stdout, stderr)
+	case "label":
+		return runIssueLabel(ctx, targetDir, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "writ issue: unknown subcommand %q\n\n", args[0])
 		renderUsage(stderr, []string{"issue"}, issueCmd)
@@ -603,5 +605,102 @@ func runIssueLink(ctx context.Context, defaultDir string, args []string, stdout,
 	}
 
 	fmt.Fprintf(stdout, "%s: link %s -> %s\n", issueID, opts.relation, opts.target)
+	return 0
+}
+
+type issueLabelOpts struct {
+	dir      string
+	add      stringSliceFlag
+	remove   stringSliceFlag
+	jsonMode bool
+}
+
+func newIssueLabelFlagSet(defaultDir string) (*flag.FlagSet, *issueLabelOpts) {
+	fs := flag.NewFlagSet("issue label", flag.ContinueOnError)
+	opts := &issueLabelOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
+	fs.Var(&opts.add, "add", "Add label `<l>` (repeatable)")
+	fs.Var(&opts.remove, "remove", "Remove label `<l>` (repeatable)")
+	fs.BoolVar(&opts.jsonMode, "json", false, "Output result as JSON")
+	fs.Usage = func() {
+		renderUsage(fs.Output(), []string{"issue", "label"}, issueLabelCmd)
+	}
+	return fs, opts
+}
+
+func runIssueLabel(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+	fs, opts := newIssueLabelFlagSet(defaultDir)
+	fs.SetOutput(stderr)
+
+	posArgs, err := parseArgs(fs, args)
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+
+	if len(posArgs) == 0 || posArgs[0] == "" {
+		fmt.Fprintln(stderr, "writ issue label: issue ID is required")
+		fs.Usage()
+		return 2
+	}
+	if len(posArgs) > 1 {
+		fmt.Fprintf(stderr, "writ issue label: unexpected arguments: %s\n", strings.Join(posArgs[1:], " "))
+		fs.Usage()
+		return 2
+	}
+
+	targetDir := opts.dir
+	if targetDir == "" {
+		targetDir = "."
+	}
+
+	store, err := openStore(targetDir)
+	if err != nil {
+		return renderErr(stderr, err)
+	}
+	defer store.Close()
+
+	issueID, err := resolveIssueID(ctx, store, posArgs[0])
+	if err != nil {
+		return renderErr(stderr, err)
+	}
+
+	if len(opts.add) == 0 && len(opts.remove) == 0 {
+		res, err := store.Query.Issue(issueID)
+		if err != nil {
+			return renderErr(stderr, err)
+		}
+		if opts.jsonMode {
+			if err := emitJSON(stdout, wire.KindIssueLabel, wire.FromIssueLabels(issueID, res.Issue.Labels)); err != nil {
+				fmt.Fprintf(stderr, "writ issue label: marshal json: %v\n", err)
+				return 1
+			}
+			return 0
+		}
+		for _, l := range res.Issue.Labels {
+			fmt.Fprintln(stdout, l)
+		}
+		return 0
+	}
+
+	if err := store.Issues.Label(ctx, issueID, opts.add, opts.remove); err != nil {
+		return renderErr(stderr, err)
+	}
+
+	if opts.jsonMode {
+		res, err := store.Query.Issue(issueID)
+		if err != nil {
+			return renderErr(stderr, err)
+		}
+		if err := emitJSON(stdout, wire.KindIssueLabel, wire.FromIssueLabels(issueID, res.Issue.Labels)); err != nil {
+			fmt.Fprintf(stderr, "writ issue label: marshal json: %v\n", err)
+			return 1
+		}
+		return 0
+	}
+
+	fmt.Fprintf(stdout, "%s: updated labels\n", issueID)
 	return 0
 }

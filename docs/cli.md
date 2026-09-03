@@ -15,6 +15,7 @@ slug: "cli"
 - [`writ issue assign`](#writ-issue-assign)
 - [`writ issue list`](#writ-issue-list)
 - [`writ issue link`](#writ-issue-link)
+- [`writ issue label`](#writ-issue-label)
 - [`writ review open`](#writ-review-open)
 - [`writ review comment`](#writ-review-comment)
 - [`writ review approve`](#writ-review-approve)
@@ -204,6 +205,36 @@ Manage issue cross-reference links.
 ```bash
 writ issue link 01J8ABC -target 01J8DEF -relation fixes
 writ issue link 01J8ABC -target other-repo#01J8DEF -relation relates
+```
+
+### `writ issue label`
+
+Add or remove issue labels
+
+#### Synopsis
+
+```console
+Usage: writ issue label [-C <dir>] <id> [-add <l>]... [-remove <l>]... [--json]
+```
+
+#### Description
+
+Add or remove issue labels.
+
+#### Flags
+
+- `-C <dir>`: Run as if writ was started in <dir>
+- `-add <l>`: Add label <l> (repeatable)
+- `-remove <l>`: Remove label <l> (repeatable)
+- `-json`: Output result as JSON
+
+#### Examples
+
+```bash
+writ issue label 01J8ABC
+writ issue label 01J8ABC -add bug
+writ issue label 01J8ABC -remove duplicate
+writ issue label 01J8ABC --json
 ```
 
 ### `writ review open`

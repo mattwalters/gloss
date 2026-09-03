@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -838,7 +839,7 @@ func TestIssue_ErrorSurfaces(t *testing.T) {
 }
 
 func TestIssue_HelpAndUsage(t *testing.T) {
-	for _, subcmd := range []string{"create", "status", "assign", "list", "link"} {
+	for _, subcmd := range []string{"create", "status", "assign", "list", "link", "label"} {
 		var stdout, stderr bytes.Buffer
 		code := run(context.Background(), []string{"issue", subcmd, "-h"}, &stdout, &stderr)
 		if code != 0 {
@@ -848,4 +849,222 @@ func TestIssue_HelpAndUsage(t *testing.T) {
 			t.Errorf("issue %s -h missing usage in output", subcmd)
 		}
 	}
+}
+
+func TestIssue_Label(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("writ init failed: %s", stderr.String())
+	}
+
+	commitFile(t, env.repoDir, "README.md", "# Hello", "initial commit")
+
+	// 1. Create an issue
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "create", "-C", env.repoDir,
+		"-title", "Issue for label tests",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue create failed: %s", stderr.String())
+	}
+	createOut := strings.TrimSpace(stdout.String())
+	issueID := strings.Split(createOut, " ")[0]
+	shortID := issueID[:8]
+
+	// 2. View labels on an issue with no labels (human and --json)
+	t.Run("view_empty", func(t *testing.T) {
+		stdout.Reset()
+		stderr.Reset()
+		code := run(context.Background(), []string{"issue", "label", "-C", env.repoDir, issueID}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("issue label view empty failed with %d; stderr: %s", code, stderr.String())
+		}
+		if strings.TrimSpace(stdout.String()) != "" {
+			t.Errorf("expected empty stdout for issue with no labels, got: %q", stdout.String())
+		}
+
+		stdout.Reset()
+		stderr.Reset()
+		code = run(context.Background(), []string{"issue", "label", "-C", env.repoDir, issueID, "--json"}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("issue label --json view empty failed with %d; stderr: %s", code, stderr.String())
+		}
+		var envJSON struct {
+			SchemaVersion int `json:"schema_version"`
+			Kind          string `json:"kind"`
+			Data          struct {
+				ObjectID string   `json:"object_id"`
+				Labels   []string `json:"labels"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(stdout.Bytes(), &envJSON); err != nil {
+			t.Fatalf("unmarshal json output: %v; raw: %s", err, stdout.String())
+		}
+		if envJSON.Kind != "issue.label" {
+			t.Errorf("expected kind 'issue.label', got %q", envJSON.Kind)
+		}
+		if envJSON.Data.ObjectID != issueID {
+			t.Errorf("expected object_id %q, got %q", issueID, envJSON.Data.ObjectID)
+		}
+		if len(envJSON.Data.Labels) != 0 {
+			t.Errorf("expected empty labels array, got: %v", envJSON.Data.Labels)
+		}
+	})
+
+	// 3. Add multiple labels using repeated -add
+	t.Run("add_labels", func(t *testing.T) {
+		stdout.Reset()
+		stderr.Reset()
+		code := run(context.Background(), []string{
+			"issue", "label", "-C", env.repoDir, issueID,
+			"-add", "frontend", "-add", "bug",
+		}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("issue label add failed: %s", stderr.String())
+		}
+		if !strings.Contains(stdout.String(), "updated labels") {
+			t.Errorf("expected stdout to mention updated labels, got: %s", stdout.String())
+		}
+	})
+
+	// 4. View labels verifying presence and sorted order (human and --json)
+	t.Run("view_sorted_labels", func(t *testing.T) {
+		stdout.Reset()
+		stderr.Reset()
+		code := run(context.Background(), []string{"issue", "label", "-C", env.repoDir, issueID}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("issue label view failed: %s", stderr.String())
+		}
+		lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+		if len(lines) != 2 || lines[0] != "bug" || lines[1] != "frontend" {
+			t.Errorf("expected labels [bug, frontend], got: %v", lines)
+		}
+
+		stdout.Reset()
+		stderr.Reset()
+		code = run(context.Background(), []string{"issue", "label", "-C", env.repoDir, issueID, "--json"}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("issue label view --json failed: %s", stderr.String())
+		}
+		var envJSON struct {
+			Kind string `json:"kind"`
+			Data struct {
+				ObjectID string   `json:"object_id"`
+				Labels   []string `json:"labels"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(stdout.Bytes(), &envJSON); err != nil {
+			t.Fatalf("unmarshal json output: %v", err)
+		}
+		if len(envJSON.Data.Labels) != 2 || envJSON.Data.Labels[0] != "bug" || envJSON.Data.Labels[1] != "frontend" {
+			t.Errorf("expected json labels [bug, frontend], got: %v", envJSON.Data.Labels)
+		}
+	})
+
+	// 5. Prefix resolution with short issue ID
+	t.Run("prefix_resolution", func(t *testing.T) {
+		stdout.Reset()
+		stderr.Reset()
+		code := run(context.Background(), []string{"issue", "label", "-C", env.repoDir, shortID}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("issue label with short ID failed: %s", stderr.String())
+		}
+		lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+		if len(lines) != 2 || lines[0] != "bug" || lines[1] != "frontend" {
+			t.Errorf("expected labels [bug, frontend], got: %v", lines)
+		}
+	})
+
+	// 6. Remove and add labels concurrently
+	t.Run("concurrent_add_and_remove", func(t *testing.T) {
+		stdout.Reset()
+		stderr.Reset()
+		code := run(context.Background(), []string{
+			"issue", "label", "-C", env.repoDir, issueID,
+			"-remove", "bug", "-add", "documentation",
+		}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("issue label update failed: %s", stderr.String())
+		}
+		if !strings.Contains(stdout.String(), "updated labels") {
+			t.Errorf("expected stdout to mention updated labels, got: %s", stdout.String())
+		}
+
+		stdout.Reset()
+		stderr.Reset()
+		code = run(context.Background(), []string{"issue", "label", "-C", env.repoDir, issueID}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("issue label view after update failed: %s", stderr.String())
+		}
+		lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+		if len(lines) != 2 || lines[0] != "documentation" || lines[1] != "frontend" {
+			t.Errorf("expected labels [documentation, frontend], got: %v", lines)
+		}
+	})
+
+	// 7. Mutation with --json flag
+	t.Run("mutation_with_json", func(t *testing.T) {
+		stdout.Reset()
+		stderr.Reset()
+		code := run(context.Background(), []string{
+			"issue", "label", "-C", env.repoDir, issueID,
+			"-add", "api", "--json",
+		}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("issue label mutation --json failed: %s", stderr.String())
+		}
+		var envJSON struct {
+			Kind string `json:"kind"`
+			Data struct {
+				ObjectID string   `json:"object_id"`
+				Labels   []string `json:"labels"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(stdout.Bytes(), &envJSON); err != nil {
+			t.Fatalf("unmarshal json: %v", err)
+		}
+		if len(envJSON.Data.Labels) != 3 || envJSON.Data.Labels[0] != "api" || envJSON.Data.Labels[1] != "documentation" || envJSON.Data.Labels[2] != "frontend" {
+			t.Errorf("expected labels [api, documentation, frontend], got: %v", envJSON.Data.Labels)
+		}
+	})
+
+	// 8. Validation and error cases
+	t.Run("validation_errors", func(t *testing.T) {
+		// Missing issue ID
+		stdout.Reset()
+		stderr.Reset()
+		code := run(context.Background(), []string{"issue", "label", "-C", env.repoDir}, &stdout, &stderr)
+		if code != 2 {
+			t.Errorf("expected exit code 2 for missing issue ID, got %d", code)
+		}
+		if !strings.Contains(stderr.String(), "issue ID is required") {
+			t.Errorf("expected 'issue ID is required' in stderr, got: %s", stderr.String())
+		}
+
+		// Unexpected arguments
+		stdout.Reset()
+		stderr.Reset()
+		code = run(context.Background(), []string{"issue", "label", "-C", env.repoDir, issueID, "unexpected"}, &stdout, &stderr)
+		if code != 2 {
+			t.Errorf("expected exit code 2 for unexpected arguments, got %d", code)
+		}
+		if !strings.Contains(stderr.String(), "unexpected arguments") {
+			t.Errorf("expected 'unexpected arguments' in stderr, got: %s", stderr.String())
+		}
+
+		// Nonexistent issue ID
+		stdout.Reset()
+		stderr.Reset()
+		nonexistentID := "00000000000000000000000000000000"
+		code = run(context.Background(), []string{"issue", "label", "-C", env.repoDir, nonexistentID}, &stdout, &stderr)
+		if code == 0 {
+			t.Errorf("expected nonzero exit code for nonexistent issue ID, got %d", code)
+		}
+	})
 }

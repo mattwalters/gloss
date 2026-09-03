@@ -3,7 +3,7 @@ title: "writ issue"
 weight: 40
 ---
 
-Manage issues: create, list, check status, assign, and link.
+Manage issues: create, list, check status, assign, link, and label.
 
 ## create
 
@@ -24,3 +24,7 @@ Add or remove issue assignees.
 ## link
 
 Manage cross-reference links between issues and other objects.
+
+## label
+
+Add or remove issue labels, or view the current labels on an issue.
