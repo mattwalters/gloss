@@ -2,7 +2,6 @@ package writ_test
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"github.com/writtendev/writ/engine"
@@ -162,60 +161,6 @@ func TestSettingsSetAndGet(t *testing.T) {
 	}
 	if sett2.EstimateScale != "t-shirt" {
 		t.Errorf("EstimateScale = %q, want 't-shirt'", sett2.EstimateScale)
-	}
-}
-
-func TestSettingsWorkspaceRouting(t *testing.T) {
-	ctx := context.Background()
-
-	// 1. Setup workspace repo
-	wsDir, _ := setupConfiguredRepo(t)
-	wsStore, err := writ.Open(wsDir, writ.WithSigner(dummySigner()))
-	if err != nil {
-		t.Fatalf("Open workspace repo failed: %v", err)
-	}
-	defer wsStore.Close()
-
-	// 2. Setup project repo linked to workspace repo
-	projDir, _ := setupConfiguredRepo(t)
-	relPath, err := filepath.Rel(projDir, wsDir)
-	if err != nil {
-		t.Fatalf("Rel path failed: %v", err)
-	}
-	runGitCmd(t, projDir, "config", "writ.workspace", relPath)
-
-	projStore, err := writ.Open(projDir, writ.WithSigner(dummySigner()))
-	if err != nil {
-		t.Fatalf("Open project repo failed: %v", err)
-	}
-	defer projStore.Close()
-
-	// 3. Set settings via project repo
-	name := "Workspace via Project"
-	id := "PROJ"
-	if err := projStore.Settings.Set(ctx, writ.SettingsEdit{
-		Name:       &name,
-		Identifier: &id,
-	}); err != nil {
-		t.Fatalf("Settings.Set via project store failed: %v", err)
-	}
-
-	// 4. Verify settings updated in workspace repo
-	wsSett, err := wsStore.Settings.Get(ctx)
-	if err != nil {
-		t.Fatalf("Settings.Get on workspace store failed: %v", err)
-	}
-	if wsSett.Name != "Workspace via Project" || wsSett.Identifier != "PROJ" {
-		t.Errorf("unexpected settings in workspace store: %+v", wsSett)
-	}
-
-	// 5. Verify query via project repo returns the workspace settings
-	projSett, err := projStore.Settings.Get(ctx)
-	if err != nil {
-		t.Fatalf("Settings.Get on project store failed: %v", err)
-	}
-	if projSett.Name != "Workspace via Project" || projSett.Identifier != "PROJ" {
-		t.Errorf("unexpected settings in project store: %+v", projSett)
 	}
 }
 

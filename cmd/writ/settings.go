@@ -138,7 +138,7 @@ func newSettingsSetFlagSet(defaultDir string) (*flag.FlagSet, *settingsSetOpts) 
 	opts := &settingsSetOpts{}
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in <dir>")
 	fs.BoolVar(&opts.jsonMode, "json", false, "Output machine-readable JSON")
-	fs.StringVar(&opts.name, "name", "", "Workspace display name")
+	fs.StringVar(&opts.name, "name", "", "Repository display name")
 	fs.StringVar(&opts.identifier, "identifier", "", "Issue identifier prefix")
 	fs.StringVar(&opts.timezone, "timezone", "", "IANA timezone identifier")
 	fs.StringVar(&opts.estimateScale, "estimate-scale", "", "Estimate scale (none, fibonacci, exponential, linear, t-shirt)")
@@ -262,6 +262,6 @@ func runSettingsSet(ctx context.Context, defaultDir string, args []string, stdou
 		return 0
 	}
 
-	fmt.Fprintln(stdout, "Updated workspace settings.")
+	fmt.Fprintln(stdout, "Updated repository settings.")
 	return 0
 }

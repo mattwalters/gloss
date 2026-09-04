@@ -10,7 +10,7 @@ import (
 	"github.com/writtendev/writ/engine/state"
 )
 
-// SettingsEdit specifies fields for updating workspace settings.
+// SettingsEdit specifies fields for updating repository settings.
 // Any non-nil field will be updated; nil fields are omitted from the operation body,
 // preserving untouched fields and unknown keys.
 type SettingsEdit struct {
@@ -27,28 +27,23 @@ type SettingsEdit struct {
 	CustomFields       map[string]any `json:"-"`
 }
 
-// SettingsService provides workspace settings retrieval and updates.
+// SettingsService provides repository settings retrieval and updates.
 type SettingsService struct {
 	store *Store
 }
 
-func (s *SettingsService) targetStore(ctx context.Context) (*Store, bool, error) {
+// target returns the store these settings operate on. Settings home in the
+// repository the client was opened on; there is no routing elsewhere.
+func (s *SettingsService) target() (*Store, error) {
 	if s == nil || s.store == nil {
-		return nil, false, fmt.Errorf("writ: store is nil")
+		return nil, fmt.Errorf("writ: store is nil")
 	}
-	if s.store.Workspace != nil && s.store.Workspace.IsConfigured() {
-		wsStore, err := s.store.Workspace.getStore(ctx)
-		if err != nil {
-			return nil, false, err
-		}
-		return wsStore, true, nil
-	}
-	return s.store, false, nil
+	return s.store, nil
 }
 
-// Get fetches the current folded workspace settings, returning defaults if no settings ops exist.
+// Get fetches the current folded settings, returning defaults if no settings ops exist.
 func (s *SettingsService) Get(ctx context.Context) (Settings, error) {
-	target, _, err := s.targetStore(ctx)
+	target, err := s.target()
 	if err != nil {
 		return Settings{}, err
 	}
@@ -59,9 +54,9 @@ func (s *SettingsService) Get(ctx context.Context) (Settings, error) {
 	return res.Settings, nil
 }
 
-// Set modifies workspace settings by appending a 'set' op to refs/writ/<writer-id>/settings.
+// Set modifies settings by appending a 'set' op to refs/writ/<writer-id>/settings.
 func (s *SettingsService) Set(ctx context.Context, edit SettingsEdit) error {
-	target, _, err := s.targetStore(ctx)
+	target, err := s.target()
 	if err != nil {
 		return err
 	}

@@ -968,7 +968,7 @@ writ label migrate --json
 
 ### `writ settings get`
 
-View workspace settings
+View repository settings
 
 #### Synopsis
 
@@ -978,7 +978,7 @@ Usage: writ settings get [-C <dir>] [--json]
 
 #### Description
 
-Display the current workspace settings in tabular format or as machine-readable JSON.
+Display the current repository settings in tabular format or as machine-readable JSON.
 
 #### Flags
 
@@ -994,7 +994,7 @@ writ settings get --json
 
 ### `writ settings set`
 
-Update workspace settings
+Update repository settings
 
 #### Synopsis
 
@@ -1004,13 +1004,13 @@ Usage: writ settings set [-C <dir>] [-name <name>] [-identifier <id>] [-timezone
 
 #### Description
 
-Update one or more workspace configuration settings. Untouched settings and unknown keys are preserved.
+Update one or more repository configuration settings. Untouched settings and unknown keys are preserved.
 
 #### Flags
 
 - `-C string`: Run as if writ was started in <dir>
 - `-json`: Output machine-readable JSON
-- `-name string`: Workspace display name
+- `-name string`: Repository display name
 - `-identifier string`: Issue identifier prefix
 - `-timezone string`: IANA timezone identifier
 - `-estimate-scale string`: Estimate scale (none, fibonacci, exponential, linear, t-shirt)
@@ -1024,7 +1024,7 @@ Update one or more workspace configuration settings. Untouched settings and unkn
 #### Examples
 
 ```bash
-writ settings set --name "My Workspace" --identifier WRIT
+writ settings set --name "Writ" --identifier WRIT
 writ settings set --estimate-scale t-shirt --timezone America/New_York
 writ settings set --cycles-enabled=true --cycle-duration 3
 ```

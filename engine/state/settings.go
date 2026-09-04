@@ -9,10 +9,10 @@ import (
 )
 
 // DefaultSettingsObjectID is the well-known canonical 32-character hexadecimal
-// object ID for workspace-level settings ("00000000000000000000000073657474").
+// object ID for repository settings ("00000000000000000000000073657474").
 const DefaultSettingsObjectID = "00000000000000000000000073657474"
 
-// Settings represents the materialized state of workspace-level settings (v1),
+// Settings represents the materialized state of repository settings (v1),
 // produced by FoldSettings.
 type Settings struct {
 	ObjectID           string         `json:"object_id"`
@@ -30,7 +30,7 @@ type Settings struct {
 	UnknownOps         []UnknownOp    `json:"unknown_ops,omitempty"`
 }
 
-// DefaultSettings returns the default configuration for a workspace that has
+// DefaultSettings returns the default configuration for a repository that has
 // never written a settings operation.
 func DefaultSettings() Settings {
 	return Settings{

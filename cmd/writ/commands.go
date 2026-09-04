@@ -639,9 +639,9 @@ var labelMigrateCmd = &command{
 
 var settingsCmd = &command{
 	Name:      "settings",
-	Short:     "Manage workspace configuration settings",
+	Short:     "Manage repository configuration settings",
 	UsageLine: "Usage: writ settings [-C <dir>] <subcommand> [arguments]",
-	Long:      "View and update workspace configuration settings (estimate scale, timezone, cycle cadence).",
+	Long:      "View and update repository configuration settings (estimate scale, timezone, cycle cadence).",
 	Flags: []flagSpec{
 		{
 			Name:  "C",
@@ -657,9 +657,9 @@ var settingsCmd = &command{
 
 var settingsGetCmd = &command{
 	Name:      "get",
-	Short:     "View workspace settings",
+	Short:     "View repository settings",
 	UsageLine: "Usage: writ settings get [-C <dir>] [--json]",
-	Long:      "Display the current workspace settings in tabular format or as machine-readable JSON.",
+	Long:      "Display the current repository settings in tabular format or as machine-readable JSON.",
 	Flags: []flagSpec{
 		{Name: "C"},
 		{Name: "json"},
@@ -672,16 +672,16 @@ var settingsGetCmd = &command{
 
 var settingsSetCmd = &command{
 	Name:      "set",
-	Short:     "Update workspace settings",
+	Short:     "Update repository settings",
 	UsageLine: "Usage: writ settings set [-C <dir>] [-name <name>] [-identifier <id>] [-timezone <tz>] [-estimate-scale <scale>] [-allow-zero-estimates <bool>] [-cycles-enabled <bool>] [-cycle-duration <weeks>] [-cycle-start-day <day>] [-cycle-cooldown <weeks>] [-triage-enabled <bool>] [--json]",
-	Long:      "Update one or more workspace configuration settings. Untouched settings and unknown keys are preserved.",
+	Long:      "Update one or more repository configuration settings. Untouched settings and unknown keys are preserved.",
 	Flags: []flagSpec{
 		{Name: "C"},
 		{Name: "json"},
 		{
 			Name:  "name",
 			Arg:   "<name>",
-			Usage: "Workspace display name",
+			Usage: "Repository display name",
 		},
 		{
 			Name:  "identifier",
@@ -731,7 +731,7 @@ var settingsSetCmd = &command{
 		},
 	},
 	Examples: []string{
-		`writ settings set --name "My Workspace" --identifier WRIT`,
+		`writ settings set --name "Writ" --identifier WRIT`,
 		`writ settings set --estimate-scale t-shirt --timezone America/New_York`,
 		`writ settings set --cycles-enabled=true --cycle-duration 3`,
 	},
