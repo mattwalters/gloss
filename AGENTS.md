@@ -30,6 +30,16 @@ stubs alone. Same pattern as the rest of the studio.
 - The spec is the conformance fixtures, not the prose. A change to fold
   behaviour, the op envelope, or canonical encoding lands as one atomic
   change touching spec text, fixtures, and implementation together.
+- Nothing has shipped: no tags, no users, no external implementations.
+  Until v0.1.0 there is nothing to be compatible with, so backward
+  compatibility is 100% tech debt — no tolerance shims, no migration
+  paths, no fixtures pinning a form the format never released. When a
+  decision supersedes an earlier one, delete what it replaced instead of
+  bridging to it, and state the consequence plainly. `spec/identifiers.md`
+  §"A bare identifier is invalid" is the standard to match. This changes
+  the day we tag a release; until then, "tolerate the old form" is never
+  the answer. Forward compatibility (unknown types and fields preserved
+  and ignored) is a different thing and stays.
 - Fold is pure and deterministic: ops in, state out, no I/O. Keep it
   that way — it is the part that has to be boring and correct.
 - The SQLite projection is a droppable cache, never a source of truth.
