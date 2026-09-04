@@ -200,3 +200,53 @@ func TestReffoldEmptyScalars(t *testing.T) {
 	}
 }
 
+func TestReffoldLegacyUnattributedResolve(t *testing.T) {
+	rules, err := spec.FieldRules()
+	if err != nil {
+		t.Fatalf("spec.FieldRules: %v", err)
+	}
+
+	ops := []spec.MergeOp{
+		{
+			ID:        "c-create",
+			Time:      1767225600,
+			ObjectID:  "c-legacy-reffold",
+			OpType:    "create",
+			OpVersion: 1,
+			Body: map[string]any{
+				"subject": map[string]any{
+					"object_type": "review",
+					"object_id":   "r-1",
+				},
+				"text": "Initial text",
+			},
+		},
+		{
+			ID:        "c-resolve-legacy",
+			Parents:   []string{"c-create"},
+			Time:      1767225660,
+			ObjectID:  "c-legacy-reffold",
+			OpType:    "resolve",
+			OpVersion: 1,
+			Body: map[string]any{
+				"resolved": true,
+			},
+		},
+	}
+
+	res, err := spec.Fold(ops, rules)
+	if err != nil {
+		t.Fatalf("spec.Fold failed: %v", err)
+	}
+
+	if val, ok := res.State["resolved"]; !ok {
+		t.Errorf("expected 'resolved' in spec.Fold state")
+	} else if val != true {
+		t.Errorf("expected 'resolved' to be true, got %v", val)
+	}
+
+	if val, ok := res.State["resolved_by"]; ok && val != "" {
+		t.Errorf("expected 'resolved_by' to be empty or unset, got %v", val)
+	}
+}
+

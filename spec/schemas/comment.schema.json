@@ -146,10 +146,30 @@
         },
         "resolved_by": {
           "$ref": "https://writ.dev/spec/identifiers.schema.json#/$defs/person-id",
-          "description": "Optional scheme-prefixed person identifier (email:alice@example.com, user:alice) recording who resolved the thread, not who last changed the resolution state. Optional even when resolved is true; an unresolve op (resolved false) SHOULD omit it so the recorded resolver is preserved."
+          "description": "Scheme-prefixed person identifier (email:alice@example.com, user:alice) recording who resolved the thread. Required when resolved is true; MUST NOT be present when resolved is false."
         }
       },
       "required": ["resolved"],
+      "allOf": [
+        {
+          "if": {
+            "properties": { "resolved": { "const": true } }
+          },
+          "then": {
+            "required": ["resolved_by"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "resolved": { "const": false } }
+          },
+          "then": {
+            "not": {
+              "required": ["resolved_by"]
+            }
+          }
+        }
+      ],
       "additionalProperties": true
     }
   }

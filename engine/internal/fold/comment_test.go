@@ -315,3 +315,45 @@ func TestFoldCommentGenericEmptyScalars(t *testing.T) {
 	}
 }
 
+func TestFoldCommentLegacyUnattributedResolve(t *testing.T) {
+	baseTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	ops := []codec.Op{
+		{
+			ID: "c-create",
+			Envelope: codec.Envelope{
+				ObjectID:   "c-legacy",
+				ObjectType: "comment",
+				OpType:     "create",
+				OpVersion:  1,
+				Body:       []byte(`{"subject":{"object_type":"review","object_id":"r-1"},"text":"Initial text"}`),
+			},
+			Author: codec.Identity{When: baseTime},
+		},
+		{
+			ID:      "c-resolve-legacy",
+			Parents: []string{"c-create"},
+			Envelope: codec.Envelope{
+				ObjectID:   "c-legacy",
+				ObjectType: "comment",
+				OpType:     "resolve",
+				OpVersion:  1,
+				Body:       []byte(`{"resolved":true}`),
+			},
+			Author: codec.Identity{When: baseTime.Add(time.Minute)},
+		},
+	}
+
+	cf, err := fold.FoldComment(ops)
+	if err != nil {
+		t.Fatalf("FoldComment failed: %v", err)
+	}
+
+	if cf.Resolved == nil || *cf.Resolved != true {
+		t.Fatalf("expected Resolved to be &true, got %+v", cf.Resolved)
+	}
+	if cf.ResolvedBy != "" {
+		t.Errorf("expected ResolvedBy to be empty string for legacy resolve, got %q", cf.ResolvedBy)
+	}
+}
+

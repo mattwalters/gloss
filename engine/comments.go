@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/writtendev/writ/engine/codec"
 )
@@ -120,6 +121,15 @@ func (c *Comments) Resolve(ctx context.Context, id string, res CommentResolve) e
 	}
 	if id == "" {
 		return fmt.Errorf("writ: comment id cannot be empty")
+	}
+	if res.Resolved {
+		if strings.TrimSpace(res.ResolvedBy) == "" {
+			return fmt.Errorf("writ: comment resolve requires resolved_by")
+		}
+	} else {
+		if strings.TrimSpace(res.ResolvedBy) != "" {
+			return fmt.Errorf("writ: comment unresolve must not carry resolved_by")
+		}
 	}
 
 	if err := c.store.maybeAutoRefresh(ctx); err != nil {
