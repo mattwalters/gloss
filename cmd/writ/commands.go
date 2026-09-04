@@ -42,6 +42,7 @@ var rootCommand = &command{
 	Subs: []*command{
 		initCmd,
 		commentCmd,
+		docCmd,
 		issueCmd,
 		reviewCmd,
 		stateCmd,
@@ -603,6 +604,202 @@ var labelMigrateCmd = &command{
 	},
 }
 
+var docCmd = &command{
+	Name:      "doc",
+	Short:     "Manage collaborative documents and sections",
+	UsageLine: "Usage: writ doc [-C <dir>] <subcommand> [arguments]",
+	Long:      "Manage collaborative documents, sections, ordering, and cross-references.",
+	Flags: []flagSpec{
+		{
+			Name:  "C",
+			Arg:   "<dir>",
+			Usage: "Run as if writ was started in <dir>",
+		},
+	},
+	Subs: []*command{
+		docCreateCmd,
+		docListCmd,
+		docShowCmd,
+		docEditCmd,
+		docLinkCmd,
+		docSectionCmd,
+	},
+}
+
+var docCreateCmd = &command{
+	Name:      "create",
+	Short:     "Create a document",
+	UsageLine: "Usage: writ doc create [-C <dir>] [-t <title>] [--link <target:relation>] [--label <l>] [--json]",
+	Long:      "Create a new collaborative document object.",
+	Flags: []flagSpec{
+		{Name: "C", Arg: "<dir>", Usage: "Run as if writ was started in <dir>"},
+		{Name: "t", Arg: "<title>", Usage: "Document title"},
+		{Name: "link", Arg: "<target:rel>", Usage: "Link in target:relation[:type] format", Repeatable: true},
+		{Name: "label", Arg: "<label>", Usage: "Label to attach", Repeatable: true},
+		{Name: "json", Usage: "Output machine-readable JSON"},
+	},
+	Examples: []string{
+		`writ doc create -t "RFC: Collaborative SDLC"`,
+		`writ doc create -t "Design Doc" --link issue-42:plan --label architecture --json`,
+	},
+}
+
+var docListCmd = &command{
+	Name:      "list",
+	Short:     "List documents",
+	UsageLine: "Usage: writ doc list [-C <dir>] [--label <l>] [--json]",
+	Long:      "List documents.",
+	Flags: []flagSpec{
+		{Name: "C", Arg: "<dir>", Usage: "Run as if writ was started in <dir>"},
+		{Name: "label", Arg: "<label>", Usage: "Filter by label", Repeatable: true},
+		{Name: "json", Usage: "Output machine-readable JSON"},
+	},
+	Examples: []string{
+		"writ doc list",
+		"writ doc list --label rfc --json",
+	},
+}
+
+var docShowCmd = &command{
+	Name:      "show",
+	Short:     "Show document details and sections",
+	UsageLine: "Usage: writ doc show [-C <dir>] <id> [--json]",
+	Long:      "Display document metadata and ordered sections, including visual markers for any conflicted section bodies.",
+	Flags: []flagSpec{
+		{Name: "C", Arg: "<dir>", Usage: "Run as if writ was started in <dir>"},
+		{Name: "json", Usage: "Output machine-readable JSON"},
+	},
+	Examples: []string{
+		"writ doc show 01J8ABC",
+		"writ doc show 01J8ABC --json",
+	},
+}
+
+var docEditCmd = &command{
+	Name:      "edit",
+	Short:     "Edit document metadata",
+	UsageLine: "Usage: writ doc edit [-C <dir>] <id> [-t <title>] [--label <l>] [--remove-label <l>] [--json]",
+	Long:      "Update document title or labels.",
+	Flags: []flagSpec{
+		{Name: "C", Arg: "<dir>", Usage: "Run as if writ was started in <dir>"},
+		{Name: "t", Arg: "<title>", Usage: "New title"},
+		{Name: "label", Arg: "<label>", Usage: "Add label", Repeatable: true},
+		{Name: "remove-label", Arg: "<label>", Usage: "Remove label", Repeatable: true},
+		{Name: "json", Usage: "Output machine-readable JSON"},
+	},
+	Examples: []string{
+		`writ doc edit 01J8ABC -t "RFC: Architecture (Updated)"`,
+		`writ doc edit 01J8ABC --label approved --remove-label draft`,
+	},
+}
+
+var docLinkCmd = &command{
+	Name:      "link",
+	Short:     "Attach a link to a document",
+	UsageLine: "Usage: writ doc link [-C <dir>] <id> --target <target> --relation <relation> [--target-type <type>] [--json]",
+	Long:      "Attach or update a cross-reference link on a document.",
+	Flags: []flagSpec{
+		{Name: "C", Arg: "<dir>", Usage: "Run as if writ was started in <dir>"},
+		{Name: "target", Arg: "<target>", Usage: "Target entity identifier"},
+		{Name: "relation", Arg: "<relation>", Usage: "Relationship predicate"},
+		{Name: "target-type", Arg: "<type>", Usage: "Optional target type"},
+		{Name: "json", Usage: "Output machine-readable JSON"},
+	},
+	Examples: []string{
+		"writ doc link 01J8ABC --target issue-105 --relation implementation-plan",
+	},
+}
+
+var docSectionCmd = &command{
+	Name:      "section",
+	Short:     "Manage document sections (add, edit, move, delete)",
+	UsageLine: "Usage: writ doc section [-C <dir>] <subcommand> [arguments]",
+	Long:      "Manage sections within collaborative documents.",
+	Flags: []flagSpec{
+		{
+			Name:  "C",
+			Arg:   "<dir>",
+			Usage: "Run as if writ was started in <dir>",
+		},
+	},
+	Subs: []*command{
+		docSectionAddCmd,
+		docSectionEditCmd,
+		docSectionMoveCmd,
+		docSectionDeleteCmd,
+	},
+}
+
+var docSectionAddCmd = &command{
+	Name:      "add",
+	Short:     "Add a section to a document",
+	UsageLine: "Usage: writ doc section add [-C <dir>] <doc-id> [-t <title>] [-m <body> | -F <file>] [--after <id>] [--before <id>] [--json]",
+	Long:      "Create and append or position a new section in a document.",
+	Flags: []flagSpec{
+		{Name: "C", Arg: "<dir>", Usage: "Run as if writ was started in <dir>"},
+		{Name: "t", Arg: "<title>", Usage: "Section title"},
+		{Name: "m", Arg: "<body>", Usage: "Section body content"},
+		{Name: "F", Arg: "<file>", Usage: "Read body from file ('-' for stdin)"},
+		{Name: "after", Arg: "<id>", Usage: "Insert after section ID"},
+		{Name: "before", Arg: "<id>", Usage: "Insert before section ID"},
+		{Name: "json", Usage: "Output machine-readable JSON"},
+	},
+	Examples: []string{
+		`writ doc section add 01J8ABC -t "Overview" -m "This document describes..."`,
+		`writ doc section add 01J8ABC -t "Specification" -F spec.md --after 01J8SEC`,
+	},
+}
+
+var docSectionEditCmd = &command{
+	Name:      "edit",
+	Short:     "Edit a section title or body",
+	UsageLine: "Usage: writ doc section edit [-C <dir>] <section-id> [-t <title>] [-m <body> | -F <file>] [--json]",
+	Long:      "Update a section's title or body, resolving any existing edit conflicts.",
+	Flags: []flagSpec{
+		{Name: "C", Arg: "<dir>", Usage: "Run as if writ was started in <dir>"},
+		{Name: "t", Arg: "<title>", Usage: "Section title"},
+		{Name: "m", Arg: "<body>", Usage: "New section body"},
+		{Name: "F", Arg: "<file>", Usage: "Read new body from file ('-' for stdin)"},
+		{Name: "json", Usage: "Output machine-readable JSON"},
+	},
+	Examples: []string{
+		`writ doc section edit 01J8SEC -t "New Title"`,
+		`writ doc section edit 01J8SEC -m "Updated section text"`,
+		`writ doc section edit 01J8SEC -F draft.md`,
+	},
+}
+
+var docSectionMoveCmd = &command{
+	Name:      "move",
+	Short:     "Move a section relative to siblings",
+	UsageLine: "Usage: writ doc section move [-C <dir>] <section-id> [--after <id>] [--before <id>] [--json]",
+	Long:      "Reorder a section by establishing a new fractional position between siblings.",
+	Flags: []flagSpec{
+		{Name: "C", Arg: "<dir>", Usage: "Run as if writ was started in <dir>"},
+		{Name: "after", Arg: "<id>", Usage: "Move after section ID"},
+		{Name: "before", Arg: "<id>", Usage: "Move before section ID"},
+		{Name: "json", Usage: "Output machine-readable JSON"},
+	},
+	Examples: []string{
+		"writ doc section move 01J8SEC --after 01J8FIRST",
+		"writ doc section move 01J8SEC --before 01J8LAST",
+	},
+}
+
+var docSectionDeleteCmd = &command{
+	Name:      "delete",
+	Short:     "Delete a section",
+	UsageLine: "Usage: writ doc section delete [-C <dir>] <section-id> [--json]",
+	Long:      "Soft-delete (tombstone) a section from its parent document.",
+	Flags: []flagSpec{
+		{Name: "C", Arg: "<dir>", Usage: "Run as if writ was started in <dir>"},
+		{Name: "json", Usage: "Output machine-readable JSON"},
+	},
+	Examples: []string{
+		"writ doc section delete 01J8SEC",
+	},
+}
+
 var syncCmd = &command{
 	Name:      "sync",
 	Short:     "Synchronize operations with git remotes",
@@ -691,14 +888,23 @@ func init() {
 		"review link":    func() *flag.FlagSet { fs, _ := newReviewLinkFlagSet(""); return fs },
 		"review status":  func() *flag.FlagSet { fs, _ := newReviewStatusFlagSet(""); return fs },
 		"review list":    func() *flag.FlagSet { fs, _ := newReviewListFlagSet(""); return fs },
-		"state list":     func() *flag.FlagSet { fs, _ := newStateListFlagSet(""); return fs },
-		"state create":   func() *flag.FlagSet { fs, _ := newStateCreateFlagSet(""); return fs },
-		"state update":   func() *flag.FlagSet { fs, _ := newStateUpdateFlagSet(""); return fs },
-		"label list":     func() *flag.FlagSet { fs, _ := newLabelListFlagSet(""); return fs },
-		"label create":   func() *flag.FlagSet { fs, _ := newLabelCreateFlagSet(""); return fs },
-		"label edit":     func() *flag.FlagSet { fs, _ := newLabelEditFlagSet(""); return fs },
-		"label migrate":  func() *flag.FlagSet { fs, _ := newLabelMigrateFlagSet(""); return fs },
-		"sync":           func() *flag.FlagSet { fs, _ := newSyncFlagSet(""); return fs },
+		"state list":           func() *flag.FlagSet { fs, _ := newStateListFlagSet(""); return fs },
+		"state create":         func() *flag.FlagSet { fs, _ := newStateCreateFlagSet(""); return fs },
+		"state update":         func() *flag.FlagSet { fs, _ := newStateUpdateFlagSet(""); return fs },
+		"label list":           func() *flag.FlagSet { fs, _ := newLabelListFlagSet(""); return fs },
+		"label create":         func() *flag.FlagSet { fs, _ := newLabelCreateFlagSet(""); return fs },
+		"label edit":           func() *flag.FlagSet { fs, _ := newLabelEditFlagSet(""); return fs },
+		"label migrate":        func() *flag.FlagSet { fs, _ := newLabelMigrateFlagSet(""); return fs },
+		"doc create":           func() *flag.FlagSet { fs, _ := newDocCreateFlagSet(""); return fs },
+		"doc list":             func() *flag.FlagSet { fs, _ := newDocListFlagSet(""); return fs },
+		"doc show":             func() *flag.FlagSet { fs, _ := newDocShowFlagSet(""); return fs },
+		"doc edit":             func() *flag.FlagSet { fs, _ := newDocEditFlagSet(""); return fs },
+		"doc link":             func() *flag.FlagSet { fs, _ := newDocLinkFlagSet(""); return fs },
+		"doc section add":      func() *flag.FlagSet { fs, _ := newDocSectionAddFlagSet(""); return fs },
+		"doc section edit":     func() *flag.FlagSet { fs, _ := newDocSectionEditFlagSet(""); return fs },
+		"doc section move":     func() *flag.FlagSet { fs, _ := newDocSectionMoveFlagSet(""); return fs },
+		"doc section delete":   func() *flag.FlagSet { fs, _ := newDocSectionDeleteFlagSet(""); return fs },
+		"sync":                 func() *flag.FlagSet { fs, _ := newSyncFlagSet(""); return fs },
 	}
 }
 

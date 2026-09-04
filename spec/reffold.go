@@ -747,6 +747,8 @@ func ruleAccepts(r FieldRule, body map[string]any) bool {
 		return ok
 	case "lattice":
 		return isRefString(v)
+	case "multi-value":
+		return isRefString(v)
 	}
 	return true
 }
@@ -1289,6 +1291,56 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 					keyed = append(keyed, map[string]any{"key": e.key, "value": e.value})
 				}
 				state[fieldName] = keyed
+			}
+
+		case "multi-value":
+			type mvWrite struct {
+				opID string
+				val  string
+			}
+			var writes []mvWrite
+			for _, id := range reduceOrder {
+				op := opMap[id]
+				for _, rule := range frs {
+					if opMatchesRule(op, rule) {
+						if raw, ok := op.Body[fieldName]; ok && raw != nil {
+							if s, ok := raw.(string); ok {
+								writes = append(writes, mvWrite{opID: op.ID, val: s})
+							}
+						}
+					}
+				}
+			}
+			if len(writes) > 0 {
+				var maximal []mvWrite
+				for i, w1 := range writes {
+					superseded := false
+					for j, w2 := range writes {
+						if i != j && isAncestor(w1.opID, w2.opID) {
+							superseded = true
+							break
+						}
+					}
+					if !superseded {
+						maximal = append(maximal, w1)
+					}
+				}
+				seen := make(map[string]bool)
+				var vals []any
+				for _, w := range maximal {
+					if !seen[w.val] {
+						seen[w.val] = true
+						vals = append(vals, w.val)
+					}
+				}
+				sort.Slice(vals, func(i, j int) bool {
+					return vals[i].(string) < vals[j].(string)
+				})
+				if len(vals) == 1 {
+					state[fieldName] = vals[0]
+				} else {
+					state[fieldName] = vals
+				}
 			}
 		}
 	}

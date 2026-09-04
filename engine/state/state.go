@@ -209,3 +209,61 @@ type Label struct {
 	Description string      `json:"description,omitempty"`
 	UnknownOps  []UnknownOp `json:"unknown_ops,omitempty"`
 }
+
+// Document represents the materialized state of a document collaborative object (v1),
+// produced by FoldDocument.
+type Document struct {
+	Title      string      `json:"title,omitempty"`
+	Labels     []string    `json:"labels,omitempty"`
+	Links      []Link      `json:"links,omitempty"`
+	UnknownOps []UnknownOp `json:"unknown_ops,omitempty"`
+}
+
+// Section represents the materialized state of a document section collaborative object (v1),
+// produced by FoldSection.
+type Section struct {
+	DocumentID string      `json:"document_id,omitempty"`
+	Position   string      `json:"position,omitempty"`
+	Title      string      `json:"title,omitempty"`
+	Body       any         `json:"body,omitempty"`
+	Deleted    bool        `json:"deleted,omitempty"`
+	UnknownOps []UnknownOp `json:"unknown_ops,omitempty"`
+}
+
+// IsConflicted reports whether the section's body is in a conflicted multi-value state.
+func (s Section) IsConflicted() bool {
+	switch s.Body.(type) {
+	case []string, []any:
+		return true
+	default:
+		return false
+	}
+}
+
+// ConflictBodies returns all conflicting versions of the section body.
+func (s Section) ConflictBodies() []string {
+	switch v := s.Body.(type) {
+	case []string:
+		return v
+	case []any:
+		res := make([]string, len(v))
+		for i, item := range v {
+			if str, ok := item.(string); ok {
+				res[i] = str
+			}
+		}
+		return res
+	case string:
+		return []string{v}
+	default:
+		return nil
+	}
+}
+
+// SettledBody returns the settled body text if not conflicted, or empty string.
+func (s Section) SettledBody() string {
+	if str, ok := s.Body.(string); ok {
+		return str
+	}
+	return ""
+}

@@ -120,6 +120,8 @@ var knownCreateBodies = map[string]string{
 	"repo":           `{"slug":"org/repo"}`,
 	"workflow-state": `{"name":"Todo","position":"V","type":"unstarted"}`,
 	"label":          `{"name":"bug"}`,
+	"document":       `{"title":"Initial"}`,
+	"section":        `{"body":"Initial","document_id":"0123456789abcdef0123456789abcdef","position":"V"}`,
 }
 
 // TestBuildCommitAcceptsUnknownFieldsInEveryVocabulary asserts the producer
@@ -235,6 +237,8 @@ var producerTypos = map[string]string{
 	"repo":           "add-remot",
 	"workflow-state": "creat",
 	"label":          "creat",
+	"document":       "creat",
+	"section":        "mov",
 }
 
 // TestBuildCommitRefusesOpTypesItDoesNotDefine pins producer rule 4
@@ -328,7 +332,16 @@ func TestProducerOpTypesMatchShippedVocabularies(t *testing.T) {
 			t.Fatalf("parse schema %s: %v", file, err)
 		}
 
-		inSchema := constsUnderProperty(doc, "op_type")
+		var inSchema []string
+		if file == "document-ops.schema.json" {
+			if objectType == "document" {
+				inSchema = constsUnderProperty(doc["then"].(map[string]any), "op_type")
+			} else if objectType == "section" {
+				inSchema = constsUnderProperty(doc["else"].(map[string]any), "op_type")
+			}
+		} else {
+			inSchema = constsUnderProperty(doc, "op_type")
+		}
 		if len(inSchema) == 0 {
 			t.Errorf("spec/schemas/%s pins no op_type consts, so this test cannot check the registry against it", file)
 			continue
@@ -481,6 +494,12 @@ func shippedVocabularies(t *testing.T) map[string]string {
 		if entry.Name() == envelopeSchemaFileName || !refsEnvelopeSchema(doc) {
 			// A support schema: op-envelope itself, identifiers, anchor,
 			// resolution. None of them governs an object type.
+			continue
+		}
+
+		if entry.Name() == "document-ops.schema.json" {
+			vocabularies["document"] = entry.Name()
+			vocabularies["section"] = entry.Name()
 			continue
 		}
 

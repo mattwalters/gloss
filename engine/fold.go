@@ -106,3 +106,25 @@ func WorkflowStateRules() []Rule {
 func LabelRules() []Rule {
 	return state.LabelRules()
 }
+
+// FoldDocument executes deterministic fold reduction on an input set of operations
+// for a document collaborative object, returning the materialized Document state.
+func FoldDocument(ops []codec.Op) (Document, error) {
+	return state.FoldDocument(ops)
+}
+
+// FoldSection executes deterministic fold reduction on an input set of operations
+// for a section collaborative object, returning the materialized Section state.
+func FoldSection(ops []codec.Op) (Section, error) {
+	return state.FoldSection(ops)
+}
+
+// DocumentRules returns the built-in field merge rules for the document vocabulary (v1).
+func DocumentRules() []Rule {
+	return state.DocumentRules()
+}
+
+// SectionRules returns the built-in field merge rules for the section vocabulary (v1).
+func SectionRules() []Rule {
+	return state.SectionRules()
+}

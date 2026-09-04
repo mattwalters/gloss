@@ -1,0 +1,43 @@
+{
+  "name": "multi-value-concurrent-edit",
+  "description": "Two concurrent writes to a multi-value register are both preserved and emitted in canonical code unit order",
+  "object_id": "obj-1",
+  "fields": {
+    "body": { "strategy": "multi-value" }
+  },
+  "ops": [
+    {
+      "id": "op-root",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "body": "Initial body"
+      }
+    },
+    {
+      "id": "op-a",
+      "parents": ["op-root"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "body": "Concurrent edit beta"
+      }
+    },
+    {
+      "id": "op-b",
+      "parents": ["op-root"],
+      "time": 300,
+      "object_id": "obj-1",
+      "body": {
+        "body": "Concurrent edit alpha"
+      }
+    }
+  ],
+  "expected_state": {
+    "body": [
+      "Concurrent edit alpha",
+      "Concurrent edit beta"
+    ]
+  }
+}

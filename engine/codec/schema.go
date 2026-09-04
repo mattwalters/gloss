@@ -45,6 +45,8 @@ var vocabularySchemaFiles = map[string]string{
 	"repo":           "repo-ops.schema.json",
 	"workflow-state": "workflow-state-ops.schema.json",
 	"label":          "label-ops.schema.json",
+	"document":       "document-ops.schema.json",
+	"section":        "document-ops.schema.json",
 }
 
 // vocabularyOpTypes maps an object type to the op types this build defines for
@@ -74,6 +76,8 @@ var vocabularyOpTypes = map[string][]string{
 	"repo":           {"add-remote", "create", "set-slug"},
 	"workflow-state": {"create", "update"},
 	"label":          {"create", "update"},
+	"document":       {"create", "label", "link", "update"},
+	"section":        {"create", "delete", "edit", "move", "update"},
 }
 
 // vocabularyOpVersion is the op version this build defines for every object
@@ -112,12 +116,20 @@ var schemasOnce = sync.OnceValue(func() compiledSchemas {
 		return sch
 	}
 
-	add(envelopeSchemaFile)
+	added := make(map[string]bool)
+	addOnce := func(file string) {
+		if !added[file] {
+			added[file] = true
+			add(file)
+		}
+	}
+
+	addOnce(envelopeSchemaFile)
 	for _, file := range supportSchemaFiles {
-		add(file)
+		addOnce(file)
 	}
 	for _, file := range vocabularySchemaFiles {
-		add(file)
+		addOnce(file)
 	}
 
 	vocab := make(map[string]*jsonschema.Schema, len(vocabularySchemaFiles))

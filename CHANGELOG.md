@@ -9,4 +9,5 @@ Each version's section is what GitHub publishes as that release's body.
 ## [Unreleased]
 
 ### Added
+- Document collaborative object type (`document` and `section`), multi-value fold register strategy, fractional section ordering, and CLI porcelain (`writ doc`).
 - Carried `object_type` in `writ.UnknownOp`, `state.UnknownOp`, CLI JSON output, and SQLite projection cache to satisfy forward-compatibility rule `FC-5`.

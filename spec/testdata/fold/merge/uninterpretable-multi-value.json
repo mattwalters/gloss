@@ -1,0 +1,63 @@
+{
+  "name": "uninterpretable-multi-value",
+  "description": "Multi-value register fields reject null, numbers, and arrays as uninterpretable per §7.1, preserving and quarantining them in unknown ops",
+  "object_id": "obj-1",
+  "fields": {
+    "body": { "strategy": "multi-value" }
+  },
+  "ops": [
+    {
+      "id": "op-a-good",
+      "parents": [],
+      "time": 100,
+      "object_id": "obj-1",
+      "body": {
+        "body": "Initial text"
+      }
+    },
+    {
+      "id": "op-b-null",
+      "parents": ["op-a-good"],
+      "time": 200,
+      "object_id": "obj-1",
+      "body": {
+        "body": null
+      }
+    },
+    {
+      "id": "op-c-number",
+      "parents": ["op-b-null"],
+      "time": 300,
+      "object_id": "obj-1",
+      "body": {
+        "body": 42
+      }
+    },
+    {
+      "id": "op-d-array",
+      "parents": ["op-c-number"],
+      "time": 400,
+      "object_id": "obj-1",
+      "body": {
+        "body": ["slice"]
+      }
+    },
+    {
+      "id": "op-e-good",
+      "parents": ["op-d-array"],
+      "time": 500,
+      "object_id": "obj-1",
+      "body": {
+        "body": "Updated text"
+      }
+    }
+  ],
+  "expected_state": {
+    "body": "Updated text"
+  },
+  "expected_unknown_ops": [
+    "op-b-null",
+    "op-c-number",
+    "op-d-array"
+  ]
+}

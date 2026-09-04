@@ -93,6 +93,8 @@ func ruleAccepts(r Rule, body map[string]any) bool {
 		return ok
 	case "lattice":
 		return isString(v)
+	case "multi-value":
+		return isString(v)
 	}
 
 	// An undeclared strategy is not this rule's business: NewAccumulator

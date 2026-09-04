@@ -49,6 +49,15 @@ type (
 	// LabelResult represents a label object along with its authorship and timestamps.
 	LabelResult = projection.LabelResult
 
+	// DocumentFilter specifies filter criteria when querying documents.
+	DocumentFilter = projection.DocumentFilter
+
+	// DocumentResult represents a document object along with its authorship, timestamps, and ordered sections.
+	DocumentResult = projection.DocumentResult
+
+	// SectionResult represents a document section object along with its authorship and timestamps.
+	SectionResult = projection.SectionResult
+
 	// CommentResult represents a comment object along with its authorship, timestamps, and anchor resolutions.
 	CommentResult = projection.CommentResult
 
@@ -301,4 +310,40 @@ func (q *Query) Label(id string) (LabelResult, error) {
 		return LabelResult{}, err
 	}
 	return target.projection.Label(id)
+}
+
+// Documents executes a list and filter query over documents.
+func (q *Query) Documents(f DocumentFilter) ([]DocumentResult, error) {
+	target, err := q.targetStoreForIssues(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if err := target.maybeAutoRefresh(context.Background()); err != nil {
+		return nil, err
+	}
+	return target.projection.Documents(f)
+}
+
+// Document fetches a single document by its object ID, returning ErrNotFound if not found.
+func (q *Query) Document(id string) (DocumentResult, error) {
+	target, err := q.targetStoreForIssues(context.Background())
+	if err != nil {
+		return DocumentResult{}, err
+	}
+	if err := target.maybeAutoRefresh(context.Background()); err != nil {
+		return DocumentResult{}, err
+	}
+	return target.projection.Document(id)
+}
+
+// Section fetches a single document section by its object ID, returning ErrNotFound if not found.
+func (q *Query) Section(id string) (SectionResult, error) {
+	target, err := q.targetStoreForIssues(context.Background())
+	if err != nil {
+		return SectionResult{}, err
+	}
+	if err := target.maybeAutoRefresh(context.Background()); err != nil {
+		return SectionResult{}, err
+	}
+	return target.projection.Section(id)
 }

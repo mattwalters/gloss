@@ -40,14 +40,17 @@ var ErrWorkspaceRemoteURLNotSupported = errors.New("writ: remote-URL workspaces 
 var ErrWorkspaceUnconfigured = errors.New("writ: workspace is not configured")
 
 func CycleRules() []Rule
+func DocumentRules() []Rule
 func Fold(ops []codec.Op, rules []Rule) (ObjectState, error)
 func FoldComment(ops []codec.Op) (Comment, error)
 func FoldComments(ops []codec.Op) ([]CommentThread, error)
 func FoldCycle(ops []codec.Op) (Cycle, error)
+func FoldDocument(ops []codec.Op) (Document, error)
 func FoldIssue(ops []codec.Op) (Issue, error)
 func FoldLabel(ops []codec.Op) (Label, error)
 func FoldProject(ops []codec.Op) (Project, error)
 func FoldReview(ops []codec.Op) (Review, error)
+func FoldSection(ops []codec.Op) (Section, error)
 func FoldWorkflowState(ops []codec.Op) (WorkflowState, error)
 func IssueRules() []Rule
 func LabelRules() []Rule
@@ -59,6 +62,7 @@ func ProjectRules() []Rule
 func ResolveGitDir(path string) (GitDirInfo, error)
 func ResolveReference(ref string, localRepoID string, registry []RepoEntry) (ResolvedReference, error)
 func ReviewRules() []Rule
+func SectionRules() []Rule
 func WithCacheDir(dir string) Option
 func WithGitBinary(gitBin string) Option
 func WithSigner(signer Signer) Option
@@ -98,6 +102,34 @@ func (*Comments) Edit(ctx context.Context, id, text string) error
 func (*Comments) Resolve(ctx context.Context, id string, res CommentResolve) error
 
 type Cycle = state.Cycle
+
+type Document = state.Document
+
+type DocumentEdit struct {
+	Title *string `json:"title,omitempty"`
+	Labels *DocumentLabelEdit `json:"labels,omitempty"`
+}
+
+type DocumentFilter = projection.DocumentFilter
+
+type DocumentLabelEdit struct {
+	Add []string `json:"add,omitempty"`
+	Remove []string `json:"remove,omitempty"`
+}
+
+type DocumentResult = projection.DocumentResult
+
+type Documents struct {
+	// unexported fields
+}
+func (*Documents) AddSection(ctx context.Context, docID string, ns NewSection) (string, error)
+func (*Documents) Create(ctx context.Context, nd NewDocument) (string, error)
+func (*Documents) DeleteSection(ctx context.Context, sectionID string) error
+func (*Documents) EditSection(ctx context.Context, sectionID string, body string) error
+func (*Documents) Link(ctx context.Context, id string, link Link) error
+func (*Documents) MoveSection(ctx context.Context, sectionID string, afterID, beforeID string) error
+func (*Documents) Update(ctx context.Context, id string, edit DocumentEdit) error
+func (*Documents) UpdateSection(ctx context.Context, sectionID string, edit SectionEdit) error
 
 type Draft struct {
 	ID string `json:"id"`
@@ -197,6 +229,12 @@ type NewComment struct {
 	InReplyTo string `json:"in_reply_to,omitempty"`
 }
 
+type NewDocument struct {
+	Title string `json:"title"`
+	Labels []string `json:"labels,omitempty"`
+	Links []Link `json:"links,omitempty"`
+}
+
 type NewIssue struct {
 	Title string `json:"title"`
 	Description string `json:"description,omitempty"`
@@ -213,6 +251,14 @@ type NewReview struct {
 	Description string `json:"description,omitempty"`
 	Base string `json:"base,omitempty"`
 	Head string `json:"head,omitempty"`
+}
+
+type NewSection struct {
+	Title string `json:"title,omitempty"`
+	Body string `json:"body"`
+	Position string `json:"position,omitempty"`
+	After string `json:"after,omitempty"`
+	Before string `json:"before,omitempty"`
 }
 
 type NewWorkflowState struct {
@@ -245,6 +291,8 @@ type Query struct {
 	// unexported fields
 }
 func (*Query) Comments(f CommentFilter) ([]CommentResult, error)
+func (*Query) Document(id string) (DocumentResult, error)
+func (*Query) Documents(f DocumentFilter) ([]DocumentResult, error)
 func (*Query) GroupIssues(by GroupKey, f IssueFilter) ([]Group, error)
 func (*Query) Issue(id string) (IssueResult, error)
 func (*Query) Issues(f IssueFilter) ([]IssueResult, error)
@@ -254,6 +302,7 @@ func (*Query) Object(id string) (ObjectResult, error)
 func (*Query) Objects(f ObjectFilter) ([]ObjectResult, error)
 func (*Query) Review(id string) (ReviewResult, error)
 func (*Query) Reviews(f ReviewFilter) ([]ReviewResult, error)
+func (*Query) Section(id string) (SectionResult, error)
 func (*Query) Threads(subjectType, subjectID string) ([]CommentThread, error)
 func (*Query) WorkflowState(id string) (WorkflowStateResult, error)
 func (*Query) WorkflowStates(f WorkflowStateFilter) ([]WorkflowStateResult, error)
@@ -307,6 +356,15 @@ type Revision = state.Revision
 
 type Rule = state.Rule
 
+type Section = state.Section
+
+type SectionEdit struct {
+	Title *string `json:"title,omitempty"`
+	Position *string `json:"position,omitempty"`
+}
+
+type SectionResult = projection.SectionResult
+
 type Signer = codec.Signer
 
 type Store struct {
@@ -318,6 +376,7 @@ type Store struct {
 	Query *Query
 	WorkflowStates *WorkflowStates
 	Labels *Labels
+	Documents *Documents
 	Workspace *Workspace
 	// unexported fields
 }
@@ -778,6 +837,8 @@ func (*DB) Close() error
 func (*DB) Comments(f CommentFilter) ([]CommentResult, error)
 func (*DB) DB() *sql.DB
 func (*DB) DeleteDraft(draftID string) error
+func (*DB) Document(id string) (DocumentResult, error)
+func (*DB) Documents(f DocumentFilter) ([]DocumentResult, error)
 func (*DB) Draft(draftID string) (Draft, error)
 func (*DB) DumpLocalTables() (map[string][]map[string]any, error)
 func (*DB) DumpTables() (map[string][]map[string]any, error)
@@ -800,12 +861,26 @@ func (*DB) Repos() ([]state.RepoEntry, error)
 func (*DB) Review(objectID string) (ReviewResult, error)
 func (*DB) Reviews(f ReviewFilter) ([]ReviewResult, error)
 func (*DB) SaveDraft(draft Draft) (string, error)
+func (*DB) Section(id string) (SectionResult, error)
 func (*DB) SetSyncCursor(remote, refName, tip string, lastSyncedAt time.Time) error
 func (*DB) String() string
 func (*DB) SyncCursors(remote string) ([]SyncCursor, error)
 func (*DB) Threads(subjectType, subjectID string) ([]state.CommentThread, error)
 func (*DB) WorkflowState(id string) (WorkflowStateResult, error)
 func (*DB) WorkflowStates(f WorkflowStateFilter) ([]WorkflowStateResult, error)
+
+type DocumentFilter struct {
+	Labels []string
+}
+
+type DocumentResult struct {
+	ObjectID string `json:"object_id"`
+	Author Author `json:"author"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Document state.Document `json:"document"`
+	Sections []SectionResult `json:"sections,omitempty"`
+}
 
 type Draft struct {
 	DraftID string `json:"draft_id"`
@@ -932,6 +1007,14 @@ type ReviewResult struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Review state.Review `json:"review"`
+}
+
+type SectionResult struct {
+	ObjectID string `json:"object_id"`
+	Author Author `json:"author"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Section state.Section `json:"section"`
 }
 
 type Stats struct {
@@ -1185,15 +1268,18 @@ var ErrInvalidReference = errors.New("writ: invalid reference format")
 var ErrMixedObjects = fold.ErrMixedObjects
 
 func CycleRules() []Rule
+func DocumentRules() []Rule
 func Fold(ops []codec.Op, rules []Rule) (ObjectState, error)
 func FoldComment(ops []codec.Op) (Comment, error)
 func FoldComments(ops []codec.Op) ([]CommentThread, error)
 func FoldCycle(ops []codec.Op) (Cycle, error)
+func FoldDocument(ops []codec.Op) (Document, error)
 func FoldIssue(ops []codec.Op) (Issue, error)
 func FoldLabel(ops []codec.Op) (Label, error)
 func FoldProject(ops []codec.Op) (Project, error)
 func FoldRepo(ops []codec.Op) (RepoEntry, error)
 func FoldReview(ops []codec.Op) (Review, error)
+func FoldSection(ops []codec.Op) (Section, error)
 func FoldWorkflowState(ops []codec.Op) (WorkflowState, error)
 func IssueRules() []Rule
 func LabelRules() []Rule
@@ -1204,6 +1290,7 @@ func ProjectRules() []Rule
 func RepoRules() []Rule
 func ResolveReference(ref string, localRepoID string, registry []RepoEntry) (ResolvedReference, error)
 func ReviewRules() []Rule
+func SectionRules() []Rule
 func WorkflowStateRules() []Rule
 
 type Anchor = resolve.Anchor
@@ -1260,6 +1347,13 @@ type Cycle struct {
 	StartsAt string `json:"starts_at,omitempty"`
 	EndsAt string `json:"ends_at,omitempty"`
 	Issues []string `json:"issues,omitempty"`
+	UnknownOps []UnknownOp `json:"unknown_ops,omitempty"`
+}
+
+type Document struct {
+	Title string `json:"title,omitempty"`
+	Labels []string `json:"labels,omitempty"`
+	Links []Link `json:"links,omitempty"`
 	UnknownOps []UnknownOp `json:"unknown_ops,omitempty"`
 }
 
@@ -1364,6 +1458,18 @@ type Rule struct {
 	Lattice []string `json:"lattice,omitempty"`
 	Normalize *NormalizeRule `json:"normalize,omitempty"`
 }
+
+type Section struct {
+	DocumentID string `json:"document_id,omitempty"`
+	Position string `json:"position,omitempty"`
+	Title string `json:"title,omitempty"`
+	Body any `json:"body,omitempty"`
+	Deleted bool `json:"deleted,omitempty"`
+	UnknownOps []UnknownOp `json:"unknown_ops,omitempty"`
+}
+func (Section) ConflictBodies() []string
+func (Section) IsConflicted() bool
+func (Section) SettledBody() string
 
 type UnknownOp struct {
 	Commit string `json:"commit"`

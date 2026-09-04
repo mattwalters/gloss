@@ -391,6 +391,101 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 			}
 		}
 
+	case "document":
+		doc, err := state.FoldDocument(ops)
+		if err != nil {
+			return fmt.Errorf("projection: fold document %s: %w", objectID, err)
+		}
+
+		stateJSON, err := json.Marshal(doc)
+		if err != nil {
+			return fmt.Errorf("projection: marshal document state %s: %w", objectID, err)
+		}
+
+		_, err = tx.Exec(
+			"INSERT INTO documents (object_id, title, author_name, author_email, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			objectID, doc.Title, authorName, authorEmail, createdAt, updatedAt, string(stateJSON),
+		)
+		if err != nil {
+			return fmt.Errorf("projection: insert document %s: %w", objectID, err)
+		}
+
+		for _, link := range doc.Links {
+			_, err = tx.Exec(
+				"INSERT INTO document_links (document_id, target, target_type, relation) VALUES (?, ?, ?, ?)",
+				objectID, link.Target, link.TargetType, link.Relation,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert document link %s (%s): %w", objectID, link.Target, err)
+			}
+		}
+
+		for _, label := range doc.Labels {
+			_, err = tx.Exec(
+				"INSERT INTO document_labels (document_id, label) VALUES (?, ?)",
+				objectID, label,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert document label %s (%s): %w", objectID, label, err)
+			}
+		}
+
+		for i, u := range doc.UnknownOps {
+			_, err = tx.Exec(
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, object_type, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?, ?)",
+				objectID, u.Commit, u.ObjectType, u.OpType, u.OpVersion, i,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert unknown op %s: %w", u.Commit, err)
+			}
+		}
+
+	case "section":
+		sec, err := state.FoldSection(ops)
+		if err != nil {
+			return fmt.Errorf("projection: fold section %s: %w", objectID, err)
+		}
+
+		stateJSON, err := json.Marshal(sec)
+		if err != nil {
+			return fmt.Errorf("projection: marshal section state %s: %w", objectID, err)
+		}
+
+		posOpID := sectionPositionOpID(orderedOps)
+
+		var bodyStr string
+		conflictedInt := 0
+		if sec.IsConflicted() {
+			conflictedInt = 1
+			bBytes, _ := json.Marshal(sec.ConflictBodies())
+			bodyStr = string(bBytes)
+		} else {
+			bodyStr = sec.SettledBody()
+		}
+
+		deletedInt := 0
+		if sec.Deleted {
+			deletedInt = 1
+		}
+
+		_, err = tx.Exec(
+			"INSERT INTO sections (object_id, document_id, position, op_id, title, body, conflicted, deleted, author_name, author_email, created_at, updated_at, state_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			objectID, sec.DocumentID, sec.Position, posOpID, sec.Title, bodyStr, conflictedInt, deletedInt, authorName, authorEmail, createdAt, updatedAt, string(stateJSON),
+		)
+		if err != nil {
+			return fmt.Errorf("projection: insert section %s: %w", objectID, err)
+		}
+
+		for i, u := range sec.UnknownOps {
+			_, err = tx.Exec(
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, object_type, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?, ?)",
+				objectID, u.Commit, u.ObjectType, u.OpType, u.OpVersion, i,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert unknown op %s: %w", u.Commit, err)
+			}
+		}
+
 	default:
 		// Preserved-but-unreduced ops: record in unknown_ops
 		for i, op := range ops {
@@ -449,6 +544,10 @@ func deleteObjectState(tx *sql.Tx, objectID string) error {
 		"DELETE FROM repo_remotes WHERE repo_object_id = ?",
 		"DELETE FROM workflow_states WHERE object_id = ?",
 		"DELETE FROM labels WHERE object_id = ?",
+		"DELETE FROM documents WHERE object_id = ?",
+		"DELETE FROM document_links WHERE document_id = ?",
+		"DELETE FROM document_labels WHERE document_id = ?",
+		"DELETE FROM sections WHERE object_id = ?",
 	}
 	for _, q := range queries {
 		if _, err := tx.Exec(q, objectID); err != nil {
@@ -650,3 +749,28 @@ func workflowStatePositionOpID(orderedOps []codec.Op) string {
 	}
 	return posOpID
 }
+
+func sectionPositionOpID(orderedOps []codec.Op) string {
+	var posOpID string
+	for _, op := range orderedOps {
+		if op.ObjectType != "section" || op.OpVersion != 1 {
+			continue
+		}
+		var body map[string]any
+		if len(op.Body) > 0 {
+			if err := json.Unmarshal(op.Body, &body); err != nil {
+				continue
+			}
+		}
+		if body == nil {
+			continue
+		}
+		if op.OpType == "create" || op.OpType == "move" || op.OpType == "update" {
+			if _, ok := body["position"].(string); ok {
+				posOpID = op.ID
+			}
+		}
+	}
+	return posOpID
+}
+

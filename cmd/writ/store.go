@@ -249,3 +249,60 @@ func gitRevParse(ctx context.Context, dir, ref string) (string, error) {
 	}
 	return strings.TrimSpace(string(out)), nil
 }
+
+func resolveDocumentID(ctx context.Context, store *writ.Store, prefix string) (string, error) {
+	if prefix == "" {
+		return "", fmt.Errorf("document ID required")
+	}
+
+	docs, err := store.Query.Documents(writ.DocumentFilter{})
+	if err != nil {
+		return "", err
+	}
+
+	var matches []string
+	for _, d := range docs {
+		if strings.HasPrefix(d.ObjectID, prefix) {
+			matches = append(matches, d.ObjectID)
+		}
+	}
+
+	if len(matches) == 0 {
+		return "", notFoundError{kind: "document", id: prefix}
+	}
+	if len(matches) > 1 {
+		return "", fmt.Errorf("ambiguous document ID prefix %q matches %d documents (%s)", prefix, len(matches), strings.Join(matches, ", "))
+	}
+
+	return matches[0], nil
+}
+
+func resolveSectionID(ctx context.Context, store *writ.Store, prefix string) (string, error) {
+	if prefix == "" {
+		return "", fmt.Errorf("section ID required")
+	}
+
+	docs, err := store.Query.Documents(writ.DocumentFilter{})
+	if err != nil {
+		return "", err
+	}
+
+	var matches []string
+	for _, d := range docs {
+		for _, s := range d.Sections {
+			if strings.HasPrefix(s.ObjectID, prefix) {
+				matches = append(matches, s.ObjectID)
+			}
+		}
+	}
+
+	if len(matches) == 0 {
+		return "", notFoundError{kind: "section", id: prefix}
+	}
+	if len(matches) > 1 {
+		return "", fmt.Errorf("ambiguous section ID prefix %q matches %d sections (%s)", prefix, len(matches), strings.Join(matches, ", "))
+	}
+
+	return matches[0], nil
+}
+

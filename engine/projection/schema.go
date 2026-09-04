@@ -13,7 +13,8 @@ package projection
 // 8: WRIT-155 added object_type column to unknown_ops table (spec FC-5).
 // 9: WRIT-104 added workflow_states table.
 // 10: WRIT-109 added labels table.
-const schemaVersion = 10
+// 11: WRIT-105 added documents, document_links, document_labels, sections tables.
+const schemaVersion = 11
 
 var projectionTables = []string{
 	"meta",
@@ -43,6 +44,10 @@ var projectionTables = []string{
 	"repo_remotes",
 	"workflow_states",
 	"labels",
+	"documents",
+	"document_links",
+	"document_labels",
+	"sections",
 }
 
 var tableQueries = map[string]string{
@@ -73,6 +78,10 @@ var tableQueries = map[string]string{
 	"repo_remotes":       "SELECT * FROM repo_remotes ORDER BY repo_object_id ASC, remote ASC",
 	"workflow_states":    "SELECT * FROM workflow_states ORDER BY object_id ASC",
 	"labels":             "SELECT * FROM labels ORDER BY object_id ASC",
+	"documents":          "SELECT * FROM documents ORDER BY object_id ASC",
+	"document_links":     "SELECT * FROM document_links ORDER BY document_id ASC, target ASC",
+	"document_labels":    "SELECT * FROM document_labels ORDER BY document_id ASC, label ASC",
+	"sections":           "SELECT * FROM sections ORDER BY object_id ASC",
 }
 
 const schemaSQL = `
@@ -324,4 +333,47 @@ CREATE TABLE IF NOT EXISTS labels (
     updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_labels_name ON labels(name);
+
+CREATE TABLE IF NOT EXISTS documents (
+    object_id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    author_name TEXT NOT NULL,
+    author_email TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    state_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS document_links (
+    document_id TEXT NOT NULL,
+    target TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    relation TEXT NOT NULL,
+    PRIMARY KEY (document_id, target),
+    FOREIGN KEY (document_id) REFERENCES documents(object_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS document_labels (
+    document_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    PRIMARY KEY (document_id, label),
+    FOREIGN KEY (document_id) REFERENCES documents(object_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS sections (
+    object_id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL,
+    position TEXT NOT NULL,
+    op_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    conflicted INTEGER NOT NULL DEFAULT 0,
+    deleted INTEGER NOT NULL DEFAULT 0,
+    author_name TEXT NOT NULL,
+    author_email TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    state_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sections_document_order ON sections(document_id, position ASC, op_id ASC);
 `

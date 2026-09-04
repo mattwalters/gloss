@@ -164,7 +164,7 @@ overwrites $A$.
 ## 5. Per-field merge strategies catalogue
 
 To prevent implicit or undefined merge behavior, Writ establishes a
-**closed catalogue** of 8 per-field merge strategies.
+**closed catalogue** of 9 per-field merge strategies.
 
 ### The "no implicit behavior" requirement
 
@@ -189,6 +189,7 @@ NOT invent default merge behaviors for undeclared fields.
 | `tombstone` | Deletable entity | Entity deletion state; deletion wins over concurrent edits while edits still fold into state. |
 | `lattice` | Join-semilattice | Monotone status transitions governed by a declared join operator ($\sqcup$). |
 | `keyed-lww` | Keyed register map | A map from a declared composite key to a register; `lww` applied independently within each key. |
+| `multi-value` | Multi-value register | Multi-Value Register (MVR): preserves concurrent values as a deterministic set in total order $L$, collapsing to a single value when an edit causally succeeds prior writes. |
 
 Counters are deliberately omitted from this catalogue; adding a counter
 strategy requires a spec amendment.
@@ -295,16 +296,12 @@ Typed domain serializations (such as language-specific state structs) MAY omit e
 - **Registers hold values.** A value stored at a key is stored verbatim, so any JSON type reproduces byte-for-byte; `null` does not, and makes the operation uninterpretable per §7.1.
 - **Why this is not `lww` or a set:** Registers scoped to a key — one vote per (voter, revision), one status per (revision, check name) — need a later write under one key to leave the others alone. Plain `lww` would collapse them to a single register; a set has no notion of a value being replaced.
 
-### Document section strategy: `multi-value` (decided ahead of document vocabulary)
+#### 9. `multi-value` (Multi-value register)
+ 
+For long-form text documents (`spec/documents.md`), Writ defines the `multi-value`
+register strategy (ARCHITECTURE.md §Document concurrency model) for document section bodies.
 
-For long-form text documents (`document`), Writ defines the `multi-value`
-register strategy (ARCHITECTURE.md §Document concurrency model). The strategy is
-named and specified here to fix its reduction semantics and client-boundary
-properties ahead of the document vocabulary and schemas. `multi-value` will
-enter the active runtime catalogue (`KnownCatalogueStrategies` and test vectors)
-alongside the `document` object type in the implementing ticket.
-
-#### Semantics and reduction rules
+##### Semantics and reduction rules
 
 - **Target data type:** Document section body.
 - **Initial state:** Unset / empty string `""`.

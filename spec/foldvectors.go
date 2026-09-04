@@ -18,6 +18,7 @@ var KnownCatalogueStrategies = map[string]bool{
 	"tombstone":           true,
 	"lattice":             true,
 	"keyed-lww":           true,
+	"multi-value":         true,
 }
 
 // OrderOp represents a single abstract operation in an ordering vector.

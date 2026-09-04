@@ -1,0 +1,56 @@
+[
+  {
+    "op_type": "create",
+    "op_version": 1,
+    "field": "document_id",
+    "strategy": "create-once"
+  },
+  {
+    "op_type": "create",
+    "op_version": 1,
+    "field": "position",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "create",
+    "op_version": 1,
+    "field": "title",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "create",
+    "op_version": 1,
+    "field": "body",
+    "strategy": "multi-value"
+  },
+  {
+    "op_type": "edit",
+    "op_version": 1,
+    "field": "body",
+    "strategy": "multi-value"
+  },
+  {
+    "op_type": "move",
+    "op_version": 1,
+    "field": "position",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "update",
+    "op_version": 1,
+    "field": "title",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "update",
+    "op_version": 1,
+    "field": "position",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "delete",
+    "op_version": 1,
+    "field": "deleted",
+    "strategy": "tombstone"
+  }
+]
