@@ -7,7 +7,7 @@ Ordering: [`spec/ordering.md`](ordering.md).
 This document defines the operation vocabulary, payload schemas, and fold
 semantics for workflow states in Writ (`object_type: "workflow-state"`).
 Workflow states represent the board columns and lifecycle stages of issues
-in a workspace.
+in a repository.
 
 The key words MUST, MUST NOT, SHOULD, and MAY are to be interpreted as
 described in RFC 2119.

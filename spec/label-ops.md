@@ -7,7 +7,7 @@ Forward compatibility: [`spec/forward-compatibility.md`](forward-compatibility.m
 This document defines the operation vocabulary, payload schemas, and fold
 semantics for labels in Writ (`object_type: "label"`). Labels represent
 categorization, tags, and visual indicators attached to issues and reviews in
-a workspace.
+a repository.
 
 The key words MUST, MUST NOT, SHOULD, and MAY are to be interpreted as
 described in RFC 2119.

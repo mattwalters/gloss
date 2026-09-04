@@ -521,9 +521,11 @@ Per ARCHITECTURE.md §Object homing:
 - Team-level workflow states, labels, and settings map to repo-global objects
   within that team's Writ repository.
 - Cross-team relations in Linear (e.g. an issue in Team A blocking an issue in
-  Team B) cannot be represented as native Writ DAG links in v1 because cross-repo
-  DAG links are not supported. Importers MUST degrade cross-team relations to
-  external Markdown links in the issue description or in a comment.
+  Team B) MAY be recorded as `link` ops with fully-qualified
+  `<repo-id>#<object-id>` targets pointing into Team B's Writ repository. Writ
+  does not resolve the target repository for such a reference, so importers
+  SHOULD additionally record a human-readable external link (a Markdown link
+  in the issue description or a comment) alongside the qualified `link` op.
 
 ### Identifier Preservation
 
@@ -587,7 +589,8 @@ The following Linear concepts deliberately do NOT map to Writ v1 primitives:
    local-first, offline-capable git event-sourcing engine.
 5. **Roadmaps & Saved Views:** Visual timeline views, filter queries, and personal
    view configurations belong to client user interfaces, not canonical repository data.
-6. **Cross-Team Links:** Bounded by the one-workspace-one-team model in v1 (WRIT-113).
+6. **Cross-Team Links:** Bounded by the one-repo-one-team model in v1
+   (ARCHITECTURE.md §Object homing).
 7. **Custom Fields:** Arbitrary organization-defined custom fields not part of
    the standard issue schema have no native typed representation in v1 core.
 
