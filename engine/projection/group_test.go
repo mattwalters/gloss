@@ -144,13 +144,13 @@ func TestGroupIssuesByPriority(t *testing.T) {
 	insertObject(t, rawDB, "iss-n", "issue", 1, "op-4", "A", "a@example.com", 1030, 1030)
 
 	execSQL(t, rawDB, "INSERT INTO issues (object_id, title, description, state, reason, priority, position, position_op_id) VALUES (?, ?, ?, ?, '', ?, ?, ?)",
-		"iss-u", "Urgent issue", "", "open", 1, "0|h:", "op-1")
+		"iss-u", "Urgent issue", "", "open", 1, "V", "op-1")
 	execSQL(t, rawDB, "INSERT INTO issues (object_id, title, description, state, reason, priority, position, position_op_id) VALUES (?, ?, ?, ?, '', ?, ?, ?)",
-		"iss-h2", "High issue 2", "", "open", 2, "0|i:", "op-3")
+		"iss-h2", "High issue 2", "", "open", 2, "aV", "op-3")
 	execSQL(t, rawDB, "INSERT INTO issues (object_id, title, description, state, reason, priority, position, position_op_id) VALUES (?, ?, ?, ?, '', ?, ?, ?)",
-		"iss-h1", "High issue 1", "", "open", 2, "0|h:", "op-2")
+		"iss-h1", "High issue 1", "", "open", 2, "V", "op-2")
 	execSQL(t, rawDB, "INSERT INTO issues (object_id, title, description, state, reason, priority, position, position_op_id) VALUES (?, ?, ?, ?, '', ?, ?, ?)",
-		"iss-n", "None issue", "", "open", 0, "0|h:", "op-4")
+		"iss-n", "None issue", "", "open", 0, "V", "op-4")
 
 	groups, err := db.GroupIssues(projection.GroupByPriority, projection.IssueFilter{})
 	if err != nil {

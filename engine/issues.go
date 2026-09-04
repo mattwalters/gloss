@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"slices"
 
 	"github.com/writtendev/writ/engine/codec"
@@ -75,8 +76,8 @@ func (i *Issues) Create(ctx context.Context, n NewIssue) (string, error) {
 		}
 	}
 	if n.Estimate != nil {
-		if *n.Estimate < 0 {
-			return "", fmt.Errorf("writ: issue estimate must be non-negative, got %g", *n.Estimate)
+		if *n.Estimate < 0 || math.IsNaN(*n.Estimate) || math.IsInf(*n.Estimate, 0) {
+			return "", fmt.Errorf("writ: issue estimate must be a non-negative finite number, got %g", *n.Estimate)
 		}
 	}
 	if n.Position != nil {
@@ -148,8 +149,8 @@ func (i *Issues) Update(ctx context.Context, id string, edit IssueEdit) error {
 		}
 	}
 	if edit.Estimate != nil {
-		if *edit.Estimate < 0 {
-			return fmt.Errorf("writ: issue estimate must be non-negative, got %g", *edit.Estimate)
+		if *edit.Estimate < 0 || math.IsNaN(*edit.Estimate) || math.IsInf(*edit.Estimate, 0) {
+			return fmt.Errorf("writ: issue estimate must be a non-negative finite number, got %g", *edit.Estimate)
 		}
 	}
 	if edit.Position != nil {

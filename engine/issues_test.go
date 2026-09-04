@@ -288,3 +288,62 @@ func TestIssuesAssignPersonIDLengthBound(t *testing.T) {
 		t.Errorf("expected the 320-character assignee to round-trip unchanged, got %v", res.Issue.Assignees)
 	}
 }
+
+func TestIssuesIdenticalPositionTiebreakAndStability(t *testing.T) {
+	ctx := context.Background()
+	repoDir, _ := setupConfiguredRepo(t)
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	pos := "V"
+	iss1, err := s.Issues.Create(ctx, writ.NewIssue{
+		Title:    "Issue Alpha",
+		Position: &pos,
+	})
+	if err != nil {
+		t.Fatalf("Create iss1: %v", err)
+	}
+
+	iss2, err := s.Issues.Create(ctx, writ.NewIssue{
+		Title:    "Issue Beta",
+		Position: &pos,
+	})
+	if err != nil {
+		t.Fatalf("Create iss2: %v", err)
+	}
+
+	issues, err := s.Query.Issues(writ.IssueFilter{OrderBy: writ.OrderByPositionAsc})
+	if err != nil {
+		t.Fatalf("Query.Issues: %v", err)
+	}
+	if len(issues) != 2 {
+		t.Fatalf("expected 2 issues, got %d", len(issues))
+	}
+
+	firstID := issues[0].ObjectID
+	secondID := issues[1].ObjectID
+	if (firstID != iss1 && firstID != iss2) || (secondID != iss1 && secondID != iss2) || firstID == secondID {
+		t.Fatalf("unexpected issue IDs: got %s, %s; want set {%s, %s}", firstID, secondID, iss1, iss2)
+	}
+
+	// Update metadata (e.g. Title) on first issue without touching position
+	newTitle := "Issue Alpha Renamed"
+	if err := s.Issues.Update(ctx, firstID, writ.IssueEdit{
+		Title: &newTitle,
+	}); err != nil {
+		t.Fatalf("Update first issue: %v", err)
+	}
+
+	issuesAfter, err := s.Query.Issues(writ.IssueFilter{OrderBy: writ.OrderByPositionAsc})
+	if err != nil {
+		t.Fatalf("Query.Issues after update: %v", err)
+	}
+	if issuesAfter[0].ObjectID != firstID || issuesAfter[1].ObjectID != secondID {
+		t.Fatalf("issue order flipped after unrelated metadata update! got %s, %s; want %s, %s",
+			issuesAfter[0].ObjectID, issuesAfter[1].ObjectID, firstID, secondID)
+	}
+}

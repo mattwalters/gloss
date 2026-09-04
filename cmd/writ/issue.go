@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"slices"
 	"sort"
 	"strconv"
@@ -389,7 +390,7 @@ func parseEstimate(val string) (*float64, error) {
 		return nil, nil
 	}
 	f, err := strconv.ParseFloat(val, 64)
-	if err != nil || f < 0 {
+	if err != nil || f < 0 || math.IsNaN(f) || math.IsInf(f, 0) {
 		return nil, fmt.Errorf("invalid estimate %q: must be a non-negative number", val)
 	}
 	return &f, nil

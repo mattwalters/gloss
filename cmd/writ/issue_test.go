@@ -2002,6 +2002,30 @@ func TestIssueFieldsPriorityEstimatePosition(t *testing.T) {
 	if !strings.Contains(stdout.String(), "5") {
 		t.Errorf("expected tabular output to show estimate '5': %s", stdout.String())
 	}
+
+	// 8. Test invalid estimates (NaN, +Inf, -Inf, negative, non-number) fail with exit code 2
+	for _, badEst := range []string{"NaN", "+Inf", "-Inf", "-1.5", "abc"} {
+		stdout.Reset()
+		stderr.Reset()
+		code = run(context.Background(), []string{
+			"issue", "create", "-C", env.repoDir,
+			"-title", "Bad Estimate Issue",
+			"-estimate", badEst,
+		}, &stdout, &stderr)
+		if code != 2 {
+			t.Errorf("issue create -estimate %s got code %d, want 2; stderr: %s", badEst, code, stderr.String())
+		}
+
+		stdout.Reset()
+		stderr.Reset()
+		code = run(context.Background(), []string{
+			"issue", "update", "-C", env.repoDir, issue1ID,
+			"-estimate", badEst,
+		}, &stdout, &stderr)
+		if code != 2 {
+			t.Errorf("issue update -estimate %s got code %d, want 2; stderr: %s", badEst, code, stderr.String())
+		}
+	}
 }
 
 

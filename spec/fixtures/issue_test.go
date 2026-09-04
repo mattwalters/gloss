@@ -5,16 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/codec/canonicaljson"
 	"github.com/writtendev/writ/engine/dag"
 	"github.com/writtendev/writ/engine/identity"
+	"github.com/writtendev/writ/engine/projection"
 	"github.com/writtendev/writ/spec/fixtures"
 )
 
@@ -291,5 +294,92 @@ func assertIssueFoldAgreement(t *testing.T, issue writ.Issue, state writ.ObjectS
 					fixtureName, objectID, l.Target, l.Relation, expectedRel)
 			}
 		}
+	}
+}
+
+func TestIssueFieldsAndRankConcurrentTiebreak(t *testing.T) {
+	descs, err := fixtures.LoadCorpus()
+	if err != nil {
+		t.Fatalf("LoadCorpus: %v", err)
+	}
+	var desc *fixtures.Description
+	for _, d := range descs {
+		if d.Name == "issue-fields-and-rank" {
+			desc = d
+			break
+		}
+	}
+	if desc == nil {
+		t.Fatal("issue-fields-and-rank description not found")
+	}
+
+	repoDir := filepath.Join(t.TempDir(), "repo")
+	manifest, err := fixtures.Generate(desc, repoDir)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	repo, err := git.PlainOpen(repoDir)
+	if err != nil {
+		t.Fatalf("PlainOpen: %v", err)
+	}
+
+	store, err := dag.OpenRepo(repo, identity.Identity{})
+	if err != nil {
+		t.Fatalf("dag.OpenRepo: %v", err)
+	}
+
+	db, err := projection.Open(":memory:")
+	if err != nil {
+		t.Fatalf("projection.Open: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := db.Refresh(store); err != nil {
+		t.Fatalf("db.Refresh: %v", err)
+	}
+
+	issues, err := db.Issues(projection.IssueFilter{OrderBy: projection.OrderByPositionAsc})
+	if err != nil {
+		t.Fatalf("db.Issues(OrderByPositionAsc): %v", err)
+	}
+	if len(issues) != 2 {
+		t.Fatalf("expected 2 issues, got %d", len(issues))
+	}
+
+	// Both issues share identical position 'V'
+	if issues[0].Issue.Position != "V" || issues[1].Issue.Position != "V" {
+		t.Fatalf("expected both issues to have position 'V', got %q and %q",
+			issues[0].Issue.Position, issues[1].Issue.Position)
+	}
+
+	// Find the create op commit SHAs from manifest
+	var aliceCreateSHA, bobCreateSHA string
+	for _, gen := range manifest.Generations {
+		for _, c := range gen.Commits {
+			if strings.Contains(c.Message, "create issue/i-fields-alice") {
+				aliceCreateSHA = c.SHA
+			}
+			if strings.Contains(c.Message, "create issue/i-fields-bob") {
+				bobCreateSHA = c.SHA
+			}
+		}
+	}
+	if aliceCreateSHA == "" || bobCreateSHA == "" {
+		t.Fatalf("failed to find create SHAs in manifest: alice=%s bob=%s", aliceCreateSHA, bobCreateSHA)
+	}
+
+	var expectedFirst, expectedSecond string
+	if bobCreateSHA < aliceCreateSHA {
+		expectedFirst = "i-fields-bob"
+		expectedSecond = "i-fields-alice"
+	} else {
+		expectedFirst = "i-fields-alice"
+		expectedSecond = "i-fields-bob"
+	}
+
+	if issues[0].ObjectID != expectedFirst || issues[1].ObjectID != expectedSecond {
+		t.Errorf("expected tiebreak order %s < %s, got %s < %s",
+			expectedFirst, expectedSecond, issues[0].ObjectID, issues[1].ObjectID)
 	}
 }

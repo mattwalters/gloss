@@ -541,11 +541,51 @@ func projectIssue(generic writ.ObjectState, ops []codec.Op, _ string) state.Issu
 		st = "open"
 	}
 
+	var priority int
+	if p, ok := generic.State["priority"]; ok && p != nil {
+		switch val := p.(type) {
+		case float64:
+			priority = int(val)
+		case int:
+			priority = val
+		case int64:
+			priority = int(val)
+		case json.Number:
+			if i, err := val.Int64(); err == nil {
+				priority = int(i)
+			}
+		}
+	}
+
+	var estimate *float64
+	if e, ok := generic.State["estimate"]; ok && e != nil {
+		switch val := e.(type) {
+		case float64:
+			est := val
+			estimate = &est
+		case int:
+			est := float64(val)
+			estimate = &est
+		case int64:
+			est := float64(val)
+			estimate = &est
+		case json.Number:
+			if f, err := val.Float64(); err == nil {
+				estimate = &f
+			}
+		}
+	}
+
+	position := stringVal(generic.State["position"])
+
 	iss := state.Issue{
 		Title:       stringVal(generic.State["title"]),
 		Description: stringVal(generic.State["description"]),
 		State:       st,
 		Reason:      stringVal(generic.State["reason"]),
+		Priority:    priority,
+		Estimate:    estimate,
+		Position:    position,
 		UnknownOps:  toStateUnknownOps(generic.UnknownOps),
 	}
 
