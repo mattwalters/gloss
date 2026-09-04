@@ -224,6 +224,81 @@ func TestProjectsMembershipReferenceAliasing(t *testing.T) {
 	}
 }
 
+// TestProjectsMembershipReferenceAliasingUppercaseDesignator pins WRIT-174
+// round-1 finding r3932326918: canonicalizeReference must lowercase the
+// designator before state.ParseReference runs, not after, since
+// ParseReference already rejects any non-lowercase designator. An
+// uppercase-hex designator naming the local repo must still canonicalize to
+// the bare member (not be refused), and one naming a foreign repo must
+// canonicalize to a lowercase-qualified reference.
+func TestProjectsMembershipReferenceAliasingUppercaseDesignator(t *testing.T) {
+	ctx := context.Background()
+	repoDir, localRepoID := setupTestRepoWithID(t, "alice", "alice@writ.dev")
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	projectID, err := s.Projects.Create(ctx, writ.NewProject{Title: "Board"})
+	if err != nil {
+		t.Fatalf("Create project failed: %v", err)
+	}
+
+	issueID := "0123456789abcdef0123456789abcdef"
+
+	// An uppercase-hex designator naming the local repo: must not be
+	// refused, and must canonicalize to the bare member exactly as the
+	// already-lowercase qualified-local form does.
+	uppercaseLocal := strings.ToUpper(string(localRepoID)) + "#" + issueID
+	if err := s.Projects.AddIssue(ctx, projectID, uppercaseLocal); err != nil {
+		t.Fatalf("AddIssue (uppercase local designator) failed: %v", err)
+	}
+
+	res, err := s.Query.Project(projectID)
+	if err != nil {
+		t.Fatalf("Query.Project failed: %v", err)
+	}
+	if len(res.Project.Issues) != 1 {
+		t.Fatalf("Issues = %v, want exactly one member (uppercase local designator collapses to bare)", res.Project.Issues)
+	}
+	if res.Project.Issues[0] != issueID {
+		t.Errorf("Issues[0] = %q, want bare form %q", res.Project.Issues[0], issueID)
+	}
+
+	// An uppercase-hex designator naming a foreign repo: must canonicalize
+	// to a lowercase-qualified reference, not be refused and not stay
+	// uppercase.
+	foreignRepoID := "fedcba9876543210fedcba9876543210"
+	foreignIssue := "abcdef0123456789abcdef0123456789"
+	uppercaseForeign := strings.ToUpper(foreignRepoID) + "#" + foreignIssue
+	lowercaseForeign := foreignRepoID + "#" + foreignIssue
+	if err := s.Projects.AddIssue(ctx, projectID, uppercaseForeign); err != nil {
+		t.Fatalf("AddIssue (uppercase foreign designator) failed: %v", err)
+	}
+
+	res, err = s.Query.Project(projectID)
+	if err != nil {
+		t.Fatalf("Query.Project failed: %v", err)
+	}
+	if len(res.Project.Issues) != 2 {
+		t.Fatalf("Issues = %v, want 2 members", res.Project.Issues)
+	}
+	found := false
+	for _, iss := range res.Project.Issues {
+		if iss == uppercaseForeign {
+			t.Errorf("Issues = %v, member kept uppercase designator %q, want lowercase %q", res.Project.Issues, uppercaseForeign, lowercaseForeign)
+		}
+		if iss == lowercaseForeign {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("Issues = %v, want %q (lowercase-qualified)", res.Project.Issues, lowercaseForeign)
+	}
+}
+
 // TestProjectsMembershipQualifiedReferenceStaysQualifiedWhenLocalRepoIDUnset
 // pins the documented consequence of writ.repoId being optional: when it is
 // unset, a caller-supplied qualified reference that happens to name this repo

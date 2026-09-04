@@ -35,12 +35,23 @@ var canonicalObjectIDPattern = regexp.MustCompile(`^[0-9A-Fa-f]{32}$`)
 // be recognized as local and is emitted qualified; that is a consequence of
 // the information available, not a bug to paper over here.
 func canonicalizeReference(ref, localRepoID string) (string, error) {
-	designator, objectID, err := state.ParseReference(ref)
+	// The designator must be lowercased before ParseReference runs: it
+	// already rejects any non-lowercase designator (repoDesignatorRegexp),
+	// so an uppercase-hex designator naming a real repo would be refused
+	// here instead of canonicalized. Only the text before the first '#' is
+	// touched; ParseReference still does the actual splitting and
+	// validation (multiple '#' separators, empty halves, non-hex
+	// designator) on the result.
+	canonical := ref
+	if idx := strings.IndexByte(ref, '#'); idx >= 0 {
+		canonical = strings.ToLower(ref[:idx]) + "#" + ref[idx+1:]
+	}
+
+	designator, objectID, err := state.ParseReference(canonical)
 	if err != nil {
 		return "", err
 	}
 
-	designator = strings.ToLower(designator)
 	if canonicalObjectIDPattern.MatchString(objectID) {
 		objectID = strings.ToLower(objectID)
 	}
