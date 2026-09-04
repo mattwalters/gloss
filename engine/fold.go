@@ -77,6 +77,12 @@ func FoldLabel(ops []codec.Op) (Label, error) {
 	return state.FoldLabel(ops)
 }
 
+// FoldSettings executes deterministic fold reduction on an input set of operations
+// for a settings collaborative object, returning the materialized Settings state.
+func FoldSettings(ops []codec.Op) (Settings, error) {
+	return state.FoldSettings(ops)
+}
+
 // ReviewRules returns the built-in field merge rules for the review-ops vocabulary (v1).
 func ReviewRules() []Rule {
 	return state.ReviewRules()
@@ -105,6 +111,11 @@ func WorkflowStateRules() []Rule {
 // LabelRules returns the built-in field merge rules for the label vocabulary (v1).
 func LabelRules() []Rule {
 	return state.LabelRules()
+}
+
+// SettingsRules returns the built-in field merge rules for the settings vocabulary (v1).
+func SettingsRules() []Rule {
+	return state.SettingsRules()
 }
 
 // FoldDocument executes deterministic fold reduction on an input set of operations

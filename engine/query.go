@@ -58,6 +58,9 @@ type (
 	// SectionResult represents a document section object along with its authorship and timestamps.
 	SectionResult = projection.SectionResult
 
+	// SettingsResult represents the workspace settings along with its object ID and timestamps.
+	SettingsResult = projection.SettingsResult
+
 	// CommentResult represents a comment object along with its authorship, timestamps, and anchor resolutions.
 	CommentResult = projection.CommentResult
 
@@ -367,4 +370,16 @@ func (q *Query) Section(id string) (SectionResult, error) {
 		return SectionResult{}, err
 	}
 	return target.projection.Section(id)
+}
+
+// Settings returns the current workspace settings.
+func (q *Query) Settings() (SettingsResult, error) {
+	target, err := q.targetStoreForIssues(context.Background())
+	if err != nil {
+		return SettingsResult{}, err
+	}
+	if err := target.maybeAutoRefresh(context.Background()); err != nil {
+		return SettingsResult{}, err
+	}
+	return target.projection.Settings()
 }

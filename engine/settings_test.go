@@ -1,0 +1,218 @@
+package writ_test
+
+import (
+	"context"
+	"path/filepath"
+	"testing"
+
+	"github.com/writtendev/writ/engine"
+)
+
+func TestSettingsGetDefaults(t *testing.T) {
+	ctx := context.Background()
+	repoDir, _ := setupConfiguredRepo(t)
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	sett, err := s.Settings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Settings.Get failed: %v", err)
+	}
+
+	if sett.Timezone != "UTC" {
+		t.Errorf("expected default Timezone 'UTC', got %q", sett.Timezone)
+	}
+	if sett.EstimateScale != "fibonacci" {
+		t.Errorf("expected default EstimateScale 'fibonacci', got %q", sett.EstimateScale)
+	}
+	if sett.CycleDurationWeeks != 2 {
+		t.Errorf("expected default CycleDurationWeeks 2, got %d", sett.CycleDurationWeeks)
+	}
+	if sett.CycleStartDay != 1 {
+		t.Errorf("expected default CycleStartDay 1, got %d", sett.CycleStartDay)
+	}
+	if sett.CyclesEnabled != false {
+		t.Errorf("expected default CyclesEnabled false, got true")
+	}
+}
+
+func TestSettingsSetAndGet(t *testing.T) {
+	ctx := context.Background()
+	repoDir, _ := setupConfiguredRepo(t)
+
+	s, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer s.Close()
+
+	// 1. Validation tests
+	if err := s.Settings.Set(ctx, writ.SettingsEdit{}); err == nil {
+		t.Errorf("expected error with empty SettingsEdit, got nil")
+	}
+	badTZ := "Mars/Olympus"
+	if err := s.Settings.Set(ctx, writ.SettingsEdit{Timezone: &badTZ}); err == nil {
+		t.Errorf("expected error with invalid timezone, got nil")
+	}
+	badScale := "fib"
+	if err := s.Settings.Set(ctx, writ.SettingsEdit{EstimateScale: &badScale}); err == nil {
+		t.Errorf("expected error with invalid estimate scale, got nil")
+	}
+	badDuration := 0
+	if err := s.Settings.Set(ctx, writ.SettingsEdit{CycleDurationWeeks: &badDuration}); err == nil {
+		t.Errorf("expected error with cycle duration 0, got nil")
+	}
+	badDay := 8
+	if err := s.Settings.Set(ctx, writ.SettingsEdit{CycleStartDay: &badDay}); err == nil {
+		t.Errorf("expected error with cycle start day 8, got nil")
+	}
+	badCooldown := -1
+	if err := s.Settings.Set(ctx, writ.SettingsEdit{CycleCooldownWeeks: &badCooldown}); err == nil {
+		t.Errorf("expected error with cycle cooldown -1, got nil")
+	}
+
+	// 2. Set valid settings
+	name := "Acme Corp"
+	id := "ACME"
+	tz := "America/New_York"
+	scale := "t-shirt"
+	allowZero := true
+	cyclesEnabled := true
+	duration := 3
+	startDay := 1
+	cooldown := 1
+	triage := true
+
+	err = s.Settings.Set(ctx, writ.SettingsEdit{
+		Name:               &name,
+		Identifier:         &id,
+		Timezone:           &tz,
+		EstimateScale:      &scale,
+		AllowZeroEstimates: &allowZero,
+		CyclesEnabled:      &cyclesEnabled,
+		CycleDurationWeeks: &duration,
+		CycleStartDay:      &startDay,
+		CycleCooldownWeeks: &cooldown,
+		TriageEnabled:      &triage,
+	})
+	if err != nil {
+		t.Fatalf("Settings.Set failed: %v", err)
+	}
+
+	sett, err := s.Settings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Settings.Get failed: %v", err)
+	}
+
+	if sett.Name != "Acme Corp" {
+		t.Errorf("Name = %q, want 'Acme Corp'", sett.Name)
+	}
+	if sett.Identifier != "ACME" {
+		t.Errorf("Identifier = %q, want 'ACME'", sett.Identifier)
+	}
+	if sett.Timezone != "America/New_York" {
+		t.Errorf("Timezone = %q, want 'America/New_York'", sett.Timezone)
+	}
+	if sett.EstimateScale != "t-shirt" {
+		t.Errorf("EstimateScale = %q, want 't-shirt'", sett.EstimateScale)
+	}
+	if !sett.AllowZeroEstimates {
+		t.Errorf("AllowZeroEstimates = false, want true")
+	}
+	if !sett.CyclesEnabled {
+		t.Errorf("CyclesEnabled = false, want true")
+	}
+	if sett.CycleDurationWeeks != 3 {
+		t.Errorf("CycleDurationWeeks = %d, want 3", sett.CycleDurationWeeks)
+	}
+	if sett.CycleStartDay != 1 {
+		t.Errorf("CycleStartDay = %d, want 1", sett.CycleStartDay)
+	}
+	if sett.CycleCooldownWeeks != 1 {
+		t.Errorf("CycleCooldownWeeks = %d, want 1", sett.CycleCooldownWeeks)
+	}
+	if !sett.TriageEnabled {
+		t.Errorf("TriageEnabled = false, want true")
+	}
+
+	// 3. Partial update preserves untouched fields
+	newName := "Acme Global"
+	err = s.Settings.Set(ctx, writ.SettingsEdit{
+		Name: &newName,
+	})
+	if err != nil {
+		t.Fatalf("partial Settings.Set failed: %v", err)
+	}
+
+	sett2, err := s.Settings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Settings.Get failed: %v", err)
+	}
+	if sett2.Name != "Acme Global" {
+		t.Errorf("Name = %q, want 'Acme Global'", sett2.Name)
+	}
+	if sett2.Identifier != "ACME" {
+		t.Errorf("Identifier = %q, want 'ACME'", sett2.Identifier)
+	}
+	if sett2.EstimateScale != "t-shirt" {
+		t.Errorf("EstimateScale = %q, want 't-shirt'", sett2.EstimateScale)
+	}
+}
+
+func TestSettingsWorkspaceRouting(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. Setup workspace repo
+	wsDir, _ := setupConfiguredRepo(t)
+	wsStore, err := writ.Open(wsDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open workspace repo failed: %v", err)
+	}
+	defer wsStore.Close()
+
+	// 2. Setup project repo linked to workspace repo
+	projDir, _ := setupConfiguredRepo(t)
+	relPath, err := filepath.Rel(projDir, wsDir)
+	if err != nil {
+		t.Fatalf("Rel path failed: %v", err)
+	}
+	runGitCmd(t, projDir, "config", "writ.workspace", relPath)
+
+	projStore, err := writ.Open(projDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open project repo failed: %v", err)
+	}
+	defer projStore.Close()
+
+	// 3. Set settings via project repo
+	name := "Workspace via Project"
+	id := "PROJ"
+	if err := projStore.Settings.Set(ctx, writ.SettingsEdit{
+		Name:       &name,
+		Identifier: &id,
+	}); err != nil {
+		t.Fatalf("Settings.Set via project store failed: %v", err)
+	}
+
+	// 4. Verify settings updated in workspace repo
+	wsSett, err := wsStore.Settings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Settings.Get on workspace store failed: %v", err)
+	}
+	if wsSett.Name != "Workspace via Project" || wsSett.Identifier != "PROJ" {
+		t.Errorf("unexpected settings in workspace store: %+v", wsSett)
+	}
+
+	// 5. Verify query via project repo returns the workspace settings
+	projSett, err := projStore.Settings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Settings.Get on project store failed: %v", err)
+	}
+	if projSett.Name != "Workspace via Project" || projSett.Identifier != "PROJ" {
+		t.Errorf("unexpected settings in project store: %+v", projSett)
+	}
+}

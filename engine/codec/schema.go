@@ -47,6 +47,7 @@ var vocabularySchemaFiles = map[string]string{
 	"label":          "label-ops.schema.json",
 	"document":       "document-ops.schema.json",
 	"section":        "document-ops.schema.json",
+	"settings":       "settings-ops.schema.json",
 }
 
 // vocabularyOpTypes maps an object type to the op types this build defines for
@@ -78,6 +79,7 @@ var vocabularyOpTypes = map[string][]string{
 	"label":          {"create", "update"},
 	"document":       {"create", "label", "link", "update"},
 	"section":        {"create", "delete", "edit", "move", "update"},
+	"settings":       {"set"},
 }
 
 // vocabularyOpVersion is the op version this build defines for every object

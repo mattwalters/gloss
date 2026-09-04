@@ -492,6 +492,48 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 			}
 		}
 
+	case "settings":
+		sett, err := state.FoldSettings(ops)
+		if err != nil {
+			return fmt.Errorf("projection: fold settings %s: %w", objectID, err)
+		}
+
+		unkJSON, err := json.Marshal(sett.UnknownKeys)
+		if err != nil {
+			unkJSON = []byte("{}")
+		}
+
+		allowZero := 0
+		if sett.AllowZeroEstimates {
+			allowZero = 1
+		}
+		cyclesEnabled := 0
+		if sett.CyclesEnabled {
+			cyclesEnabled = 1
+		}
+		triageEnabled := 0
+		if sett.TriageEnabled {
+			triageEnabled = 1
+		}
+
+		_, err = tx.Exec(
+			"INSERT INTO settings (object_id, name, identifier, timezone, estimate_scale, allow_zero_estimates, cycles_enabled, cycle_duration_weeks, cycle_start_day, cycle_cooldown_weeks, triage_enabled, unknown_keys, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			objectID, sett.Name, sett.Identifier, sett.Timezone, sett.EstimateScale, allowZero, cyclesEnabled, sett.CycleDurationWeeks, sett.CycleStartDay, sett.CycleCooldownWeeks, triageEnabled, string(unkJSON), updatedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("projection: insert settings %s: %w", objectID, err)
+		}
+
+		for i, u := range sett.UnknownOps {
+			_, err = tx.Exec(
+				"INSERT OR REPLACE INTO unknown_ops (object_id, op_id, object_type, op_type, op_version, op_index) VALUES (?, ?, ?, ?, ?, ?)",
+				objectID, u.Commit, u.ObjectType, u.OpType, u.OpVersion, i,
+			)
+			if err != nil {
+				return fmt.Errorf("projection: insert unknown op %s: %w", u.Commit, err)
+			}
+		}
+
 	default:
 		// Preserved-but-unreduced ops: record in unknown_ops
 		for i, op := range ops {
@@ -554,6 +596,7 @@ func deleteObjectState(tx *sql.Tx, objectID string) error {
 		"DELETE FROM document_links WHERE document_id = ?",
 		"DELETE FROM document_labels WHERE document_id = ?",
 		"DELETE FROM sections WHERE object_id = ?",
+		"DELETE FROM settings WHERE object_id = ?",
 	}
 	for _, q := range queries {
 		if _, err := tx.Exec(q, objectID); err != nil {

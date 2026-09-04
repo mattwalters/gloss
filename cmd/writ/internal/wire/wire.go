@@ -36,6 +36,7 @@ const (
 	KindDocEdit       = "doc.edit"
 	KindDocLink       = "doc.link"
 	KindDocSection    = "doc.section"
+	KindSettings      = "settings"
 )
 
 // Envelope wraps all machine-readable output in a single versioned container.
@@ -852,5 +853,39 @@ func FromDocumentResults(docs []writ.DocumentResult) []DocumentSummary {
 		}
 	}
 	return res
+}
+
+// SettingsWire represents workspace settings in JSON plumbing output.
+type SettingsWire struct {
+	ObjectID           string         `json:"object_id"`
+	Name               string         `json:"name"`
+	Identifier         string         `json:"identifier"`
+	Timezone           string         `json:"timezone"`
+	EstimateScale      string         `json:"estimate_scale"`
+	AllowZeroEstimates bool           `json:"allow_zero_estimates"`
+	CyclesEnabled      bool           `json:"cycles_enabled"`
+	CycleDurationWeeks int            `json:"cycle_duration_weeks"`
+	CycleStartDay      int            `json:"cycle_start_day"`
+	CycleCooldownWeeks int            `json:"cycle_cooldown_weeks"`
+	TriageEnabled      bool           `json:"triage_enabled"`
+	UnknownKeys        map[string]any `json:"unknown_keys,omitempty"`
+}
+
+// FromSettingsResult converts a domain SettingsResult to its wire representation.
+func FromSettingsResult(res writ.SettingsResult) SettingsWire {
+	return SettingsWire{
+		ObjectID:           res.ObjectID,
+		Name:               res.Settings.Name,
+		Identifier:         res.Settings.Identifier,
+		Timezone:           res.Settings.Timezone,
+		EstimateScale:      res.Settings.EstimateScale,
+		AllowZeroEstimates: res.Settings.AllowZeroEstimates,
+		CyclesEnabled:      res.Settings.CyclesEnabled,
+		CycleDurationWeeks: res.Settings.CycleDurationWeeks,
+		CycleStartDay:      res.Settings.CycleStartDay,
+		CycleCooldownWeeks: res.Settings.CycleCooldownWeeks,
+		TriageEnabled:      res.Settings.TriageEnabled,
+		UnknownKeys:        res.Settings.UnknownKeys,
+	}
 }
 

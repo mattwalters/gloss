@@ -50,6 +50,11 @@ func TestVocabularyEnumsExtractedFromSchemas(t *testing.T) {
 			got:  spec.WorkflowStateTypes(),
 			want: []string{"backlog", "unstarted", "started", "completed", "canceled"},
 		},
+		{
+			name: "EstimateScales",
+			got:  spec.EstimateScales(),
+			want: []string{"none", "fibonacci", "exponential", "linear", "t-shirt"},
+		},
 	}
 
 	for _, tt := range tests {

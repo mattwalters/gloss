@@ -77,6 +77,13 @@ type DocumentResult struct {
 	Sections  []SectionResult `json:"sections,omitempty"`
 }
 
+// SettingsResult represents the workspace settings along with its object ID and timestamps.
+type SettingsResult struct {
+	ObjectID  string         `json:"object_id"`
+	Settings  state.Settings `json:"settings"`
+	UpdatedAt time.Time      `json:"updated_at"`
+}
+
 // DocumentFilter specifies filter criteria when querying documents.
 type DocumentFilter struct {
 	Labels []string
@@ -2383,5 +2390,95 @@ func (d *DB) Section(id string) (SectionResult, error) {
 		CreatedAt: time.Unix(createdAt, 0).UTC(),
 		UpdatedAt: time.Unix(updatedAt, 0).UTC(),
 		Section:   secState,
+	}, nil
+}
+
+// Settings queries the current workspace settings from the projection.
+// If no settings operations have been written to the projection,
+// it returns the default settings.
+func (d *DB) Settings() (SettingsResult, error) {
+	if d == nil || d.db == nil {
+		return SettingsResult{}, fmt.Errorf("projection: database is closed")
+	}
+
+	var (
+		objectID           string
+		name               string
+		identifier         string
+		timezone           string
+		estimateScale      string
+		allowZeroInt       int
+		cyclesEnabledInt   int
+		cycleDurationWeeks int
+		cycleStartDay      int
+		cycleCooldownWeeks int
+		triageEnabledInt   int
+		unkJSON            string
+		updatedAt          int64
+	)
+
+	row := d.db.QueryRow(
+		"SELECT object_id, name, identifier, timezone, estimate_scale, allow_zero_estimates, cycles_enabled, cycle_duration_weeks, cycle_start_day, cycle_cooldown_weeks, triage_enabled, unknown_keys, updated_at FROM settings LIMIT 1",
+	)
+	err := row.Scan(
+		&objectID, &name, &identifier, &timezone, &estimateScale,
+		&allowZeroInt, &cyclesEnabledInt, &cycleDurationWeeks, &cycleStartDay, &cycleCooldownWeeks,
+		&triageEnabledInt, &unkJSON, &updatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return SettingsResult{
+			ObjectID: state.DefaultSettingsObjectID,
+			Settings: state.DefaultSettings(),
+		}, nil
+	}
+	if err != nil {
+		return SettingsResult{}, fmt.Errorf("projection: query settings: %w", err)
+	}
+
+	unkKeys := make(map[string]any)
+	if unkJSON != "" {
+		_ = json.Unmarshal([]byte(unkJSON), &unkKeys)
+	}
+
+	sett := state.Settings{
+		ObjectID:           objectID,
+		Name:               name,
+		Identifier:         identifier,
+		Timezone:           timezone,
+		EstimateScale:      estimateScale,
+		AllowZeroEstimates: allowZeroInt != 0,
+		CyclesEnabled:      cyclesEnabledInt != 0,
+		CycleDurationWeeks: cycleDurationWeeks,
+		CycleStartDay:      cycleStartDay,
+		CycleCooldownWeeks: cycleCooldownWeeks,
+		TriageEnabled:      triageEnabledInt != 0,
+		UnknownKeys:        unkKeys,
+	}
+
+	// Read unknown ops
+	rows, err := d.db.Query(
+		"SELECT op_id, object_type, op_type, op_version FROM unknown_ops WHERE object_id = ? ORDER BY op_index ASC",
+		objectID,
+	)
+	if err != nil {
+		return SettingsResult{}, fmt.Errorf("projection: query unknown_ops: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var u state.UnknownOp
+		if err := rows.Scan(&u.Commit, &u.ObjectType, &u.OpType, &u.OpVersion); err != nil {
+			return SettingsResult{}, fmt.Errorf("projection: scan unknown op: %w", err)
+		}
+		sett.UnknownOps = append(sett.UnknownOps, u)
+	}
+	if err := rows.Err(); err != nil {
+		return SettingsResult{}, fmt.Errorf("projection: iterate unknown_ops: %w", err)
+	}
+
+	return SettingsResult{
+		ObjectID:  objectID,
+		Settings:  sett,
+		UpdatedAt: time.Unix(updatedAt, 0).UTC(),
 	}, nil
 }

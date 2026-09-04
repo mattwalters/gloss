@@ -15,7 +15,8 @@ package projection
 // 10: WRIT-109 added labels table.
 // 11: WRIT-105 added documents, document_links, document_labels, sections tables.
 // 12: WRIT-106 added priority, estimate, position, position_op_id to issues table.
-const schemaVersion = 12
+// 13: WRIT-110 added settings table.
+const schemaVersion = 13
 
 var projectionTables = []string{
 	"meta",
@@ -49,6 +50,7 @@ var projectionTables = []string{
 	"document_links",
 	"document_labels",
 	"sections",
+	"settings",
 }
 
 var tableQueries = map[string]string{
@@ -83,6 +85,7 @@ var tableQueries = map[string]string{
 	"document_links":     "SELECT * FROM document_links ORDER BY document_id ASC, target ASC",
 	"document_labels":    "SELECT * FROM document_labels ORDER BY document_id ASC, label ASC",
 	"sections":           "SELECT * FROM sections ORDER BY object_id ASC",
+	"settings":           "SELECT * FROM settings ORDER BY object_id ASC",
 }
 
 const schemaSQL = `
@@ -383,4 +386,20 @@ CREATE TABLE IF NOT EXISTS sections (
     state_json TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sections_document_order ON sections(document_id, position ASC, op_id ASC);
+
+CREATE TABLE IF NOT EXISTS settings (
+    object_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    identifier TEXT NOT NULL,
+    timezone TEXT NOT NULL,
+    estimate_scale TEXT NOT NULL,
+    allow_zero_estimates INTEGER NOT NULL,
+    cycles_enabled INTEGER NOT NULL,
+    cycle_duration_weeks INTEGER NOT NULL,
+    cycle_start_day INTEGER NOT NULL,
+    cycle_cooldown_weeks INTEGER NOT NULL,
+    triage_enabled INTEGER NOT NULL,
+    unknown_keys TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+);
 `

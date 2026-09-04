@@ -12,6 +12,7 @@
 
 package writ // github.com/writtendev/writ/engine
 
+const DefaultSettingsObjectID = state.DefaultSettingsObjectID
 const EventChanged EventKind = "changed"
 const EventCreated EventKind = "created"
 const EventReset EventKind = "reset"
@@ -47,6 +48,7 @@ var ErrWorkspaceRemoteURLNotSupported = errors.New("writ: remote-URL workspaces 
 var ErrWorkspaceUnconfigured = errors.New("writ: workspace is not configured")
 
 func CycleRules() []Rule
+func DefaultSettings() Settings
 func DocumentRules() []Rule
 func Fold(ops []codec.Op, rules []Rule) (ObjectState, error)
 func FoldComment(ops []codec.Op) (Comment, error)
@@ -58,6 +60,7 @@ func FoldLabel(ops []codec.Op) (Label, error)
 func FoldProject(ops []codec.Op) (Project, error)
 func FoldReview(ops []codec.Op) (Review, error)
 func FoldSection(ops []codec.Op) (Section, error)
+func FoldSettings(ops []codec.Op) (Settings, error)
 func FoldWorkflowState(ops []codec.Op) (WorkflowState, error)
 func IssueRules() []Rule
 func LabelRules() []Rule
@@ -70,6 +73,7 @@ func ResolveGitDir(path string) (GitDirInfo, error)
 func ResolveReference(ref string, localRepoID string, registry []RepoEntry) (ResolvedReference, error)
 func ReviewRules() []Rule
 func SectionRules() []Rule
+func SettingsRules() []Rule
 func WithCacheDir(dir string) Option
 func WithGitBinary(gitBin string) Option
 func WithSigner(signer Signer) Option
@@ -317,6 +321,7 @@ func (*Query) Objects(f ObjectFilter) ([]ObjectResult, error)
 func (*Query) Review(id string) (ReviewResult, error)
 func (*Query) Reviews(f ReviewFilter) ([]ReviewResult, error)
 func (*Query) Section(id string) (SectionResult, error)
+func (*Query) Settings() (SettingsResult, error)
 func (*Query) Threads(subjectType, subjectID string) ([]CommentThread, error)
 func (*Query) WorkflowState(id string) (WorkflowStateResult, error)
 func (*Query) WorkflowStates(f WorkflowStateFilter) ([]WorkflowStateResult, error)
@@ -379,6 +384,30 @@ type SectionEdit struct {
 
 type SectionResult = projection.SectionResult
 
+type Settings = state.Settings
+
+type SettingsEdit struct {
+	Name *string `json:"name,omitempty"`
+	Identifier *string `json:"identifier,omitempty"`
+	Timezone *string `json:"timezone,omitempty"`
+	EstimateScale *string `json:"estimate_scale,omitempty"`
+	AllowZeroEstimates *bool `json:"allow_zero_estimates,omitempty"`
+	CyclesEnabled *bool `json:"cycles_enabled,omitempty"`
+	CycleDurationWeeks *int `json:"cycle_duration_weeks,omitempty"`
+	CycleStartDay *int `json:"cycle_start_day,omitempty"`
+	CycleCooldownWeeks *int `json:"cycle_cooldown_weeks,omitempty"`
+	TriageEnabled *bool `json:"triage_enabled,omitempty"`
+	CustomFields map[string]any `json:"-"`
+}
+
+type SettingsResult = projection.SettingsResult
+
+type SettingsService struct {
+	// unexported fields
+}
+func (*SettingsService) Get(ctx context.Context) (Settings, error)
+func (*SettingsService) Set(ctx context.Context, edit SettingsEdit) error
+
 type Signer = codec.Signer
 
 type Store struct {
@@ -391,6 +420,7 @@ type Store struct {
 	WorkflowStates *WorkflowStates
 	Labels *Labels
 	Documents *Documents
+	Settings *SettingsService
 	Workspace *Workspace
 	// unexported fields
 }
@@ -884,6 +914,7 @@ func (*DB) Reviews(f ReviewFilter) ([]ReviewResult, error)
 func (*DB) SaveDraft(draft Draft) (string, error)
 func (*DB) Section(id string) (SectionResult, error)
 func (*DB) SetSyncCursor(remote, refName, tip string, lastSyncedAt time.Time) error
+func (*DB) Settings() (SettingsResult, error)
 func (*DB) String() string
 func (*DB) SyncCursors(remote string) ([]SyncCursor, error)
 func (*DB) Threads(subjectType, subjectID string) ([]state.CommentThread, error)
@@ -1037,6 +1068,12 @@ type SectionResult struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Section state.Section `json:"section"`
+}
+
+type SettingsResult struct {
+	ObjectID string `json:"object_id"`
+	Settings state.Settings `json:"settings"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type Stats struct {
@@ -1284,12 +1321,15 @@ type Writer struct {
 
 package state // github.com/writtendev/writ/engine/state
 
+const DefaultSettingsObjectID = "00000000000000000000000073657474"
+
 var ErrCycle = fold.ErrCycle
 var ErrDuplicateOpID = fold.ErrDuplicateOpID
 var ErrInvalidReference = errors.New("writ: invalid reference format")
 var ErrMixedObjects = fold.ErrMixedObjects
 
 func CycleRules() []Rule
+func DefaultSettings() Settings
 func DocumentRules() []Rule
 func Fold(ops []codec.Op, rules []Rule) (ObjectState, error)
 func FoldComment(ops []codec.Op) (Comment, error)
@@ -1302,6 +1342,7 @@ func FoldProject(ops []codec.Op) (Project, error)
 func FoldRepo(ops []codec.Op) (RepoEntry, error)
 func FoldReview(ops []codec.Op) (Review, error)
 func FoldSection(ops []codec.Op) (Section, error)
+func FoldSettings(ops []codec.Op) (Settings, error)
 func FoldWorkflowState(ops []codec.Op) (WorkflowState, error)
 func IssueRules() []Rule
 func LabelRules() []Rule
@@ -1313,6 +1354,7 @@ func RepoRules() []Rule
 func ResolveReference(ref string, localRepoID string, registry []RepoEntry) (ResolvedReference, error)
 func ReviewRules() []Rule
 func SectionRules() []Rule
+func SettingsRules() []Rule
 func WorkflowStateRules() []Rule
 
 type Anchor = resolve.Anchor
@@ -1497,6 +1539,22 @@ type Section struct {
 func (Section) ConflictBodies() []string
 func (Section) IsConflicted() bool
 func (Section) SettledBody() string
+
+type Settings struct {
+	ObjectID string `json:"object_id"`
+	Name string `json:"name"`
+	Identifier string `json:"identifier"`
+	Timezone string `json:"timezone"`
+	EstimateScale string `json:"estimate_scale"`
+	AllowZeroEstimates bool `json:"allow_zero_estimates"`
+	CyclesEnabled bool `json:"cycles_enabled"`
+	CycleDurationWeeks int `json:"cycle_duration_weeks"`
+	CycleStartDay int `json:"cycle_start_day"`
+	CycleCooldownWeeks int `json:"cycle_cooldown_weeks"`
+	TriageEnabled bool `json:"triage_enabled"`
+	UnknownKeys map[string]any `json:"unknown_keys,omitempty"`
+	UnknownOps []UnknownOp `json:"unknown_ops,omitempty"`
+}
 
 type UnknownOp struct {
 	Commit string `json:"commit"`

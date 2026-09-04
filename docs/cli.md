@@ -41,6 +41,8 @@ slug: "cli"
 - [`writ label create`](#writ-label-create)
 - [`writ label edit`](#writ-label-edit)
 - [`writ label migrate`](#writ-label-migrate)
+- [`writ settings get`](#writ-settings-get)
+- [`writ settings set`](#writ-settings-set)
 - [`writ sync`](#writ-sync)
 - [`writ version`](#writ-version)
 - [`writ completion`](#writ-completion)
@@ -962,6 +964,69 @@ Migrate legacy bare-string labels across issues and reviews into collaborative l
 ```bash
 writ label migrate
 writ label migrate --json
+```
+
+### `writ settings get`
+
+View workspace settings
+
+#### Synopsis
+
+```console
+Usage: writ settings get [-C <dir>] [--json]
+```
+
+#### Description
+
+Display the current workspace settings in tabular format or as machine-readable JSON.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-json`: Output machine-readable JSON
+
+#### Examples
+
+```bash
+writ settings get
+writ settings get --json
+```
+
+### `writ settings set`
+
+Update workspace settings
+
+#### Synopsis
+
+```console
+Usage: writ settings set [-C <dir>] [-name <name>] [-identifier <id>] [-timezone <tz>] [-estimate-scale <scale>] [-allow-zero-estimates <bool>] [-cycles-enabled <bool>] [-cycle-duration <weeks>] [-cycle-start-day <day>] [-cycle-cooldown <weeks>] [-triage-enabled <bool>] [--json]
+```
+
+#### Description
+
+Update one or more workspace configuration settings. Untouched settings and unknown keys are preserved.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-json`: Output machine-readable JSON
+- `-name string`: Workspace display name
+- `-identifier string`: Issue identifier prefix
+- `-timezone string`: IANA timezone identifier
+- `-estimate-scale string`: Estimate scale (none, fibonacci, exponential, linear, t-shirt)
+- `-allow-zero-estimates string`: Allow zero as estimate (true|false)
+- `-cycles-enabled string`: Enable cycles (true|false)
+- `-cycle-duration int`: Cycle duration in weeks
+- `-cycle-start-day int`: Cycle start day (1=Monday, 7=Sunday)
+- `-cycle-cooldown int`: Cycle cooldown in weeks
+- `-triage-enabled string`: Enable triage mode (true|false)
+
+#### Examples
+
+```bash
+writ settings set --name "My Workspace" --identifier WRIT
+writ settings set --estimate-scale t-shirt --timezone America/New_York
+writ settings set --cycles-enabled=true --cycle-duration 3
 ```
 
 ### `writ sync`
