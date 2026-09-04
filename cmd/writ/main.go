@@ -59,6 +59,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return runComment(ctx, defaultDir, args[1:], stdout, stderr)
 	case "doc":
 		return runDoc(ctx, defaultDir, args[1:], stdout, stderr)
+	case "project":
+		return runProject(ctx, defaultDir, args[1:], stdout, stderr)
 	case "issue":
 		return runIssue(ctx, defaultDir, args[1:], stdout, stderr)
 	case "review":

@@ -89,6 +89,15 @@ type DocumentFilter struct {
 	Labels []string
 }
 
+// ProjectResult represents a project object along with its authorship and timestamps.
+type ProjectResult struct {
+	ObjectID  string        `json:"object_id"`
+	Author    Author        `json:"author"`
+	CreatedAt time.Time     `json:"created_at"`
+	UpdatedAt time.Time     `json:"updated_at"`
+	Project   state.Project `json:"project"`
+}
+
 // ResolvedPosition describes the resolved anchor position for a comment side.
 type ResolvedPosition struct {
 	Side      string `json:"side"`
@@ -2108,6 +2117,237 @@ func (d *DB) Label(id string) (LabelResult, error) {
 			Name:        name,
 			Color:       color,
 			Description: description,
+			UnknownOps:  unknownOps,
+		},
+	}, nil
+}
+
+// Projects executes a list and filter query over projects.
+func (d *DB) Projects(f ProjectFilter) ([]ProjectResult, error) {
+	if d == nil || d.db == nil {
+		return nil, fmt.Errorf("projection: database is closed")
+	}
+
+	var sb strings.Builder
+	var args []any
+
+	sb.WriteString("SELECT p.object_id, p.title, p.description, p.status, p.reason, ")
+	sb.WriteString("o.author_name, o.author_email, o.created_at, o.updated_at ")
+	sb.WriteString("FROM projects p JOIN objects o ON o.object_id = p.object_id WHERE 1=1")
+
+	if len(f.Status) > 0 {
+		sb.WriteString(" AND p.status IN (" + placeholders(len(f.Status)) + ")")
+		for _, s := range f.Status {
+			args = append(args, s)
+		}
+	}
+
+	if f.Text != "" {
+		sb.WriteString(" AND (p.title LIKE ? ESCAPE '\\' OR p.description LIKE ? ESCAPE '\\')")
+		escaped := "%" + escapeLike(f.Text) + "%"
+		args = append(args, escaped, escaped)
+	}
+
+	switch f.OrderBy {
+	case OrderByCreatedAtAsc:
+		sb.WriteString(" ORDER BY o.created_at ASC, p.object_id ASC")
+	case OrderByCreatedAtDesc:
+		sb.WriteString(" ORDER BY o.created_at DESC, p.object_id DESC")
+	case OrderByUpdatedAtAsc:
+		sb.WriteString(" ORDER BY o.updated_at ASC, p.object_id ASC")
+	case OrderByUpdatedAtDesc:
+		sb.WriteString(" ORDER BY o.updated_at DESC, p.object_id DESC")
+	case OrderByTitleAsc:
+		sb.WriteString(" ORDER BY p.title ASC, p.object_id ASC")
+	case OrderByTitleDesc:
+		sb.WriteString(" ORDER BY p.title DESC, p.object_id DESC")
+	default:
+		sb.WriteString(" ORDER BY o.created_at ASC, p.object_id ASC")
+	}
+
+	appendLimitOffset(&sb, &args, f.Limit, f.Offset)
+
+	rows, err := d.db.Query(sb.String(), args...)
+	if err != nil {
+		return nil, fmt.Errorf("projection: query projects: %w", err)
+	}
+	defer rows.Close()
+
+	type rawProject struct {
+		objectID    string
+		title       string
+		description string
+		status      string
+		reason      string
+		authorName  string
+		authorEmail string
+		createdAt   int64
+		updatedAt   int64
+	}
+
+	var rawProjects []rawProject
+	var objectIDs []string
+
+	for rows.Next() {
+		var rp rawProject
+		if err := rows.Scan(
+			&rp.objectID, &rp.title, &rp.description, &rp.status, &rp.reason,
+			&rp.authorName, &rp.authorEmail, &rp.createdAt, &rp.updatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("projection: scan project: %w", err)
+		}
+		rawProjects = append(rawProjects, rp)
+		objectIDs = append(objectIDs, rp.objectID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("projection: iterate projects: %w", err)
+	}
+
+	if len(rawProjects) == 0 {
+		return []ProjectResult{}, nil
+	}
+
+	// Batch load member issues.
+	issuesMap := make(map[string][]string)
+	issRows, err := d.queryIn("SELECT project_object_id, issue FROM project_issues WHERE project_object_id IN (?) ORDER BY project_object_id ASC, issue ASC", objectIDs)
+	if err != nil {
+		return nil, fmt.Errorf("projection: query project issues: %w", err)
+	}
+	for issRows.Next() {
+		var objID, issue string
+		if err := issRows.Scan(&objID, &issue); err != nil {
+			issRows.Close()
+			return nil, fmt.Errorf("projection: scan project issue: %w", err)
+		}
+		issuesMap[objID] = append(issuesMap[objID], issue)
+	}
+	issRows.Close()
+
+	// Batch load unknown_ops.
+	unknownMap := make(map[string][]state.UnknownOp)
+	uRows, err := d.queryIn("SELECT object_id, op_id, object_type, op_type, op_version FROM unknown_ops WHERE object_id IN (?) ORDER BY object_id ASC, op_index ASC", objectIDs)
+	if err != nil {
+		return nil, fmt.Errorf("projection: query unknown_ops: %w", err)
+	}
+	for uRows.Next() {
+		var objID, opID, objType, opType string
+		var opVersion int64
+		if err := uRows.Scan(&objID, &opID, &objType, &opType, &opVersion); err != nil {
+			uRows.Close()
+			return nil, fmt.Errorf("projection: scan unknown op: %w", err)
+		}
+		unknownMap[objID] = append(unknownMap[objID], state.UnknownOp{
+			Commit:     opID,
+			ObjectType: objType,
+			OpType:     opType,
+			OpVersion:  opVersion,
+		})
+	}
+	uRows.Close()
+
+	results := make([]ProjectResult, 0, len(rawProjects))
+	for _, rp := range rawProjects {
+		results = append(results, ProjectResult{
+			ObjectID: rp.objectID,
+			Author: Author{
+				Name:  rp.authorName,
+				Email: rp.authorEmail,
+			},
+			CreatedAt: time.Unix(rp.createdAt, 0).UTC(),
+			UpdatedAt: time.Unix(rp.updatedAt, 0).UTC(),
+			Project: state.Project{
+				Title:       rp.title,
+				Description: rp.description,
+				Status:      rp.status,
+				Reason:      rp.reason,
+				Issues:      issuesMap[rp.objectID],
+				UnknownOps:  unknownMap[rp.objectID],
+			},
+		})
+	}
+
+	return results, nil
+}
+
+// Project fetches a single project by its object ID, returning ErrNotFound if not found.
+func (d *DB) Project(objectID string) (ProjectResult, error) {
+	if d == nil || d.db == nil {
+		return ProjectResult{}, fmt.Errorf("projection: database is closed")
+	}
+	if objectID == "" {
+		return ProjectResult{}, ErrNotFound
+	}
+
+	var (
+		title       string
+		description string
+		status      string
+		reason      string
+		authorName  string
+		authorEmail string
+		createdAt   int64
+		updatedAt   int64
+	)
+
+	err := d.db.QueryRow(
+		"SELECT p.title, p.description, p.status, p.reason, o.author_name, o.author_email, o.created_at, o.updated_at FROM projects p JOIN objects o ON o.object_id = p.object_id WHERE p.object_id = ?",
+		objectID,
+	).Scan(&title, &description, &status, &reason, &authorName, &authorEmail, &createdAt, &updatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ProjectResult{}, ErrNotFound
+		}
+		return ProjectResult{}, fmt.Errorf("projection: query project %s: %w", objectID, err)
+	}
+
+	var issues []string
+	issRows, err := d.db.Query("SELECT issue FROM project_issues WHERE project_object_id = ? ORDER BY issue ASC", objectID)
+	if err != nil {
+		return ProjectResult{}, fmt.Errorf("projection: query project issues: %w", err)
+	}
+	defer issRows.Close()
+	for issRows.Next() {
+		var issue string
+		if err := issRows.Scan(&issue); err != nil {
+			return ProjectResult{}, fmt.Errorf("projection: scan project issue: %w", err)
+		}
+		issues = append(issues, issue)
+	}
+	if err := issRows.Err(); err != nil {
+		return ProjectResult{}, fmt.Errorf("projection: iterate project issues: %w", err)
+	}
+
+	var unknownOps []state.UnknownOp
+	uRows, err := d.db.Query("SELECT op_id, object_type, op_type, op_version FROM unknown_ops WHERE object_id = ? ORDER BY op_index ASC", objectID)
+	if err != nil {
+		return ProjectResult{}, fmt.Errorf("projection: query unknown_ops: %w", err)
+	}
+	defer uRows.Close()
+	for uRows.Next() {
+		var u state.UnknownOp
+		if err := uRows.Scan(&u.Commit, &u.ObjectType, &u.OpType, &u.OpVersion); err != nil {
+			return ProjectResult{}, fmt.Errorf("projection: scan unknown op: %w", err)
+		}
+		unknownOps = append(unknownOps, u)
+	}
+	if err := uRows.Err(); err != nil {
+		return ProjectResult{}, fmt.Errorf("projection: iterate unknown_ops: %w", err)
+	}
+
+	return ProjectResult{
+		ObjectID: objectID,
+		Author: Author{
+			Name:  authorName,
+			Email: authorEmail,
+		},
+		CreatedAt: time.Unix(createdAt, 0).UTC(),
+		UpdatedAt: time.Unix(updatedAt, 0).UTC(),
+		Project: state.Project{
+			Title:       title,
+			Description: description,
+			Status:      status,
+			Reason:      reason,
+			Issues:      issues,
 			UnknownOps:  unknownOps,
 		},
 	}, nil

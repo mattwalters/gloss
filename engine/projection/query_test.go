@@ -2,6 +2,7 @@ package projection_test
 
 import (
 	"database/sql"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -702,6 +703,112 @@ func TestIssuesPriorityEstimatePosition(t *testing.T) {
 	}
 	if len(posDesc) != 4 || posDesc[0].ObjectID != "iss-n" || posDesc[1].ObjectID != "iss-u" || posDesc[2].ObjectID != "iss-h2" || posDesc[3].ObjectID != "iss-h1" {
 		t.Errorf("OrderByPositionDesc unexpected order: %v, %v, %v, %v", posDesc[0].ObjectID, posDesc[1].ObjectID, posDesc[2].ObjectID, posDesc[3].ObjectID)
+	}
+}
+
+func TestProjectsQuery(t *testing.T) {
+	db := setupSeededDB(t)
+	defer db.Close()
+
+	rawDB := db.DB()
+
+	insertObject(t, rawDB, "proj-1", "project", 1, "op-proj-1", "Alice Smith", "alice@example.com", 1000, 1000)
+	execSQL(t, rawDB, "INSERT INTO projects (object_id, title, description, status, reason) VALUES (?, ?, ?, ?, ?)",
+		"proj-1", "Authentication Redesign", "Redesign auth flow to support SAML and OIDC", "active", "")
+	execSQL(t, rawDB, "INSERT INTO project_issues (project_object_id, issue) VALUES (?, ?)", "proj-1", "iss-1")
+	execSQL(t, rawDB, "INSERT INTO project_issues (project_object_id, issue) VALUES (?, ?)", "proj-1", "iss-2")
+
+	insertObject(t, rawDB, "proj-2", "project", 2, "op-proj-2b", "Bob Jones", "bob@example.com", 2000, 2100)
+	execSQL(t, rawDB, "INSERT INTO projects (object_id, title, description, status, reason) VALUES (?, ?, ?, ?, ?)",
+		"proj-2", "Storage Cleanup", "Remove legacy drivers", "paused", "waiting on upstream")
+
+	insertObject(t, rawDB, "proj-3", "project", 1, "op-proj-3", "Charlie Brown", "charlie@example.com", 3000, 3000)
+	execSQL(t, rawDB, "INSERT INTO projects (object_id, title, description, status, reason) VALUES (?, ?, ?, ?, ?)",
+		"proj-3", "Docs Overhaul", "", "canceled", "deprioritized")
+
+	// 1. Unfiltered list, default order (created_at ASC).
+	all, err := db.Projects(projection.ProjectFilter{})
+	if err != nil {
+		t.Fatalf("Projects() failed: %v", err)
+	}
+	if len(all) != 3 || all[0].ObjectID != "proj-1" || all[1].ObjectID != "proj-2" || all[2].ObjectID != "proj-3" {
+		t.Fatalf("unexpected Projects() order: %v", all)
+	}
+	if len(all[0].Project.Issues) != 2 || all[0].Project.Issues[0] != "iss-1" || all[0].Project.Issues[1] != "iss-2" {
+		t.Errorf("proj-1 issues = %v, want [iss-1 iss-2]", all[0].Project.Issues)
+	}
+	if len(all[1].Project.Issues) != 0 {
+		t.Errorf("proj-2 issues = %v, want none", all[1].Project.Issues)
+	}
+
+	// 2. Status filter.
+	active, err := db.Projects(projection.ProjectFilter{Status: []string{"active", "paused"}})
+	if err != nil {
+		t.Fatalf("Projects(Status) failed: %v", err)
+	}
+	if len(active) != 2 {
+		t.Fatalf("Projects(Status) = %d results, want 2", len(active))
+	}
+	for _, p := range active {
+		if p.ObjectID == "proj-3" {
+			t.Errorf("Projects(Status) unexpectedly matched canceled proj-3")
+		}
+	}
+
+	// 3. Text filter matches title or description, case-insensitively via LIKE.
+	byText, err := db.Projects(projection.ProjectFilter{Text: "legacy"})
+	if err != nil {
+		t.Fatalf("Projects(Text) failed: %v", err)
+	}
+	if len(byText) != 1 || byText[0].ObjectID != "proj-2" {
+		t.Fatalf("Projects(Text=legacy) = %v, want [proj-2]", byText)
+	}
+
+	// 4. Ordering: title ascending.
+	byTitle, err := db.Projects(projection.ProjectFilter{OrderBy: projection.OrderByTitleAsc})
+	if err != nil {
+		t.Fatalf("Projects(OrderByTitleAsc) failed: %v", err)
+	}
+	if len(byTitle) != 3 || byTitle[0].ObjectID != "proj-1" || byTitle[1].ObjectID != "proj-3" || byTitle[2].ObjectID != "proj-2" {
+		t.Errorf("Projects(OrderByTitleAsc) unexpected order: %v, %v, %v", byTitle[0].ObjectID, byTitle[1].ObjectID, byTitle[2].ObjectID)
+	}
+
+	// 5. Limit/offset.
+	paged, err := db.Projects(projection.ProjectFilter{OrderBy: projection.OrderByCreatedAtAsc, Limit: 1, Offset: 1})
+	if err != nil {
+		t.Fatalf("Projects(Limit/Offset) failed: %v", err)
+	}
+	if len(paged) != 1 || paged[0].ObjectID != "proj-2" {
+		t.Fatalf("Projects(Limit=1,Offset=1) = %v, want [proj-2]", paged)
+	}
+
+	// 6. Single-object fetch, with members.
+	single, err := db.Project("proj-1")
+	if err != nil {
+		t.Fatalf("Project(proj-1) failed: %v", err)
+	}
+	if single.Project.Title != "Authentication Redesign" || single.Project.Status != "active" {
+		t.Errorf("unexpected Project(proj-1): %+v", single.Project)
+	}
+	if len(single.Project.Issues) != 2 {
+		t.Errorf("Project(proj-1).Issues = %v, want 2 members", single.Project.Issues)
+	}
+	if single.Author.Name != "Alice Smith" || single.Author.Email != "alice@example.com" {
+		t.Errorf("unexpected Project(proj-1) author: %+v", single.Author)
+	}
+
+	// 7. Single-object fetch, no members.
+	noMembers, err := db.Project("proj-2")
+	if err != nil {
+		t.Fatalf("Project(proj-2) failed: %v", err)
+	}
+	if len(noMembers.Project.Issues) != 0 {
+		t.Errorf("Project(proj-2).Issues = %v, want none", noMembers.Project.Issues)
+	}
+
+	// 8. ErrNotFound for a missing id.
+	if _, err := db.Project("does-not-exist"); !errors.Is(err, projection.ErrNotFound) {
+		t.Errorf("Project(does-not-exist) error = %v, want ErrNotFound", err)
 	}
 }
 

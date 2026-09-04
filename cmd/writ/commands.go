@@ -43,6 +43,7 @@ var rootCommand = &command{
 		initCmd,
 		commentCmd,
 		docCmd,
+		projectCmd,
 		issueCmd,
 		reviewCmd,
 		stateCmd,
@@ -917,6 +918,139 @@ var docSectionDeleteCmd = &command{
 	},
 }
 
+var projectCmd = &command{
+	Name:      "project",
+	Short:     "Manage projects and their issue membership",
+	UsageLine: "Usage: writ project [-C <dir>] <subcommand> [arguments]",
+	Long:      "Manage project collaborative objects: creation, metadata, lifecycle status, and issue membership.",
+	Flags: []flagSpec{
+		{
+			Name:  "C",
+			Arg:   "<dir>",
+			Usage: "Run as if writ was started in <dir>",
+		},
+	},
+	Subs: []*command{
+		projectCreateCmd,
+		projectListCmd,
+		projectShowCmd,
+		projectUpdateCmd,
+		projectStatusCmd,
+		projectAddCmd,
+		projectRemoveCmd,
+	},
+}
+
+var projectCreateCmd = &command{
+	Name:      "create",
+	Short:     "Create a project",
+	UsageLine: "Usage: writ project create [-C <dir>] [-t <title>] [-description <d>] [--json]",
+	Long:      "Create a new project collaborative object.",
+	Flags: []flagSpec{
+		{Name: "C", Arg: "<dir>", Usage: "Run as if writ was started in <dir>"},
+		{Name: "t", Arg: "<title>", Usage: "Project title"},
+		{Name: "description", Arg: "<d>", Usage: "Project description"},
+		{Name: "json", Usage: "Output machine-readable JSON"},
+	},
+	Examples: []string{
+		`writ project create -t "Authentication Redesign"`,
+		`writ project create -t "Authentication Redesign" -description "Redesign auth flow" --json`,
+	},
+}
+
+var projectListCmd = &command{
+	Name:      "list",
+	Short:     "List projects",
+	UsageLine: "Usage: writ project list [-C <dir>] [-status <s>]... [-text <q>] [-limit N] [-sort <order>] [--json]",
+	Long:      "List projects, optionally filtered by status or text match.",
+	Flags: []flagSpec{
+		{Name: "C", Arg: "<dir>", Usage: "Run as if writ was started in <dir>"},
+		{Name: "status", Arg: "<s>", Usage: "Filter by project status", Values: spec.ProjectStatuses(), Repeatable: true},
+		{Name: "text", Arg: "<q>", Usage: "Filter by text match in title or description"},
+		{Name: "limit", Arg: "N", Usage: "Maximum number of projects to return"},
+		{Name: "sort", Arg: "<order>", Usage: "Sort order (created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc)"},
+		{Name: "json", Usage: "Output machine-readable JSON"},
+	},
+	Examples: []string{
+		"writ project list",
+		"writ project list -status active -status planned --json",
+	},
+}
+
+var projectShowCmd = &command{
+	Name:      "show",
+	Short:     "Show project details",
+	UsageLine: "Usage: writ project show [-C <dir>] <id> [--json]",
+	Long:      "Display project metadata and member issue references.",
+	Flags: []flagSpec{
+		{Name: "C", Arg: "<dir>", Usage: "Run as if writ was started in <dir>"},
+		{Name: "json", Usage: "Output machine-readable JSON"},
+	},
+	Examples: []string{
+		"writ project show 01J8ABC",
+		"writ project show 01J8ABC --json",
+	},
+}
+
+var projectUpdateCmd = &command{
+	Name:      "update",
+	Short:     "Update project metadata",
+	UsageLine: "Usage: writ project update [-C <dir>] <id> [-t <title>] [-description <d>] [--json]",
+	Long:      "Update project title or description.",
+	Flags: []flagSpec{
+		{Name: "C", Arg: "<dir>", Usage: "Run as if writ was started in <dir>"},
+		{Name: "t", Arg: "<title>", Usage: "New title"},
+		{Name: "description", Arg: "<d>", Usage: "New description"},
+		{Name: "json", Usage: "Output machine-readable JSON"},
+	},
+	Examples: []string{
+		`writ project update 01J8ABC -t "Authentication & SSO Redesign"`,
+	},
+}
+
+var projectStatusCmd = &command{
+	Name:      "status",
+	Short:     "Transition a project's lifecycle status",
+	UsageLine: "Usage: writ project status [-C <dir>] <id> <status> [-reason <r>] [--json]",
+	Long:      "Set a project's lifecycle status (planned, active, paused, completed, canceled).",
+	Flags: []flagSpec{
+		{Name: "C", Arg: "<dir>", Usage: "Run as if writ was started in <dir>"},
+		{Name: "reason", Arg: "<r>", Usage: "Reason for status change"},
+		{Name: "json", Usage: "Output machine-readable JSON"},
+	},
+	Examples: []string{
+		"writ project status 01J8ABC paused -reason \"Waiting on upstream API release\"",
+	},
+}
+
+var projectAddCmd = &command{
+	Name:      "add",
+	Short:     "Add issues to a project",
+	UsageLine: "Usage: writ project add [-C <dir>] <id> <issue-ref>... [--json]",
+	Long:      "Add one or more issues to a project's member set.",
+	Flags: []flagSpec{
+		{Name: "C", Arg: "<dir>", Usage: "Run as if writ was started in <dir>"},
+		{Name: "json", Usage: "Output machine-readable JSON"},
+	},
+	Examples: []string{
+		"writ project add 01J8ABC 01J8ISSUE1 01J8ISSUE2",
+	},
+}
+
+var projectRemoveCmd = &command{
+	Name:      "remove",
+	Short:     "Remove issues from a project",
+	UsageLine: "Usage: writ project remove [-C <dir>] <id> <issue-ref>... [--json]",
+	Long:      "Remove one or more issues from a project's member set.",
+	Flags: []flagSpec{
+		{Name: "C", Arg: "<dir>", Usage: "Run as if writ was started in <dir>"},
+		{Name: "json", Usage: "Output machine-readable JSON"},
+	},
+	Examples: []string{
+		"writ project remove 01J8ABC 01J8ISSUE1",
+	},
+}
+
 var syncCmd = &command{
 	Name:      "sync",
 	Short:     "Synchronize operations with git remotes",
@@ -987,43 +1121,50 @@ var flagSetConstructors map[string]func() *flag.FlagSet
 
 func init() {
 	flagSetConstructors = map[string]func() *flag.FlagSet{
-		"init":           func() *flag.FlagSet { fs, _ := newInitFlagSet(""); return fs },
-		"comment edit":   func() *flag.FlagSet { fs, _ := newCommentEditFlagSet(""); return fs },
-		"comment delete": func() *flag.FlagSet { fs, _ := newCommentDeleteFlagSet(""); return fs },
-		"issue create":   func() *flag.FlagSet { fs, _ := newIssueCreateFlagSet(""); return fs },
-		"issue update":   func() *flag.FlagSet { fs, _ := newIssueUpdateFlagSet(""); return fs },
-		"issue status":   func() *flag.FlagSet { fs, _ := newIssueStatusFlagSet(""); return fs },
-		"issue comment":  func() *flag.FlagSet { fs, _ := newIssueCommentFlagSet(""); return fs },
-		"issue assign":   func() *flag.FlagSet { fs, _ := newIssueAssignFlagSet(""); return fs },
-		"issue list":     func() *flag.FlagSet { fs, _ := newIssueListFlagSet(""); return fs },
-		"issue link":     func() *flag.FlagSet { fs, _ := newIssueLinkFlagSet(""); return fs },
-		"issue label":    func() *flag.FlagSet { fs, _ := newIssueLabelFlagSet(""); return fs },
-		"review open":    func() *flag.FlagSet { fs, _ := newReviewOpenFlagSet(""); return fs },
-		"review comment": func() *flag.FlagSet { fs, _ := newReviewCommentFlagSet(""); return fs },
-		"review approve": func() *flag.FlagSet { fs, _ := newReviewApproveFlagSet(""); return fs },
-		"review assign":  func() *flag.FlagSet { fs, _ := newReviewAssignFlagSet(""); return fs },
-		"review label":   func() *flag.FlagSet { fs, _ := newReviewLabelFlagSet(""); return fs },
-		"review link":    func() *flag.FlagSet { fs, _ := newReviewLinkFlagSet(""); return fs },
-		"review status":  func() *flag.FlagSet { fs, _ := newReviewStatusFlagSet(""); return fs },
-		"review list":    func() *flag.FlagSet { fs, _ := newReviewListFlagSet(""); return fs },
-		"state list":           func() *flag.FlagSet { fs, _ := newStateListFlagSet(""); return fs },
-		"state create":         func() *flag.FlagSet { fs, _ := newStateCreateFlagSet(""); return fs },
-		"state update":         func() *flag.FlagSet { fs, _ := newStateUpdateFlagSet(""); return fs },
-		"label list":           func() *flag.FlagSet { fs, _ := newLabelListFlagSet(""); return fs },
-		"label create":         func() *flag.FlagSet { fs, _ := newLabelCreateFlagSet(""); return fs },
-		"label edit":           func() *flag.FlagSet { fs, _ := newLabelEditFlagSet(""); return fs },
-		"doc create":           func() *flag.FlagSet { fs, _ := newDocCreateFlagSet(""); return fs },
-		"doc list":             func() *flag.FlagSet { fs, _ := newDocListFlagSet(""); return fs },
-		"doc show":             func() *flag.FlagSet { fs, _ := newDocShowFlagSet(""); return fs },
-		"doc edit":             func() *flag.FlagSet { fs, _ := newDocEditFlagSet(""); return fs },
-		"doc link":             func() *flag.FlagSet { fs, _ := newDocLinkFlagSet(""); return fs },
-		"doc section add":      func() *flag.FlagSet { fs, _ := newDocSectionAddFlagSet(""); return fs },
-		"doc section edit":     func() *flag.FlagSet { fs, _ := newDocSectionEditFlagSet(""); return fs },
-		"doc section move":     func() *flag.FlagSet { fs, _ := newDocSectionMoveFlagSet(""); return fs },
-		"doc section delete":   func() *flag.FlagSet { fs, _ := newDocSectionDeleteFlagSet(""); return fs },
-		"settings get":         func() *flag.FlagSet { fs, _ := newSettingsGetFlagSet(""); return fs },
-		"settings set":         func() *flag.FlagSet { fs, _ := newSettingsSetFlagSet(""); return fs },
-		"sync":                 func() *flag.FlagSet { fs, _ := newSyncFlagSet(""); return fs },
+		"init":               func() *flag.FlagSet { fs, _ := newInitFlagSet(""); return fs },
+		"comment edit":       func() *flag.FlagSet { fs, _ := newCommentEditFlagSet(""); return fs },
+		"comment delete":     func() *flag.FlagSet { fs, _ := newCommentDeleteFlagSet(""); return fs },
+		"issue create":       func() *flag.FlagSet { fs, _ := newIssueCreateFlagSet(""); return fs },
+		"issue update":       func() *flag.FlagSet { fs, _ := newIssueUpdateFlagSet(""); return fs },
+		"issue status":       func() *flag.FlagSet { fs, _ := newIssueStatusFlagSet(""); return fs },
+		"issue comment":      func() *flag.FlagSet { fs, _ := newIssueCommentFlagSet(""); return fs },
+		"issue assign":       func() *flag.FlagSet { fs, _ := newIssueAssignFlagSet(""); return fs },
+		"issue list":         func() *flag.FlagSet { fs, _ := newIssueListFlagSet(""); return fs },
+		"issue link":         func() *flag.FlagSet { fs, _ := newIssueLinkFlagSet(""); return fs },
+		"issue label":        func() *flag.FlagSet { fs, _ := newIssueLabelFlagSet(""); return fs },
+		"review open":        func() *flag.FlagSet { fs, _ := newReviewOpenFlagSet(""); return fs },
+		"review comment":     func() *flag.FlagSet { fs, _ := newReviewCommentFlagSet(""); return fs },
+		"review approve":     func() *flag.FlagSet { fs, _ := newReviewApproveFlagSet(""); return fs },
+		"review assign":      func() *flag.FlagSet { fs, _ := newReviewAssignFlagSet(""); return fs },
+		"review label":       func() *flag.FlagSet { fs, _ := newReviewLabelFlagSet(""); return fs },
+		"review link":        func() *flag.FlagSet { fs, _ := newReviewLinkFlagSet(""); return fs },
+		"review status":      func() *flag.FlagSet { fs, _ := newReviewStatusFlagSet(""); return fs },
+		"review list":        func() *flag.FlagSet { fs, _ := newReviewListFlagSet(""); return fs },
+		"state list":         func() *flag.FlagSet { fs, _ := newStateListFlagSet(""); return fs },
+		"state create":       func() *flag.FlagSet { fs, _ := newStateCreateFlagSet(""); return fs },
+		"state update":       func() *flag.FlagSet { fs, _ := newStateUpdateFlagSet(""); return fs },
+		"label list":         func() *flag.FlagSet { fs, _ := newLabelListFlagSet(""); return fs },
+		"label create":       func() *flag.FlagSet { fs, _ := newLabelCreateFlagSet(""); return fs },
+		"label edit":         func() *flag.FlagSet { fs, _ := newLabelEditFlagSet(""); return fs },
+		"doc create":         func() *flag.FlagSet { fs, _ := newDocCreateFlagSet(""); return fs },
+		"doc list":           func() *flag.FlagSet { fs, _ := newDocListFlagSet(""); return fs },
+		"doc show":           func() *flag.FlagSet { fs, _ := newDocShowFlagSet(""); return fs },
+		"doc edit":           func() *flag.FlagSet { fs, _ := newDocEditFlagSet(""); return fs },
+		"doc link":           func() *flag.FlagSet { fs, _ := newDocLinkFlagSet(""); return fs },
+		"doc section add":    func() *flag.FlagSet { fs, _ := newDocSectionAddFlagSet(""); return fs },
+		"doc section edit":   func() *flag.FlagSet { fs, _ := newDocSectionEditFlagSet(""); return fs },
+		"doc section move":   func() *flag.FlagSet { fs, _ := newDocSectionMoveFlagSet(""); return fs },
+		"doc section delete": func() *flag.FlagSet { fs, _ := newDocSectionDeleteFlagSet(""); return fs },
+		"project create":     func() *flag.FlagSet { fs, _ := newProjectCreateFlagSet(""); return fs },
+		"project list":       func() *flag.FlagSet { fs, _ := newProjectListFlagSet(""); return fs },
+		"project show":       func() *flag.FlagSet { fs, _ := newProjectShowFlagSet(""); return fs },
+		"project update":     func() *flag.FlagSet { fs, _ := newProjectUpdateFlagSet(""); return fs },
+		"project status":     func() *flag.FlagSet { fs, _ := newProjectStatusFlagSet(""); return fs },
+		"project add":        func() *flag.FlagSet { fs, _ := newProjectAddFlagSet(""); return fs },
+		"project remove":     func() *flag.FlagSet { fs, _ := newProjectRemoveFlagSet(""); return fs },
+		"settings get":       func() *flag.FlagSet { fs, _ := newSettingsGetFlagSet(""); return fs },
+		"settings set":       func() *flag.FlagSet { fs, _ := newSettingsSetFlagSet(""); return fs },
+		"sync":               func() *flag.FlagSet { fs, _ := newSyncFlagSet(""); return fs },
 	}
 }
 

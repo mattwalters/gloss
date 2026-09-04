@@ -18,6 +18,13 @@ slug: "cli"
 - [`writ doc edit`](#writ-doc-edit)
 - [`writ doc link`](#writ-doc-link)
 - [`writ doc section`](#writ-doc-section)
+- [`writ project create`](#writ-project-create)
+- [`writ project list`](#writ-project-list)
+- [`writ project show`](#writ-project-show)
+- [`writ project update`](#writ-project-update)
+- [`writ project status`](#writ-project-status)
+- [`writ project add`](#writ-project-add)
+- [`writ project remove`](#writ-project-remove)
 - [`writ issue create`](#writ-issue-create)
 - [`writ issue update`](#writ-issue-update)
 - [`writ issue status`](#writ-issue-status)
@@ -284,6 +291,193 @@ Manage sections within collaborative documents.
 #### Flags
 
 - `-C <dir>`: Run as if writ was started in <dir>
+
+### `writ project create`
+
+Create a project
+
+#### Synopsis
+
+```console
+Usage: writ project create [-C <dir>] [-t <title>] [-description <d>] [--json]
+```
+
+#### Description
+
+Create a new project collaborative object.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-t string`: Project title
+- `-description string`: Project description
+- `-json`: Output machine-readable JSON
+
+#### Examples
+
+```bash
+writ project create -t "Authentication Redesign"
+writ project create -t "Authentication Redesign" -description "Redesign auth flow" --json
+```
+
+### `writ project list`
+
+List projects
+
+#### Synopsis
+
+```console
+Usage: writ project list [-C <dir>] [-status <s>]... [-text <q>] [-limit N] [-sort <order>] [--json]
+```
+
+#### Description
+
+List projects, optionally filtered by status or text match.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-status value`: Filter by project status (repeatable)
+- `-text string`: Filter by text match in title or description
+- `-limit int`: Maximum number of projects to return
+- `-sort string`: Sort order (created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc)
+- `-json`: Output machine-readable JSON
+
+#### Examples
+
+```bash
+writ project list
+writ project list -status active -status planned --json
+```
+
+### `writ project show`
+
+Show project details
+
+#### Synopsis
+
+```console
+Usage: writ project show [-C <dir>] <id> [--json]
+```
+
+#### Description
+
+Display project metadata and member issue references.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-json`: Output machine-readable JSON
+
+#### Examples
+
+```bash
+writ project show 01J8ABC
+writ project show 01J8ABC --json
+```
+
+### `writ project update`
+
+Update project metadata
+
+#### Synopsis
+
+```console
+Usage: writ project update [-C <dir>] <id> [-t <title>] [-description <d>] [--json]
+```
+
+#### Description
+
+Update project title or description.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-t string`: New title
+- `-description string`: New description
+- `-json`: Output machine-readable JSON
+
+#### Examples
+
+```bash
+writ project update 01J8ABC -t "Authentication & SSO Redesign"
+```
+
+### `writ project status`
+
+Transition a project's lifecycle status
+
+#### Synopsis
+
+```console
+Usage: writ project status [-C <dir>] <id> <status> [-reason <r>] [--json]
+```
+
+#### Description
+
+Set a project's lifecycle status (planned, active, paused, completed, canceled).
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-reason string`: Reason for status change
+- `-json`: Output machine-readable JSON
+
+#### Examples
+
+```bash
+writ project status 01J8ABC paused -reason "Waiting on upstream API release"
+```
+
+### `writ project add`
+
+Add issues to a project
+
+#### Synopsis
+
+```console
+Usage: writ project add [-C <dir>] <id> <issue-ref>... [--json]
+```
+
+#### Description
+
+Add one or more issues to a project's member set.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-json`: Output machine-readable JSON
+
+#### Examples
+
+```bash
+writ project add 01J8ABC 01J8ISSUE1 01J8ISSUE2
+```
+
+### `writ project remove`
+
+Remove issues from a project
+
+#### Synopsis
+
+```console
+Usage: writ project remove [-C <dir>] <id> <issue-ref>... [--json]
+```
+
+#### Description
+
+Remove one or more issues from a project's member set.
+
+#### Flags
+
+- `-C string`: Run as if writ was started in <dir>
+- `-json`: Output machine-readable JSON
+
+#### Examples
+
+```bash
+writ project remove 01J8ABC 01J8ISSUE1
+```
 
 ### `writ issue create`
 

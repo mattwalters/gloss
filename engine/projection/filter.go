@@ -89,6 +89,15 @@ type LabelFilter struct {
 	Offset  int
 }
 
+// ProjectFilter specifies filter criteria when querying projects.
+type ProjectFilter struct {
+	Status  []string
+	Text    string
+	OrderBy OrderBy
+	Limit   int
+	Offset  int
+}
+
 // escapeLike escapes special SQLite LIKE pattern characters (%, _, \) so that
 // the text is matched literally as a substring.
 func escapeLike(s string) string {

@@ -64,6 +64,10 @@ type Store struct {
 	// Documents provides document and section operations.
 	Documents *Documents
 
+	// Projects provides project creation, metadata updates, status
+	// transitions, and issue membership operations.
+	Projects *Projects
+
 	// Settings provides workspace settings retrieval and updates.
 	Settings *SettingsService
 
