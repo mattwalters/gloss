@@ -581,6 +581,64 @@ func TestIssue_ErrorSurfaces(t *testing.T) {
 		}
 	})
 
+	// status_reason_with_position_no_state guards against a regression where
+	// `writ issue status <id> -position <p> -reason <r>` (no explicit new
+	// state) passed flag validation and then silently dropped -reason: the
+	// reposition-only path routes through Issues.Update, whose IssueEdit has
+	// no reason field. -reason must be rejected up front instead, and that
+	// must hold regardless of whether the issue already has a folded state
+	// -- a user should not get different semantics from the same flags
+	// depending on the issue's current state.
+	t.Run("status_reason_with_position_no_state", func(t *testing.T) {
+		env := setupTestCLIEnv(t)
+		setupSigningKey(t, env.repoDir)
+		_ = run(context.Background(), []string{"init", "-C", env.repoDir}, &bytes.Buffer{}, &bytes.Buffer{})
+		commitFile(t, env.repoDir, "README.md", "# Hello", "initial commit")
+
+		var stdout, stderr bytes.Buffer
+		code := run(context.Background(), []string{
+			"issue", "create", "-C", env.repoDir,
+			"-title", "Stated Issue",
+		}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("issue create failed with %d; stderr: %s", code, stderr.String())
+		}
+		issueID := strings.Fields(stdout.String())[0]
+
+		stdout.Reset()
+		stderr.Reset()
+		code = run(context.Background(), []string{
+			"issue", "status", "-C", env.repoDir, issueID,
+			"-position", "V", "-reason", "pulled forward",
+		}, &stdout, &stderr)
+		if code != 2 {
+			t.Fatalf("expected exit code 2 for -reason with -position and no explicit state, got %d; stderr: %s", code, stderr.String())
+		}
+		if !strings.Contains(stderr.String(), "-reason is only valid when setting status") {
+			t.Errorf("stderr missing -reason is only valid message: %s", stderr.String())
+		}
+
+		// Confirm nothing was applied: neither the reason nor the position.
+		stdout.Reset()
+		stderr.Reset()
+		code = run(context.Background(), []string{"issue", "status", "-C", env.repoDir, issueID, "--json"}, &stdout, &stderr)
+		if code != 0 {
+			t.Fatalf("issue status --json failed with %d; stderr: %s", code, stderr.String())
+		}
+		var wire1 struct {
+			Data wire.Issue `json:"data"`
+		}
+		if err := json.Unmarshal(stdout.Bytes(), &wire1); err != nil {
+			t.Fatalf("unmarshal json: %v", err)
+		}
+		if wire1.Data.Reason != "" {
+			t.Errorf("expected reason not to be recorded, got %q", wire1.Data.Reason)
+		}
+		if wire1.Data.Position == "V" {
+			t.Errorf("expected position not to be applied when -reason is rejected, got %q", wire1.Data.Position)
+		}
+	})
+
 	t.Run("missing_assign_flags", func(t *testing.T) {
 		env := setupTestCLIEnv(t)
 		setupSigningKey(t, env.repoDir)

@@ -315,14 +315,14 @@ func TestFoldCommentGenericEmptyScalars(t *testing.T) {
 	}
 }
 
-func TestFoldCommentLegacyUnattributedResolve(t *testing.T) {
+func TestFoldCommentResolveWithoutResolvedBy(t *testing.T) {
 	baseTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	ops := []codec.Op{
 		{
 			ID: "c-create",
 			Envelope: codec.Envelope{
-				ObjectID:   "c-legacy",
+				ObjectID:   "c-no-resolved-by",
 				ObjectType: "comment",
 				OpType:     "create",
 				OpVersion:  1,
@@ -331,10 +331,10 @@ func TestFoldCommentLegacyUnattributedResolve(t *testing.T) {
 			Author: codec.Identity{When: baseTime},
 		},
 		{
-			ID:      "c-resolve-legacy",
+			ID:      "c-resolve-no-resolved-by",
 			Parents: []string{"c-create"},
 			Envelope: codec.Envelope{
-				ObjectID:   "c-legacy",
+				ObjectID:   "c-no-resolved-by",
 				ObjectType: "comment",
 				OpType:     "resolve",
 				OpVersion:  1,
@@ -353,7 +353,7 @@ func TestFoldCommentLegacyUnattributedResolve(t *testing.T) {
 		t.Fatalf("expected Resolved to be &true, got %+v", cf.Resolved)
 	}
 	if cf.ResolvedBy != "" {
-		t.Errorf("expected ResolvedBy to be empty string for legacy resolve, got %q", cf.ResolvedBy)
+		t.Errorf("expected ResolvedBy to be empty string when resolved_by is absent, got %q", cf.ResolvedBy)
 	}
 }
 

@@ -200,7 +200,7 @@ func TestReffoldEmptyScalars(t *testing.T) {
 	}
 }
 
-func TestReffoldLegacyUnattributedResolve(t *testing.T) {
+func TestReffoldResolveWithoutResolvedBy(t *testing.T) {
 	rules, err := spec.FieldRules()
 	if err != nil {
 		t.Fatalf("spec.FieldRules: %v", err)
@@ -210,7 +210,7 @@ func TestReffoldLegacyUnattributedResolve(t *testing.T) {
 		{
 			ID:        "c-create",
 			Time:      1767225600,
-			ObjectID:  "c-legacy-reffold",
+			ObjectID:  "c-reffold-no-resolved-by",
 			OpType:    "create",
 			OpVersion: 1,
 			Body: map[string]any{
@@ -222,10 +222,10 @@ func TestReffoldLegacyUnattributedResolve(t *testing.T) {
 			},
 		},
 		{
-			ID:        "c-resolve-legacy",
+			ID:        "c-resolve-no-resolved-by",
 			Parents:   []string{"c-create"},
 			Time:      1767225660,
-			ObjectID:  "c-legacy-reffold",
+			ObjectID:  "c-reffold-no-resolved-by",
 			OpType:    "resolve",
 			OpVersion: 1,
 			Body: map[string]any{

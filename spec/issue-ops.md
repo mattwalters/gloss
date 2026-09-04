@@ -34,9 +34,11 @@ workspace.
   triaged" and "triaged later" share one uniform append pipeline and fold path.
   Absent any `set-state` op, the folded issue state defaults to the empty
   string; clients render this as "no state". Fold is pure and per-object and
-  cannot know a workspace's default unstarted state — `WorkflowStates.SeedDefaults`
-  and `issue create`'s unstarted-state pick are what give a real repo's issues
-  a real state from birth.
+  cannot know a workspace's default unstarted state — a conforming client
+  seeding the default starter workflow states at repository initialization
+  (see [`workflow-state-ops.md`](workflow-state-ops.md) §7) and picking one
+  of them on `issue create` are what give a real repo's issues a real state
+  from birth.
 - **`set-state` is `lww`, not `lattice`:** Issues reopen; state transitions
   (unstarted $\leftrightarrow$ completed workflow states) are not monotone, so
   a join-semilattice would be incorrect. Last-writer-wins in the fold's total order resolves
@@ -376,7 +378,7 @@ illustrate these mappings.
 | --- | --- |
 | `title` | `create.title` / `update.title` (`lww`) |
 | `body` | `create.description` / `update.description` (`lww`) |
-| `state` (`"open"`, `"closed"`) | `set-state.state` referencing a `workflow-state` object: `open` maps to a state of type `unstarted`, `closed` maps to a state of type `completed` (`state_reason: "not_planned"` steers to a `canceled`-type state where the workspace has one). The bridge resolves against the workspace's states; `WorkflowStates.SeedDefaults` guarantees they exist. (`lww`) |
+| `state` (`"open"`, `"closed"`) | `set-state.state` referencing a `workflow-state` object: `open` maps to a state of type `unstarted`, `closed` maps to a state of type `completed` (`state_reason: "not_planned"` steers to a `canceled`-type state where the workspace has one). The bridge resolves against the workspace's workflow states; a conforming client seeds the default starter set at repository initialization (see [`workflow-state-ops.md`](workflow-state-ops.md) §7), guaranteeing they exist. (`lww`) |
 | `state_reason` (`"completed"`, `"not_planned"`) | `set-state.reason` (`lww`) |
 | `assignees` (added / removed) | `assign.add` / `assign.remove` (`set-observed-remove`) |
 | `labels` (added / removed) | `label.add` / `label.remove` (`set-observed-remove`) |

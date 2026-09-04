@@ -437,7 +437,12 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 		return 2
 	}
 
-	if len(posArgs) == 1 && opts.position == "" {
+	if len(posArgs) == 1 {
+		// No explicit new state: view mode (no -position) and
+		// reposition-only mode (-position set) both leave -reason with
+		// nothing to attach to. Reject it here, before the reposition-only
+		// path is chosen below, so the flag's validity does not depend on
+		// whether this issue happens to already have a folded state.
 		if opts.reason != "" {
 			fmt.Fprintln(stderr, "writ issue status: -reason is only valid when setting status")
 			fs.Usage()
