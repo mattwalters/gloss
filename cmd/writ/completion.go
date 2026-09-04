@@ -43,8 +43,6 @@ func escapeFishDesc(s string) string {
 func flagEnumChoices(flagName string, cmdPath []string) string {
 	p := strings.Join(cmdPath, " ")
 	switch flagName {
-	case "state":
-		return strings.Join(spec.IssueStates(), " ")
 	case "status":
 		if p == "review list" {
 			return strings.Join(spec.ReviewStatuses(), " ")
@@ -201,12 +199,6 @@ _writ() {
             fi
             case "$subcmd" in
                 create)
-                    case "$prev" in
-                        -state|--state)
-                            COMPREPLY=($(compgen -W "open closed" -- "$cur"))
-                            return 0
-                            ;;
-                    esac
                     if [[ "$cur" == -* ]]; then
                         COMPREPLY=($(compgen -W "-C -title -description -state -fixes -relates -h -help --help" -- "$cur"))
                         return 0
@@ -215,20 +207,6 @@ _writ() {
                 status)
                     if [[ "$cur" == -* ]]; then
                         COMPREPLY=($(compgen -W "-C -reason -json --json -h -help --help" -- "$cur"))
-                        return 0
-                    fi
-                    # Check positional count after subcommand
-                    local pos_count=0
-                    local j=$((subcmd_idx + 1))
-                    while [ $j -lt $cword ]; do
-                        case "${words[j]}" in
-                            -C|-reason|--reason) j=$((j + 2)) ;;
-                            -*) j=$((j + 1)) ;;
-                            *) pos_count=$((pos_count + 1)); j=$((j + 1)) ;;
-                        esac
-                    done
-                    if [ $pos_count -eq 1 ]; then
-                        COMPREPLY=($(compgen -W "open closed" -- "$cur"))
                         return 0
                     fi
                     ;;
@@ -246,10 +224,6 @@ _writ() {
                     ;;
                 list)
                     case "$prev" in
-                        -state|--state)
-                            COMPREPLY=($(compgen -W "open closed" -- "$cur"))
-                            return 0
-                            ;;
                         -sort|--sort)
                             COMPREPLY=($(compgen -W "created_at_asc created_at_desc updated_at_asc updated_at_desc title_asc title_desc" -- "$cur"))
                             return 0
@@ -531,7 +505,7 @@ _writ_issue() {
                         '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
                         '-title[Issue title]:title:' \
                         '-description[Issue description]:description:' \
-                        '-state[Initial issue state]:state:(open closed)' \
+                        '-state[Initial issue state]:state:' \
                         '*-fixes[Add fixes cross-reference link]:ref:' \
                         '*-relates[Add relates cross-reference link]:ref:' \
                         '(-h -help --help)'{-h,-help,--help}'[Show help]'
@@ -543,7 +517,7 @@ _writ_issue() {
                         '(--json -json)'{--json,-json}'[Output result as JSON]' \
                         '(-h -help --help)'{-h,-help,--help}'[Show help]' \
                         '1:issue ID:' \
-                        '2:state:(open closed)'
+                        '2:state:'
                     ;;
                 comment)
                     _arguments -s -S \
@@ -566,7 +540,7 @@ _writ_issue() {
                 list)
                     _arguments -s -S \
                         '(-C)-C[Run as if writ was started in <dir>]:directory:_files -/' \
-                        '*-state[Filter by issue state]:state:(open closed)' \
+                        '*-state[Filter by issue state]:state:' \
                         '*-assignee[Filter by assignee]:assignee:' \
                         '*-label[Filter by label]:label:' \
                         '*-author[Filter by author]:author:' \
@@ -857,12 +831,8 @@ complete -c writ -n '__fish_writ_needs_subcommand help review' -f -a 'open comme
 		}
 
 		// Positional enums
-		if cmd.Name == "status" && len(path) == 2 {
-			if path[0] == "issue" {
-				fmt.Fprintf(w, "complete -c writ -n '%s' -f -a 'open closed'\n", cond)
-			} else if path[0] == "review" {
-				fmt.Fprintf(w, "complete -c writ -n '%s' -f -a 'draft open closed merged'\n", cond)
-			}
+		if cmd.Name == "status" && len(path) == 2 && path[0] == "review" {
+			fmt.Fprintf(w, "complete -c writ -n '%s' -f -a 'draft open closed merged'\n", cond)
 		}
 	}
 

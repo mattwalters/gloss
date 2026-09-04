@@ -35,8 +35,14 @@ func TestCompletion_Bash(t *testing.T) {
 	}
 
 	// Verify double-dash enum flag support
-	if !strings.Contains(script, "-verdict|--verdict") || !strings.Contains(script, "-state|--state") || !strings.Contains(script, "-status|--status") {
+	if !strings.Contains(script, "-verdict|--verdict") || !strings.Contains(script, "-status|--status") {
 		t.Errorf("bash completion missing double-dash flag matching for enums")
+	}
+
+	// Issue state has no fixed vocabulary (states are per-repo workflow states),
+	// so completion must not offer a hardcoded list for it.
+	if strings.Contains(script, "-state|--state") {
+		t.Errorf("bash completion should not offer enum completions for -state (workflow states are per-repo)")
 	}
 
 	if _, err := exec.LookPath("bash"); err == nil {
