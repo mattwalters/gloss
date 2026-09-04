@@ -27,26 +27,12 @@ type Labels struct {
 	store *Store
 }
 
-func (l *Labels) targetStore(ctx context.Context) (*Store, bool, error) {
-	if l == nil || l.store == nil {
-		return nil, false, fmt.Errorf("writ: store is nil")
-	}
-	if l.store.Workspace != nil && l.store.Workspace.IsConfigured() {
-		wsStore, err := l.store.Workspace.getStore(ctx)
-		if err != nil {
-			return nil, false, err
-		}
-		return wsStore, true, nil
-	}
-	return l.store, false, nil
-}
-
 // Create initializes a new label collaborative object, minting an object ID.
 func (l *Labels) Create(ctx context.Context, nl NewLabel) (string, error) {
-	target, _, err := l.targetStore(ctx)
-	if err != nil {
-		return "", err
+	if l == nil || l.store == nil {
+		return "", fmt.Errorf("writ: store is nil")
 	}
+	target := l.store
 	if err := target.ensureWritable(); err != nil {
 		return "", err
 	}
@@ -90,10 +76,10 @@ func (l *Labels) Create(ctx context.Context, nl NewLabel) (string, error) {
 
 // Update modifies one or more properties of an existing label.
 func (l *Labels) Update(ctx context.Context, id string, edit LabelEdit) error {
-	target, _, err := l.targetStore(ctx)
-	if err != nil {
-		return err
+	if l == nil || l.store == nil {
+		return fmt.Errorf("writ: store is nil")
 	}
+	target := l.store
 	if err := target.ensureWritable(); err != nil {
 		return err
 	}

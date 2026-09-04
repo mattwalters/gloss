@@ -44,8 +44,6 @@ var ErrNonFastForward = writsync.ErrNonFastForward
 var ErrNotFound = projection.ErrNotFound
 var ErrRefRejected = writsync.ErrRefRejected
 var ErrUnknownRemote = writsync.ErrUnknownRemote
-var ErrWorkspaceRemoteURLNotSupported = errors.New("writ: remote-URL workspaces are not supported; writ.workspace must be a local path")
-var ErrWorkspaceUnconfigured = errors.New("writ: workspace is not configured")
 
 func CycleRules() []Rule
 func DefaultSettings() Settings
@@ -70,7 +68,6 @@ func ParseCommentSubject(raw []byte) (CommentSubject, error)
 func ParseReference(ref string) (string, string, error)
 func ProjectRules() []Rule
 func ResolveGitDir(path string) (GitDirInfo, error)
-func ResolveReference(ref string, localRepoID string, registry []RepoEntry) (ResolvedReference, error)
 func ReviewRules() []Rule
 func SectionRules() []Rule
 func SettingsRules() []Rule
@@ -78,7 +75,6 @@ func WithCacheDir(dir string) Option
 func WithGitBinary(gitBin string) Option
 func WithSigner(signer Signer) Option
 func WithTargetRefs(refs ...string) Option
-func WithWorkspace(path string) Option
 func WithoutAutoRefresh() Option
 func WorkflowStateRules() []Rule
 
@@ -339,8 +335,6 @@ type RepoEntry = state.RepoEntry
 
 type ResolvedPosition = projection.ResolvedPosition
 
-type ResolvedReference = state.ResolvedReference
-
 type Review = state.Review
 
 type ReviewEdit struct {
@@ -421,7 +415,6 @@ type Store struct {
 	Labels *Labels
 	Documents *Documents
 	Settings *SettingsService
-	Workspace *Workspace
 	// unexported fields
 }
 func (*Store) Close() error
@@ -487,24 +480,6 @@ type WorkflowStates struct {
 func (*WorkflowStates) Create(ctx context.Context, nws NewWorkflowState) (string, error)
 func (*WorkflowStates) SeedDefaults(ctx context.Context) error
 func (*WorkflowStates) Update(ctx context.Context, id string, edit WorkflowStateEdit) error
-
-type Workspace struct {
-	// unexported fields
-}
-func (*Workspace) Info() WorkspaceInfo
-func (*Workspace) IsConfigured() bool
-func (*Workspace) Register(ctx context.Context, slug string, remotes []string) error
-func (*Workspace) Repos(ctx context.Context) ([]RepoEntry, error)
-func (*Workspace) Resolve(ctx context.Context, reference string) (ResolvedReference, error)
-func (*Workspace) SeedDefaults(ctx context.Context) error
-
-type WorkspaceInfo struct {
-	LocalRepoID string `json:"local_repo_id,omitempty"`
-	WorkspaceRepoID string `json:"workspace_repo_id,omitempty"`
-	Slug string `json:"slug,omitempty"`
-	Configured bool `json:"configured"`
-	Path string `json:"path,omitempty"`
-}
 
 type Writer struct {
 	ID string `json:"id"`

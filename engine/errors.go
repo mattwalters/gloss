@@ -35,11 +35,5 @@ var (
 
 	// ErrRefRejected indicates that the remote rejected one or more ref updates.
 	ErrRefRejected = writsync.ErrRefRejected
-
-	// ErrWorkspaceRemoteURLNotSupported is returned when writ.workspace is configured as a remote URL.
-	ErrWorkspaceRemoteURLNotSupported = errors.New("writ: remote-URL workspaces are not supported; writ.workspace must be a local path")
-
-	// ErrWorkspaceUnconfigured is returned when an operation requires a workspace but none is configured.
-	ErrWorkspaceUnconfigured = errors.New("writ: workspace is not configured")
 )
 

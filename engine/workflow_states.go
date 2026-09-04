@@ -34,26 +34,12 @@ type WorkflowStates struct {
 	store *Store
 }
 
-func (ws *WorkflowStates) targetStore(ctx context.Context) (*Store, bool, error) {
-	if ws == nil || ws.store == nil {
-		return nil, false, fmt.Errorf("writ: store is nil")
-	}
-	if ws.store.Workspace != nil && ws.store.Workspace.IsConfigured() {
-		wsStore, err := ws.store.Workspace.getStore(ctx)
-		if err != nil {
-			return nil, false, err
-		}
-		return wsStore, true, nil
-	}
-	return ws.store, false, nil
-}
-
 // Create initializes a new workflow state collaborative object, minting an object ID.
 func (ws *WorkflowStates) Create(ctx context.Context, nws NewWorkflowState) (string, error) {
-	target, _, err := ws.targetStore(ctx)
-	if err != nil {
-		return "", err
+	if ws == nil || ws.store == nil {
+		return "", fmt.Errorf("writ: store is nil")
 	}
+	target := ws.store
 	if err := target.ensureWritable(); err != nil {
 		return "", err
 	}
@@ -126,10 +112,10 @@ func (ws *WorkflowStates) Create(ctx context.Context, nws NewWorkflowState) (str
 
 // Update modifies one or more properties of an existing workflow state.
 func (ws *WorkflowStates) Update(ctx context.Context, id string, edit WorkflowStateEdit) error {
-	target, _, err := ws.targetStore(ctx)
-	if err != nil {
-		return err
+	if ws == nil || ws.store == nil {
+		return fmt.Errorf("writ: store is nil")
 	}
+	target := ws.store
 	if err := target.ensureWritable(); err != nil {
 		return err
 	}
@@ -216,10 +202,10 @@ var DefaultWorkflowStates = []NewWorkflowState{
 
 // SeedDefaults creates the five default starter workflow states if no workflow states exist.
 func (ws *WorkflowStates) SeedDefaults(ctx context.Context) error {
-	target, _, err := ws.targetStore(ctx)
-	if err != nil {
-		return err
+	if ws == nil || ws.store == nil {
+		return fmt.Errorf("writ: store is nil")
 	}
+	target := ws.store
 	if err := target.maybeAutoRefresh(ctx); err != nil {
 		return fmt.Errorf("writ: auto refresh: %w", err)
 	}

@@ -2,7 +2,6 @@ package writ_test
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"github.com/writtendev/writ/engine"
@@ -157,45 +156,6 @@ func TestWorkflowStatesCRUDAndOrdering(t *testing.T) {
 	}
 	if groups[2].Key != "Unknown" || groups[2].Count != 1 {
 		t.Errorf("group 2: want Unknown (1), got %s (%d)", groups[2].Key, groups[2].Count)
-	}
-}
-
-func TestWorkflowStatesWorkspaceScoping(t *testing.T) {
-	ctx := context.Background()
-
-	// Create workspace repo
-	wsDir, _ := setupTestRepoWithID(t, "ws-writer", "ws@writ.dev")
-
-	wsStore, err := writ.Open(wsDir, writ.WithSigner(dummySigner()))
-	if err != nil {
-		t.Fatalf("Open workspace failed: %v", err)
-	}
-	if err := wsStore.WorkflowStates.SeedDefaults(ctx); err != nil {
-		t.Fatalf("SeedDefaults in ws failed: %v", err)
-	}
-	wsStore.Close()
-
-	// Create code repo configuring writ.workspace
-	codeDir, _ := setupTestRepoWithID(t, "code-writer", "code@writ.dev")
-	relPath, err := filepath.Rel(codeDir, wsDir)
-	if err != nil {
-		relPath = wsDir
-	}
-	runGitCmd(t, codeDir, "config", "writ.workspace", relPath)
-
-	codeStore, err := writ.Open(codeDir, writ.WithSigner(dummySigner()))
-	if err != nil {
-		t.Fatalf("Open code store failed: %v", err)
-	}
-	defer codeStore.Close()
-
-	// Query states from codeStore — should automatically route to workspace repo!
-	states, err := codeStore.Query.WorkflowStates(writ.WorkflowStateFilter{})
-	if err != nil {
-		t.Fatalf("Query.WorkflowStates via codeStore failed: %v", err)
-	}
-	if len(states) != 5 {
-		t.Fatalf("expected 5 states from workspace, got %d", len(states))
 	}
 }
 

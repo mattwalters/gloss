@@ -8,7 +8,6 @@ import (
 	"slices"
 
 	"github.com/writtendev/writ/engine/codec"
-	"github.com/writtendev/writ/engine/identity"
 	"github.com/writtendev/writ/engine/order"
 	"github.com/writtendev/writ/engine/state"
 	"github.com/writtendev/writ/spec"
@@ -44,26 +43,12 @@ type IssueState struct {
 	Position *string `json:"position,omitempty"`
 }
 
-func (i *Issues) targetStore(ctx context.Context) (*Store, bool, error) {
-	if i == nil || i.store == nil {
-		return nil, false, fmt.Errorf("writ: store is nil")
-	}
-	if i.store.Workspace != nil && i.store.Workspace.IsConfigured() {
-		wsStore, err := i.store.Workspace.getStore(ctx)
-		if err != nil {
-			return nil, false, err
-		}
-		return wsStore, true, nil
-	}
-	return i.store, false, nil
-}
-
 // Create initializes a new issue collaborative object, minting an object ID.
 func (i *Issues) Create(ctx context.Context, n NewIssue) (string, error) {
-	target, _, err := i.targetStore(ctx)
-	if err != nil {
-		return "", err
+	if i == nil || i.store == nil {
+		return "", fmt.Errorf("writ: store is nil")
 	}
+	target := i.store
 	if err := target.ensureWritable(); err != nil {
 		return "", err
 	}
@@ -127,10 +112,10 @@ func (i *Issues) Create(ctx context.Context, n NewIssue) (string, error) {
 
 // Update modifies title, description, priority, estimate, or position metadata for an existing issue.
 func (i *Issues) Update(ctx context.Context, id string, edit IssueEdit) error {
-	target, _, err := i.targetStore(ctx)
-	if err != nil {
-		return err
+	if i == nil || i.store == nil {
+		return fmt.Errorf("writ: store is nil")
 	}
+	target := i.store
 	if err := target.ensureWritable(); err != nil {
 		return err
 	}
@@ -212,10 +197,10 @@ func (i *Issues) Update(ctx context.Context, id string, edit IssueEdit) error {
 
 // SetState transitions the issue state (e.g. "open", "closed", or a workflow state reference) with an optional reason.
 func (i *Issues) SetState(ctx context.Context, id string, st IssueState) error {
-	target, _, err := i.targetStore(ctx)
-	if err != nil {
-		return err
+	if i == nil || i.store == nil {
+		return fmt.Errorf("writ: store is nil")
 	}
+	target := i.store
 	if err := target.ensureWritable(); err != nil {
 		return err
 	}
@@ -280,10 +265,10 @@ func (i *Issues) SetState(ctx context.Context, id string, st IssueState) error {
 
 // Assign adds and/or removes assignees on an issue.
 func (i *Issues) Assign(ctx context.Context, id string, add, remove []string) error {
-	target, _, err := i.targetStore(ctx)
-	if err != nil {
-		return err
+	if i == nil || i.store == nil {
+		return fmt.Errorf("writ: store is nil")
 	}
+	target := i.store
 	if err := target.ensureWritable(); err != nil {
 		return err
 	}
@@ -361,10 +346,10 @@ func (i *Issues) Assign(ctx context.Context, id string, add, remove []string) er
 
 // Label adds and/or removes labels on an issue.
 func (i *Issues) Label(ctx context.Context, id string, add, remove []string) error {
-	target, _, err := i.targetStore(ctx)
-	if err != nil {
-		return err
+	if i == nil || i.store == nil {
+		return fmt.Errorf("writ: store is nil")
 	}
+	target := i.store
 	if err := target.ensureWritable(); err != nil {
 		return err
 	}
@@ -419,10 +404,10 @@ func (i *Issues) Label(ctx context.Context, id string, add, remove []string) err
 
 // Link creates or modifies a cross-reference link on an issue.
 func (i *Issues) Link(ctx context.Context, id string, l Link) error {
-	target, isWorkspace, err := i.targetStore(ctx)
-	if err != nil {
-		return err
+	if i == nil || i.store == nil {
+		return fmt.Errorf("writ: store is nil")
 	}
+	target := i.store
 	if err := target.ensureWritable(); err != nil {
 		return err
 	}
@@ -436,28 +421,8 @@ func (i *Issues) Link(ctx context.Context, id string, l Link) error {
 		return fmt.Errorf("writ: invalid relation %q (must be %s)", l.Relation, spec.FormatOptions(spec.LinkRelations()))
 	}
 
-	des, objID, err := state.ParseReference(l.Target)
-	if err != nil {
+	if _, _, err := state.ParseReference(l.Target); err != nil {
 		return fmt.Errorf("writ: invalid link target: %w", err)
-	}
-
-	// When targeting a workspace-scoped issue from a code repo context,
-	// auto-qualify a bare target with the originating repo's repo-id
-	if isWorkspace && des == "" {
-		localRepoID := i.store.Workspace.localRepoID
-		if localRepoID == "" {
-			repoDir := i.store.gitInfo.WorkTree
-			if repoDir == "" {
-				repoDir = i.store.gitInfo.GitDir
-			}
-			minted, _, err := identity.EnsureRepoID(ctx, repoDir)
-			if err != nil {
-				return fmt.Errorf("writ: ensure local repo id for link: %w", err)
-			}
-			localRepoID = string(minted)
-			i.store.Workspace.localRepoID = localRepoID
-		}
-		l.Target = localRepoID + "#" + objID
 	}
 
 	if err := target.maybeAutoRefresh(ctx); err != nil {
@@ -504,10 +469,10 @@ func (i *Issues) Link(ctx context.Context, id string, l Link) error {
 
 // Comment appends a new comment collaborative object attached to the issue.
 func (i *Issues) Comment(ctx context.Context, id string, c NewComment) (string, error) {
-	target, _, err := i.targetStore(ctx)
-	if err != nil {
-		return "", err
+	if i == nil || i.store == nil {
+		return "", fmt.Errorf("writ: store is nil")
 	}
+	target := i.store
 	if err := target.ensureWritable(); err != nil {
 		return "", err
 	}

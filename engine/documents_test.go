@@ -163,62 +163,6 @@ func TestDocumentsCRUDAndSections(t *testing.T) {
 	}
 }
 
-func TestDocumentsWorkspaceScoping(t *testing.T) {
-	ctx := context.Background()
-	wsDir, _ := setupTestRepoWithID(t, "ws-writer", "ws@writ.dev")
-	repoDir, _ := setupTestRepoWithID(t, "code-writer", "code@writ.dev")
-
-	wsStore, err := writ.Open(wsDir, writ.WithSigner(dummySigner()))
-	if err != nil {
-		t.Fatalf("Open wsDir: %v", err)
-	}
-	defer wsStore.Close()
-
-	appStore, err := writ.Open(repoDir, writ.WithSigner(dummySigner()), writ.WithWorkspace(wsDir))
-	if err != nil {
-		t.Fatalf("Open appStore: %v", err)
-	}
-	defer appStore.Close()
-
-	// Create document through appStore - should route to wsDir
-	docID, err := appStore.Documents.Create(ctx, writ.NewDocument{
-		Title: "Workspace Global Doc",
-	})
-	if err != nil {
-		t.Fatalf("Create doc via appStore: %v", err)
-	}
-
-	// Add section through appStore
-	secID, err := appStore.Documents.AddSection(ctx, docID, writ.NewSection{
-		Title: "Sec 1",
-		Body:  "Body 1",
-	})
-	if err != nil {
-		t.Fatalf("AddSection via appStore: %v", err)
-	}
-
-	// Query from appStore
-	docFromApp, err := appStore.Query.Document(docID)
-	if err != nil {
-		t.Fatalf("Query from appStore: %v", err)
-	}
-	if docFromApp.Document.Title != "Workspace Global Doc" {
-		t.Errorf("appStore Title = %q", docFromApp.Document.Title)
-	}
-	if len(docFromApp.Sections) != 1 || docFromApp.Sections[0].ObjectID != secID {
-		t.Errorf("appStore sections = %+v", docFromApp.Sections)
-	}
-
-	// Query from wsStore directly
-	docFromWS, err := wsStore.Query.Document(docID)
-	if err != nil {
-		t.Fatalf("Query from wsStore: %v", err)
-	}
-	if docFromWS.Document.Title != "Workspace Global Doc" {
-		t.Errorf("wsStore Title = %q", docFromWS.Document.Title)
-	}
-}
-
 func TestDocumentsSectionConcurrencyAndResolution(t *testing.T) {
 	ctx := context.Background()
 	repoDir, _ := setupConfiguredRepo(t)
