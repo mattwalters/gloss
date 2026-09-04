@@ -22,9 +22,9 @@ optional client presentation color hint (`color`), and an optional human
 description (`description`). Issues and reviews reference labels by object
 identifier (`object_id`).
 
-Labels live in the repository the client is operating on (ARCHITECTURE.md
-§Object homing, WRIT-113) and are workspace-global: all projects, issues,
-and reviews within the workspace share the common label definitions.
+Labels live in the repository the client is operating on and are repo-global
+(ARCHITECTURE.md §Object homing): all projects, issues, and reviews in that
+repository share the common label definitions.
 
 ### 1.1. Why Labels Are Collaborative Objects
 

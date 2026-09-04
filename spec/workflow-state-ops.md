@@ -21,9 +21,9 @@ In Writ, **each workflow state is its own collaborative object**
 a semantic type, a fractional index column position, and optional visual hints.
 Issues reference workflow states by object identifier (`object_id`).
 
-Workflow states live in the repository the client is operating on (ARCHITECTURE.md
-§Object homing, WRIT-113) and are workspace-global: all projects and issues
-within the workspace share the common workflow state definitions.
+Workflow states live in the repository the client is operating on and are
+repo-global (ARCHITECTURE.md §Object homing): all projects and issues in
+that repository share the common workflow state definitions.
 
 ### 1.1. Why States Are Collaborative Objects
 

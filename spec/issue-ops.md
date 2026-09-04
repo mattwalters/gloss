@@ -15,11 +15,11 @@ described in RFC 2119.
 
 ## Scope & Object Model
 
-An issue is represented in Writ as a workspace-scoped collaborative object with
+An issue is represented in Writ as a collaborative object with
 `object_type: "issue"`. Issues live in the repository the client is operating on
-(ARCHITECTURE.md §Object types, `spec/identifiers.md`) and can reference or be
-referenced by reviews and other collaborative objects across repositories in the
-workspace.
+(ARCHITECTURE.md §Object homing) and can reference or be referenced by reviews
+and other collaborative objects in other repositories via qualified
+references (`spec/identifiers.md`).
 
 ### Decisions behind the vocabulary
 
@@ -294,8 +294,8 @@ object (such as a code review or another issue).
 - `target` (reference string, required): Reference to the target object per
   `spec/identifiers.md`. Either a bare `<object-id>` (for objects in the same
   repository) or a fully-qualified `<repo-id>#<object-id>` (for cross-repo
-  references, such as an issue in a workspace repo linking to a review in a
-  code repo).
+  references, such as an issue in one repository linking to a review in
+  another).
 - `target_type` (string, optional): Type of the target collaborative object
   (e.g. `"review"`, `"issue"`), minLength 1.
 - `relation` (string, required): One of:
@@ -513,15 +513,15 @@ rules:
 In Linear, workflow states, issue keys, and triage queues are scoped to a team,
 while an organization workspace often contains multiple teams.
 
-Per WRIT-113 ("One workspace = one team") and ARCHITECTURE.md §Object homing:
-- A Writ workspace corresponds to a single team: workflow states, labels, and
-  settings are workspace-global, and there is no `team` collaborative object in
+Per ARCHITECTURE.md §Object homing:
+- A Writ repository corresponds to a single team: workflow states, labels, and
+  settings are repo-global, and there is no `team` collaborative object in
   v1 core.
-- Importers MUST target one Writ workspace repository per Linear team.
-- Team-level workflow states, labels, and settings map to workspace-global objects
-  within that team's Writ workspace repository.
+- Importers MUST target one Writ repository per Linear team.
+- Team-level workflow states, labels, and settings map to repo-global objects
+  within that team's Writ repository.
 - Cross-team relations in Linear (e.g. an issue in Team A blocking an issue in
-  Team B) cannot be represented as native Writ DAG links in v1 because cross-workspace
+  Team B) cannot be represented as native Writ DAG links in v1 because cross-repo
   DAG links are not supported. Importers MUST degrade cross-team relations to
   external Markdown links in the issue description or in a comment.
 

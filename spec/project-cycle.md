@@ -20,9 +20,9 @@ described in RFC 2119.
 
 ## Scope & Object Model
 
-Projects and cycles are workspace-scoped collaborative objects that group
-issues. In Writ's architecture, workspace-scoped objects reside in the
-repository the client is operating on (ARCHITECTURE.md §Object types, `spec/identifiers.md`).
+Projects and cycles are collaborative objects that group issues. Like every
+collaborative object, they reside in the repository the client is operating
+on (ARCHITECTURE.md §Object homing).
 
 - A `project` represents an initiative or goal with an explicit lifecycle status
   (`planned`, `active`, `paused`, `completed`, `canceled`) and a set of member issues.
