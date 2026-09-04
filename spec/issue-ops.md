@@ -506,7 +506,7 @@ rules:
 In Linear, workflow states, issue keys, and triage queues are scoped to a team,
 while an organization workspace often contains multiple teams.
 
-Per WRIT-113 ("One workspace = one team") and ARCHITECTURE.md §Workspace scoping:
+Per WRIT-113 ("One workspace = one team") and ARCHITECTURE.md §Object homing:
 - A Writ workspace corresponds to a single team: workflow states, labels, and
   settings are workspace-global, and there is no `team` collaborative object in
   v1 core.

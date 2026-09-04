@@ -23,7 +23,7 @@ description (`description`). Issues and reviews reference labels by object
 identifier (`object_id`).
 
 Labels live in the designated workspace repository (ARCHITECTURE.md
-§Workspace scoping, WRIT-113) and are workspace-global: all projects, issues,
+§Object homing, WRIT-113) and are workspace-global: all projects, issues,
 and reviews within the workspace share the common label definitions.
 
 ### 1.1. Why Labels Are Collaborative Objects

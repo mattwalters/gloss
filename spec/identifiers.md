@@ -1,4 +1,4 @@
-# Identifiers, cross-repo references & workspace repo
+# Identifiers and cross-repo references
 
 Status: normative. Schema: [`schemas/identifiers.schema.json`](schemas/identifiers.schema.json).
 Vectors: [`testdata/references/`](testdata/references/).
@@ -6,7 +6,7 @@ Vectors: [`testdata/references/`](testdata/references/).
 Writ connects code reviews, issues, projects, and cycles across multiple
 repositories into a unified software development lifecycle graph. Cross-repo
 linking — such as an issue in repository A resolved by a review in repository B —
-requires that object identities and cross-references be workspace-global from
+requires that object identities and cross-references be globally unique from
 day one (VISION.md §Scope architecture; ARCHITECTURE.md §Object types).
 
 The key words MUST, MUST NOT, SHOULD, and MAY are to be interpreted as
@@ -19,16 +19,13 @@ This section defines:
 - **Object identifiers** — the canonical form minted by Writ producers.
 - **Person identifiers** — format, normalization, and byte-comparison rules for
   collaborative actor identities (assignees, approval subjects).
-- **Repository designators** — the immutable identifier of a git repository
-  within a Writ workspace.
+- **Repository designators** — the immutable identity of a git repository.
 - **Reference grammar** — the syntax for bare local and fully-qualified
   cross-repository references.
-- **The workspace repository convention** — the repository holding
-  workspace-scoped objects and the repository registry.
 - **The repository registry entry shape** — the folded metadata structure
   mapping repository designators to human-readable slugs and remote URLs.
 - **The reference resolution algorithm** — how references are resolved
-  against a workspace checkout.
+  against a repository's registry of known repositories.
 
 This section deliberately does not define:
 
@@ -40,13 +37,13 @@ This section deliberately does not define:
   `repo` create, set-slug, and add-remote op payloads are specified in the
   repository registry op vocabulary ([`spec/repo-ops.md`](repo-ops.md)). This
   document defines the folded registry entry shape that resolution consumes.
-- **Workspace permission semantics** — see [Out of scope](#out-of-scope).
+- **Permission semantics** — see [Out of scope](#out-of-scope).
 
 ## Object identifiers
 
 A collaborative object in Writ (a review, comment, issue, project, cycle)
-possesses an identifier that is unique across all repositories, writers, and
-devices in a workspace.
+possesses an identifier that is globally unique across all repositories,
+writers, and devices.
 
 ```jsonc
 "0123456789abcdef0123456789abcdef"
@@ -68,7 +65,7 @@ paradox approximation:
 
 $$P \approx \frac{N^2}{2 \times 2^{128}} = \frac{N^2}{2^{129}}$$
 
-For a large workspace containing one trillion ($10^{12}$) objects, the
+Across one trillion ($10^{12}$) minted objects, the
 probability of a collision is less than $1.47 \times 10^{-15}$. This ensures
 collision safety across independent writers without requiring centralized
 locking.
@@ -159,10 +156,10 @@ Two schemes are defined:
 | Scheme | Value | Example |
 | --- | --- | --- |
 | `email` | A single email address. | `email:alice@example.com` |
-| `user` | An opaque handle, scoped to the workspace. | `user:alice` |
+| `user` | An opaque handle, scoped to the team. | `user:alice` |
 
 Writ does not parse either value. An `email:` value is not validated against
-RFC 5321 and a `user:` value has no assigned meaning beyond the workspace that
+RFC 5321 and a `user:` value has no assigned meaning beyond the team that
 mints it; both are compared, never interpreted.
 
 **Non-human writers use the same schemes.** A CI writer is `user:ci`, not a
@@ -447,10 +444,10 @@ Two properties make this worth stating plainly rather than burying:
 - **The writer is not the subject.** The person whose address is published is
   usually not the person who decided to publish it, and cannot withdraw it.
 
-The mitigation is `user:`. A workspace that does not want member email
+The mitigation is `user:`. A team that does not want member email
 addresses in its published op log uses opaque handles — `user:alice` — and
 keeps the handle-to-person mapping wherever it keeps its other member data,
-outside the format. Writ takes no position on which scheme a workspace should
+outside the format. Writ takes no position on which scheme a team should
 use; it provides one that does not require publishing an address, and names
 the consequence of the one that does.
 
@@ -517,7 +514,7 @@ identities:
 | Concept | Format | Scope | Purpose |
 | --- | --- | --- | --- |
 | **`writer-id`** | 16 lowercase hex characters (`^[0-9a-f]{16}$`) | Device-scoped `(user, device)` | Git ref namespace (`refs/writ/<writer-id>/`) for append-only concurrent writes without locking. |
-| **`person-id`** | `scheme ":" value`, normalized | Workspace-global collaborative actor | Collaborative actor identity (assignee, reviewer, voter) across multiple devices and repositories. |
+| **`person-id`** | `scheme ":" value`, normalized | Globally unique collaborative actor | Collaborative actor identity (assignee, reviewer, voter) across multiple devices and repositories. |
 
 A single person (e.g. `email:alice@example.com`) may author ops from multiple
 machines and devices, each with its own distinct `writer-id` (e.g. laptop
@@ -529,7 +526,7 @@ one would be a bare identifier, which is invalid.
 A producer MUST NOT write a `writer-id` where a `person-id` is expected, and
 MUST NOT derive one identifier from the other. The format objection above is
 not the only one: the two identifiers have different scopes. A `person-id` is
-workspace-global, while a `writer-id` names `(user, device)` — so the person
+globally unique, while a `writer-id` names `(user, device)` — so the person
 above holds two of them. Substituting a `writer-id` therefore splits one human
 into two collaborative actors: two assignees, two voters, and — because
 approval fold is scoped by the key `[subject, revision]`
@@ -558,8 +555,7 @@ policies belong to the hosting forge or coordination service.
 
 ## Repository designators (`repo-id`)
 
-A repository designator uniquely identifies a git repository within a
-workspace.
+A repository designator uniquely identifies a git repository.
 
 ```jsonc
 "a1b2c3d4e5f60718293a4b5c6d7e8f90"
@@ -589,6 +585,28 @@ To allow a local clone to determine its own repository identity:
    the key, the engine reads `refs/writ/meta/repo-id` and populates the config
    cache.
 
+### Object homing
+
+A collaborative object's operations MUST live under the `refs/writ/*` of
+exactly one repository — the one the client was operating on when the object
+was created. This is structural, not aesthetic: per-writer refs make pushes
+conflict-free only because everyone collaborating on an object pushes to and
+fetches from the same remote; an object whose ops could accumulate across
+several repositories would need something to replicate them between remotes,
+and there is deliberately no such thing (ARCHITECTURE.md §Object homing,
+WRIT-180; supersedes WRIT-113).
+
+Workflow states ([`spec/workflow-state-ops.md`](workflow-state-ops.md)),
+labels ([`spec/label-ops.md`](label-ops.md)), and settings
+([`spec/settings-ops.md`](settings-ops.md)) are repo-global: this
+specification defines no `team` object type and no team scoping field in v1.
+If team scoping is introduced later, it MUST arrive additively: a `team`
+object type plus an optional scoping field on affected objects, such that
+existing scopeless objects fold as belonging to a default team and older
+clients degrade to ignoring the unknown field per
+[`spec/forward-compatibility.md`](forward-compatibility.md) — never a
+breaking change to existing payloads.
+
 ## Reference grammar
 
 A reference points to a collaborative object. References appear in op bodies
@@ -616,8 +634,7 @@ reference = [ repo-id "#" ] object-id
    This keeps local references compact and independent of repository
    designators.
 2. **Cross-repo scoping:** When an operation references an object in a different
-   repository (or when a workspace-scoped issue references a review in a code
-   repository), producers MUST emit the **fully-qualified reference** form
+   repository, producers MUST emit the **fully-qualified reference** form
    (`<repo-id>#<object-id>`).
 3. **Normalization:** References MUST be lowercase-normalized. All hexadecimal
    digits in `<repo-id>` and canonical `<object-id>` MUST be lowercase ASCII
@@ -668,93 +685,9 @@ human-readable repository slug (e.g. `writ#a1b2c3d` or `writtendev/writ#a1b2c3d`
 Short forms are strictly a client display concern. Canonical references stored
 in op payloads MUST always use full, unabbreviated identifiers.
 
-## Workspace repository
-
-A **workspace repo** is an ordinary git repository holding workspace-level
-collaborative objects and workspace metadata.
-
-> **Definition (normative):** The workspace repo is **an ordinary git repo,
-> convention only, no special server behavior**.
-
-Precedent: Gerrit's `All-Projects` and `All-Users` repositories, which store
-site-wide configuration and metadata as ordinary git commits.
-
-Being the workspace repository is a **role**, not a kind of repository. Any
-member repository MAY play it, and the common cases involve no additional
-repository at all (WRIT-113).
-
-### Roles of the workspace repository
-
-1. **Host for workspace-scoped objects:** Objects that are not bound to a
-   single code repository — `issue`, `project`, `cycle`, and team/membership
-   metadata — live in the workspace repository under standard `refs/writ/*`
-   namespaces.
-2. **Host for the repository registry:** The workspace repository maintains
-   the registry of all member repositories in the workspace.
-3. **Ordinary code repository:** A workspace repository is itself an ordinary
-   git repository and MAY also contain code, branches, and code reviews.
-
-### The self-workspace default
-
-A repository MAY be its own workspace repository. This is the expected
-configuration for a single-repository project or a monorepo: the repository
-hosts its own registry (with `is_workspace: true` on its own entry, per
-[`spec/repo-ops.md`](repo-ops.md)) alongside its code and reviews, and the
-workspace involves no second repository.
-
-A team working across several repositories designates one of them as the
-workspace repository, or MAY create a dedicated repository for the role if it
-prefers the separation. All three configurations — self, designated member,
-dedicated — are equivalent under this specification; nothing in the format
-distinguishes them.
-
-### Workspace re-homing
-
-The workspace repository is a *location*, not part of any object's identity.
-Object IDs are random (`§Object identifiers`), operations are self-contained
-signed commits, and no op payload or envelope field records which repository
-hosts it. A workspace therefore moves to a new home by pushing its writ refs
-(`refs/writ/*`) to the new repository and updating each member repository's
-`writ.workspace` configuration. References — bare or fully-qualified — remain
-valid unchanged, because they name `repo-id`s and `object-id`s, never
-locations.
-
-### Team scope
-
-One workspace corresponds to one team (decided, WRIT-113). Workspace-scoped
-configuration objects — workflow states ([`spec/workflow-state-ops.md`](workflow-state-ops.md)), labels ([`spec/label-ops.md`](label-ops.md)), settings ([`spec/settings-ops.md`](settings-ops.md)) — are
-workspace-global; this specification defines no `team` object type and no team
-scoping field in v1. Organizations with multiple teams run multiple
-workspaces.
-
-If team scoping is introduced later, it MUST arrive additively: a `team`
-object type plus an optional scoping field on affected objects, such that
-existing scopeless objects fold as belonging to a default team and older
-clients degrade to ignoring the unknown field per
-[`spec/forward-compatibility.md`](forward-compatibility.md) — never a breaking
-change to existing payloads.
-
-### Repository association
-
-A repository belongs to at most one workspace.
-
-A code repository associates with its workspace repository via local git
-configuration (`writ.workspace`, set to a remote URL or path) and by having its
-`repo-id` recorded in the workspace repository's registry.
-
-### Read-side aggregation
-
-Workspace homing governs where operations are *written*. On the read side,
-clients SHOULD treat the workspace's member repositories additively: fetch
-`refs/writ/*` from each registered repository and fold each repository's
-objects into one workspace-wide projection, so cross-repository views ("all
-reviews across the team's repos") require no additional convention. Aggregation
-is a projection/client concern; the fold itself remains per-repository, pure,
-and unchanged.
-
 ## Repository registry
 
-The workspace repository maintains a folded repository registry that maps
+A repository maintains a folded repository registry that maps
 immutable `repo-id` designators to mutable human-readable slugs and remote
 URLs.
 
@@ -870,11 +803,11 @@ queried by client porcelain.
 
 The following concerns are explicitly out of scope for this specification:
 
-- **Workspace permission semantics:** Access control, branch protection, and
+- **Permission semantics:** Access control, branch protection, and
   write permissions are governed by the underlying git transport and hosting
   provider (e.g. SSH keys, forge repository permissions). Writ defines no
   custom server-side permission or ACL system. Tracked in ARCHITECTURE.md
-  §Known-hard list ("workspace-repo permission semantics").
+  §Known-hard list ("repo permission semantics").
 - **Identity mapping:** Mapping cryptographic signing keys (SSH/GPG) to
   directory identities (LDAP, SSO, email) is tracked in ARCHITECTURE.md
   §Known-hard list.
