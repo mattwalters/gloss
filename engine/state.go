@@ -88,6 +88,19 @@ type WorkflowState = state.WorkflowState
 // produced by FoldLabel.
 type Label = state.Label
 
+// Settings represents the materialized state of workspace-level settings (v1),
+// produced by FoldSettings.
+type Settings = state.Settings
+
+// DefaultSettingsObjectID is the well-known canonical object ID for workspace settings.
+const DefaultSettingsObjectID = state.DefaultSettingsObjectID
+
+// DefaultSettings returns the default configuration for a workspace that has
+// never written a settings operation.
+func DefaultSettings() Settings {
+	return state.DefaultSettings()
+}
+
 // ResolvedReference represents the outcome of resolving a reference against a repository registry.
 type ResolvedReference = state.ResolvedReference
 

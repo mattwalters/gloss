@@ -16,6 +16,7 @@ type vocabulary struct {
 	issueStates        []string
 	projectStatuses    []string
 	workflowStateTypes []string
+	estimateScales     []string
 }
 
 func parseSchemaEnum(schemaFile string, jsonPath ...string) []string {
@@ -62,6 +63,7 @@ var vocabOnce = sync.OnceValue(func() vocabulary {
 		issueStates:        []string{"open", "closed"},
 		projectStatuses:    parseSchemaEnum("project-ops.schema.json", "$defs", "set_status_body", "properties", "status", "enum"),
 		workflowStateTypes: parseSchemaEnum("workflow-state-ops.schema.json", "$defs", "state_type", "enum"),
+		estimateScales:     parseSchemaEnum("settings-ops.schema.json", "$defs", "set_body", "properties", "estimate_scale", "enum"),
 	}
 })
 
@@ -98,6 +100,11 @@ func ProjectStatuses() []string {
 // WorkflowStateTypes returns the accepted workflow state type enum values defined in workflow-state-ops.schema.json.
 func WorkflowStateTypes() []string {
 	return slices.Clone(vocabOnce().workflowStateTypes)
+}
+
+// EstimateScales returns the accepted estimate scale enum values defined in settings-ops.schema.json.
+func EstimateScales() []string {
+	return slices.Clone(vocabOnce().estimateScales)
 }
 
 // FormatOptions formats a slice of enum options into a human-readable list,

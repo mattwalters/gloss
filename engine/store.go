@@ -64,6 +64,9 @@ type Store struct {
 	// Documents provides document and section operations.
 	Documents *Documents
 
+	// Settings provides workspace settings retrieval and updates.
+	Settings *SettingsService
+
 	// Workspace provides repository registry discovery, registration, and cross-repo resolution.
 	Workspace *Workspace
 

@@ -122,6 +122,7 @@ var knownCreateBodies = map[string]string{
 	"label":          `{"name":"bug"}`,
 	"document":       `{"title":"Initial"}`,
 	"section":        `{"body":"Initial","document_id":"0123456789abcdef0123456789abcdef","position":"V"}`,
+	"settings":       `{"name":"Initial"}`,
 }
 
 // TestBuildCommitAcceptsUnknownFieldsInEveryVocabulary asserts the producer
@@ -140,10 +141,15 @@ func TestBuildCommitAcceptsUnknownFieldsInEveryVocabulary(t *testing.T) {
 			// otherwise valid create body.
 			withUnknown := body[:len(body)-1] + `,"future_field":{"x":1}}`
 
+			opType := "create"
+			if !slices.Contains(codec.VocabularyOpTypes[objectType], opType) {
+				opType = codec.VocabularyOpTypes[objectType][0]
+			}
+
 			if _, err := codec.BuildCommit(codec.Envelope{
 				ObjectID:   "obj-1",
 				ObjectType: objectType,
-				OpType:     "create",
+				OpType:     opType,
 				OpVersion:  1,
 				Body:       json.RawMessage(withUnknown),
 			}, testAuthor(), nil); err != nil {
@@ -239,6 +245,7 @@ var producerTypos = map[string]string{
 	"label":          "creat",
 	"document":       "creat",
 	"section":        "mov",
+	"settings":       "st",
 }
 
 // TestBuildCommitRefusesOpTypesItDoesNotDefine pins producer rule 4
@@ -254,6 +261,11 @@ func TestBuildCommitRefusesOpTypesItDoesNotDefine(t *testing.T) {
 		}
 		if defined := codec.VocabularyOpTypes[objectType]; slices.Contains(defined, typo) {
 			t.Fatalf("producerTypos[%q] = %q is an op type the vocabulary defines; pick a misspelling", objectType, typo)
+		}
+
+		validOpType := "create"
+		if !slices.Contains(codec.VocabularyOpTypes[objectType], validOpType) {
+			validOpType = codec.VocabularyOpTypes[objectType][0]
 		}
 
 		cases := []struct {
@@ -285,7 +297,7 @@ func TestBuildCommitRefusesOpTypesItDoesNotDefine(t *testing.T) {
 				env: codec.Envelope{
 					ObjectID:   "obj-1",
 					ObjectType: objectType,
-					OpType:     "create",
+					OpType:     validOpType,
 					OpVersion:  codec.VocabularyOpVersion + 1,
 					Body:       json.RawMessage(`{"headline":"v2 renamed the field"}`),
 				},

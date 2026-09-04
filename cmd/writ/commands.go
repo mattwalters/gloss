@@ -47,6 +47,7 @@ var rootCommand = &command{
 		reviewCmd,
 		stateCmd,
 		labelCmd,
+		settingsCmd,
 		syncCmd,
 		versionCmd,
 		completionCmd,
@@ -636,6 +637,106 @@ var labelMigrateCmd = &command{
 	},
 }
 
+var settingsCmd = &command{
+	Name:      "settings",
+	Short:     "Manage repository configuration settings",
+	UsageLine: "Usage: writ settings [-C <dir>] <subcommand> [arguments]",
+	Long:      "View and update repository configuration settings (estimate scale, timezone, cycle cadence).",
+	Flags: []flagSpec{
+		{
+			Name:  "C",
+			Arg:   "<dir>",
+			Usage: "Run as if writ was started in <dir>",
+		},
+	},
+	Subs: []*command{
+		settingsGetCmd,
+		settingsSetCmd,
+	},
+}
+
+var settingsGetCmd = &command{
+	Name:      "get",
+	Short:     "View repository settings",
+	UsageLine: "Usage: writ settings get [-C <dir>] [--json]",
+	Long:      "Display the current repository settings in tabular format or as machine-readable JSON.",
+	Flags: []flagSpec{
+		{Name: "C"},
+		{Name: "json"},
+	},
+	Examples: []string{
+		"writ settings get",
+		"writ settings get --json",
+	},
+}
+
+var settingsSetCmd = &command{
+	Name:      "set",
+	Short:     "Update repository settings",
+	UsageLine: "Usage: writ settings set [-C <dir>] [-name <name>] [-identifier <id>] [-timezone <tz>] [-estimate-scale <scale>] [-allow-zero-estimates <bool>] [-cycles-enabled <bool>] [-cycle-duration <weeks>] [-cycle-start-day <day>] [-cycle-cooldown <weeks>] [-triage-enabled <bool>] [--json]",
+	Long:      "Update one or more repository configuration settings. Untouched settings and unknown keys are preserved.",
+	Flags: []flagSpec{
+		{Name: "C"},
+		{Name: "json"},
+		{
+			Name:  "name",
+			Arg:   "<name>",
+			Usage: "Repository display name",
+		},
+		{
+			Name:  "identifier",
+			Arg:   "<id>",
+			Usage: "Issue identifier prefix",
+		},
+		{
+			Name:  "timezone",
+			Arg:   "<tz>",
+			Usage: "IANA timezone identifier",
+		},
+		{
+			Name:   "estimate-scale",
+			Arg:    "<scale>",
+			Usage:  "Estimate scale (none, fibonacci, exponential, linear, t-shirt)",
+			Values: []string{"none", "fibonacci", "exponential", "linear", "t-shirt"},
+		},
+		{
+			Name:  "allow-zero-estimates",
+			Arg:   "<bool>",
+			Usage: "Allow zero as estimate (true|false)",
+		},
+		{
+			Name:  "cycles-enabled",
+			Arg:   "<bool>",
+			Usage: "Enable cycles (true|false)",
+		},
+		{
+			Name:  "cycle-duration",
+			Arg:   "<weeks>",
+			Usage: "Cycle duration in weeks",
+		},
+		{
+			Name:  "cycle-start-day",
+			Arg:   "<day>",
+			Usage: "Cycle start day (1=Monday, 7=Sunday)",
+		},
+		{
+			Name:  "cycle-cooldown",
+			Arg:   "<weeks>",
+			Usage: "Cycle cooldown in weeks",
+		},
+		{
+			Name:  "triage-enabled",
+			Arg:   "<bool>",
+			Usage: "Enable triage mode (true|false)",
+		},
+	},
+	Examples: []string{
+		`writ settings set --name "Writ" --identifier WRIT`,
+		`writ settings set --estimate-scale t-shirt --timezone America/New_York`,
+		`writ settings set --cycles-enabled=true --cycle-duration 3`,
+	},
+}
+
 var docCmd = &command{
 	Name:      "doc",
 	Short:     "Manage collaborative documents and sections",
@@ -937,6 +1038,8 @@ func init() {
 		"doc section edit":     func() *flag.FlagSet { fs, _ := newDocSectionEditFlagSet(""); return fs },
 		"doc section move":     func() *flag.FlagSet { fs, _ := newDocSectionMoveFlagSet(""); return fs },
 		"doc section delete":   func() *flag.FlagSet { fs, _ := newDocSectionDeleteFlagSet(""); return fs },
+		"settings get":         func() *flag.FlagSet { fs, _ := newSettingsGetFlagSet(""); return fs },
+		"settings set":         func() *flag.FlagSet { fs, _ := newSettingsSetFlagSet(""); return fs },
 		"sync":                 func() *flag.FlagSet { fs, _ := newSyncFlagSet(""); return fs },
 	}
 }

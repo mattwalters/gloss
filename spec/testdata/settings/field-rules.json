@@ -1,0 +1,62 @@
+[
+  {
+    "op_type": "set",
+    "op_version": 1,
+    "field": "name",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "set",
+    "op_version": 1,
+    "field": "identifier",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "set",
+    "op_version": 1,
+    "field": "timezone",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "set",
+    "op_version": 1,
+    "field": "estimate_scale",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "set",
+    "op_version": 1,
+    "field": "allow_zero_estimates",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "set",
+    "op_version": 1,
+    "field": "cycles_enabled",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "set",
+    "op_version": 1,
+    "field": "cycle_duration_weeks",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "set",
+    "op_version": 1,
+    "field": "cycle_start_day",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "set",
+    "op_version": 1,
+    "field": "cycle_cooldown_weeks",
+    "strategy": "lww"
+  },
+  {
+    "op_type": "set",
+    "op_version": 1,
+    "field": "triage_enabled",
+    "strategy": "lww"
+  }
+]

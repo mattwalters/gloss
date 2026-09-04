@@ -35,6 +35,7 @@ func TestFieldRulesSchemaValidation(t *testing.T) {
 		"testdata/project/field-rules.json",
 		"testdata/repo/field-rules.json",
 		"testdata/review-ops/field-rules.json",
+		"testdata/settings/field-rules.json",
 		"testdata/workflow-state/field-rules.json",
 	}
 

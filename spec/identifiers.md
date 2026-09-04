@@ -722,7 +722,7 @@ locations.
 ### Team scope
 
 One workspace corresponds to one team (decided, WRIT-113). Workspace-scoped
-configuration objects — workflow states, labels, settings — are
+configuration objects — workflow states ([`spec/workflow-state-ops.md`](workflow-state-ops.md)), labels ([`spec/label-ops.md`](label-ops.md)), settings ([`spec/settings-ops.md`](settings-ops.md)) — are
 workspace-global; this specification defines no `team` object type and no team
 scoping field in v1. Organizations with multiple teams run multiple
 workspaces.
