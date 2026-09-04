@@ -416,8 +416,8 @@ func (d *DB) Issues(f IssueFilter) ([]IssueResult, error) {
 			if idx > 0 {
 				sb.WriteString(" OR ")
 			}
-			sb.WriteString("(i.state = ? OR (i.state = 'open' AND LOWER(?) IN ('open', 'unstarted', 'backlog')) OR (i.state = 'closed' AND LOWER(?) IN ('closed', 'completed')) OR EXISTS (SELECT 1 FROM workflow_states ws WHERE ws.object_id = i.state AND (LOWER(ws.name) = LOWER(?) OR LOWER(ws.type) = LOWER(?) OR (LOWER(?) = 'closed' AND ws.type = 'completed') OR (LOWER(?) = 'open' AND ws.type IN ('unstarted', 'backlog')))))")
-			args = append(args, s, s, s, s, s, s, s)
+			sb.WriteString("(i.state = ? OR EXISTS (SELECT 1 FROM workflow_states ws WHERE ws.object_id = i.state AND (LOWER(ws.name) = LOWER(?) OR LOWER(ws.type) = LOWER(?) OR (LOWER(?) = 'closed' AND ws.type = 'completed') OR (LOWER(?) = 'open' AND ws.type IN ('unstarted', 'backlog')))))")
+			args = append(args, s, s, s, s, s)
 		}
 		sb.WriteString(")")
 	}

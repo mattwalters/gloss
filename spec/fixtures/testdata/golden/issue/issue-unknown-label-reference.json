@@ -4,7 +4,6 @@
       "object_id": "iss-dangling-lbl",
       "issue": {
         "title": "Dangling label test issue",
-        "state": "open",
         "labels": [
           "0123456789abcdef0123456789abcdef"
         ]

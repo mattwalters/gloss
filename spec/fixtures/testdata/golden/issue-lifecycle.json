@@ -2,11 +2,11 @@
   "refs": [
     {
       "name": "refs/writ/0123456789abcdef/issue",
-      "commit": "4a2608f22ba59708489436bfb19f19ae60e5b903"
+      "commit": "75ae37bac9b048f8a94ee2261c5b7ef45d22f53b"
     },
     {
       "name": "refs/writ/fedcba9876543210/issue",
-      "commit": "e693c3e8a579b65b2bdb93aa4e1c73f46eee5085"
+      "commit": "0297cc448fd4361482e5be3baefc29cc3920a386"
     }
   ],
   "generations": [
@@ -35,8 +35,8 @@
           "signed": true
         },
         {
-          "sha": "4a2608f22ba59708489436bfb19f19ae60e5b903",
-          "tree": "7f0262da42bce984015b0623b18645204dee5891",
+          "sha": "75ae37bac9b048f8a94ee2261c5b7ef45d22f53b",
+          "tree": "fd1a619fba5034caa74a16d23fef130d418c0629",
           "parents": [
             "f9be8939b1bab4996e56d101a4833eec59d9f15c"
           ],
@@ -52,10 +52,10 @@
       "index": 0,
       "commits": [
         {
-          "sha": "18a7e130fa4a876ac93745a9ab930d59fe16bed9",
-          "tree": "a069d549d37ddc6991778ec92f0d6bbbf884aafd",
+          "sha": "deff60779a8f9d04d2b82ce9fd7d125cedfb939d",
+          "tree": "756479c7bb433641cf52d6932a1437389e0c41e0",
           "parents": [
-            "4a2608f22ba59708489436bfb19f19ae60e5b903"
+            "75ae37bac9b048f8a94ee2261c5b7ef45d22f53b"
           ],
           "author": "Bob Example \u003cbob@example.test\u003e",
           "timestamp": "2026-01-01T00:03:00Z",
@@ -63,10 +63,10 @@
           "signed": true
         },
         {
-          "sha": "e693c3e8a579b65b2bdb93aa4e1c73f46eee5085",
+          "sha": "0297cc448fd4361482e5be3baefc29cc3920a386",
           "tree": "d717892ebf8fe0ce6860da619a436e2a8648769a",
           "parents": [
-            "18a7e130fa4a876ac93745a9ab930d59fe16bed9"
+            "deff60779a8f9d04d2b82ce9fd7d125cedfb939d"
           ],
           "author": "Bob Example \u003cbob@example.test\u003e",
           "timestamp": "2026-01-01T00:04:00Z",

@@ -43,7 +43,7 @@ refs:
               op_type: set-state
               op_version: 1
               body:
-                state: "closed"
+                state: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
                 reason: "completed"
             expect: accept
 
@@ -60,7 +60,7 @@ refs:
               op_type: set-state
               op_version: 1
               body:
-                state: "open"
+                state: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 reason: "reopened with new requirements"
             expect: accept
 

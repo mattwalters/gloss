@@ -24,8 +24,6 @@ func FoldIssue(ops []codec.Op) (Issue, error) {
 	reach := fold.BuildReachability(orderedOps)
 
 	var state Issue
-	var hasKnownOp bool
-	var stateExplicitlySet bool
 	var unknownOps []UnknownOp
 
 	type orSetRecord struct {
@@ -80,7 +78,6 @@ func FoldIssue(ops []codec.Op) (Issue, error) {
 
 		switch op.OpType {
 		case "create", "update":
-			hasKnownOp = true
 			if t, ok := body["title"].(string); ok {
 				state.Title = t
 			}
@@ -123,10 +120,8 @@ func FoldIssue(ops []codec.Op) (Issue, error) {
 			}
 
 		case "set-state":
-			hasKnownOp = true
 			if s, ok := body["state"].(string); ok {
 				state.State = s
-				stateExplicitlySet = true
 			}
 			if r, ok := body["reason"].(string); ok {
 				state.Reason = r
@@ -136,7 +131,6 @@ func FoldIssue(ops []codec.Op) (Issue, error) {
 			}
 
 		case "assign":
-			hasKnownOp = true
 			adds, removes := extractOrSetItems(body, "add", "remove")
 			for _, it := range adds {
 				if item := NormalizePerson(it); item != "" {
@@ -150,7 +144,6 @@ func FoldIssue(ops []codec.Op) (Issue, error) {
 			}
 
 		case "label":
-			hasKnownOp = true
 			adds, removes := extractOrSetItems(body, "add", "remove")
 			for _, it := range adds {
 				if it != "" {
@@ -164,7 +157,6 @@ func FoldIssue(ops []codec.Op) (Issue, error) {
 			}
 
 		case "link":
-			hasKnownOp = true
 			target, _ := body["target"].(string)
 			if target != "" {
 				entry, ok := linksMap[target]
@@ -188,10 +180,6 @@ func FoldIssue(ops []codec.Op) (Issue, error) {
 				OpVersion:  op.OpVersion,
 			})
 		}
-	}
-
-	if hasKnownOp && !stateExplicitlySet && state.State == "" {
-		state.State = "open"
 	}
 
 	// Assignees OR-set: add-wins over causal removes, emitted sorted

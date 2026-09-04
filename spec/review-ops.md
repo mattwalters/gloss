@@ -59,7 +59,7 @@ into fields of the `review` object rather than standalone collaborative objects.
   identifiers ([`spec/identifiers.md`](identifiers.md) §Person identifiers),
   normalized (scheme lowercased; value trimmed and case-folded) prior to set
   evaluation; schemes never unify, so `user:alice` and `email:alice@example.com`
-  are two members. Labels are opaque non-empty strings.
+  are two members. Labels are references to `label` objects.
 - **Link directionality: single-sided with derived inverse:**
   Links are declared single-sided on the object being authored (e.g. a review
   links to an issue with `relation: "fixes"`). This design avoids multi-repo
@@ -122,7 +122,7 @@ The review family defines nine operation types for `op_version: 1`:
 | `assign` | `{"add"?: [person-id], "remove"?: [person-id]}` | Add or remove review assignees (requested reviewers). |
 | `approval` | `{"revision": oid, "verdict": enum, "subject"?: person-id, "message"?: string}` | Review vote (`approve`, `request-changes`, `none`). |
 | `ci-status` | `{"revision": oid, "name": string, "state": enum, "url"?: string, "description"?: string, "started_at"?: timestamp, "completed_at"?: timestamp, "external_id"?: string}` | CI check result on a revision head. |
-| `label` | `{"add"?: [reference], "remove"?: [string]}` | Add or remove review labels (referencing label object IDs, FC-16; remove accepts legacy strings). |
+| `label` | `{"add"?: [reference], "remove"?: [string]}` | Add or remove review labels (referencing label object IDs, FC-16). |
 | `link` | `{"target": reference, "target_type"?: string, "relation": "fixes"\|"relates"\|"none"}` | Associate or retract cross-references (e.g. closes issue). |
 
 ### 1. `create`
@@ -374,7 +374,7 @@ head.
 
 ### 8. `label`
 
-Adds or removes labels on the review. In v1, label operations reference collaborative `label` object identifiers (`spec/identifiers.md#reference`). Unknown or unfetched label references fold cleanly without rejection per `spec/forward-compatibility.md` rule `FC-16`. Historical bare-string labels fold normally under the OR-set as legacy references.
+Adds or removes labels on the review. In v1, label operations reference collaborative `label` object identifiers (`spec/identifiers.md#reference`). Unknown or unfetched label references fold cleanly without rejection per `spec/forward-compatibility.md` rule `FC-16`.
 
 ```jsonc
 {
@@ -390,7 +390,7 @@ Adds or removes labels on the review. In v1, label operations reference collabor
 ```
 
 - `add` (array of label references, optional): Label object identifiers or references to attach to the review.
-- `remove` (array of non-empty strings, optional): Label object identifiers, references, or legacy bare strings to remove.
+- `remove` (array of non-empty strings, optional): Label object identifiers or references to remove, matching the stored value byte-exactly.
 
 At least one of `add` or `remove` MUST be present and contain at least one item.
 An empty `{}` body or empty arrays (`"add": []`) are invalid.
