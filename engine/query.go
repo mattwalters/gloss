@@ -3,7 +3,6 @@ package writ
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/writtendev/writ/engine/projection"
 )
@@ -140,65 +139,18 @@ func (q *Query) Reviews(f ReviewFilter) ([]ReviewResult, error) {
 	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
 		return nil, err
 	}
-	if len(f.Label) > 0 && q.store.Workspace != nil && q.store.Workspace.IsConfigured() {
-		labels, err := q.Labels(LabelFilter{})
-		if err == nil {
-			expanded := make([]string, len(f.Label))
-			copy(expanded, f.Label)
-			seen := make(map[string]bool)
-			for _, l := range expanded {
-				seen[l] = true
-			}
-			for _, req := range f.Label {
-				target := req
-				if idx := strings.Index(req, "#"); idx >= 0 && idx < len(req)-1 {
-					target = req[idx+1:]
-				}
-				for _, l := range labels {
-					if strings.EqualFold(l.Label.Name, req) || strings.EqualFold(l.Label.Name, target) {
-						if !seen[l.ObjectID] {
-							seen[l.ObjectID] = true
-							expanded = append(expanded, l.ObjectID)
-						}
-					}
-					if l.ObjectID == req || l.ObjectID == target || strings.HasPrefix(l.ObjectID, target) {
-						if !seen[l.Label.Name] {
-							seen[l.Label.Name] = true
-							expanded = append(expanded, l.Label.Name)
-						}
-					}
-				}
-			}
-			f.Label = expanded
-		}
-	}
 	return q.store.projection.Reviews(f)
-}
-
-func (q *Query) targetStoreForIssues(ctx context.Context) (*Store, error) {
-	if q == nil || q.store == nil {
-		return nil, fmt.Errorf("writ: store is nil")
-	}
-	if q.store.Workspace != nil && q.store.Workspace.IsConfigured() {
-		wsStore, err := q.store.Workspace.getStore(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return wsStore, nil
-	}
-	return q.store, nil
 }
 
 // Issues executes a list and filter query over issues.
 func (q *Query) Issues(f IssueFilter) ([]IssueResult, error) {
-	target, err := q.targetStoreForIssues(context.Background())
-	if err != nil {
+	if q == nil || q.store == nil {
+		return nil, fmt.Errorf("writ: store is nil")
+	}
+	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
 		return nil, err
 	}
-	if err := target.maybeAutoRefresh(context.Background()); err != nil {
-		return nil, err
-	}
-	return target.projection.Issues(f)
+	return q.store.projection.Issues(f)
 }
 
 // Comments executes a list and filter query over comments.
@@ -225,33 +177,24 @@ func (q *Query) Objects(f ObjectFilter) ([]ObjectResult, error) {
 
 // Threads retrieves and structures all comments attached to a subject into a comment reply forest.
 func (q *Query) Threads(subjectType, subjectID string) ([]CommentThread, error) {
-	target := q.store
-	if subjectType == "issue" {
-		var err error
-		target, err = q.targetStoreForIssues(context.Background())
-		if err != nil {
-			return nil, err
-		}
-	}
-	if target == nil {
+	if q == nil || q.store == nil {
 		return nil, fmt.Errorf("writ: store is nil")
 	}
-	if err := target.maybeAutoRefresh(context.Background()); err != nil {
+	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
 		return nil, err
 	}
-	return target.projection.Threads(subjectType, subjectID)
+	return q.store.projection.Threads(subjectType, subjectID)
 }
 
 // GroupIssues partitions issues matching the filter by the specified grouping key.
 func (q *Query) GroupIssues(by GroupKey, f IssueFilter) ([]Group, error) {
-	target, err := q.targetStoreForIssues(context.Background())
-	if err != nil {
+	if q == nil || q.store == nil {
+		return nil, fmt.Errorf("writ: store is nil")
+	}
+	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
 		return nil, err
 	}
-	if err := target.maybeAutoRefresh(context.Background()); err != nil {
-		return nil, err
-	}
-	return target.projection.GroupIssues(by, f)
+	return q.store.projection.GroupIssues(by, f)
 }
 
 // Review fetches a single review by its object ID, returning ErrNotFound if not found.
@@ -267,14 +210,13 @@ func (q *Query) Review(id string) (ReviewResult, error) {
 
 // Issue fetches a single issue by its object ID, returning ErrNotFound if not found.
 func (q *Query) Issue(id string) (IssueResult, error) {
-	target, err := q.targetStoreForIssues(context.Background())
-	if err != nil {
+	if q == nil || q.store == nil {
+		return IssueResult{}, fmt.Errorf("writ: store is nil")
+	}
+	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
 		return IssueResult{}, err
 	}
-	if err := target.maybeAutoRefresh(context.Background()); err != nil {
-		return IssueResult{}, err
-	}
-	return target.projection.Issue(id)
+	return q.store.projection.Issue(id)
 }
 
 // Object fetches summary metadata for a single collaborative object by its ID, returning ErrNotFound if not found.
@@ -290,86 +232,79 @@ func (q *Query) Object(id string) (ObjectResult, error) {
 
 // WorkflowStates executes a list and filter query over workflow states.
 func (q *Query) WorkflowStates(f WorkflowStateFilter) ([]WorkflowStateResult, error) {
-	target, err := q.targetStoreForIssues(context.Background())
-	if err != nil {
+	if q == nil || q.store == nil {
+		return nil, fmt.Errorf("writ: store is nil")
+	}
+	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
 		return nil, err
 	}
-	if err := target.maybeAutoRefresh(context.Background()); err != nil {
-		return nil, err
-	}
-	return target.projection.WorkflowStates(f)
+	return q.store.projection.WorkflowStates(f)
 }
 
 // WorkflowState fetches a single workflow state by its object ID, returning ErrNotFound if not found.
 func (q *Query) WorkflowState(id string) (WorkflowStateResult, error) {
-	target, err := q.targetStoreForIssues(context.Background())
-	if err != nil {
+	if q == nil || q.store == nil {
+		return WorkflowStateResult{}, fmt.Errorf("writ: store is nil")
+	}
+	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
 		return WorkflowStateResult{}, err
 	}
-	if err := target.maybeAutoRefresh(context.Background()); err != nil {
-		return WorkflowStateResult{}, err
-	}
-	return target.projection.WorkflowState(id)
+	return q.store.projection.WorkflowState(id)
 }
 
 // Labels executes a list and filter query over labels.
 func (q *Query) Labels(f LabelFilter) ([]LabelResult, error) {
-	target, err := q.targetStoreForIssues(context.Background())
-	if err != nil {
+	if q == nil || q.store == nil {
+		return nil, fmt.Errorf("writ: store is nil")
+	}
+	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
 		return nil, err
 	}
-	if err := target.maybeAutoRefresh(context.Background()); err != nil {
-		return nil, err
-	}
-	return target.projection.Labels(f)
+	return q.store.projection.Labels(f)
 }
 
 // Label fetches a single label by its object ID, returning ErrNotFound if not found.
 func (q *Query) Label(id string) (LabelResult, error) {
-	target, err := q.targetStoreForIssues(context.Background())
-	if err != nil {
+	if q == nil || q.store == nil {
+		return LabelResult{}, fmt.Errorf("writ: store is nil")
+	}
+	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
 		return LabelResult{}, err
 	}
-	if err := target.maybeAutoRefresh(context.Background()); err != nil {
-		return LabelResult{}, err
-	}
-	return target.projection.Label(id)
+	return q.store.projection.Label(id)
 }
 
 // Documents executes a list and filter query over documents.
 func (q *Query) Documents(f DocumentFilter) ([]DocumentResult, error) {
-	target, err := q.targetStoreForIssues(context.Background())
-	if err != nil {
+	if q == nil || q.store == nil {
+		return nil, fmt.Errorf("writ: store is nil")
+	}
+	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
 		return nil, err
 	}
-	if err := target.maybeAutoRefresh(context.Background()); err != nil {
-		return nil, err
-	}
-	return target.projection.Documents(f)
+	return q.store.projection.Documents(f)
 }
 
 // Document fetches a single document by its object ID, returning ErrNotFound if not found.
 func (q *Query) Document(id string) (DocumentResult, error) {
-	target, err := q.targetStoreForIssues(context.Background())
-	if err != nil {
+	if q == nil || q.store == nil {
+		return DocumentResult{}, fmt.Errorf("writ: store is nil")
+	}
+	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
 		return DocumentResult{}, err
 	}
-	if err := target.maybeAutoRefresh(context.Background()); err != nil {
-		return DocumentResult{}, err
-	}
-	return target.projection.Document(id)
+	return q.store.projection.Document(id)
 }
 
 // Section fetches a single document section by its object ID, returning ErrNotFound if not found.
 func (q *Query) Section(id string) (SectionResult, error) {
-	target, err := q.targetStoreForIssues(context.Background())
-	if err != nil {
+	if q == nil || q.store == nil {
+		return SectionResult{}, fmt.Errorf("writ: store is nil")
+	}
+	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
 		return SectionResult{}, err
 	}
-	if err := target.maybeAutoRefresh(context.Background()); err != nil {
-		return SectionResult{}, err
-	}
-	return target.projection.Section(id)
+	return q.store.projection.Section(id)
 }
 
 // Settings returns the current repository settings.

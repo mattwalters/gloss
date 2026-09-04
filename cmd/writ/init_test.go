@@ -15,7 +15,6 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/writtendev/writ/engine"
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/dag"
 	"github.com/writtendev/writ/engine/identity"
@@ -482,56 +481,6 @@ func TestInit_RepoIDPrecedence(t *testing.T) {
 	})
 }
 
-func TestInit_WorkspaceRegistration(t *testing.T) {
-	env := setupTestCLIEnv(t)
-	setupSigningKey(t, env.repoDir)
-
-	// Create a workspace repository
-	wsDir := t.TempDir()
-	initCmd := exec.Command("git", "init")
-	initCmd.Dir = wsDir
-	if out, err := initCmd.CombinedOutput(); err != nil {
-		t.Fatalf("init wsDir: %v (%s)", err, out)
-	}
-	setupSigningKey(t, wsDir)
-	setGitConfig(t, wsDir, "writ.writerId", "0000000000000001")
-
-	// Set writ.workspace on code repo
-	setGitConfig(t, env.repoDir, "writ.workspace", wsDir)
-	addRemote(t, env.repoDir, "origin", "git@github.com:acme/backend.git")
-
-	var stdout, stderr bytes.Buffer
-	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("init with workspace exited with %d; stderr: %s", code, stderr.String())
-	}
-
-	if !strings.Contains(stdout.String(), "Registered repository in workspace") {
-		t.Errorf("stdout does not note workspace registration: %s", stdout.String())
-	}
-
-	// Verify workspace repo's projection contains the registered repo
-	wsStore, err := writ.Open(wsDir)
-	if err != nil {
-		t.Fatalf("open wsStore: %v", err)
-	}
-	defer wsStore.Close()
-
-	repos, err := wsStore.Workspace.Repos(context.Background())
-	if err != nil {
-		t.Fatalf("wsStore.Workspace.Repos: %v", err)
-	}
-	if len(repos) != 1 {
-		t.Fatalf("expected 1 registered repo in workspace, got %d", len(repos))
-	}
-	if repos[0].Slug != filepath.Base(env.repoDir) {
-		t.Errorf("registered repo slug = %q, want %q", repos[0].Slug, filepath.Base(env.repoDir))
-	}
-	if len(repos[0].Remotes) != 1 || repos[0].Remotes[0] != "git@github.com:acme/backend.git" {
-		t.Errorf("registered repo remotes = %v, want ['git@github.com:acme/backend.git']", repos[0].Remotes)
-	}
-}
-
 func TestInit_SigningKeyGuidance(t *testing.T) {
 	env := setupTestCLIEnv(t)
 	// The author identity has to be configured for Load to get as far as the
@@ -686,51 +635,6 @@ func TestInit_NeverAdvisesRunningInit(t *testing.T) {
 			}
 		})
 	}
-
-	// Registering into a workspace is the one place init may name itself, and
-	// the reason is the reason the advice is banned everywhere else: the
-	// reader must be told something that will actually fix their repository.
-	// The workspace is a second repository. Running writ init here — which is
-	// what the reader is doing — will never configure it, so the message has
-	// to name the repository to run it in.
-	t.Run("workspace registration names the other repo", func(t *testing.T) {
-		env := setupTestCLIEnv(t)
-		setupSigningKey(t, env.repoDir)
-		addRemote(t, env.repoDir, "origin", "https://example.com/repo.git")
-
-		// A workspace repository that is a git repository and nothing more:
-		// writ init has never been run in it, so it has no writer identity
-		// and registration cannot write to it.
-		wsDir := t.TempDir()
-		wsInit := exec.Command("git", "init")
-		wsInit.Dir = wsDir
-		if out, err := wsInit.CombinedOutput(); err != nil {
-			t.Fatalf("git init in workspace dir: %v (%s)", err, out)
-		}
-		setGitConfig(t, env.repoDir, "writ.workspace", wsDir)
-
-		var stdout, stderr bytes.Buffer
-		if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr); code != 0 {
-			t.Fatalf("init exited with %d; stderr: %s", code, stderr.String())
-		}
-
-		got := stderr.String()
-		if !strings.Contains(got, "could not register in workspace") {
-			t.Fatalf("init did not report the failed registration:\n%s", got)
-		}
-		if !strings.Contains(got, wsDir) {
-			t.Errorf("the advice does not name the repository to run writ init in:\n%s", got)
-		}
-		// Every mention of writ init must be the one that names the other
-		// repository. A bare "(run 'writ init' to configure)" here sends the
-		// reader back to the command they are running, in the repository that
-		// is already configured.
-		for _, line := range strings.Split(got, "\n") {
-			if strings.Contains(line, "writ init") && !strings.Contains(line, "in the workspace repo "+wsDir) {
-				t.Errorf("init advised running itself without saying where:\n%s", line)
-			}
-		}
-	})
 
 	// The other half of the rule: suppressed for init, kept everywhere else.
 	// A verb that needs a signed write on an unconfigured repo is exactly

@@ -17,23 +17,15 @@ import (
 )
 
 type openConfig struct {
-	cacheDir      string
-	signer        codec.Signer
-	autoRefresh   bool
-	gitBin        string
-	targetRefs    []string
-	workspacePath string
+	cacheDir    string
+	signer      codec.Signer
+	autoRefresh bool
+	gitBin      string
+	targetRefs  []string
 }
 
 // Option configures an Open invocation.
 type Option func(*openConfig)
-
-// WithWorkspace configures an explicit custom local filesystem path for the workspace repository.
-func WithWorkspace(path string) Option {
-	return func(c *openConfig) {
-		c.workspacePath = path
-	}
-}
 
 // WithCacheDir configures an explicit custom directory for the SQLite projection cache.
 func WithCacheDir(dir string) Option {
@@ -179,25 +171,8 @@ func Open(path string, opts ...Option) (*Store, error) {
 		return nil, fmt.Errorf("writ: open sync client: %w", err)
 	}
 
-	// Load repo ID and discover workspace configuration
+	// Load repo ID
 	localRepoID, _ := identity.LoadRepoID(context.Background(), repoDir)
-
-	if cfg.workspacePath == "" {
-		gitCfg, err := identity.ReadGitConfig(context.Background(), repoDir)
-		if err == nil {
-			if rawWs, ok := gitCfg["writ.workspace"]; ok && strings.TrimSpace(rawWs) != "" {
-				trimmed := strings.TrimSpace(rawWs)
-				if strings.HasPrefix(trimmed, "http://") || strings.HasPrefix(trimmed, "https://") || strings.HasPrefix(trimmed, "git@") || strings.HasPrefix(trimmed, "ssh://") {
-					_ = projDB.Close()
-					return nil, ErrWorkspaceRemoteURLNotSupported
-				}
-				if !filepath.IsAbs(trimmed) {
-					trimmed = filepath.Clean(filepath.Join(repoDir, trimmed))
-				}
-				cfg.workspacePath = trimmed
-			}
-		}
-	}
 
 	s := &Store{
 		gitInfo:     gitInfo,
@@ -213,9 +188,9 @@ func Open(path string, opts ...Option) (*Store, error) {
 		signerErr:   signerErr,
 		autoRefresh: cfg.autoRefresh,
 		targetRefs:  cfg.targetRefs,
+		localRepoID: string(localRepoID),
 	}
 
-	s.Workspace = newWorkspace(s, string(localRepoID), cfg.workspacePath)
 	s.Reviews = &Reviews{store: s}
 	s.Issues = &Issues{store: s}
 	s.Comments = &Comments{store: s}

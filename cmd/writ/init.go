@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/writtendev/writ/engine"
@@ -44,26 +43,6 @@ func initMessage(err error) string {
 		return cfgErr.Message()
 	}
 	return err.Error()
-}
-
-// workspaceRegisterMessage renders a workspace-registration failure for writ
-// init's own output.
-//
-// Registration writes into a second repository — the one writ.workspace points
-// at — and the identity errors it fails with carry "(run 'writ init' to
-// configure)". Printed here that advice is not merely circular, the way a
-// ConfigError from this repository would be: it is wrong. The reader is
-// already running writ init, in this repository, and no number of further runs
-// here will ever configure the workspace repository. The only useful thing to
-// say is which repository to go and run it in, so say that.
-func workspaceRegisterMessage(err error, wsPath string) string {
-	switch {
-	case errors.Is(err, writ.ErrNoIdentity):
-		return fmt.Sprintf("the workspace repository has no writer identity configured (run 'writ init' in the workspace repo %s)", wsPath)
-	case errors.Is(err, writ.ErrNoSigningKey):
-		return fmt.Sprintf("the workspace repository has no signing key configured (run 'writ init' in the workspace repo %s)", wsPath)
-	}
-	return initMessage(err)
 }
 
 // reportPartialInit names the state a failed run leaves the repository in.
@@ -306,38 +285,7 @@ func runInit(ctx context.Context, defaultDir string, args []string, stdout, stde
 		}
 	}
 
-	// 7. Register repository in workspace if writ.workspace is configured
-	gitCfg, _ := identity.ReadGitConfig(ctx, repoRoot)
-	if rawWs, ok := gitCfg["writ.workspace"]; ok && strings.TrimSpace(rawWs) != "" {
-		wsPath := strings.TrimSpace(rawWs)
-		if !filepath.IsAbs(wsPath) {
-			wsPath = filepath.Clean(filepath.Join(repoRoot, wsPath))
-		}
-		store, err := writ.Open(repoRoot)
-		if err == nil {
-			defer store.Close()
-			slug := filepath.Base(repoRoot)
-			if store.Workspace != nil && store.Workspace.IsConfigured() {
-				var remoteURLs []string
-				for _, r := range remotes {
-					cmdURL := exec.CommandContext(ctx, "git", "remote", "get-url", r)
-					cmdURL.Dir = repoRoot
-					if outURL, errURL := cmdURL.Output(); errURL == nil {
-						if u := strings.TrimSpace(string(outURL)); u != "" {
-							remoteURLs = append(remoteURLs, u)
-						}
-					}
-				}
-				if err := store.Workspace.Register(ctx, slug, remoteURLs); err == nil {
-					fmt.Fprintf(stdout, "Registered repository in workspace %s (%s)\n", wsPath, slug)
-				} else {
-					fmt.Fprintf(stderr, "warning: could not register in workspace: %s\n", workspaceRegisterMessage(err, wsPath))
-				}
-			}
-		}
-	}
-
-	// 8. Seed default workflow states if writable and none exist
+	// 7. Seed default workflow states if writable and none exist
 	if initStore, err := writ.Open(repoRoot); err == nil {
 		defer initStore.Close()
 		_ = initStore.WorkflowStates.SeedDefaults(ctx)

@@ -67,9 +67,6 @@ type Store struct {
 	// Settings provides workspace settings retrieval and updates.
 	Settings *SettingsService
 
-	// Workspace provides repository registry discovery, registration, and cross-repo resolution.
-	Workspace *Workspace
-
 	gitInfo     GitDirInfo
 	storer      storage.Storer
 	dagStore    *dag.Store
@@ -83,6 +80,7 @@ type Store struct {
 	signerErr   error
 	autoRefresh bool
 	targetRefs  []string
+	localRepoID string
 	closed      bool
 	subscribers []*subscriber
 	mu          sync.Mutex
@@ -112,16 +110,6 @@ func (s *Store) Close() error {
 			errs = append(errs, err)
 		}
 	}
-	if s.Workspace != nil {
-		s.Workspace.mu.Lock()
-		if s.Workspace.wsStore != nil && s.Workspace.wsOpened {
-			if err := s.Workspace.wsStore.Close(); err != nil {
-				errs = append(errs, err)
-			}
-			s.Workspace.wsStore = nil
-		}
-		s.Workspace.mu.Unlock()
-	}
 	return errors.Join(errs...)
 }
 
@@ -131,8 +119,8 @@ func (s *Store) Ref(objectID string) string {
 	if s == nil || objectID == "" {
 		return objectID
 	}
-	if s.Workspace != nil && s.Workspace.localRepoID != "" {
-		return s.Workspace.localRepoID + "#" + objectID
+	if s.localRepoID != "" {
+		return s.localRepoID + "#" + objectID
 	}
 	return objectID
 }

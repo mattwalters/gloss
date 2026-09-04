@@ -134,29 +134,8 @@ func resolveIssueRef(ctx context.Context, store *writ.Store, ref string) (scope 
 		return "", "", "", err
 	}
 
-	var issueRepoID string
-	var registry []writ.RepoEntry
-	if store.Workspace != nil {
-		info := store.Workspace.Info()
-		if info.Configured {
-			issueRepoID = info.WorkspaceRepoID
-			repos, rErr := store.Workspace.Repos(ctx)
-			if rErr == nil {
-				registry = repos
-			}
-		} else {
-			issueRepoID = info.LocalRepoID
-		}
-	}
-
-	if des == "" || (issueRepoID != "" && des == issueRepoID) {
+	if des == "" || store.Ref(objID) == ref {
 		return "local", "", objID, nil
-	}
-
-	for _, entry := range registry {
-		if entry.RepoID == des {
-			return "cross-repo", entry.Slug, objID, nil
-		}
 	}
 
 	return "unresolved", "", objID, nil

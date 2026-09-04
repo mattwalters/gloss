@@ -5,9 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -258,244 +255,102 @@ func TestIssue_Create_OptionalFlags(t *testing.T) {
 	}
 }
 
-func TestIssue_WorkspaceRouting_DoD1(t *testing.T) {
-	requireGit(t)
-	tempDir := t.TempDir()
-
-	globalCfgPath := filepath.Join(tempDir, "global_gitconfig")
-	if err := os.WriteFile(globalCfgPath, []byte(""), 0600); err != nil {
-		t.Fatalf("writing empty global config: %v", err)
-	}
-	t.Setenv("GIT_CONFIG_GLOBAL", globalCfgPath)
-	t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-
-	wsDir := filepath.Join(tempDir, "workspace")
-	if err := os.Mkdir(wsDir, 0755); err != nil {
-		t.Fatalf("mkdir ws: %v", err)
-	}
-	cmd := exec.Command("git", "init")
-	cmd.Dir = wsDir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git init ws failed: %v (%s)", err, string(out))
-	}
-	setupSigningKey(t, wsDir)
-	commitFile(t, wsDir, "README.md", "# Workspace", "initial ws commit")
-
-	codeDir := filepath.Join(tempDir, "code")
-	if err := os.Mkdir(codeDir, 0755); err != nil {
-		t.Fatalf("mkdir code: %v", err)
-	}
-	cmd = exec.Command("git", "init")
-	cmd.Dir = codeDir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git init code failed: %v (%s)", err, string(out))
-	}
-	setupSigningKey(t, codeDir)
-	commitFile(t, codeDir, "main.go", "package main", "initial code commit")
-
-	setGitConfig(t, codeDir, "writ.workspace", wsDir)
+// TestIssue_QualifiedLinkReference covers the link-target resolution
+// behaviour that survives the removal of workspace routing (WRIT-181):
+// qualified references (<repo-id>#<object-id>) still parse and still
+// display, but resolution against a repo other than the one writ is
+// standing in is no longer possible — a bare link target is never
+// auto-qualified, and any reference this store cannot recognize as its
+// own is displayed unresolved, verbatim, per spec/identifiers.md.
+func TestIssue_QualifiedLinkReference(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+	commitFile(t, env.repoDir, "main.go", "package main", "initial commit")
 
 	var stdout, stderr bytes.Buffer
-	code := run(context.Background(), []string{"init", "-C", wsDir}, &stdout, &stderr)
+	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
 	if code != 0 {
-		t.Fatalf("init ws failed: %s", stderr.String())
+		t.Fatalf("init failed: %s", stderr.String())
 	}
 
-	stdout.Reset()
-	stderr.Reset()
-	code = run(context.Background(), []string{"init", "-C", codeDir}, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("init code failed: %s", stderr.String())
-	}
-
-	// Create issue targeting codeDir
 	stdout.Reset()
 	stderr.Reset()
 	code = run(context.Background(), []string{
-		"issue", "create", "-C", codeDir,
-		"-title", "Routed Issue",
-		"-description", "Should land in workspace repo",
-	}, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("issue create in codeDir failed with %d; stderr: %s", code, stderr.String())
-	}
-
-	createOut := strings.TrimSpace(stdout.String())
-	idRe := regexp.MustCompile(`^([0-9a-f]{32}) \(Todo\) Routed Issue$`)
-	matches := idRe.FindStringSubmatch(createOut)
-	if len(matches) < 2 {
-		t.Fatalf("unexpected issue create output: %q", createOut)
-	}
-	issueID := matches[1]
-
-	// 1. Assert issue is visible from workspace repo's own store
-	stdout.Reset()
-	stderr.Reset()
-	code = run(context.Background(), []string{"issue", "list", "-C", wsDir}, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("issue list in wsDir failed: %s", stderr.String())
-	}
-	if !strings.Contains(stdout.String(), issueID[:8]) {
-		t.Errorf("workspace repo issue list missing issue %s: %s", issueID[:8], stdout.String())
-	}
-
-	// 2. Assert issue is also visible when querying codeDir (through workspace routing)
-	stdout.Reset()
-	stderr.Reset()
-	code = run(context.Background(), []string{"issue", "list", "-C", codeDir}, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("issue list in codeDir failed: %s", stderr.String())
-	}
-	if !strings.Contains(stdout.String(), issueID[:8]) {
-		t.Errorf("codeDir issue list missing issue %s: %s", issueID[:8], stdout.String())
-	}
-
-	// 3. Assert no issue op landed in codeDir's refs/writ/*
-	cmd = exec.Command("git", "for-each-ref", "refs/writ/ops/")
-	cmd.Dir = codeDir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("for-each-ref in codeDir failed: %v", err)
-	}
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if strings.Contains(line, "refs/writ/ops/issue/") {
-			t.Errorf("unexpected issue op ref found in codeDir: %s", line)
-		}
-	}
-}
-
-func TestIssue_CrossRepoReference_DoD2(t *testing.T) {
-	requireGit(t)
-	tempDir := t.TempDir()
-
-	globalCfgPath := filepath.Join(tempDir, "global_gitconfig")
-	if err := os.WriteFile(globalCfgPath, []byte(""), 0600); err != nil {
-		t.Fatalf("writing empty global config: %v", err)
-	}
-	t.Setenv("GIT_CONFIG_GLOBAL", globalCfgPath)
-	t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-
-	wsDir := filepath.Join(tempDir, "workspace")
-	if err := os.Mkdir(wsDir, 0755); err != nil {
-		t.Fatalf("mkdir ws: %v", err)
-	}
-	cmd := exec.Command("git", "init")
-	cmd.Dir = wsDir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git init ws failed: %v (%s)", err, string(out))
-	}
-	setupSigningKey(t, wsDir)
-	commitFile(t, wsDir, "README.md", "# Workspace", "initial ws commit")
-
-	codeDir := filepath.Join(tempDir, "code")
-	if err := os.Mkdir(codeDir, 0755); err != nil {
-		t.Fatalf("mkdir code: %v", err)
-	}
-	cmd = exec.Command("git", "init")
-	cmd.Dir = codeDir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git init code failed: %v (%s)", err, string(out))
-	}
-	setupSigningKey(t, codeDir)
-	commitFile(t, codeDir, "main.go", "package main", "initial code commit")
-
-	setGitConfig(t, codeDir, "writ.workspace", wsDir)
-
-	var stdout, stderr bytes.Buffer
-	code := run(context.Background(), []string{"init", "-C", wsDir}, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("init ws failed: %s", stderr.String())
-	}
-
-	stdout.Reset()
-	stderr.Reset()
-	code = run(context.Background(), []string{"init", "-C", codeDir}, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("init code failed: %s", stderr.String())
-	}
-
-	// Create issue from codeDir
-	stdout.Reset()
-	stderr.Reset()
-	code = run(context.Background(), []string{
-		"issue", "create", "-C", codeDir,
-		"-title", "Issue with cross-repo link",
+		"issue", "create", "-C", env.repoDir,
+		"-title", "Issue with a qualified link",
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("issue create failed: %s", stderr.String())
 	}
 	createOut := strings.TrimSpace(stdout.String())
-	idRe := regexp.MustCompile(`^([0-9a-f]{32}) \(Todo\) Issue with cross-repo link$`)
+	idRe := regexp.MustCompile(`^([0-9a-f]{32}) \(Todo\) Issue with a qualified link$`)
 	matches := idRe.FindStringSubmatch(createOut)
 	if len(matches) < 2 {
 		t.Fatalf("unexpected create output: %q", createOut)
 	}
 	issueID := matches[1]
 
-	// Open review in codeDir
 	stdout.Reset()
 	stderr.Reset()
 	code = run(context.Background(), []string{
-		"review", "open", "-C", codeDir,
-		"-title", "Fix review in code repo",
+		"review", "open", "-C", env.repoDir,
+		"-title", "Fix review",
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("review open failed: %s", stderr.String())
 	}
 	revOut := strings.TrimSpace(stdout.String())
-	revRe := regexp.MustCompile(`^([0-9a-f]{32}) \(open\) Fix review in code repo$`)
+	revRe := regexp.MustCompile(`^([0-9a-f]{32}) \(open\) Fix review$`)
 	revMatches := revRe.FindStringSubmatch(revOut)
 	if len(revMatches) < 2 {
 		t.Fatalf("unexpected review open output: %q", revOut)
 	}
 	reviewID := revMatches[1]
 
-	// Get code repo's repo-id
-	codeRepoIDBytes, err := identity.LoadRepoID(context.Background(), codeDir)
+	repoIDBytes, err := identity.LoadRepoID(context.Background(), env.repoDir)
 	if err != nil {
-		t.Fatalf("load code repo id: %v", err)
+		t.Fatalf("load repo id: %v", err)
 	}
-	codeRepoID := string(codeRepoIDBytes)
+	repoID := string(repoIDBytes)
 
-	// Case 1: Cross-repo link with explicit <repo-id>#<review-id>
-	explicitTarget := codeRepoID + "#" + reviewID
+	// Case 1: a reference explicitly qualified with this repo's own repo-id
+	// resolves locally — qualification is still correct, it just never
+	// means "elsewhere" anymore.
+	selfQualified := repoID + "#" + reviewID
 	stdout.Reset()
 	stderr.Reset()
 	code = run(context.Background(), []string{
-		"issue", "link", "-C", codeDir,
-		issueID, "-relation", "fixes", "-target", explicitTarget,
+		"issue", "link", "-C", env.repoDir,
+		issueID, "-relation", "fixes", "-target", selfQualified,
 	}, &stdout, &stderr)
 	if code != 0 {
-		t.Fatalf("issue link explicit target failed with %d; stderr: %s", code, stderr.String())
+		t.Fatalf("issue link self-qualified target failed with %d; stderr: %s", code, stderr.String())
 	}
 
 	stdout.Reset()
 	stderr.Reset()
-	code = run(context.Background(), []string{"issue", "status", "-C", codeDir, issueID}, &stdout, &stderr)
+	code = run(context.Background(), []string{"issue", "status", "-C", env.repoDir, issueID}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("issue status failed: %s", stderr.String())
 	}
 	statusOut := stdout.String()
-	// Should show cross-repo with slug "code"
-	if !strings.Contains(statusOut, "fixes "+explicitTarget+" (cross-repo code)") {
-		t.Errorf("status output missing cross-repo slug: %s", statusOut)
+	if !strings.Contains(statusOut, "fixes "+selfQualified+" (local)") {
+		t.Errorf("status output missing local resolution for self-qualified link: %s", statusOut)
 	}
 
-	// Case 2: Link with bare review ID -> engine auto-qualification
+	// Case 2: a bare link target stays bare — there is no second store left
+	// to auto-qualify it against.
 	stdout.Reset()
 	stderr.Reset()
 	code = run(context.Background(), []string{
-		"issue", "link", "-C", codeDir,
+		"issue", "link", "-C", env.repoDir,
 		issueID, "-relation", "relates", "-target", reviewID,
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("issue link bare target failed with %d; stderr: %s", code, stderr.String())
 	}
 
-	// Verify stored target came back fully qualified
-	store, err := writ.Open(codeDir)
+	store, err := writ.Open(env.repoDir)
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -508,8 +363,8 @@ func TestIssue_CrossRepoReference_DoD2(t *testing.T) {
 	for _, l := range issRes.Issue.Links {
 		if l.Relation == "relates" {
 			foundBareLink = true
-			if l.Target != explicitTarget {
-				t.Errorf("bare link target = %q, want auto-qualified %q", l.Target, explicitTarget)
+			if l.Target != reviewID {
+				t.Errorf("bare link target = %q, want it to stay bare (%q)", l.Target, reviewID)
 			}
 		}
 	}
@@ -517,75 +372,48 @@ func TestIssue_CrossRepoReference_DoD2(t *testing.T) {
 		t.Errorf("relates link not found in issue state")
 	}
 
-	// Case 3: Link unregistered repo-id -> displayed as unresolved and preserved verbatim
-	unregisteredRef := "0123456789abcdef0123456789abcdef#fedcba9876543210fedcba9876543210"
+	// Case 3: a qualified reference to a repo-id this store does not
+	// recognize as its own is displayed unresolved, preserved verbatim.
+	foreignRef := "0123456789abcdef0123456789abcdef#fedcba9876543210fedcba9876543210"
 	stdout.Reset()
 	stderr.Reset()
 	code = run(context.Background(), []string{
-		"issue", "link", "-C", codeDir,
-		issueID, "-relation", "fixes", "-target", unregisteredRef,
+		"issue", "link", "-C", env.repoDir,
+		issueID, "-relation", "fixes", "-target", foreignRef,
 	}, &stdout, &stderr)
 	if code != 0 {
-		t.Fatalf("issue link unregistered ref failed with %d; stderr: %s", code, stderr.String())
+		t.Fatalf("issue link foreign ref failed with %d; stderr: %s", code, stderr.String())
 	}
 
 	stdout.Reset()
 	stderr.Reset()
-	code = run(context.Background(), []string{"issue", "status", "-C", codeDir, issueID}, &stdout, &stderr)
+	code = run(context.Background(), []string{"issue", "status", "-C", env.repoDir, issueID}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("issue status query failed: %s", stderr.String())
 	}
 	unresStatusOut := stdout.String()
-	if !strings.Contains(unresStatusOut, "fixes "+unregisteredRef+" (unresolved)") {
+	if !strings.Contains(unresStatusOut, "fixes "+foreignRef+" (unresolved)") {
 		t.Errorf("status missing unresolved link verbatim: %s", unresStatusOut)
 	}
 }
 
-func TestIssue_ResolveIssueID_WorkspaceGlobal(t *testing.T) {
-	requireGit(t)
-	tempDir := t.TempDir()
+// TestIssue_ResolveIssueID_Qualified covers resolving an issue ID prefix
+// itself (not just a link target) when passed as a qualified reference:
+// self-qualified succeeds, and a reference to any other repo-id is not
+// found — there is no registry left to consult.
+func TestIssue_ResolveIssueID_Qualified(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+	commitFile(t, env.repoDir, "main.go", "package main", "initial commit")
 
-	globalCfgPath := filepath.Join(tempDir, "global_gitconfig")
-	if err := os.WriteFile(globalCfgPath, []byte(""), 0600); err != nil {
-		t.Fatalf("writing empty global config: %v", err)
+	if code := run(context.Background(), []string{"init", "-C", env.repoDir}, &bytes.Buffer{}, &bytes.Buffer{}); code != 0 {
+		t.Fatalf("init failed")
 	}
-	t.Setenv("GIT_CONFIG_GLOBAL", globalCfgPath)
-	t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-
-	wsDir := filepath.Join(tempDir, "workspace")
-	if err := os.Mkdir(wsDir, 0755); err != nil {
-		t.Fatalf("mkdir ws: %v", err)
-	}
-	cmd := exec.Command("git", "init")
-	cmd.Dir = wsDir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git init ws failed: %v (%s)", err, string(out))
-	}
-	setupSigningKey(t, wsDir)
-	commitFile(t, wsDir, "README.md", "# Workspace", "initial ws commit")
-
-	codeDir := filepath.Join(tempDir, "code")
-	if err := os.Mkdir(codeDir, 0755); err != nil {
-		t.Fatalf("mkdir code: %v", err)
-	}
-	cmd = exec.Command("git", "init")
-	cmd.Dir = codeDir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git init code failed: %v (%s)", err, string(out))
-	}
-	setupSigningKey(t, codeDir)
-	commitFile(t, codeDir, "main.go", "package main", "initial code commit")
-
-	setGitConfig(t, codeDir, "writ.workspace", wsDir)
-
-	_ = run(context.Background(), []string{"init", "-C", wsDir}, &bytes.Buffer{}, &bytes.Buffer{})
-	_ = run(context.Background(), []string{"init", "-C", codeDir}, &bytes.Buffer{}, &bytes.Buffer{})
 
 	var stdout, stderr bytes.Buffer
 	code := run(context.Background(), []string{
-		"issue", "create", "-C", codeDir,
-		"-title", "Global ID Issue",
+		"issue", "create", "-C", env.repoDir,
+		"-title", "Qualified ID Issue",
 	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("issue create failed: %s", stderr.String())
@@ -593,45 +421,29 @@ func TestIssue_ResolveIssueID_WorkspaceGlobal(t *testing.T) {
 	createOut := strings.TrimSpace(stdout.String())
 	issueID := strings.Split(createOut, " ")[0]
 
-	wsRepoIDBytes, _ := identity.LoadRepoID(context.Background(), wsDir)
-	wsRepoID := string(wsRepoIDBytes)
-	codeRepoIDBytes, _ := identity.LoadRepoID(context.Background(), codeDir)
-	codeRepoID := string(codeRepoIDBytes)
+	repoIDBytes, _ := identity.LoadRepoID(context.Background(), env.repoDir)
+	repoID := string(repoIDBytes)
 
-	// 1. Resolve with workspace repo ID: <ws-repo-id>#<issue-id> -> succeeds
+	// 1. Resolve with this repo's own repo-id: <repo-id>#<issue-id> -> succeeds
 	stdout.Reset()
 	stderr.Reset()
 	code = run(context.Background(), []string{
-		"issue", "status", "-C", codeDir,
-		wsRepoID + "#" + issueID,
+		"issue", "status", "-C", env.repoDir,
+		repoID + "#" + issueID,
 	}, &stdout, &stderr)
 	if code != 0 {
-		t.Fatalf("issue status with global ws repo id failed with %d; stderr: %s", code, stderr.String())
+		t.Fatalf("issue status with self-qualified repo id failed with %d; stderr: %s", code, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "Issue:       "+issueID) {
 		t.Errorf("status output missing issue ID: %s", stdout.String())
 	}
 
-	// 2. Resolve with cross-repo ID: <code-repo-id>#<review-id> -> errors clearly "issue lives in repo <slug>"
-	stdout.Reset()
-	stderr.Reset()
-	code = run(context.Background(), []string{
-		"issue", "status", "-C", codeDir,
-		codeRepoID + "#" + issueID,
-	}, &stdout, &stderr)
-	if code != 1 {
-		t.Fatalf("expected exit code 1 for cross-repo issue reference, got %d", code)
-	}
-	if !strings.Contains(stderr.String(), "issue lives in repo code") {
-		t.Errorf("stderr missing 'issue lives in repo code': %s", stderr.String())
-	}
-
-	// 3. Resolve with unknown repo ID -> not found error
+	// 2. Resolve with an unknown repo-id -> not found error
 	const unknownRepoRef = "00000000000000000000000000000000#12345678"
 	stdout.Reset()
 	stderr.Reset()
 	code = run(context.Background(), []string{
-		"issue", "status", "-C", codeDir,
+		"issue", "status", "-C", env.repoDir,
 		unknownRepoRef,
 	}, &stdout, &stderr)
 	if code != 1 {

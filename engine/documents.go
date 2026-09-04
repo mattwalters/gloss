@@ -48,26 +48,12 @@ type Documents struct {
 	store *Store
 }
 
-func (d *Documents) targetStore(ctx context.Context) (*Store, bool, error) {
-	if d == nil || d.store == nil {
-		return nil, false, fmt.Errorf("writ: store is nil")
-	}
-	if d.store.Workspace != nil && d.store.Workspace.IsConfigured() {
-		wsStore, err := d.store.Workspace.getStore(ctx)
-		if err != nil {
-			return nil, false, err
-		}
-		return wsStore, true, nil
-	}
-	return d.store, false, nil
-}
-
 // Create initializes a new document collaborative object, minting an object ID.
 func (d *Documents) Create(ctx context.Context, nd NewDocument) (string, error) {
-	target, _, err := d.targetStore(ctx)
-	if err != nil {
-		return "", err
+	if d == nil || d.store == nil {
+		return "", fmt.Errorf("writ: store is nil")
 	}
+	target := d.store
 	if err := target.ensureWritable(); err != nil {
 		return "", err
 	}
@@ -157,10 +143,10 @@ func (d *Documents) Create(ctx context.Context, nd NewDocument) (string, error) 
 
 // Update modifies title or labels of an existing document.
 func (d *Documents) Update(ctx context.Context, id string, edit DocumentEdit) error {
-	target, _, err := d.targetStore(ctx)
-	if err != nil {
-		return err
+	if d == nil || d.store == nil {
+		return fmt.Errorf("writ: store is nil")
 	}
+	target := d.store
 	if err := target.ensureWritable(); err != nil {
 		return err
 	}
@@ -241,10 +227,10 @@ func (d *Documents) Update(ctx context.Context, id string, edit DocumentEdit) er
 
 // Link adds or updates a cross-reference link on a document.
 func (d *Documents) Link(ctx context.Context, id string, link Link) error {
-	target, _, err := d.targetStore(ctx)
-	if err != nil {
-		return err
+	if d == nil || d.store == nil {
+		return fmt.Errorf("writ: store is nil")
 	}
+	target := d.store
 	if err := target.ensureWritable(); err != nil {
 		return err
 	}
@@ -303,10 +289,10 @@ func (d *Documents) Link(ctx context.Context, id string, link Link) error {
 
 // AddSection creates a new section in a document.
 func (d *Documents) AddSection(ctx context.Context, docID string, ns NewSection) (string, error) {
-	target, _, err := d.targetStore(ctx)
-	if err != nil {
-		return "", err
+	if d == nil || d.store == nil {
+		return "", fmt.Errorf("writ: store is nil")
 	}
+	target := d.store
 	if err := target.ensureWritable(); err != nil {
 		return "", err
 	}
@@ -439,10 +425,10 @@ func (d *Documents) AddSection(ctx context.Context, docID string, ns NewSection)
 
 // EditSection records a new body version for a section, resolving any existing conflicts upon commit.
 func (d *Documents) EditSection(ctx context.Context, sectionID string, body string) error {
-	target, _, err := d.targetStore(ctx)
-	if err != nil {
-		return err
+	if d == nil || d.store == nil {
+		return fmt.Errorf("writ: store is nil")
 	}
+	target := d.store
 	if err := target.ensureWritable(); err != nil {
 		return err
 	}
@@ -487,10 +473,10 @@ func (d *Documents) EditSection(ctx context.Context, sectionID string, body stri
 
 // MoveSection reorders a section to between afterID and beforeID.
 func (d *Documents) MoveSection(ctx context.Context, sectionID string, afterID, beforeID string) error {
-	target, _, err := d.targetStore(ctx)
-	if err != nil {
-		return err
+	if d == nil || d.store == nil {
+		return fmt.Errorf("writ: store is nil")
 	}
+	target := d.store
 	if err := target.ensureWritable(); err != nil {
 		return err
 	}
@@ -617,10 +603,10 @@ func (d *Documents) MoveSection(ctx context.Context, sectionID string, afterID, 
 
 // UpdateSection modifies title or position of an existing section.
 func (d *Documents) UpdateSection(ctx context.Context, sectionID string, edit SectionEdit) error {
-	target, _, err := d.targetStore(ctx)
-	if err != nil {
-		return err
+	if d == nil || d.store == nil {
+		return fmt.Errorf("writ: store is nil")
 	}
+	target := d.store
 	if err := target.ensureWritable(); err != nil {
 		return err
 	}
@@ -682,10 +668,10 @@ func (d *Documents) UpdateSection(ctx context.Context, sectionID string, edit Se
 
 // DeleteSection tombstones a section.
 func (d *Documents) DeleteSection(ctx context.Context, sectionID string) error {
-	target, _, err := d.targetStore(ctx)
-	if err != nil {
-		return err
+	if d == nil || d.store == nil {
+		return fmt.Errorf("writ: store is nil")
 	}
+	target := d.store
 	if err := target.ensureWritable(); err != nil {
 		return err
 	}
