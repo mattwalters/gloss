@@ -1,6 +1,6 @@
 ---
 name: dispatch
-description: Batch-run the next WRIT tickets from Linear. Picks 5–10 unblocked tickets by priority, has each one planned into its ticket description, plans parallel vs serial execution, gets human approval, then runs each ticket through the implement-ticket, adversarial-review, and merge-queue skills to a merged pull request. Use when asked to run the queue, work the next tickets, dispatch a batch, or process Linear tickets in parallel. Do not use for a single ticket a human is already driving — use implement-ticket, adversarial-review, or merge-queue directly for that.
+description: Batch-run the next WRIT tickets from Linear. Picks 5–10 unblocked tickets from `Todo` by priority (never from `Backlog`), has each one planned into its ticket description, plans parallel vs serial execution, gets human approval, then runs each ticket through the implement-ticket, adversarial-review, and merge-queue skills to a merged pull request. Use when asked to run the queue, work the next tickets, dispatch a batch, or process Linear tickets in parallel. Do not use for a single ticket a human is already driving — use implement-ticket, adversarial-review, or merge-queue directly for that.
 ---
 
 # Dispatch
@@ -44,13 +44,23 @@ automation may race you to `Done` on merge, which is harmless.
 
 ## Phase 1 — Pick
 
-Read the WRIT queue in Linear. Candidates are unstarted tickets
-(`Todo`; dip into `Backlog` only if `Todo` runs dry), sorted by
-priority. Skip anything blocked by an open ticket, anything too vague
-to implement without a human, and anything whose scope is plainly a
-project rather than a change. Use judgment: a slightly lower-priority
-ticket that unblocks others, or rounds out a coherent batch, can jump
-the line. Pick 5–10.
+Read the WRIT queue in Linear. Candidates are tickets in `Todo`,
+sorted by priority. **`Backlog` is off-limits.** It is where the human
+parks work they do not want started — their own tickets, decisions
+they are still thinking through, things deliberately set aside.
+Promoting a ticket to `Todo` is how they hand it to dispatch, and it
+is the only signal that a ticket is available. An empty `Todo`
+therefore means there is nothing to run: say so and stop. Never dip
+into `Backlog` to fill out a batch, however tempting the tickets there
+look.
+
+Within `Todo`, skip anything blocked by an open ticket, anything too
+vague to implement without a human, and anything whose scope is
+plainly a project rather than a change. Use judgment: a slightly
+lower-priority ticket that unblocks others, or rounds out a coherent
+batch, can jump the line. Pick 5–10 — or everything in `Todo` if it
+holds fewer. A short batch is a normal outcome, not a reason to reach
+further.
 
 ## Phase 2 — Plan each ticket
 
