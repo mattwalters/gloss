@@ -26,6 +26,11 @@
           "minLength": 1,
           "description": "Name of the field in the operation body."
         },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "description": "State key in the generic fold map (ObjectState.State). Defaults to field if omitted."
+        },
         "strategy": {
           "type": "string",
           "enum": [

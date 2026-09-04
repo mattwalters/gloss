@@ -20,10 +20,19 @@ type Rule struct {
 	OpType    string         `json:"op_type,omitempty"`
 	OpVersion int64          `json:"op_version,omitempty"`
 	Field     string         `json:"field"`
+	Target    string         `json:"target,omitempty"`
 	Strategy  string         `json:"strategy"`
 	Key       []string       `json:"key,omitempty"`
 	Lattice   []string       `json:"lattice,omitempty"`
 	Normalize *NormalizeRule `json:"normalize,omitempty"`
+}
+
+// TargetKey returns Target if non-empty, otherwise Field.
+func (r Rule) TargetKey() string {
+	if r.Target != "" {
+		return r.Target
+	}
+	return r.Field
 }
 
 // OpRef identifies an operation in an object's total order sequence L
@@ -157,7 +166,7 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 		}
 	}
 
-	// Group matching rules by field name for ops actually present in input set
+	// Group matching rules by target key for ops actually present in input set
 	matchedRulesByField := make(map[string][]Rule)
 	for _, r := range rules {
 		for _, o := range orderedOps {
@@ -179,22 +188,23 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 					hasWrite = true
 				}
 				if hasWrite {
-					matchedRulesByField[r.Field] = append(matchedRulesByField[r.Field], r)
+					targetKey := r.TargetKey()
+					matchedRulesByField[targetKey] = append(matchedRulesByField[targetKey], r)
 					break
 				}
 			}
 		}
 	}
 
-	// Instantiate strategy accumulators for each field
+	// Instantiate strategy accumulators for each target key
 	accumulators := make(map[string]Accumulator, len(matchedRulesByField))
-	for fieldName, fieldRules := range matchedRulesByField {
+	for targetKey, fieldRules := range matchedRulesByField {
 		primaryRule := fieldRules[0]
 		acc, err := NewAccumulator(primaryRule, reach)
 		if err != nil {
-			return ObjectState{}, fmt.Errorf("fold: field %q: %w", fieldName, err)
+			return ObjectState{}, fmt.Errorf("fold: target %q: %w", targetKey, err)
 		}
-		accumulators[fieldName] = acc
+		accumulators[targetKey] = acc
 	}
 
 	// Walk total order L once, dispatching to matching field accumulators
@@ -204,12 +214,12 @@ func Fold(ops []codec.Op, rules []Rule) (ObjectState, error) {
 		}
 		bm := bodyMap[o.Op.ID]
 		rbm := rawBodyMap[o.Op.ID]
-		for fieldName, fieldRules := range matchedRulesByField {
+		for targetKey, fieldRules := range matchedRulesByField {
 			for _, r := range fieldRules {
 				if opMatchesRule(o.Op, r) {
-					acc := accumulators[fieldName]
+					acc := accumulators[targetKey]
 					if err := acc.Apply(r, o.Op, bm, rbm); err != nil {
-						return ObjectState{}, fmt.Errorf("fold: applying op %s to field %q: %w", o.Op.ID, fieldName, err)
+						return ObjectState{}, fmt.Errorf("fold: applying op %s to target %q: %w", o.Op.ID, targetKey, err)
 					}
 					break
 				}

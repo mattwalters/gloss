@@ -239,6 +239,7 @@ func runFoldFixture(t *testing.T, fix *fixtures.Fixture) ([]byte, error) {
 				OpType:    r.OpType,
 				OpVersion: r.OpVersion,
 				Field:     r.Field,
+				Target:    r.Target,
 				Strategy:  r.Strategy,
 				Key:       r.Key,
 				Lattice:   r.Lattice,

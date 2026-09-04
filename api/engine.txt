@@ -1453,11 +1453,13 @@ type Rule struct {
 	OpType string `json:"op_type,omitempty"`
 	OpVersion int64 `json:"op_version,omitempty"`
 	Field string `json:"field"`
+	Target string `json:"target,omitempty"`
 	Strategy string `json:"strategy"`
 	Key []string `json:"key,omitempty"`
 	Lattice []string `json:"lattice,omitempty"`
 	Normalize *NormalizeRule `json:"normalize,omitempty"`
 }
+func (Rule) TargetKey() string
 
 type Section struct {
 	DocumentID string `json:"document_id,omitempty"`

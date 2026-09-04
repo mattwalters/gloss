@@ -336,7 +336,7 @@ func ReviewRules() []Rule {
 		{OpType: "ci-status", OpVersion: 1, Field: "name", Strategy: "keyed-lww", Key: []string{"revision", "name"}},
 		{OpType: "ci-status", OpVersion: 1, Field: "state", Strategy: "keyed-lww", Key: []string{"revision", "name"}},
 		{OpType: "ci-status", OpVersion: 1, Field: "url", Strategy: "keyed-lww", Key: []string{"revision", "name"}},
-		{OpType: "ci-status", OpVersion: 1, Field: "description", Strategy: "keyed-lww", Key: []string{"revision", "name"}},
+		{OpType: "ci-status", OpVersion: 1, Field: "description", Target: "ci_description", Strategy: "keyed-lww", Key: []string{"revision", "name"}},
 		{OpType: "ci-status", OpVersion: 1, Field: "started_at", Strategy: "keyed-lww", Key: []string{"revision", "name"}},
 		{OpType: "ci-status", OpVersion: 1, Field: "completed_at", Strategy: "keyed-lww", Key: []string{"revision", "name"}},
 		{OpType: "ci-status", OpVersion: 1, Field: "external_id", Strategy: "keyed-lww", Key: []string{"revision", "name"}},

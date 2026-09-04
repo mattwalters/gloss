@@ -13,11 +13,20 @@ type FieldRule struct {
 	OpType     string         `json:"op_type,omitempty"`
 	OpVersion  int64          `json:"op_version,omitempty"`
 	Field      string         `json:"field"`
+	Target     string         `json:"target,omitempty"`
 	Strategy   string         `json:"strategy"`
 	Key        []string       `json:"key,omitempty"`
 	Lattice    []string       `json:"lattice,omitempty"`
 	Normalize  *NormalizeRule `json:"normalize,omitempty"`
 	Vocabulary string         `json:"-"`
+}
+
+// TargetKey returns Target if non-empty, otherwise Field.
+func (r FieldRule) TargetKey() string {
+	if r.Target != "" {
+		return r.Target
+	}
+	return r.Field
 }
 
 // NormalizeRule specifies the target structural positions for normalization.

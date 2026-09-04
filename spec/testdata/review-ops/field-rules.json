@@ -176,6 +176,7 @@
     "op_type": "ci-status",
     "op_version": 1,
     "field": "description",
+    "target": "ci_description",
     "strategy": "keyed-lww",
     "key": [
       "revision",
