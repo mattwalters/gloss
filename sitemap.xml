@@ -12,6 +12,8 @@
   </url><url>
     <loc>/docs/issue/</loc>
   </url><url>
+    <loc>/docs/document/</loc>
+  </url><url>
     <loc>/docs/sync/</loc>
   </url><url>
     <loc>/spec/anchors/</loc>
@@ -19,6 +21,8 @@
     <loc>/spec/canonicalization/</loc>
   </url><url>
     <loc>/spec/comments/</loc>
+  </url><url>
+    <loc>/spec/documents/</loc>
   </url><url>
     <loc>/spec/fold/</loc>
   </url><url>
