@@ -95,7 +95,7 @@ func newIssueCreateFlagSet(defaultDir string) (*flag.FlagSet, *issueCreateOpts) 
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
 	fs.StringVar(&opts.title, "title", "", "Issue title `<t>` (required)")
 	fs.StringVar(&opts.description, "description", "", "Issue description `<d>`")
-	fs.StringVar(&opts.stateVal, "state", "", "Initial issue state `<state>` (open or closed)")
+	fs.StringVar(&opts.stateVal, "state", "", "Initial issue state `<state>` (workflow-state name or ID)")
 	fs.StringVar(&opts.priority, "priority", "", "Issue priority `<p>` (urgent|high|medium|low|none or 0..4)")
 	fs.StringVar(&opts.estimate, "estimate", "", "Issue estimate `<e>` (non-negative number)")
 	fs.StringVar(&opts.position, "position", "", "Issue position `<pos>` (fractional index)")
@@ -616,17 +616,28 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 		posPtr = &opts.position
 	}
 
-	if err := store.Issues.SetState(ctx, issueID, writ.IssueState{
-		State:    newState,
-		Reason:   opts.reason,
-		Position: posPtr,
-	}); err != nil {
-		return renderErr(stderr, err)
+	if newState == "" {
+		// Reposition-only path (len(posArgs) == 1) on an issue that has
+		// never had a set-state op: there is no state to pass through,
+		// and SetState rejects "". Move the position via the update op
+		// instead of forcing a state onto an issue that has none.
+		if err := store.Issues.Update(ctx, issueID, writ.IssueEdit{Position: posPtr}); err != nil {
+			return renderErr(stderr, err)
+		}
+	} else {
+		if err := store.Issues.SetState(ctx, issueID, writ.IssueState{
+			State:    newState,
+			Reason:   opts.reason,
+			Position: posPtr,
+		}); err != nil {
+			return renderErr(stderr, err)
+		}
 	}
 
 	dispState := newState
-	ws, err := store.Query.WorkflowState(newState)
-	if err == nil && ws.WorkflowState.Name != "" {
+	if dispState == "" {
+		dispState = "-"
+	} else if ws, err := store.Query.WorkflowState(newState); err == nil && ws.WorkflowState.Name != "" {
 		dispState = ws.WorkflowState.Name
 	}
 

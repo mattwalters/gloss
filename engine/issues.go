@@ -195,7 +195,7 @@ func (i *Issues) Update(ctx context.Context, id string, edit IssueEdit) error {
 	return nil
 }
 
-// SetState transitions the issue state (e.g. "open", "closed", or a workflow state reference) with an optional reason.
+// SetState transitions the issue to a workflow state reference, with an optional reason.
 func (i *Issues) SetState(ctx context.Context, id string, st IssueState) error {
 	if i == nil || i.store == nil {
 		return fmt.Errorf("writ: store is nil")

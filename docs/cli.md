@@ -304,7 +304,7 @@ Create a new issue.
 - `-C <dir>`: Run as if writ was started in <dir>
 - `-title <t>`: Issue title <t> (required)
 - `-description <d>`: Issue description <d>
-- `-state <state>`: Initial issue state <state> (open or closed)
+- `-state <state>`: Initial issue state <state> (workflow-state name or ID)
 - `-priority <p>`: Issue priority <p> (urgent|high|medium|low|none or 0..4)
 - `-estimate <e>`: Issue estimate <e> (non-negative number)
 - `-position <pos>`: Issue position <pos> (fractional index)

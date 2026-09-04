@@ -349,8 +349,9 @@ Folded issue state is `Issue{title, description, state, reason, priority, estima
   not conflict. A link is retracted by emitting `relation: "none"`, causing the
   link for that `target` to present as absent in materialized state while the
   operation remains preserved in the DAG.
-- **Deletion:** Issues are never deleted in v1. Status transitions such as
-  `"closed"` represent lifecycle state, not object deletion.
+- **Deletion:** Issues are never deleted in v1. Status transitions into a
+  `completed`- or `canceled`-type workflow state represent lifecycle state,
+  not object deletion.
 
 ## Forward Compatibility & Unknown Fields
 

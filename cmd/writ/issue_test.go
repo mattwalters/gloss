@@ -1840,6 +1840,76 @@ func TestIssueFieldsPriorityEstimatePosition(t *testing.T) {
 	}
 }
 
+// TestIssueStatus_RepositionOnly_StatelessIssue guards against a regression
+// where `writ issue status <id> -position <p>` on an issue with no
+// `set-state` op (folded state == "") passed the empty state into
+// SetState, which rejects it. Repositioning must not require a state.
+//
+// A stateless issue arises from a repo whose `writ init` ran before a
+// signing key was configured: default workflow-state seeding is attempted
+// but silently fails (no signing key to commit with), so `issue create`
+// -- run later, once signing is configured -- finds no workflow states to
+// default into and leaves the issue without a set-state op.
+func TestIssueStatus_RepositionOnly_StatelessIssue(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setGitConfig(t, env.repoDir, "user.name", "Alice")
+	setGitConfig(t, env.repoDir, "user.email", "alice@example.com")
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("writ init (no signing key) failed with %d; stderr: %s", code, stderr.String())
+	}
+	commitFile(t, env.repoDir, "README.md", "# Hello", "initial commit")
+
+	// Configure signing only now, so default workflow-state seeding above
+	// stayed a no-op: this issue is created with no workflow states to
+	// default into, hence no set-state op.
+	setupSigningKey(t, env.repoDir)
+
+	// Create an issue without -state: it folds to state == "".
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "create", "-C", env.repoDir,
+		"-title", "Stateless Issue",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue create failed with %d; stderr: %s", code, stderr.String())
+	}
+	issueID := strings.Fields(stdout.String())[0]
+
+	// Reposition-only: no explicit new state is passed.
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "status", "-C", env.repoDir, issueID,
+		"-position", "V",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue status -position on stateless issue failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "status", "-C", env.repoDir, issueID, "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue status --json failed with %d; stderr: %s", code, stderr.String())
+	}
+	var wire1 struct {
+		Data wire.Issue `json:"data"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &wire1); err != nil {
+		t.Fatalf("unmarshal json: %v", err)
+	}
+	if wire1.Data.State != "" {
+		t.Errorf("expected state to remain empty, got %q", wire1.Data.State)
+	}
+	if wire1.Data.Position != "V" {
+		t.Errorf("expected position 'V', got %q", wire1.Data.Position)
+	}
+}
+
 
 
 
