@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"slices"
 
 	"github.com/writtendev/writ/engine/codec"
 	"github.com/writtendev/writ/engine/identity"
+	"github.com/writtendev/writ/engine/order"
 	"github.com/writtendev/writ/engine/state"
 	"github.com/writtendev/writ/spec"
 )
@@ -19,20 +21,27 @@ type Issues struct {
 
 // NewIssue specifies parameters for creating an issue.
 type NewIssue struct {
-	Title       string `json:"title"`
-	Description string `json:"description,omitempty"`
+	Title       string   `json:"title"`
+	Description string   `json:"description,omitempty"`
+	Priority    *int     `json:"priority,omitempty"`
+	Estimate    *float64 `json:"estimate,omitempty"`
+	Position    *string  `json:"position,omitempty"`
 }
 
 // IssueEdit specifies metadata edits for an issue.
 type IssueEdit struct {
-	Title       *string `json:"title,omitempty"`
-	Description *string `json:"description,omitempty"`
+	Title       *string  `json:"title,omitempty"`
+	Description *string  `json:"description,omitempty"`
+	Priority    *int     `json:"priority,omitempty"`
+	Estimate    *float64 `json:"estimate,omitempty"`
+	Position    *string  `json:"position,omitempty"`
 }
 
 // IssueState specifies state transitions for an issue.
 type IssueState struct {
-	State  string `json:"state"`
-	Reason string `json:"reason,omitempty"`
+	State    string  `json:"state"`
+	Reason   string  `json:"reason,omitempty"`
+	Position *string `json:"position,omitempty"`
 }
 
 func (i *Issues) targetStore(ctx context.Context) (*Store, bool, error) {
@@ -61,6 +70,21 @@ func (i *Issues) Create(ctx context.Context, n NewIssue) (string, error) {
 	if n.Title == "" {
 		return "", fmt.Errorf("writ: issue title cannot be empty")
 	}
+	if n.Priority != nil {
+		if *n.Priority < 0 || *n.Priority > 4 {
+			return "", fmt.Errorf("writ: issue priority must be between 0 and 4, got %d", *n.Priority)
+		}
+	}
+	if n.Estimate != nil {
+		if *n.Estimate < 0 || math.IsNaN(*n.Estimate) || math.IsInf(*n.Estimate, 0) {
+			return "", fmt.Errorf("writ: issue estimate must be a non-negative finite number, got %g", *n.Estimate)
+		}
+	}
+	if n.Position != nil {
+		if err := order.Validate(*n.Position); err != nil {
+			return "", fmt.Errorf("writ: invalid issue position: %w", err)
+		}
+	}
 
 	id := newObjectID()
 
@@ -69,6 +93,15 @@ func (i *Issues) Create(ctx context.Context, n NewIssue) (string, error) {
 	}
 	if n.Description != "" {
 		body["description"] = n.Description
+	}
+	if n.Priority != nil {
+		body["priority"] = *n.Priority
+	}
+	if n.Estimate != nil {
+		body["estimate"] = *n.Estimate
+	}
+	if n.Position != nil {
+		body["position"] = *n.Position
 	}
 
 	bodyBytes, err := json.Marshal(body)
@@ -92,7 +125,7 @@ func (i *Issues) Create(ctx context.Context, n NewIssue) (string, error) {
 	return id, nil
 }
 
-// Update modifies title or description metadata for an existing issue.
+// Update modifies title, description, priority, estimate, or position metadata for an existing issue.
 func (i *Issues) Update(ctx context.Context, id string, edit IssueEdit) error {
 	target, _, err := i.targetStore(ctx)
 	if err != nil {
@@ -104,11 +137,26 @@ func (i *Issues) Update(ctx context.Context, id string, edit IssueEdit) error {
 	if id == "" {
 		return fmt.Errorf("writ: issue id cannot be empty")
 	}
-	if edit.Title == nil && edit.Description == nil {
-		return fmt.Errorf("writ: at least one of title or description must be provided")
+	if edit.Title == nil && edit.Description == nil && edit.Priority == nil && edit.Estimate == nil && edit.Position == nil {
+		return fmt.Errorf("writ: at least one of title, description, priority, estimate, or position must be provided")
 	}
 	if edit.Title != nil && *edit.Title == "" {
 		return fmt.Errorf("writ: issue title cannot be empty: pass a nil title to leave it unchanged")
+	}
+	if edit.Priority != nil {
+		if *edit.Priority < 0 || *edit.Priority > 4 {
+			return fmt.Errorf("writ: issue priority must be between 0 and 4, got %d", *edit.Priority)
+		}
+	}
+	if edit.Estimate != nil {
+		if *edit.Estimate < 0 || math.IsNaN(*edit.Estimate) || math.IsInf(*edit.Estimate, 0) {
+			return fmt.Errorf("writ: issue estimate must be a non-negative finite number, got %g", *edit.Estimate)
+		}
+	}
+	if edit.Position != nil {
+		if err := order.Validate(*edit.Position); err != nil {
+			return fmt.Errorf("writ: invalid issue position: %w", err)
+		}
 	}
 
 	if err := target.maybeAutoRefresh(ctx); err != nil {
@@ -130,6 +178,15 @@ func (i *Issues) Update(ctx context.Context, id string, edit IssueEdit) error {
 	}
 	if edit.Description != nil {
 		body["description"] = *edit.Description
+	}
+	if edit.Priority != nil {
+		body["priority"] = *edit.Priority
+	}
+	if edit.Estimate != nil {
+		body["estimate"] = *edit.Estimate
+	}
+	if edit.Position != nil {
+		body["position"] = *edit.Position
 	}
 
 	bodyBytes, err := json.Marshal(body)
@@ -171,6 +228,11 @@ func (i *Issues) SetState(ctx context.Context, id string, st IssueState) error {
 	if _, _, err := state.ParseReference(st.State); err != nil {
 		return fmt.Errorf("writ: invalid issue state reference: %w", err)
 	}
+	if st.Position != nil {
+		if err := order.Validate(*st.Position); err != nil {
+			return fmt.Errorf("writ: invalid issue position: %w", err)
+		}
+	}
 
 	if err := target.maybeAutoRefresh(ctx); err != nil {
 		return fmt.Errorf("writ: auto refresh: %w", err)
@@ -190,6 +252,9 @@ func (i *Issues) SetState(ctx context.Context, id string, st IssueState) error {
 	}
 	if st.Reason != "" {
 		body["reason"] = st.Reason
+	}
+	if st.Position != nil {
+		body["position"] = *st.Position
 	}
 
 	bodyBytes, err := json.Marshal(body)

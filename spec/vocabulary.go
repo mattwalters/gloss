@@ -115,3 +115,45 @@ func FormatOptions(options []string) string {
 		return strings.Join(options[:len(options)-1], ", ") + ", or " + options[len(options)-1]
 	}
 }
+
+// IssuePriorityNames returns the closed priority vocabulary names in index order:
+// 0: "none", 1: "urgent", 2: "high", 3: "medium", 4: "low".
+func IssuePriorityNames() []string {
+	return []string{"none", "urgent", "high", "medium", "low"}
+}
+
+// ParseIssuePriority parses a priority string, accepting symbolic names
+// ("none", "urgent", "high", "medium", "low") or numeric digits ("0"-"4").
+func ParseIssuePriority(s string) (int, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "none", "0":
+		return 0, nil
+	case "urgent", "1":
+		return 1, nil
+	case "high", "2":
+		return 2, nil
+	case "medium", "3":
+		return 3, nil
+	case "low", "4":
+		return 4, nil
+	default:
+		return 0, fmt.Errorf("spec: invalid issue priority %q (expected none, urgent, high, medium, low, or 0-4)", s)
+	}
+}
+
+// FormatIssuePriority returns the canonical lowercase symbolic name for a priority level.
+func FormatIssuePriority(p int) string {
+	switch p {
+	case 1:
+		return "urgent"
+	case 2:
+		return "high"
+	case 3:
+		return "medium"
+	case 4:
+		return "low"
+	default:
+		return "none"
+	}
+}
+

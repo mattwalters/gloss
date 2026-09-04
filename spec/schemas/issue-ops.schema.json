@@ -141,6 +141,18 @@
         },
         "description": {
           "type": "string"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+        },
+        "estimate": {
+          "type": "number",
+          "minimum": 0
+        },
+        "position": {
+          "$ref": "https://writ.dev/spec/ordering.schema.json#/$defs/position"
         }
       },
       "required": [
@@ -156,6 +168,18 @@
         },
         "description": {
           "type": "string"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+        },
+        "estimate": {
+          "type": "number",
+          "minimum": 0
+        },
+        "position": {
+          "$ref": "https://writ.dev/spec/ordering.schema.json#/$defs/position"
         }
       },
       "anyOf": [
@@ -168,6 +192,21 @@
           "required": [
             "description"
           ]
+        },
+        {
+          "required": [
+            "priority"
+          ]
+        },
+        {
+          "required": [
+            "estimate"
+          ]
+        },
+        {
+          "required": [
+            "position"
+          ]
         }
       ]
     },
@@ -179,6 +218,9 @@
         },
         "reason": {
           "type": "string"
+        },
+        "position": {
+          "$ref": "https://writ.dev/spec/ordering.schema.json#/$defs/position"
         }
       },
       "required": [

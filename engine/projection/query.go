@@ -399,7 +399,7 @@ func (d *DB) Issues(f IssueFilter) ([]IssueResult, error) {
 	var sb strings.Builder
 	var args []any
 
-	sb.WriteString("SELECT i.object_id, i.title, i.description, i.state, i.reason, ")
+	sb.WriteString("SELECT i.object_id, i.title, i.description, i.state, i.reason, i.priority, i.estimate, i.position, ")
 	sb.WriteString("o.author_name, o.author_email, o.created_at, o.updated_at ")
 	sb.WriteString("FROM issues i JOIN objects o ON o.object_id = i.object_id WHERE 1=1")
 
@@ -413,6 +413,13 @@ func (d *DB) Issues(f IssueFilter) ([]IssueResult, error) {
 			args = append(args, s, s, s, s, s, s, s)
 		}
 		sb.WriteString(")")
+	}
+
+	if len(f.Priority) > 0 {
+		sb.WriteString(" AND i.priority IN (" + placeholders(len(f.Priority)) + ")")
+		for _, p := range f.Priority {
+			args = append(args, p)
+		}
 	}
 
 	if len(f.Author) > 0 {
@@ -455,6 +462,18 @@ func (d *DB) Issues(f IssueFilter) ([]IssueResult, error) {
 		sb.WriteString(" ORDER BY i.title ASC, i.object_id ASC")
 	case OrderByTitleDesc:
 		sb.WriteString(" ORDER BY i.title DESC, i.object_id DESC")
+	case OrderByPriorityAsc:
+		sb.WriteString(" ORDER BY CASE WHEN i.priority = 0 THEN 0 ELSE 5 - i.priority END ASC, i.position ASC, o.created_at ASC, i.object_id ASC")
+	case OrderByPriorityDesc:
+		sb.WriteString(" ORDER BY CASE WHEN i.priority = 0 THEN 5 ELSE i.priority END ASC, i.position ASC, o.created_at ASC, i.object_id ASC")
+	case OrderByPositionAsc:
+		sb.WriteString(" ORDER BY i.position ASC, i.position_op_id ASC, o.created_at ASC, i.object_id ASC")
+	case OrderByPositionDesc:
+		sb.WriteString(" ORDER BY i.position DESC, i.position_op_id DESC, o.created_at DESC, i.object_id DESC")
+	case OrderByEstimateAsc:
+		sb.WriteString(" ORDER BY CASE WHEN i.estimate IS NULL THEN 1 ELSE 0 END, i.estimate ASC, i.position ASC, o.created_at ASC, i.object_id ASC")
+	case OrderByEstimateDesc:
+		sb.WriteString(" ORDER BY CASE WHEN i.estimate IS NULL THEN 1 ELSE 0 END, i.estimate DESC, i.position ASC, o.created_at ASC, i.object_id ASC")
 	default:
 		sb.WriteString(" ORDER BY o.created_at ASC, i.object_id ASC")
 	}
@@ -473,6 +492,9 @@ func (d *DB) Issues(f IssueFilter) ([]IssueResult, error) {
 		description string
 		state       string
 		reason      string
+		priority    int
+		estimate    sql.NullFloat64
+		position    string
 		authorName  string
 		authorEmail string
 		createdAt   int64
@@ -486,6 +508,7 @@ func (d *DB) Issues(f IssueFilter) ([]IssueResult, error) {
 		var ri rawIssue
 		if err := rows.Scan(
 			&ri.objectID, &ri.title, &ri.description, &ri.state, &ri.reason,
+			&ri.priority, &ri.estimate, &ri.position,
 			&ri.authorName, &ri.authorEmail, &ri.createdAt, &ri.updatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("projection: scan issue: %w", err)
@@ -577,11 +600,18 @@ func (d *DB) Issues(f IssueFilter) ([]IssueResult, error) {
 
 	results := make([]IssueResult, 0, len(rawIssues))
 	for _, ri := range rawIssues {
+		var est *float64
+		if ri.estimate.Valid {
+			est = &ri.estimate.Float64
+		}
 		issue := state.Issue{
 			Title:       ri.title,
 			Description: ri.description,
 			State:       ri.state,
 			Reason:      ri.reason,
+			Priority:    ri.priority,
+			Estimate:    est,
+			Position:    ri.position,
 			Assignees:   assigneesMap[ri.objectID],
 			Labels:      labelsMap[ri.objectID],
 			Links:       linksMap[ri.objectID],
@@ -1400,6 +1430,9 @@ func (d *DB) Issue(objectID string) (IssueResult, error) {
 		description string
 		state       string
 		reason      string
+		priority    int
+		estimate    sql.NullFloat64
+		position    string
 		authorName  string
 		authorEmail string
 		createdAt   int64
@@ -1407,10 +1440,11 @@ func (d *DB) Issue(objectID string) (IssueResult, error) {
 	}
 
 	err := d.db.QueryRow(
-		"SELECT i.object_id, i.title, i.description, i.state, i.reason, o.author_name, o.author_email, o.created_at, o.updated_at FROM issues i JOIN objects o ON o.object_id = i.object_id WHERE i.object_id = ?",
+		"SELECT i.object_id, i.title, i.description, i.state, i.reason, i.priority, i.estimate, i.position, o.author_name, o.author_email, o.created_at, o.updated_at FROM issues i JOIN objects o ON o.object_id = i.object_id WHERE i.object_id = ?",
 		objectID,
 	).Scan(
 		&ri.objectID, &ri.title, &ri.description, &ri.state, &ri.reason,
+		&ri.priority, &ri.estimate, &ri.position,
 		&ri.authorName, &ri.authorEmail, &ri.createdAt, &ri.updatedAt,
 	)
 	if err != nil {
@@ -1498,6 +1532,11 @@ func (d *DB) Issue(objectID string) (IssueResult, error) {
 		return IssueResult{}, fmt.Errorf("projection: iterate unknown_ops: %w", err)
 	}
 
+	var est *float64
+	if ri.estimate.Valid {
+		est = &ri.estimate.Float64
+	}
+
 	return IssueResult{
 		ObjectID:  ri.objectID,
 		Author:    Author{Name: ri.authorName, Email: ri.authorEmail},
@@ -1508,6 +1547,9 @@ func (d *DB) Issue(objectID string) (IssueResult, error) {
 			Description: ri.description,
 			State:       ri.state,
 			Reason:      ri.reason,
+			Priority:    ri.priority,
+			Estimate:    est,
+			Position:    ri.position,
 			Assignees:   assignees,
 			Labels:      labels,
 			Links:       links,

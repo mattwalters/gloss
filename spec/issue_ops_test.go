@@ -48,12 +48,24 @@ func compileIssueOpsSchemas(t *testing.T) (*jsonschema.Schema, *jsonschema.Schem
 		t.Fatalf("decoding issue-ops schema: %v", err)
 	}
 
+	ordRaw, err := spec.FS.ReadFile("schemas/ordering.schema.json")
+	if err != nil {
+		t.Fatalf("reading ordering schema: %v", err)
+	}
+	ordDoc, err := jsonschema.UnmarshalJSON(bytes.NewReader(ordRaw))
+	if err != nil {
+		t.Fatalf("decoding ordering schema: %v", err)
+	}
+
 	c := jsonschema.NewCompiler()
 	if err := c.AddResource(envelopeSchemaID, envDoc); err != nil {
 		t.Fatalf("adding envelope schema resource: %v", err)
 	}
 	if err := c.AddResource(identifiersSchemaID, idDoc); err != nil {
 		t.Fatalf("adding identifiers schema resource: %v", err)
+	}
+	if err := c.AddResource("https://writ.dev/spec/ordering.schema.json", ordDoc); err != nil {
+		t.Fatalf("adding ordering schema resource: %v", err)
 	}
 	if err := c.AddResource(issueOpsSchemaID, issDoc); err != nil {
 		t.Fatalf("adding issue-ops schema resource: %v", err)

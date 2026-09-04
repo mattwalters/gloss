@@ -14,6 +14,12 @@ const (
 	OrderByUpdatedAtDesc OrderBy = "updated_at_desc"
 	OrderByTitleAsc      OrderBy = "title_asc"
 	OrderByTitleDesc     OrderBy = "title_desc"
+	OrderByPriorityAsc   OrderBy = "priority_asc"
+	OrderByPriorityDesc  OrderBy = "priority_desc"
+	OrderByPositionAsc   OrderBy = "position_asc"
+	OrderByPositionDesc  OrderBy = "position_desc"
+	OrderByEstimateAsc   OrderBy = "estimate_asc"
+	OrderByEstimateDesc  OrderBy = "estimate_desc"
 )
 
 // ReviewFilter specifies filter criteria when querying reviews.
@@ -32,6 +38,7 @@ type ReviewFilter struct {
 // IssueFilter specifies filter criteria when querying issues.
 type IssueFilter struct {
 	State          []string
+	Priority       []int
 	Author         []string
 	Assignee       []string
 	Label          []string // Filter by label names or canonical label object IDs.

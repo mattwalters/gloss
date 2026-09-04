@@ -96,11 +96,32 @@ const (
 	// OrderByTitleDesc sorts results by title descending.
 	OrderByTitleDesc = projection.OrderByTitleDesc
 
+	// OrderByPriorityAsc sorts results by priority ascending (none < low < medium < high < urgent).
+	OrderByPriorityAsc = projection.OrderByPriorityAsc
+
+	// OrderByPriorityDesc sorts results by priority descending (urgent > high > medium > low > none).
+	OrderByPriorityDesc = projection.OrderByPriorityDesc
+
+	// OrderByPositionAsc sorts results by position ascending.
+	OrderByPositionAsc = projection.OrderByPositionAsc
+
+	// OrderByPositionDesc sorts results by position descending.
+	OrderByPositionDesc = projection.OrderByPositionDesc
+
+	// OrderByEstimateAsc sorts results by estimate ascending.
+	OrderByEstimateAsc = projection.OrderByEstimateAsc
+
+	// OrderByEstimateDesc sorts results by estimate descending.
+	OrderByEstimateDesc = projection.OrderByEstimateDesc
+
 	// GroupByState groups issues by their state string.
 	GroupByState = projection.GroupByState
 
 	// GroupByAssignee groups issues by assignee.
 	GroupByAssignee = projection.GroupByAssignee
+
+	// GroupByPriority groups issues by priority.
+	GroupByPriority = projection.GroupByPriority
 )
 
 // Query provides read queries over collaborative objects, served from the projection SQLite cache.

@@ -1844,5 +1844,190 @@ func TestIssue_WorkflowStateDefaultsAndFiltering(t *testing.T) {
 	}
 }
 
+func TestIssueFieldsPriorityEstimatePosition(t *testing.T) {
+	env := setupTestCLIEnv(t)
+	setupSigningKey(t, env.repoDir)
+
+	var stdout, stderr bytes.Buffer
+	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("writ init failed with %d; stderr: %s", code, stderr.String())
+	}
+	commitFile(t, env.repoDir, "README.md", "# Hello", "initial commit")
+
+	// 1. Create issue with priority, estimate, position
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "create", "-C", env.repoDir,
+		"-title", "Urgent Task",
+		"-priority", "urgent",
+		"-estimate", "3.5",
+		"-position", "V",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue create failed with %d; stderr: %s", code, stderr.String())
+	}
+
+	issue1ID := strings.Fields(stdout.String())[0]
+
+	// 2. View status --json
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "status", "-C", env.repoDir, issue1ID, "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue status --json failed with %d: %s", code, stderr.String())
+	}
+
+	var wire1 struct {
+		Data wire.Issue `json:"data"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &wire1); err != nil {
+		t.Fatalf("unmarshal json: %v", err)
+	}
+	if wire1.Data.Priority != 1 {
+		t.Errorf("expected priority 1 (urgent), got %d", wire1.Data.Priority)
+	}
+	if wire1.Data.Estimate == nil || *wire1.Data.Estimate != 3.5 {
+		t.Errorf("expected estimate 3.5, got %v", wire1.Data.Estimate)
+	}
+	if wire1.Data.Position != "V" {
+		t.Errorf("expected position 'V', got %q", wire1.Data.Position)
+	}
+
+	// 3. Update issue via `writ issue update`
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "update", "-C", env.repoDir, issue1ID,
+		"-priority", "high",
+		"-estimate", "5.0",
+		"-position", "aV",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue update failed with %d: %s", code, stderr.String())
+	}
+
+	// Verify update in status --json
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "status", "-C", env.repoDir, issue1ID, "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue status --json failed with %d: %s", code, stderr.String())
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &wire1); err != nil {
+		t.Fatalf("unmarshal json: %v", err)
+	}
+	if wire1.Data.Priority != 2 {
+		t.Errorf("expected updated priority 2 (high), got %d", wire1.Data.Priority)
+	}
+	if wire1.Data.Estimate == nil || *wire1.Data.Estimate != 5.0 {
+		t.Errorf("expected updated estimate 5.0, got %v", wire1.Data.Estimate)
+	}
+	if wire1.Data.Position != "aV" {
+		t.Errorf("expected updated position 'aV', got %q", wire1.Data.Position)
+	}
+
+	// 4. Update position via `writ issue status`
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "status", "-C", env.repoDir, issue1ID, "closed",
+		"-position", "k",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue status with position failed with %d: %s", code, stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "status", "-C", env.repoDir, issue1ID, "--json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue status --json failed with %d: %s", code, stderr.String())
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &wire1); err != nil {
+		t.Fatalf("unmarshal json: %v", err)
+	}
+	if wire1.Data.State == "" {
+		t.Errorf("expected non-empty state, got %s", wire1.Data.State)
+	}
+	if wire1.Data.Position != "k" {
+		t.Errorf("expected updated position 'k', got %q", wire1.Data.Position)
+	}
+
+	// 5. Create a second issue with priority low
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "create", "-C", env.repoDir,
+		"-title", "Low Priority Task",
+		"-priority", "low",
+		"-estimate", "1.0",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue create failed with %d: %s", code, stderr.String())
+	}
+	issue2ID := strings.Fields(stdout.String())[0]
+
+	// 6. Test list filter by -priority high
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{
+		"issue", "list", "-C", env.repoDir,
+		"-priority", "high",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue list -priority high failed with %d: %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), issue1ID[:8]) {
+		t.Errorf("expected issue1 (%s) in high priority list: %s", issue1ID[:8], stdout.String())
+	}
+	if strings.Contains(stdout.String(), issue2ID[:8]) {
+		t.Errorf("issue2 (%s) should not appear in high priority list: %s", issue2ID[:8], stdout.String())
+	}
+
+	// 7. Test tabular view includes priority and estimate
+	stdout.Reset()
+	stderr.Reset()
+	code = run(context.Background(), []string{"issue", "list", "-C", env.repoDir}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("issue list failed with %d: %s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "high") {
+		t.Errorf("expected tabular output to show 'high': %s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "low") {
+		t.Errorf("expected tabular output to show 'low': %s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "5") {
+		t.Errorf("expected tabular output to show estimate '5': %s", stdout.String())
+	}
+
+	// 8. Test invalid estimates (NaN, +Inf, -Inf, negative, non-number) fail with exit code 2
+	for _, badEst := range []string{"NaN", "+Inf", "-Inf", "-1.5", "abc"} {
+		stdout.Reset()
+		stderr.Reset()
+		code = run(context.Background(), []string{
+			"issue", "create", "-C", env.repoDir,
+			"-title", "Bad Estimate Issue",
+			"-estimate", badEst,
+		}, &stdout, &stderr)
+		if code != 2 {
+			t.Errorf("issue create -estimate %s got code %d, want 2; stderr: %s", badEst, code, stderr.String())
+		}
+
+		stdout.Reset()
+		stderr.Reset()
+		code = run(context.Background(), []string{
+			"issue", "update", "-C", env.repoDir, issue1ID,
+			"-estimate", badEst,
+		}, &stdout, &stderr)
+		if code != 2 {
+			t.Errorf("issue update -estimate %s got code %d, want 2; stderr: %s", badEst, code, stderr.String())
+		}
+	}
+}
+
+
 
 

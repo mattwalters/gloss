@@ -129,3 +129,48 @@ func TestGroupIssuesInvalidKey(t *testing.T) {
 		t.Errorf("expected error for invalid GroupKey, got nil")
 	}
 }
+
+func TestGroupIssuesByPriority(t *testing.T) {
+	db, err := projection.Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open(:memory:): %v", err)
+	}
+	defer db.Close()
+
+	rawDB := db.DB()
+	insertObject(t, rawDB, "iss-u", "issue", 1, "op-1", "A", "a@example.com", 1000, 1000)
+	insertObject(t, rawDB, "iss-h1", "issue", 1, "op-2", "A", "a@example.com", 1010, 1010)
+	insertObject(t, rawDB, "iss-h2", "issue", 1, "op-3", "A", "a@example.com", 1020, 1020)
+	insertObject(t, rawDB, "iss-n", "issue", 1, "op-4", "A", "a@example.com", 1030, 1030)
+
+	execSQL(t, rawDB, "INSERT INTO issues (object_id, title, description, state, reason, priority, position, position_op_id) VALUES (?, ?, ?, ?, '', ?, ?, ?)",
+		"iss-u", "Urgent issue", "", "open", 1, "V", "op-1")
+	execSQL(t, rawDB, "INSERT INTO issues (object_id, title, description, state, reason, priority, position, position_op_id) VALUES (?, ?, ?, ?, '', ?, ?, ?)",
+		"iss-h2", "High issue 2", "", "open", 2, "aV", "op-3")
+	execSQL(t, rawDB, "INSERT INTO issues (object_id, title, description, state, reason, priority, position, position_op_id) VALUES (?, ?, ?, ?, '', ?, ?, ?)",
+		"iss-h1", "High issue 1", "", "open", 2, "V", "op-2")
+	execSQL(t, rawDB, "INSERT INTO issues (object_id, title, description, state, reason, priority, position, position_op_id) VALUES (?, ?, ?, ?, '', ?, ?, ?)",
+		"iss-n", "None issue", "", "open", 0, "V", "op-4")
+
+	groups, err := db.GroupIssues(projection.GroupByPriority, projection.IssueFilter{})
+	if err != nil {
+		t.Fatalf("GroupIssues(GroupByPriority): %v", err)
+	}
+
+	if len(groups) != 3 {
+		t.Fatalf("expected 3 groups (urgent, high, none), got %d", len(groups))
+	}
+	if groups[0].Key != "urgent" || groups[0].Count != 1 {
+		t.Errorf("expected urgent group, got %s (%d)", groups[0].Key, groups[0].Count)
+	}
+	if groups[1].Key != "high" || groups[1].Count != 2 {
+		t.Errorf("expected high group, got %s (%d)", groups[1].Key, groups[1].Count)
+	}
+	if groups[1].Issues[0].ObjectID != "iss-h1" || groups[1].Issues[1].ObjectID != "iss-h2" {
+		t.Errorf("expected [iss-h1, iss-h2], got [%s, %s]", groups[1].Issues[0].ObjectID, groups[1].Issues[1].ObjectID)
+	}
+	if groups[2].Key != "none" || groups[2].Count != 1 {
+		t.Errorf("expected none group, got %s (%d)", groups[2].Key, groups[2].Count)
+	}
+}
+

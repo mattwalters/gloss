@@ -1,7 +1,9 @@
 package spec_test
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/writtendev/writ/spec"
@@ -79,3 +81,56 @@ func TestFormatOptions(t *testing.T) {
 		}
 	}
 }
+
+func TestIssuePriorityVocabulary(t *testing.T) {
+	names := spec.IssuePriorityNames()
+	wantNames := []string{"none", "urgent", "high", "medium", "low"}
+	if !reflect.DeepEqual(names, wantNames) {
+		t.Errorf("IssuePriorityNames() = %v, want %v", names, wantNames)
+	}
+
+	for i, name := range wantNames {
+		// Parse by name
+		got, err := spec.ParseIssuePriority(name)
+		if err != nil {
+			t.Errorf("ParseIssuePriority(%q): unexpected error %v", name, err)
+		}
+		if got != i {
+			t.Errorf("ParseIssuePriority(%q) = %d, want %d", name, got, i)
+		}
+
+		// Parse case-insensitive
+		gotUpper, err := spec.ParseIssuePriority(strings.ToUpper(name))
+		if err != nil {
+			t.Errorf("ParseIssuePriority(%q): unexpected error %v", strings.ToUpper(name), err)
+		}
+		if gotUpper != i {
+			t.Errorf("ParseIssuePriority(%q) = %d, want %d", strings.ToUpper(name), gotUpper, i)
+		}
+
+		// Parse by digit
+		digit := fmt.Sprintf("%d", i)
+		gotDigit, err := spec.ParseIssuePriority(digit)
+		if err != nil {
+			t.Errorf("ParseIssuePriority(%q): unexpected error %v", digit, err)
+		}
+		if gotDigit != i {
+			t.Errorf("ParseIssuePriority(%q) = %d, want %d", digit, gotDigit, i)
+		}
+
+		// Format
+		formatted := spec.FormatIssuePriority(i)
+		if formatted != name {
+			t.Errorf("FormatIssuePriority(%d) = %q, want %q", i, formatted, name)
+		}
+	}
+
+	// Invalid strings
+	invalid := []string{"invalid", "5", "-1", "urgent!", ""}
+	for _, inv := range invalid {
+		if _, err := spec.ParseIssuePriority(inv); err == nil {
+			t.Errorf("ParseIssuePriority(%q) expected error, got nil", inv)
+		}
+	}
+}
+

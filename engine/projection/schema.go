@@ -14,7 +14,8 @@ package projection
 // 9: WRIT-104 added workflow_states table.
 // 10: WRIT-109 added labels table.
 // 11: WRIT-105 added documents, document_links, document_labels, sections tables.
-const schemaVersion = 11
+// 12: WRIT-106 added priority, estimate, position, position_op_id to issues table.
+const schemaVersion = 12
 
 var projectionTables = []string{
 	"meta",
@@ -243,9 +244,15 @@ CREATE TABLE IF NOT EXISTS issues (
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     state TEXT NOT NULL,
-    reason TEXT NOT NULL
+    reason TEXT NOT NULL,
+    priority INTEGER NOT NULL DEFAULT 0,
+    estimate REAL,
+    position TEXT NOT NULL DEFAULT '',
+    position_op_id TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_issues_state ON issues(state);
+CREATE INDEX IF NOT EXISTS idx_issues_priority ON issues(priority);
+CREATE INDEX IF NOT EXISTS idx_issues_position ON issues(position);
 
 CREATE TABLE IF NOT EXISTS issue_assignees (
     issue_object_id TEXT NOT NULL,

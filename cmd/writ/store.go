@@ -225,6 +225,18 @@ func parseOrderBy(sortOrder string) (writ.OrderBy, error) {
 		return writ.OrderByTitleAsc, nil
 	case "title_desc", "title-desc":
 		return writ.OrderByTitleDesc, nil
+	case "priority_asc", "priority-asc":
+		return writ.OrderByPriorityAsc, nil
+	case "priority_desc", "priority-desc", "priority":
+		return writ.OrderByPriorityDesc, nil
+	case "position_asc", "position-asc", "position":
+		return writ.OrderByPositionAsc, nil
+	case "position_desc", "position-desc":
+		return writ.OrderByPositionDesc, nil
+	case "estimate_asc", "estimate-asc", "estimate":
+		return writ.OrderByEstimateAsc, nil
+	case "estimate_desc", "estimate-desc":
+		return writ.OrderByEstimateDesc, nil
 	default:
 		return "", fmt.Errorf("invalid sort order %q", sortOrder)
 	}

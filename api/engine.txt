@@ -16,9 +16,16 @@ const EventChanged EventKind = "changed"
 const EventCreated EventKind = "created"
 const EventReset EventKind = "reset"
 const GroupByAssignee = projection.GroupByAssignee
+const GroupByPriority = projection.GroupByPriority
 const GroupByState = projection.GroupByState
 const OrderByCreatedAtAsc = projection.OrderByCreatedAtAsc
 const OrderByCreatedAtDesc = projection.OrderByCreatedAtDesc
+const OrderByEstimateAsc = projection.OrderByEstimateAsc
+const OrderByEstimateDesc = projection.OrderByEstimateDesc
+const OrderByPositionAsc = projection.OrderByPositionAsc
+const OrderByPositionDesc = projection.OrderByPositionDesc
+const OrderByPriorityAsc = projection.OrderByPriorityAsc
+const OrderByPriorityDesc = projection.OrderByPriorityDesc
 const OrderByTitleAsc = projection.OrderByTitleAsc
 const OrderByTitleDesc = projection.OrderByTitleDesc
 const OrderByUpdatedAtAsc = projection.OrderByUpdatedAtAsc
@@ -181,6 +188,9 @@ type Issue = state.Issue
 type IssueEdit struct {
 	Title *string `json:"title,omitempty"`
 	Description *string `json:"description,omitempty"`
+	Priority *int `json:"priority,omitempty"`
+	Estimate *float64 `json:"estimate,omitempty"`
+	Position *string `json:"position,omitempty"`
 }
 
 type IssueFilter = projection.IssueFilter
@@ -190,6 +200,7 @@ type IssueResult = projection.IssueResult
 type IssueState struct {
 	State string `json:"state"`
 	Reason string `json:"reason,omitempty"`
+	Position *string `json:"position,omitempty"`
 }
 
 type Issues struct {
@@ -238,6 +249,9 @@ type NewDocument struct {
 type NewIssue struct {
 	Title string `json:"title"`
 	Description string `json:"description,omitempty"`
+	Priority *int `json:"priority,omitempty"`
+	Estimate *float64 `json:"estimate,omitempty"`
+	Position *string `json:"position,omitempty"`
 }
 
 type NewLabel struct {
@@ -786,9 +800,16 @@ func Validate(key string) error
 package projection // github.com/writtendev/writ/engine/projection
 
 const GroupByAssignee GroupKey = "assignee"
+const GroupByPriority GroupKey = "priority"
 const GroupByState GroupKey = "state"
 const OrderByCreatedAtAsc OrderBy = "created_at_asc"
 const OrderByCreatedAtDesc OrderBy = "created_at_desc"
+const OrderByEstimateAsc OrderBy = "estimate_asc"
+const OrderByEstimateDesc OrderBy = "estimate_desc"
+const OrderByPositionAsc OrderBy = "position_asc"
+const OrderByPositionDesc OrderBy = "position_desc"
+const OrderByPriorityAsc OrderBy = "priority_asc"
+const OrderByPriorityDesc OrderBy = "priority_desc"
 const OrderByTitleAsc OrderBy = "title_asc"
 const OrderByTitleDesc OrderBy = "title_desc"
 const OrderByUpdatedAtAsc OrderBy = "updated_at_asc"
@@ -908,6 +929,7 @@ type GroupKey string
 
 type IssueFilter struct {
 	State []string
+	Priority []int
 	Author []string
 	Assignee []string
 	Label []string
@@ -1362,6 +1384,9 @@ type Issue struct {
 	Description string `json:"description,omitempty"`
 	State string `json:"state,omitempty"`
 	Reason string `json:"reason,omitempty"`
+	Priority int `json:"priority,omitempty"`
+	Estimate *float64 `json:"estimate,omitempty"`
+	Position string `json:"position,omitempty"`
 	Assignees []string `json:"assignees,omitempty"`
 	Labels []string `json:"labels,omitempty"`
 	Links []Link `json:"links,omitempty"`

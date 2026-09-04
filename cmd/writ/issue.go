@@ -6,8 +6,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -54,6 +56,8 @@ func runIssue(ctx context.Context, defaultDir string, args []string, stdout, std
 		return runHelp(append([]string{"issue"}, args[1:]...), stdout, stderr)
 	case "create":
 		return runIssueCreate(ctx, targetDir, args[1:], stdout, stderr)
+	case "update":
+		return runIssueUpdate(ctx, targetDir, args[1:], stdout, stderr)
 	case "status":
 		return runIssueStatus(ctx, targetDir, args[1:], stdout, stderr)
 	case "comment":
@@ -78,6 +82,9 @@ type issueCreateOpts struct {
 	title       string
 	description string
 	stateVal    string
+	priority    string
+	estimate    string
+	position    string
 	fixes       stringSliceFlag
 	relates     stringSliceFlag
 }
@@ -89,6 +96,9 @@ func newIssueCreateFlagSet(defaultDir string) (*flag.FlagSet, *issueCreateOpts) 
 	fs.StringVar(&opts.title, "title", "", "Issue title `<t>` (required)")
 	fs.StringVar(&opts.description, "description", "", "Issue description `<d>`")
 	fs.StringVar(&opts.stateVal, "state", "", "Initial issue state `<state>` (open or closed)")
+	fs.StringVar(&opts.priority, "priority", "", "Issue priority `<p>` (urgent|high|medium|low|none or 0..4)")
+	fs.StringVar(&opts.estimate, "estimate", "", "Issue estimate `<e>` (non-negative number)")
+	fs.StringVar(&opts.position, "position", "", "Issue position `<pos>` (fractional index)")
 	fs.Var(&opts.fixes, "fixes", "Add a 'fixes' cross-reference link `<ref>` (repeatable)")
 	fs.Var(&opts.relates, "relates", "Add a 'relates' cross-reference link `<ref>` (repeatable)")
 	fs.Usage = func() {
@@ -119,6 +129,31 @@ func runIssueCreate(ctx context.Context, defaultDir string, args []string, stdou
 		fmt.Fprintln(stderr, "writ issue create: -title is required")
 		fs.Usage()
 		return 2
+	}
+
+	var priorityPtr *int
+	if opts.priority != "" {
+		p, err := parsePriority(opts.priority)
+		if err != nil {
+			fmt.Fprintf(stderr, "writ issue create: %v\n", err)
+			fs.Usage()
+			return 2
+		}
+		priorityPtr = &p
+	}
+	var estimatePtr *float64
+	if opts.estimate != "" {
+		est, err := parseEstimate(opts.estimate)
+		if err != nil {
+			fmt.Fprintf(stderr, "writ issue create: %v\n", err)
+			fs.Usage()
+			return 2
+		}
+		estimatePtr = est
+	}
+	var positionPtr *string
+	if opts.position != "" {
+		positionPtr = &opts.position
 	}
 
 	targetDir := opts.dir
@@ -170,6 +205,9 @@ func runIssueCreate(ctx context.Context, defaultDir string, args []string, stdou
 	id, err := store.Issues.Create(ctx, writ.NewIssue{
 		Title:       opts.title,
 		Description: opts.description,
+		Priority:    priorityPtr,
+		Estimate:    estimatePtr,
+		Position:    positionPtr,
 	})
 	if err != nil {
 		return renderErr(stderr, err)
@@ -208,9 +246,160 @@ func runIssueCreate(ctx context.Context, defaultDir string, args []string, stdou
 	return 0
 }
 
+type issueUpdateOpts struct {
+	dir         string
+	title       string
+	description string
+	priority    string
+	estimate    string
+	position    string
+}
+
+func newIssueUpdateFlagSet(defaultDir string) (*flag.FlagSet, *issueUpdateOpts) {
+	fs := flag.NewFlagSet("issue update", flag.ContinueOnError)
+	opts := &issueUpdateOpts{}
+	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
+	fs.StringVar(&opts.title, "title", "", "Updated title `<t>`")
+	fs.StringVar(&opts.description, "description", "", "Updated description `<d>`")
+	fs.StringVar(&opts.priority, "priority", "", "Updated priority `<p>` (urgent|high|medium|low|none or 0..4)")
+	fs.StringVar(&opts.estimate, "estimate", "", "Updated estimate `<e>` (non-negative number)")
+	fs.StringVar(&opts.position, "position", "", "Updated position `<pos>` (fractional index)")
+	fs.Usage = func() {
+		renderUsage(fs.Output(), []string{"issue", "update"}, issueUpdateCmd)
+	}
+	return fs, opts
+}
+
+func runIssueUpdate(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
+	fs, opts := newIssueUpdateFlagSet(defaultDir)
+	fs.SetOutput(stderr)
+
+	posArgs, err := parseArgs(fs, args)
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+
+	if len(posArgs) == 0 || posArgs[0] == "" {
+		fmt.Fprintln(stderr, "writ issue update: issue ID is required")
+		fs.Usage()
+		return 2
+	}
+	if len(posArgs) > 1 {
+		fmt.Fprintf(stderr, "writ issue update: unexpected arguments: %s\n", strings.Join(posArgs[1:], " "))
+		fs.Usage()
+		return 2
+	}
+
+	var edit writ.IssueEdit
+	var hasChange bool
+	var priorityVal string
+	var estimateVal string
+	var prioritySet, estimateSet bool
+
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "title":
+			edit.Title = &opts.title
+			hasChange = true
+		case "description":
+			edit.Description = &opts.description
+			hasChange = true
+		case "position":
+			edit.Position = &opts.position
+			hasChange = true
+		case "priority":
+			prioritySet = true
+			priorityVal = f.Value.String()
+			hasChange = true
+		case "estimate":
+			estimateSet = true
+			estimateVal = f.Value.String()
+			hasChange = true
+		}
+	})
+
+	if prioritySet {
+		p, err := parsePriority(priorityVal)
+		if err != nil {
+			fmt.Fprintf(stderr, "writ issue update: %v\n", err)
+			fs.Usage()
+			return 2
+		}
+		edit.Priority = &p
+	}
+
+	if estimateSet {
+		est, err := parseEstimate(estimateVal)
+		if err != nil {
+			fmt.Fprintf(stderr, "writ issue update: %v\n", err)
+			fs.Usage()
+			return 2
+		}
+		edit.Estimate = est
+	}
+
+	if !hasChange {
+		fmt.Fprintln(stderr, "writ issue update: at least one field to update must be specified")
+		fs.Usage()
+		return 2
+	}
+
+	targetDir := opts.dir
+	if targetDir == "" {
+		targetDir = "."
+	}
+
+	store, err := openStore(targetDir)
+	if err != nil {
+		return renderErr(stderr, err)
+	}
+	defer store.Close()
+
+	issueID, err := resolveIssueID(ctx, store, posArgs[0])
+	if err != nil {
+		return renderErr(stderr, err)
+	}
+
+	if err := store.Issues.Update(ctx, issueID, edit); err != nil {
+		return renderErr(stderr, err)
+	}
+
+	fmt.Fprintf(stdout, "%s updated\n", issueID)
+	return 0
+}
+
+func parsePriority(val string) (int, error) {
+	if val == "" {
+		return 0, nil
+	}
+	p, err := spec.ParseIssuePriority(val)
+	if err == nil {
+		return p, nil
+	}
+	if n, err := strconv.Atoi(val); err == nil && n >= 0 && n <= 4 {
+		return n, nil
+	}
+	return 0, fmt.Errorf("invalid priority %q: must be one of urgent, high, medium, low, none, or 0..4", val)
+}
+
+func parseEstimate(val string) (*float64, error) {
+	if val == "" {
+		return nil, nil
+	}
+	f, err := strconv.ParseFloat(val, 64)
+	if err != nil || f < 0 || math.IsNaN(f) || math.IsInf(f, 0) {
+		return nil, fmt.Errorf("invalid estimate %q: must be a non-negative number", val)
+	}
+	return &f, nil
+}
+
 type issueStatusOpts struct {
 	dir      string
 	reason   string
+	position string
 	jsonMode bool
 }
 
@@ -219,6 +408,7 @@ func newIssueStatusFlagSet(defaultDir string) (*flag.FlagSet, *issueStatusOpts) 
 	opts := &issueStatusOpts{}
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
 	fs.StringVar(&opts.reason, "reason", "", "Reason `<r>` for status change")
+	fs.StringVar(&opts.position, "position", "", "Updated position `<pos>` (fractional index)")
 	fs.BoolVar(&opts.jsonMode, "json", false, "Output result as JSON (view mode only)")
 	fs.Usage = func() {
 		renderUsage(fs.Output(), []string{"issue", "status"}, issueStatusCmd)
@@ -249,7 +439,7 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 		return 2
 	}
 
-	if len(posArgs) == 1 {
+	if len(posArgs) == 1 && opts.position == "" {
 		if opts.reason != "" {
 			fmt.Fprintln(stderr, "writ issue status: -reason is only valid when setting status")
 			fs.Usage()
@@ -296,8 +486,8 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 		return renderErr(stderr, err)
 	}
 
-	// 1. Read / View status mode (len(posArgs) == 1)
-	if len(posArgs) == 1 {
+	// 1. Read / View status mode (len(posArgs) == 1 and no -position)
+	if len(posArgs) == 1 && opts.position == "" {
 
 		res, err := store.Query.Issue(issueID)
 		if err != nil {
@@ -369,6 +559,15 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 		if res.Issue.Reason != "" {
 			fmt.Fprintf(stdout, "Reason:      %s\n", res.Issue.Reason)
 		}
+		if res.Issue.Priority > 0 {
+			fmt.Fprintf(stdout, "Priority:    %s\n", spec.FormatIssuePriority(res.Issue.Priority))
+		}
+		if res.Issue.Estimate != nil {
+			fmt.Fprintf(stdout, "Estimate:    %g\n", *res.Issue.Estimate)
+		}
+		if res.Issue.Position != "" {
+			fmt.Fprintf(stdout, "Position:    %s\n", res.Issue.Position)
+		}
 		fmt.Fprintf(stdout, "Author:      %s\n", author)
 		fmt.Fprintf(stdout, "Assignees:   %s\n", assignees)
 		fmt.Fprintf(stdout, "Labels:      %s\n", labels)
@@ -401,16 +600,33 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 		return 0
 	}
 
-	// 2. Update / Transition status mode (len(posArgs) == 2)
+	// 2. Update / Transition status mode
 	if opts.jsonMode {
 		fmt.Fprintln(stderr, "writ issue status: --json is only valid when viewing status")
 		fs.Usage()
 		return 2
 	}
 
+	if len(posArgs) == 1 {
+		currentIssue, err := store.Query.Issue(issueID)
+		if err != nil {
+			return renderErr(stderr, err)
+		}
+		newState = currentIssue.Issue.State
+		if newState == "" {
+			newState = "open"
+		}
+	}
+
+	var posPtr *string
+	if opts.position != "" {
+		posPtr = &opts.position
+	}
+
 	if err := store.Issues.SetState(ctx, issueID, writ.IssueState{
-		State:  newState,
-		Reason: opts.reason,
+		State:    newState,
+		Reason:   opts.reason,
+		Position: posPtr,
 	}); err != nil {
 		return renderErr(stderr, err)
 	}
@@ -725,15 +941,16 @@ func runIssueAssign(ctx context.Context, defaultDir string, args []string, stdou
 }
 
 type issueListOpts struct {
-	dir       string
-	states    stringSliceFlag
-	assignees stringSliceFlag
-	labels    stringSliceFlag
-	authors   stringSliceFlag
-	text      string
-	limit     int
-	sortOrder string
-	jsonMode  bool
+	dir        string
+	states     stringSliceFlag
+	assignees  stringSliceFlag
+	labels     stringSliceFlag
+	authors    stringSliceFlag
+	priorities stringSliceFlag
+	text       string
+	limit      int
+	sortOrder  string
+	jsonMode   bool
 }
 
 func newIssueListFlagSet(defaultDir string) (*flag.FlagSet, *issueListOpts) {
@@ -744,9 +961,10 @@ func newIssueListFlagSet(defaultDir string) (*flag.FlagSet, *issueListOpts) {
 	fs.Var(&opts.assignees, "assignee", "Filter by assignee `<a>`, a scheme:value person identifier (repeatable)")
 	fs.Var(&opts.labels, "label", "Filter by label `<l>` (repeatable)")
 	fs.Var(&opts.authors, "author", "Filter by author `<a>` name or email (repeatable)")
+	fs.Var(&opts.priorities, "priority", "Filter by priority `<p>` (urgent|high|medium|low|none or 0..4) (repeatable)")
 	fs.StringVar(&opts.text, "text", "", "Filter by text `<q>` match in title or description")
 	fs.IntVar(&opts.limit, "limit", 0, "Maximum number `N` of issues to return")
-	fs.StringVar(&opts.sortOrder, "sort", "", "Sort order `<order>` (created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc)")
+	fs.StringVar(&opts.sortOrder, "sort", "", "Sort order `<order>` (created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc, priority_asc, priority_desc, position_asc, position_desc, estimate_asc, estimate_desc)")
 	fs.BoolVar(&opts.jsonMode, "json", false, "Output result as JSON")
 	fs.Usage = func() {
 		renderUsage(fs.Output(), []string{"issue", "list"}, issueListCmd)
@@ -778,6 +996,19 @@ func runIssueList(ctx context.Context, defaultDir string, args []string, stdout,
 		return 2
 	}
 
+	var priorityFilter []int
+	if len(opts.priorities) > 0 {
+		for _, pStr := range opts.priorities {
+			p, err := parsePriority(pStr)
+			if err != nil {
+				fmt.Fprintf(stderr, "writ issue list: %v\n", err)
+				fs.Usage()
+				return 2
+			}
+			priorityFilter = append(priorityFilter, p)
+		}
+	}
+
 	var orderBy writ.OrderBy
 	if opts.sortOrder != "" {
 		var err error
@@ -805,6 +1036,7 @@ func runIssueList(ctx context.Context, defaultDir string, args []string, stdout,
 		Assignee: opts.assignees,
 		Label:    opts.labels,
 		Author:   opts.authors,
+		Priority: priorityFilter,
 		Text:     opts.text,
 		Limit:    opts.limit,
 		OrderBy:  orderBy,
@@ -841,12 +1073,20 @@ func runIssueList(ctx context.Context, defaultDir string, args []string, stdout,
 		} else if name, ok := stateNames[stateVal]; ok && name != "" {
 			stateVal = name
 		}
+		pStr := "-"
+		if iss.Issue.Priority > 0 {
+			pStr = spec.FormatIssuePriority(iss.Issue.Priority)
+		}
+		estStr := "-"
+		if iss.Issue.Estimate != nil {
+			estStr = fmt.Sprintf("%g", *iss.Issue.Estimate)
+		}
 		assigneesStr := "-"
 		if len(iss.Issue.Assignees) > 0 {
 			assigneesStr = strings.Join(iss.Issue.Assignees, ", ")
 		}
 		updatedAt := iss.UpdatedAt.Format("2006-01-02 15:04:05")
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", shortID, stateVal, iss.Issue.Title, assigneesStr, updatedAt)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", shortID, stateVal, pStr, estStr, iss.Issue.Title, assigneesStr, updatedAt)
 	}
 	_ = tw.Flush()
 	return 0

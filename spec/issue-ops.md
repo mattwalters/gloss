@@ -121,9 +121,9 @@ The issue family defines six operation types for `op_version: 1`:
 
 | `op_type` | Body Schema | Description |
 | --- | --- | --- |
-| `create` | `{"title": string, "description"?: string}` | Issue creation and initial description. |
-| `update` | `{"title"?: string, "description"?: string}` | Metadata edits (title, description). |
-| `set-state` | `{"state": reference, "reason"?: string}` | State transitions and optional reason. |
+| `create` | `{"title": string, "description"?: string, "priority"?: integer, "estimate"?: number, "position"?: string}` | Issue creation and initial description. |
+| `update` | `{"title"?: string, "description"?: string, "priority"?: integer, "estimate"?: number, "position"?: string}` | Metadata edits (title, description, priority, estimate, position). |
+| `set-state` | `{"state": reference, "reason"?: string, "position"?: string}` | State transitions, optional reason, and optional destination position. |
 | `assign` | `{"add"?: [person-id], "remove"?: [person-id]}` | Add or remove assignees. |
 | `label` | `{"add"?: [reference], "remove"?: [string]}` | Add or remove labels (referencing label object IDs, FC-16; remove accepts legacy strings). |
 | `link` | `{"target": reference, "target_type"?: string, "relation": "fixes"\|"relates"\|"none"}` | Associate or retract cross-references. |
@@ -140,19 +140,25 @@ Initializes an issue object.
   "op_version": 1,
   "body": {
     "title": "Fix parser crash on empty input",
-    "description": "Parser panics with index out of range when given empty input."
+    "description": "Parser panics with index out of range when given empty input.",
+    "priority": 1,
+    "estimate": 3,
+    "position": "V"
   }
 }
 ```
 
 - `title` (string, required): Summary title of the issue, minLength 1.
 - `description` (string, optional): Full Markdown body describing the issue.
+- `priority` (integer, optional): Closed enum integer priority from `0` to `4` (0 = None, 1 = Urgent, 2 = High, 3 = Medium, 4 = Low).
+- `estimate` (number, optional): Unconstrained non-negative numeric estimate (`minimum: 0`).
+- `position` (string, optional): Fractional index position string per [`spec/ordering.md`](ordering.md).
 
-Absent any subsequent `set-state` op, the folded state of an issue is `"open"`.
+Absent any subsequent `set-state` op, the folded state of an issue is `"open"`. Absent an explicit priority, the folded priority is `0` ("none").
 
 ### 2. `update`
 
-Modifies issue metadata (title, description).
+Modifies issue metadata (title, description, priority, estimate, position).
 
 ```jsonc
 {
@@ -161,20 +167,26 @@ Modifies issue metadata (title, description).
   "op_type": "update",
   "op_version": 1,
   "body": {
-    "title": "Fix parser crash on empty and nil input"
+    "title": "Fix parser crash on empty and nil input",
+    "priority": 2,
+    "estimate": 5,
+    "position": "aV"
   }
 }
 ```
 
 - `title` (string, optional): Updated issue title, minLength 1.
 - `description` (string, optional): Updated issue description.
+- `priority` (integer, optional): Updated priority (`0`–`4`).
+- `estimate` (number, optional): Updated non-negative estimate (`minimum: 0`).
+- `position` (string, optional): Updated fractional index position string per [`spec/ordering.md`](ordering.md).
 
-At least one of `title` or `description` MUST be present in an `update` body.
+At least one of `title`, `description`, `priority`, `estimate`, or `position` MUST be present in an `update` body.
 An empty `{}` update body is invalid.
 
 ### 3. `set-state`
 
-Transitions the issue state to reference a `workflow-state` collaborative object (or legacy string `"open"` or `"closed"`).
+Transitions the issue state to reference a `workflow-state` collaborative object (or legacy string `"open"` or `"closed"`), optionally updating manual rank position in the destination column.
 
 ```jsonc
 {
@@ -184,7 +196,8 @@ Transitions the issue state to reference a `workflow-state` collaborative object
   "op_version": 1,
   "body": {
     "state": "0123456789abcdef0123456789abcdef",
-    "reason": "completed"
+    "reason": "completed",
+    "position": "V"
   }
 }
 ```
@@ -193,6 +206,7 @@ Transitions the issue state to reference a `workflow-state` collaborative object
   collaborative object ID (per [`spec/identifiers.md`](identifiers.md)), or legacy `"open"` / `"closed"`.
 - `reason` (string, optional): Explanation for the state change (e.g. `"completed"`,
   `"not_planned"`, or a free-form human string).
+- `position` (string, optional): Fractional index position string in the destination column per [`spec/ordering.md`](ordering.md).
 
 #### Unknown-State Reference Semantics
 
@@ -289,16 +303,23 @@ Every body property defined in this vocabulary is mapped to one merge strategy
 from `spec/fold.md`'s closed catalogue. A machine-readable copy of these rules
 is published in `spec/testdata/issue-ops/field-rules.json`.
 
-Folded issue state is `Issue{title, description, state, reason, assignees, labels, links}`.
+Folded issue state is `Issue{title, description, state, reason, priority, estimate, position, assignees, labels, links}`.
 
 | `op_type` | Field | Merge Strategy | Key / Details |
 | --- | --- | --- | --- |
 | `create` | `title` | `lww` | Last writer wins in total order $L$ |
 | `create` | `description` | `lww` | Last writer wins |
+| `create` | `priority` | `lww` | Last writer wins; closed vocabulary 0–4; 0 is None |
+| `create` | `estimate` | `lww` | Last writer wins; non-negative number |
+| `create` | `position` | `lww` | Last writer wins; base-62 fractional index string |
 | `update` | `title` | `lww` | Last writer wins |
 | `update` | `description` | `lww` | Last writer wins |
+| `update` | `priority` | `lww` | Last writer wins |
+| `update` | `estimate` | `lww` | Last writer wins |
+| `update` | `position` | `lww` | Last writer wins |
 | `set-state` | `state` | `lww` | Last writer wins; default is `"open"` |
 | `set-state` | `reason` | `lww` | Last writer wins |
+| `set-state` | `position` | `lww` | Last writer wins |
 | `assign` | `add` | `set-observed-remove` | Add-wins OR-set over normalized person identifiers (`spec/identifiers.md`) |
 | `assign` | `remove` | `set-observed-remove` | Add-wins OR-set over normalized person identifiers (`spec/identifiers.md`) |
 | `label` | `add` | `set-observed-remove` | Add-wins OR-set over label strings |
@@ -310,8 +331,11 @@ Folded issue state is `Issue{title, description, state, reason, assignees, label
 ### Concurrency and Retraction Semantics
 
 - **Total order and LWW:** Concurrent edits to `title`, `description`, `state`,
-  or `reason` resolve via last-writer-wins in the deterministic total order $L$
+  `reason`, `priority`, `estimate`, or `position` resolve via last-writer-wins in the deterministic total order $L$
   (defined in `spec/fold.md` §Causality-monotone total order $L$).
+- **Priority closed vocabulary & semantic sorting:** Priority is a closed integer enum `0`–`4`: `0` = None, `1` = Urgent, `2` = High, `3` = Medium, `4` = Low. Queries sort semantically: Urgent (1) > High (2) > Medium (3) > Low (4) > None (0).
+- **Estimate scaling:** Stored as an unconstrained non-negative number (`minimum: 0`). Interpretation of the estimate scale (Fibonacci points, linear hours, T-shirt sizes) is left to workspace settings and client-side presentation.
+- **Manual rank & fractional indexing:** Global position is stored as a base-62 fractional index string per [`spec/ordering.md`](ordering.md). Concurrent inserts at the same position resolve deterministically via op-id tiebreak.
 - **Add-Wins OR-Sets:** `assign` and `label` use `set-observed-remove`
   (`spec/fold.md` §5). If an addition of an assignee or label is concurrent
   with a removal ($a \parallel r$), the addition wins and the element remains
