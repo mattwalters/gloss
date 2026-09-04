@@ -200,6 +200,7 @@ Field merge rules are declared in machine-readable tables (`field-rules.json`, c
 - `op_type` (string): The operation type.
 - `op_version` (integer): The operation schema version.
 - `field` (string): The target field in the operation body.
+- `target` (optional string): The state key in the generic fold map (`ObjectState.State`). Defaults to `field` if omitted. Rules may declare a `target` state key to avoid strategy collisions when multiple op types define identical body field names with differing merge strategies.
 - `strategy` (string): Exactly one strategy from the closed catalogue.
 - `key` (array of strings, required for `keyed-lww`): The ordered list of body fields forming the composite key.
 - `lattice` (array of strings, required for `lattice`): The ordered elements of the semilattice.

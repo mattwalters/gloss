@@ -190,3 +190,14 @@ func TestValidateFieldRule(t *testing.T) {
 		})
 	}
 }
+
+func TestFieldRuleTargetKey(t *testing.T) {
+	r1 := spec.FieldRule{Field: "description"}
+	if got := r1.TargetKey(); got != "description" {
+		t.Fatalf("expected Field 'description', got %q", got)
+	}
+	r2 := spec.FieldRule{Field: "description", Target: "ci_description"}
+	if got := r2.TargetKey(); got != "ci_description" {
+		t.Fatalf("expected Target 'ci_description', got %q", got)
+	}
+}

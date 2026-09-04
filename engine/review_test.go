@@ -32,6 +32,7 @@ func TestReviewRulesDriftGuard(t *testing.T) {
 				OpType:    r.OpType,
 				OpVersion: r.OpVersion,
 				Field:     r.Field,
+				Target:    r.Target,
 				Strategy:  r.Strategy,
 				Key:       r.Key,
 				Lattice:   r.Lattice,

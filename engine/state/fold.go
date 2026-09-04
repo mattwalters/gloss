@@ -19,10 +19,19 @@ type Rule struct {
 	OpType    string         `json:"op_type,omitempty"`
 	OpVersion int64          `json:"op_version,omitempty"`
 	Field     string         `json:"field"`
+	Target    string         `json:"target,omitempty"`
 	Strategy  string         `json:"strategy"`
 	Key       []string       `json:"key,omitempty"`
 	Lattice   []string       `json:"lattice,omitempty"`
 	Normalize *NormalizeRule `json:"normalize,omitempty"`
+}
+
+// TargetKey returns Target if non-empty, otherwise Field.
+func (r Rule) TargetKey() string {
+	if r.Target != "" {
+		return r.Target
+	}
+	return r.Field
 }
 
 // Sentinels re-exported from internal/fold.
@@ -55,6 +64,7 @@ func internalRules(rules []Rule) []fold.Rule {
 			OpType:    r.OpType,
 			OpVersion: r.OpVersion,
 			Field:     r.Field,
+			Target:    r.Target,
 			Strategy:  r.Strategy,
 			Key:       r.Key,
 			Lattice:   r.Lattice,

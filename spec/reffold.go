@@ -905,7 +905,8 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 					hasWrite = true
 				}
 				if hasWrite {
-					matchedRulesByField[r.Field] = append(matchedRulesByField[r.Field], r)
+					targetKey := r.TargetKey()
+					matchedRulesByField[targetKey] = append(matchedRulesByField[targetKey], r)
 					break
 				}
 			}
@@ -915,14 +916,14 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 	state := make(map[string]any)
 
 	// Iterate fields in deterministic order
-	var fieldNames []string
+	var targetKeys []string
 	for f := range matchedRulesByField {
-		fieldNames = append(fieldNames, f)
+		targetKeys = append(targetKeys, f)
 	}
-	sort.Strings(fieldNames)
+	sort.Strings(targetKeys)
 
-	for _, fieldName := range fieldNames {
-		frs := matchedRulesByField[fieldName]
+	for _, targetKey := range targetKeys {
+		frs := matchedRulesByField[targetKey]
 		if len(frs) == 0 {
 			continue
 		}
@@ -934,14 +935,14 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 				op := opMap[id]
 				for _, r := range frs {
 					if opMatchesRule(op, r) {
-						if val, present := op.Body[fieldName]; present && val != nil {
+						if val, present := op.Body[r.Field]; present && val != nil {
 							// Empty scalar contract (spec/fold.md §5.1): empty strings
 							// (including person identifiers that normalize to empty) are
 							// preserved in the generic fold map as deliberate scalar writes.
 							if s, ok := val.(string); ok && r.NormalizesValue() {
 								val = normalizePerson(s)
 							}
-							state[fieldName] = val
+							state[targetKey] = val
 						}
 					}
 				}
@@ -952,9 +953,9 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 				op := opMap[id]
 				for _, r := range frs {
 					if opMatchesRule(op, r) {
-						if _, alreadySet := state[fieldName]; !alreadySet {
-							if val, present := op.Body[fieldName]; present && val != nil {
-								state[fieldName] = val
+						if _, alreadySet := state[targetKey]; !alreadySet {
+							if val, present := op.Body[r.Field]; present && val != nil {
+								state[targetKey] = val
 							}
 						}
 					}
@@ -968,7 +969,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 				op := opMap[id]
 				for _, r := range frs {
 					if opMatchesRule(op, r) {
-						if raw, present := op.Body[fieldName]; present {
+						if raw, present := op.Body[r.Field]; present {
 							hasSet = true
 							normalizeItem := func(it string) string {
 								if r.NormalizesItems() {
@@ -1009,7 +1010,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 					result = append(result, k)
 				}
 				sort.Strings(result)
-				state[fieldName] = result
+				state[targetKey] = result
 			}
 
 		case "set-observed-remove":
@@ -1032,7 +1033,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 				for _, r := range frs {
 					if opMatchesRule(op, r) {
 						var addItems, remItems []string
-						if fieldName == "add" || fieldName == "remove" {
+						if r.Field == "add" || r.Field == "remove" {
 							if m, ok := op.Body["add"].(map[string]any); ok {
 								addItems = append(addItems, refOrSetItems(m["add"])...)
 								remItems = append(remItems, refOrSetItems(m["remove"])...)
@@ -1045,10 +1046,10 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 							} else {
 								remItems = append(remItems, refOrSetItems(op.Body["remove"])...)
 							}
-						} else if bodyMap, ok := op.Body[fieldName].(map[string]any); ok {
+						} else if bodyMap, ok := op.Body[r.Field].(map[string]any); ok {
 							addItems = append(addItems, refOrSetItems(bodyMap["add"])...)
 							remItems = append(remItems, refOrSetItems(bodyMap["remove"])...)
-						} else if raw, ok := op.Body[fieldName]; ok && raw != nil {
+						} else if raw, ok := op.Body[r.Field]; ok && raw != nil {
 							if strings.HasPrefix(op.OpType, "add-") || op.OpType == "add" {
 								addItems = append(addItems, refOrSetItems(raw)...)
 							} else if strings.HasPrefix(op.OpType, "remove-") || op.OpType == "remove" {
@@ -1107,7 +1108,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 					result = append(result, k)
 				}
 				sort.Strings(result)
-				state[fieldName] = result
+				state[targetKey] = result
 			}
 
 		case "append":
@@ -1117,7 +1118,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 				op := opMap[id]
 				for _, r := range frs {
 					if opMatchesRule(op, r) {
-						if raw, present := op.Body[fieldName]; present {
+						if raw, present := op.Body[r.Field]; present {
 							hasAppend = true
 							if slice, ok := raw.([]any); ok {
 								list = append(list, slice...)
@@ -1136,7 +1137,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 				if list == nil {
 					list = []any{}
 				}
-				state[fieldName] = list
+				state[targetKey] = list
 			}
 
 		case "tombstone":
@@ -1149,10 +1150,10 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 				}
 				for _, r := range frs {
 					if opMatchesRule(op, r) {
-						if op.OpType == "delete" || op.Body[fieldName] == true {
+						if op.OpType == "delete" || op.Body[r.Field] == true {
 							deletes = append(deletes, op.ID)
 							hasTombstone = true
-						} else if op.OpType == "undelete" || op.Body[fieldName] == false {
+						} else if op.OpType == "undelete" || op.Body[r.Field] == false {
 							undeletes = append(undeletes, op.ID)
 							hasTombstone = true
 						}
@@ -1175,7 +1176,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 						break
 					}
 				}
-				state[fieldName] = isDeleted
+				state[targetKey] = isDeleted
 			}
 
 		case "lattice":
@@ -1190,7 +1191,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 				op := opMap[id]
 				for _, r := range frs {
 					if opMatchesRule(op, r) {
-						if raw, present := op.Body[fieldName]; present {
+						if raw, present := op.Body[r.Field]; present {
 							// The value is a string; see the set-union arm. A
 							// string outside the declared lattice is ignored
 							// rather than rejected: that is a value from a
@@ -1212,7 +1213,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 				}
 			}
 			if hasLattice {
-				state[fieldName] = currentVal
+				state[targetKey] = currentVal
 			}
 
 		case "keyed-lww":
@@ -1226,9 +1227,9 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 				op := opMap[id]
 				for _, rule := range frs {
 					if opMatchesRule(op, rule) {
-						val, present := op.Body[fieldName]
+						val, present := op.Body[rule.Field]
 						if !present {
-							if fieldName == "subject" && op.OpType == "approval" && op.Author.Email != "" {
+							if rule.Field == "subject" && op.OpType == "approval" && op.Author.Email != "" {
 								val = normalizePerson("email:" + op.Author.Email)
 							} else {
 								continue
@@ -1236,7 +1237,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 						} else if rule.NormalizesValue() {
 							if s, isStr := val.(string); isStr {
 								norm := normalizePerson(s)
-								if norm == "" && fieldName == "subject" && op.OpType == "approval" && op.Author.Email != "" {
+								if norm == "" && rule.Field == "subject" && op.OpType == "approval" && op.Author.Email != "" {
 									norm = normalizePerson("email:" + op.Author.Email)
 								}
 								val = norm
@@ -1265,7 +1266,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 						// a list.
 						keyBytes, err := json.Marshal(key)
 						if err != nil {
-							return FoldResult{}, fmt.Errorf("spec: encoding keyed-lww key for field %q: %w", fieldName, err)
+							return FoldResult{}, fmt.Errorf("spec: encoding keyed-lww key for field %q: %w", targetKey, err)
 						}
 						latest[string(keyBytes)] = &keyedEntry{key: key, value: val}
 					}
@@ -1290,7 +1291,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 				for _, e := range entries {
 					keyed = append(keyed, map[string]any{"key": e.key, "value": e.value})
 				}
-				state[fieldName] = keyed
+				state[targetKey] = keyed
 			}
 
 		case "multi-value":
@@ -1303,7 +1304,7 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 				op := opMap[id]
 				for _, rule := range frs {
 					if opMatchesRule(op, rule) {
-						if raw, ok := op.Body[fieldName]; ok && raw != nil {
+						if raw, ok := op.Body[rule.Field]; ok && raw != nil {
 							if s, ok := raw.(string); ok {
 								writes = append(writes, mvWrite{opID: op.ID, val: s})
 							}
@@ -1337,9 +1338,9 @@ func Fold(ops []MergeOp, rules []FieldRule) (FoldResult, error) {
 					return vals[i].(string) < vals[j].(string)
 				})
 				if len(vals) == 1 {
-					state[fieldName] = vals[0]
+					state[targetKey] = vals[0]
 				} else {
-					state[fieldName] = vals
+					state[targetKey] = vals
 				}
 			}
 		}

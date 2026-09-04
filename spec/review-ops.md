@@ -457,7 +457,7 @@ treated as unknown data, preserved in the DAG, and ignored during fold.
 | `ci-status` | `name` | `keyed-lww` | Scoped by key `[revision, name]` |
 | `ci-status` | `state` | `keyed-lww` | Scoped by key `[revision, name]` |
 | `ci-status` | `url` | `keyed-lww` | Scoped by key `[revision, name]` |
-| `ci-status` | `description` | `keyed-lww` | Scoped by key `[revision, name]` |
+| `ci-status` | `description` | `keyed-lww` | Scoped by key `[revision, name]`; maps to state key `ci_description` |
 | `ci-status` | `started_at` | `keyed-lww` | Scoped by key `[revision, name]` |
 | `ci-status` | `completed_at` | `keyed-lww` | Scoped by key `[revision, name]` |
 | `ci-status` | `external_id` | `keyed-lww` | Scoped by key `[revision, name]` |
