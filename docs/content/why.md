@@ -234,7 +234,7 @@ No peer-to-peer networking — Radicle is doing that mission properly and we
 have nothing to add.
 
 No project-management feature parity. The spec covers issues, projects and
-cycles from day one because the object IDs have to be workspace-global from
+cycles from day one because the object IDs have to be globally unique from
 day one, but the near-term focus is review with issues as the natural
 companion.
 
