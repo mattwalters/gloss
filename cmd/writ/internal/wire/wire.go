@@ -877,7 +877,7 @@ type Project struct {
 	ObjectID    string    `json:"object_id"`
 	Title       string    `json:"title"`
 	Description string    `json:"description,omitempty"`
-	Status      string    `json:"status,omitempty"`
+	Status      string    `json:"status"`
 	Reason      string    `json:"reason,omitempty"`
 	Author      Author    `json:"author"`
 	CreatedAt   time.Time `json:"created_at"`
