@@ -8,6 +8,7 @@ import (
 
 	s "github.com/writtendev/writ/engine/state"
 	"github.com/writtendev/writ/engine/codec"
+	"github.com/writtendev/writ/engine/codec/canonicaljson"
 	"github.com/writtendev/writ/spec"
 )
 
@@ -1308,4 +1309,171 @@ func TestFoldReviewSubjectlessApprovals(t *testing.T) {
 		t.Errorf("updated approval[0] mismatch: got %+v, want %+v", stateUpdated.Approvals[0], wantAliceUpdated)
 	}
 }
+
+func TestFoldReviewApprovalAndCIStatusKeyAgreement(t *testing.T) {
+	now := time.Unix(100, 0).UTC()
+	rev := "1111111111111111111111111111111111111111"
+
+	opCreate := codec.Op{
+		Envelope: codec.Envelope{
+			ObjectID:   "r-dual",
+			ObjectType: "review",
+			OpType:     "create",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"title":"Initial Review","description":"Review desc"}`),
+		},
+		ID: "op-create",
+		Author: codec.Identity{
+			Email: "alice@example.com",
+			When:  now,
+		},
+	}
+
+	opApp := codec.Op{
+		Envelope: codec.Envelope{
+			ObjectID:   "r-dual",
+			ObjectType: "review",
+			OpType:     "approval",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"revision":"` + rev + `","verdict":"approve","subject":"user:alice","message":"LGTM"}`),
+		},
+		ID:      "op-app",
+		Parents: []string{"op-create"},
+		Author: codec.Identity{
+			Email: "alice@example.com",
+			When:  now.Add(time.Minute),
+		},
+	}
+
+	opCI := codec.Op{
+		Envelope: codec.Envelope{
+			ObjectID:   "r-dual",
+			ObjectType: "review",
+			OpType:     "ci-status",
+			OpVersion:  1,
+			Body:       json.RawMessage(`{"revision":"` + rev + `","name":"build","state":"success","url":"https://ci.example.com/1"}`),
+		},
+		ID:      "op-ci",
+		Parents: []string{"op-app"},
+		Author: codec.Identity{
+			Email: "ci-bot@example.com",
+			When:  now.Add(2 * time.Minute),
+		},
+	}
+
+	ops := []codec.Op{opCreate, opApp, opCI}
+
+	// 1. Fold via engine generic fold
+	generic, err := s.Fold(ops, s.ReviewRules())
+	if err != nil {
+		t.Fatalf("Fold: %v", err)
+	}
+
+	wantRevision := []any{
+		map[string]any{
+			"key":   []string{rev, "build"},
+			"value": rev,
+		},
+		map[string]any{
+			"key":   []string{"user:alice", rev},
+			"value": rev,
+		},
+	}
+
+	if !reflect.DeepEqual(generic.State["revision"], wantRevision) {
+		t.Errorf("revision mismatch:\n got:  %v\n want: %v", generic.State["revision"], wantRevision)
+	}
+
+	// 2. FoldReview typed fold verification
+	review, err := s.FoldReview(ops)
+	if err != nil {
+		t.Fatalf("FoldReview: %v", err)
+	}
+	if len(review.Approvals) != 1 {
+		t.Fatalf("expected 1 approval, got %d", len(review.Approvals))
+	}
+	if review.Approvals[0].Subject != "user:alice" || review.Approvals[0].Revision != rev || review.Approvals[0].Verdict != "approve" {
+		t.Errorf("approval mismatch: %+v", review.Approvals[0])
+	}
+	if len(review.CIStatuses) != 1 {
+		t.Fatalf("expected 1 ci status, got %d", len(review.CIStatuses))
+	}
+	if review.CIStatuses[0].Name != "build" || review.CIStatuses[0].Revision != rev || review.CIStatuses[0].State != "success" {
+		t.Errorf("ci-status mismatch: %+v", review.CIStatuses[0])
+	}
+
+	// 3. spec.Fold reference fold cross-check
+	var mergeOps []spec.MergeOp
+	for _, o := range ops {
+		var bm map[string]any
+		_ = json.Unmarshal(o.Body, &bm)
+		mergeOps = append(mergeOps, spec.MergeOp{
+			ID:        o.ID,
+			Parents:   o.Parents,
+			Time:      o.Author.When.Unix(),
+			ObjectID:  o.ObjectID,
+			OpType:    o.OpType,
+			OpVersion: o.OpVersion,
+			Author: spec.MergeAuthor{
+				Email: o.Author.Email,
+			},
+			Body: bm,
+		})
+	}
+
+	var fieldRules []spec.FieldRule
+	for _, r := range s.ReviewRules() {
+		var norm *spec.NormalizeRule
+		if r.Normalize != nil {
+			norm = &spec.NormalizeRule{
+				Value: r.Normalize.Value,
+				Items: r.Normalize.Items,
+				Key:   r.Normalize.Key,
+			}
+		}
+		fieldRules = append(fieldRules, spec.FieldRule{
+			OpType:    r.OpType,
+			OpVersion: r.OpVersion,
+			Field:     r.Field,
+			Strategy:  r.Strategy,
+			Key:       r.Key,
+			Lattice:   r.Lattice,
+			Normalize: norm,
+		})
+	}
+
+	refRes, err := spec.Fold(mergeOps, fieldRules)
+	if err != nil {
+		t.Fatalf("spec.Fold: %v", err)
+	}
+
+	if !reflect.DeepEqual(generic.State["revision"], refRes.State["revision"]) {
+		t.Errorf("revision mismatch between engine fold and spec fold:\n engine: %v\n spec:   %v",
+			generic.State["revision"], refRes.State["revision"])
+	}
+
+	engineRaw, err := json.Marshal(generic.State)
+	if err != nil {
+		t.Fatalf("json.Marshal(generic.State): %v", err)
+	}
+	specRaw, err := json.Marshal(refRes.State)
+	if err != nil {
+		t.Fatalf("json.Marshal(refRes.State): %v", err)
+	}
+
+	engineJSON, err := canonicaljson.Marshal(engineRaw)
+	if err != nil {
+		t.Fatalf("canonicaljson.Marshal(engineRaw): %v", err)
+	}
+	specJSON, err := canonicaljson.Marshal(specRaw)
+	if err != nil {
+		t.Fatalf("canonicaljson.Marshal(specRaw): %v", err)
+	}
+
+	if string(engineJSON) != string(specJSON) {
+		t.Errorf("canonical JSON mismatch between engine fold and spec fold:\n engine: %s\n spec:   %s",
+			string(engineJSON), string(specJSON))
+	}
+}
+
 

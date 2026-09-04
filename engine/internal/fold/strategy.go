@@ -408,7 +408,6 @@ type keyedEntry struct {
 
 type keyedLWWAccumulator struct {
 	field    string
-	keyCols  []string
 	hasKeyed bool
 	latest   map[string]*keyedEntry
 }
@@ -418,9 +417,8 @@ func newKeyedLWWAccumulator(rule Rule, _ ReachOracle) (Accumulator, error) {
 		return nil, fmt.Errorf("fold: keyed-lww strategy for field %q requires non-empty key", rule.Field)
 	}
 	return &keyedLWWAccumulator{
-		field:   rule.Field,
-		keyCols: rule.Key,
-		latest:  make(map[string]*keyedEntry),
+		field:  rule.Field,
+		latest: make(map[string]*keyedEntry),
 	}, nil
 }
 
@@ -452,8 +450,8 @@ func (a *keyedLWWAccumulator) Apply(rule Rule, op codec.Op, body map[string]any,
 	a.hasKeyed = true
 	// The stored value is normalized on the same terms as the key component it
 	// mirrors: a person identifier reads back normalized per spec/identifiers.md.
-	key := make([]string, 0, len(a.keyCols))
-	for _, kf := range a.keyCols {
+	key := make([]string, 0, len(rule.Key))
+	for _, kf := range rule.Key {
 		// Every present key component is a string; see setUnionAccumulator.Apply.
 		// An absent one contributes the empty component, except for approval
 		// subject which falls back to the commit author's email.
