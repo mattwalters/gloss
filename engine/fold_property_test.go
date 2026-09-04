@@ -390,12 +390,31 @@ func projectReview(generic writ.ObjectState, ops []codec.Op, _ string) state.Rev
 		revision string
 		name     string
 	}
+	ciIntroduced := make(map[ciKey]bool)
+	for _, o := range ops {
+		if unknownMap[o.ID] {
+			continue
+		}
+		if o.ObjectType == "review" && o.OpType == "ci-status" && o.OpVersion == 1 {
+			var bm map[string]any
+			if len(o.Body) > 0 {
+				_ = json.Unmarshal(o.Body, &bm)
+			}
+			rev, _ := bm["revision"].(string)
+			name, _ := bm["name"].(string)
+			ciIntroduced[ciKey{revision: rev, name: name}] = true
+		}
+	}
+
 	ciKeySet := make(map[ciKey]bool)
-	ciFields := []string{"name", "state", "url", "ci_description", "started_at", "completed_at", "external_id"}
+	ciFields := []string{"revision", "name", "state", "url", "ci_description", "started_at", "completed_at", "external_id"}
 	for _, f := range ciFields {
 		for _, it := range parseKeyedLWW(generic.State[f]) {
 			if len(it.Key) >= 2 {
-				ciKeySet[ciKey{revision: it.Key[0], name: it.Key[1]}] = true
+				k := ciKey{revision: it.Key[0], name: it.Key[1]}
+				if f != "revision" || ciIntroduced[k] {
+					ciKeySet[k] = true
+				}
 			}
 		}
 	}
@@ -515,8 +534,10 @@ func projectIssue(generic writ.ObjectState, ops []codec.Op, _ string) state.Issu
 		}
 	}
 
-	st := stringVal(generic.State["state"])
-	if st == "" && hasKnownOp {
+	var st string
+	if stateVal, ok := generic.State["state"]; ok {
+		st = stringVal(stateVal)
+	} else if hasKnownOp {
 		st = "open"
 	}
 
@@ -1218,7 +1239,9 @@ func generateReviewStream(rng *rand.Rand) ([]codec.Op, []writ.Rule, string) {
 			ops[i].OpType = "ci-status"
 			b := map[string]any{
 				"revision": "head-1",
-				"name":     fmt.Sprintf("check-%d", rng.Intn(3)),
+			}
+			if rng.Intn(4) > 0 {
+				b["name"] = fmt.Sprintf("check-%d", rng.Intn(3))
 			}
 			if rng.Intn(4) > 0 {
 				b["state"] = []string{"pending", "success", "failure"}[rng.Intn(3)]
@@ -1303,7 +1326,7 @@ func generateIssueStream(rng *rand.Rand) ([]codec.Op, []writ.Rule, string) {
 		case 1:
 			ops[i].OpType = "set-state"
 			ops[i].Body, _ = json.Marshal(map[string]any{
-				"state":  []string{"open", "in-progress", "closed"}[rng.Intn(3)],
+				"state":  []string{"open", "in-progress", "closed", ""}[rng.Intn(4)],
 				"reason": interestingStrings[rng.Intn(len(interestingStrings))],
 			})
 		case 2:
@@ -1671,24 +1694,29 @@ func regressionVectorWRIT125() FuzzCase {
 // WRIT-126: Non-string and null elements in set-union and append triggering op-level rejection into UnknownOps, plus empty array append producing [].
 func regressionVectorWRIT126() FuzzCase {
 	now := time.Unix(100, 0).UTC()
+	rules := []writ.Rule{
+		{OpType: "create", OpVersion: 1, Field: "title", Strategy: "lww"},
+		{OpType: "add-remote", OpVersion: 1, Field: "remote", Strategy: "set-union"},
+		{OpType: "append-entries", OpVersion: 1, Field: "entries", Strategy: "append"},
+	}
 	ops := []codec.Op{
 		{
-			ID: "op-repo-create",
+			ID: "op-create",
 			Envelope: codec.Envelope{
-				ObjectID:   "repo-126",
-				ObjectType: "repo",
+				ObjectID:   "obj-126",
+				ObjectType: "synthetic-126",
 				OpType:     "create",
 				OpVersion:  1,
-				Body:       json.RawMessage(`{"slug":"writ"}`),
+				Body:       json.RawMessage(`{"title":"writ-126"}`),
 			},
 			Author: codec.Identity{When: now},
 		},
 		{
 			ID:      "op-remote-bad-num",
-			Parents: []string{"op-repo-create"},
+			Parents: []string{"op-create"},
 			Envelope: codec.Envelope{
-				ObjectID:   "repo-126",
-				ObjectType: "repo",
+				ObjectID:   "obj-126",
+				ObjectType: "synthetic-126",
 				OpType:     "add-remote",
 				OpVersion:  1,
 				Body:       json.RawMessage(`{"remote":[12345]}`),
@@ -1699,19 +1727,66 @@ func regressionVectorWRIT126() FuzzCase {
 			ID:      "op-remote-bad-null",
 			Parents: []string{"op-remote-bad-num"},
 			Envelope: codec.Envelope{
-				ObjectID:   "repo-126",
-				ObjectType: "repo",
+				ObjectID:   "obj-126",
+				ObjectType: "synthetic-126",
 				OpType:     "add-remote",
 				OpVersion:  1,
 				Body:       json.RawMessage(`{"remote":null}`),
 			},
 			Author: codec.Identity{When: now.Add(20 * time.Second)},
 		},
+		{
+			ID:      "op-remote-good",
+			Parents: []string{"op-remote-bad-null"},
+			Envelope: codec.Envelope{
+				ObjectID:   "obj-126",
+				ObjectType: "synthetic-126",
+				OpType:     "add-remote",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"remote":["origin"]}`),
+			},
+			Author: codec.Identity{When: now.Add(30 * time.Second)},
+		},
+		{
+			ID:      "op-append-bad-null",
+			Parents: []string{"op-remote-good"},
+			Envelope: codec.Envelope{
+				ObjectID:   "obj-126",
+				ObjectType: "synthetic-126",
+				OpType:     "append-entries",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"entries":null}`),
+			},
+			Author: codec.Identity{When: now.Add(40 * time.Second)},
+		},
+		{
+			ID:      "op-append-bad-null-elem",
+			Parents: []string{"op-append-bad-null"},
+			Envelope: codec.Envelope{
+				ObjectID:   "obj-126",
+				ObjectType: "synthetic-126",
+				OpType:     "append-entries",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"entries":["second",null]}`),
+			},
+			Author: codec.Identity{When: now.Add(50 * time.Second)},
+		},
+		{
+			ID:      "op-append-empty",
+			Parents: []string{"op-append-bad-null-elem"},
+			Envelope: codec.Envelope{
+				ObjectID:   "obj-126",
+				ObjectType: "synthetic-126",
+				OpType:     "append-entries",
+				OpVersion:  1,
+				Body:       json.RawMessage(`{"entries":[]}`),
+			},
+			Author: codec.Identity{When: now.Add(60 * time.Second)},
+		},
 	}
 	return FuzzCase{
-		ObjectType: "repo",
-		Rules:      state.RepoRules(),
-		Ops:        ops,
+		Rules: rules,
+		Ops:   ops,
 	}
 }
 
@@ -1752,7 +1827,83 @@ func TestProperty_FoldThreeWay(t *testing.T) {
 
 	t.Run("Regression_WRIT_126_NonStringNullSetUnionAppend", func(t *testing.T) {
 		c := regressionVectorWRIT126()
-		assertThreeWayFoldDomain(t, c.ObjectType, c.Ops, c.Rules, c.Mode)
+		if c.ObjectType != "" {
+			assertThreeWayFoldDomain(t, c.ObjectType, c.Ops, c.Rules, c.Mode)
+		} else {
+			assertThreeWayFoldAbstract(t, c.Ops, c.Rules)
+		}
+	})
+
+	t.Run("Review_CIStatusOnlyRevision", func(t *testing.T) {
+		now := time.Unix(100, 0).UTC()
+		ops := []codec.Op{
+			{
+				ID: "op-rev-create",
+				Envelope: codec.Envelope{
+					ObjectID:   "r-ci-rev",
+					ObjectType: "review",
+					OpType:     "create",
+					OpVersion:  1,
+					Body:       json.RawMessage(`{"title":"Review with CI"}`),
+				},
+				Author: codec.Identity{When: now},
+			},
+			{
+				ID:      "op-app",
+				Parents: []string{"op-rev-create"},
+				Envelope: codec.Envelope{
+					ObjectID:   "r-ci-rev",
+					ObjectType: "review",
+					OpType:     "approval",
+					OpVersion:  1,
+					Body:       json.RawMessage(`{"revision":"head-1","subject":"alice@example.com","verdict":"approve"}`),
+				},
+				Author: codec.Identity{When: now.Add(10 * time.Second)},
+			},
+			{
+				ID:      "op-ci-only-rev",
+				Parents: []string{"op-app"},
+				Envelope: codec.Envelope{
+					ObjectID:   "r-ci-rev",
+					ObjectType: "review",
+					OpType:     "ci-status",
+					OpVersion:  1,
+					Body:       json.RawMessage(`{"revision":"head-1"}`),
+				},
+				Author: codec.Identity{When: now.Add(20 * time.Second)},
+			},
+		}
+		assertThreeWayFoldDomain(t, "review", ops, writ.ReviewRules(), "")
+	})
+
+	t.Run("Issue_ExplicitEmptyState", func(t *testing.T) {
+		now := time.Unix(100, 0).UTC()
+		ops := []codec.Op{
+			{
+				ID: "op-iss-create",
+				Envelope: codec.Envelope{
+					ObjectID:   "iss-empty-state",
+					ObjectType: "issue",
+					OpType:     "create",
+					OpVersion:  1,
+					Body:       json.RawMessage(`{"title":"Issue title"}`),
+				},
+				Author: codec.Identity{When: now},
+			},
+			{
+				ID:      "op-iss-set-empty",
+				Parents: []string{"op-iss-create"},
+				Envelope: codec.Envelope{
+					ObjectID:   "iss-empty-state",
+					ObjectType: "issue",
+					OpType:     "set-state",
+					OpVersion:  1,
+					Body:       json.RawMessage(`{"state":""}`),
+				},
+				Author: codec.Identity{When: now.Add(10 * time.Second)},
+			},
+		}
+		assertThreeWayFoldDomain(t, "issue", ops, writ.IssueRules(), "")
 	})
 
 	// 100 randomized property iterations over abstract strategies and domain object streams
