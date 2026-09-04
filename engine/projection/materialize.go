@@ -187,9 +187,15 @@ func materializeObject(tx *sql.Tx, objectID string, ops []codec.Op) error {
 			return fmt.Errorf("projection: fold issue %s: %w", objectID, err)
 		}
 
+		posOpID := issuePositionOpID(orderedOps)
+		var estVal any
+		if issue.Estimate != nil {
+			estVal = *issue.Estimate
+		}
+
 		_, err = tx.Exec(
-			"INSERT INTO issues (object_id, title, description, state, reason) VALUES (?, ?, ?, ?, ?)",
-			objectID, issue.Title, issue.Description, issue.State, issue.Reason,
+			"INSERT INTO issues (object_id, title, description, state, reason, priority, estimate, position, position_op_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			objectID, issue.Title, issue.Description, issue.State, issue.Reason, issue.Priority, estVal, issue.Position, posOpID,
 		)
 		if err != nil {
 			return fmt.Errorf("projection: insert issue %s: %w", objectID, err)
@@ -773,4 +779,29 @@ func sectionPositionOpID(orderedOps []codec.Op) string {
 	}
 	return posOpID
 }
+
+func issuePositionOpID(orderedOps []codec.Op) string {
+	var posOpID string
+	for _, op := range orderedOps {
+		if op.ObjectType != "issue" || op.OpVersion != 1 {
+			continue
+		}
+		var body map[string]any
+		if len(op.Body) > 0 {
+			if err := json.Unmarshal(op.Body, &body); err != nil {
+				continue
+			}
+		}
+		if body == nil {
+			continue
+		}
+		if op.OpType == "create" || op.OpType == "update" || op.OpType == "set-state" {
+			if _, ok := body["position"].(string); ok {
+				posOpID = op.ID
+			}
+		}
+	}
+	return posOpID
+}
+
 

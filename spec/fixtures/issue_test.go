@@ -215,6 +215,48 @@ func assertIssueFoldAgreement(t *testing.T, issue writ.Issue, state writ.ObjectS
 		t.Errorf("[%s/%s] reason present in FoldIssue (%q) but not in Fold", fixtureName, objectID, issue.Reason)
 	}
 
+	if p, ok := state.State["priority"]; ok {
+		var foldPriority int
+		switch v := p.(type) {
+		case int:
+			foldPriority = v
+		case int64:
+			foldPriority = int(v)
+		case float64:
+			foldPriority = int(v)
+		}
+		if issue.Priority != foldPriority {
+			t.Errorf("[%s/%s] agreement mismatch on priority: FoldIssue=%d, Fold=%d", fixtureName, objectID, issue.Priority, foldPriority)
+		}
+	} else if issue.Priority != 0 {
+		t.Errorf("[%s/%s] priority present in FoldIssue (%d) but not in Fold", fixtureName, objectID, issue.Priority)
+	}
+
+	if est, ok := state.State["estimate"]; ok {
+		var foldEst float64
+		switch v := est.(type) {
+		case float64:
+			foldEst = v
+		case int:
+			foldEst = float64(v)
+		case int64:
+			foldEst = float64(v)
+		}
+		if issue.Estimate == nil || *issue.Estimate != foldEst {
+			t.Errorf("[%s/%s] agreement mismatch on estimate: FoldIssue=%v, Fold=%v", fixtureName, objectID, issue.Estimate, foldEst)
+		}
+	} else if issue.Estimate != nil {
+		t.Errorf("[%s/%s] estimate present in FoldIssue (%v) but not in Fold", fixtureName, objectID, *issue.Estimate)
+	}
+
+	if pos, ok := state.State["position"].(string); ok {
+		if issue.Position != pos {
+			t.Errorf("[%s/%s] agreement mismatch on position: FoldIssue=%q, Fold=%q", fixtureName, objectID, issue.Position, pos)
+		}
+	} else if issue.Position != "" {
+		t.Errorf("[%s/%s] position present in FoldIssue (%q) but not in Fold", fixtureName, objectID, issue.Position)
+	}
+
 	// Links: keyed-lww on target
 	if rawRelations, ok := state.State["relation"].([]any); ok {
 		activeRelations := make(map[string]string)

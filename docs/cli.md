@@ -19,6 +19,7 @@ slug: "cli"
 - [`writ doc link`](#writ-doc-link)
 - [`writ doc section`](#writ-doc-section)
 - [`writ issue create`](#writ-issue-create)
+- [`writ issue update`](#writ-issue-update)
 - [`writ issue status`](#writ-issue-status)
 - [`writ issue comment`](#writ-issue-comment)
 - [`writ issue assign`](#writ-issue-assign)
@@ -290,7 +291,7 @@ Create a new issue
 #### Synopsis
 
 ```console
-Usage: writ issue create [-C <dir>] -title <t> [-description <d>] [-state <s>] [-fixes <ref>]... [-relates <ref>]...
+Usage: writ issue create [-C <dir>] -title <t> [-description <d>] [-state <s>] [-priority <p>] [-estimate <e>] [-position <pos>] [-fixes <ref>]... [-relates <ref>]...
 ```
 
 #### Description
@@ -303,6 +304,9 @@ Create a new issue.
 - `-title <t>`: Issue title <t> (required)
 - `-description <d>`: Issue description <d>
 - `-state <state>`: Initial issue state <state> (open or closed)
+- `-priority <p>`: Issue priority <p> (urgent|high|medium|low|none or 0..4)
+- `-estimate <e>`: Issue estimate <e> (non-negative number)
+- `-position <pos>`: Issue position <pos> (fractional index)
 - `-fixes <ref>`: Add a 'fixes' cross-reference link <ref> (repeatable)
 - `-relates <ref>`: Add a 'relates' cross-reference link <ref> (repeatable)
 
@@ -310,7 +314,37 @@ Create a new issue.
 
 ```bash
 writ issue create -title "Fix memory leak"
-writ issue create -title "Bug in parser" -fixes 01J8ABC
+writ issue create -title "Bug in parser" -priority urgent -estimate 3 -fixes 01J8ABC
+```
+
+### `writ issue update`
+
+Update an existing issue
+
+#### Synopsis
+
+```console
+Usage: writ issue update [-C <dir>] <id> [-title <t>] [-description <d>] [-priority <p>] [-estimate <e>] [-position <pos>]
+```
+
+#### Description
+
+Update an existing issue.
+
+#### Flags
+
+- `-C <dir>`: Run as if writ was started in <dir>
+- `-title <t>`: Updated title <t>
+- `-description <d>`: Updated description <d>
+- `-priority <p>`: Updated priority <p> (urgent|high|medium|low|none or 0..4)
+- `-estimate <e>`: Updated estimate <e> (non-negative number)
+- `-position <pos>`: Updated position <pos> (fractional index)
+
+#### Examples
+
+```bash
+writ issue update 01J8ABC -title "Updated title"
+writ issue update 01J8ABC -priority urgent -estimate 5
 ```
 
 ### `writ issue status`
@@ -320,7 +354,7 @@ View or update issue status
 #### Synopsis
 
 ```console
-Usage: writ issue status [-C <dir>] <id> [<state>] [-reason <r>] [--json]
+Usage: writ issue status [-C <dir>] <id> [<state>] [-reason <r>] [-position <pos>] [--json]
 ```
 
 #### Description
@@ -331,6 +365,7 @@ View or update issue status.
 
 - `-C <dir>`: Run as if writ was started in <dir>
 - `-reason <r>`: Reason <r> for status change
+- `-position <pos>`: Updated position <pos> (fractional index)
 - `-json`: Output result as JSON (view mode only)
 
 #### Examples
@@ -406,7 +441,7 @@ List issues
 #### Synopsis
 
 ```console
-Usage: writ issue list [-C <dir>] [-state <s>]... [-assignee <a>]... [-label <l>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>] [--json]
+Usage: writ issue list [-C <dir>] [-state <s>]... [-assignee <a>]... [-label <l>]... [-author <a>]... [-priority <p>]... [-text <q>] [-limit N] [-sort <order>] [--json]
 ```
 
 #### Description
@@ -420,9 +455,10 @@ List issues.
 - `-assignee <a>`: Filter by assignee <a>, a scheme:value person identifier (repeatable)
 - `-label <l>`: Filter by label <l> (repeatable)
 - `-author <a>`: Filter by author <a> name or email (repeatable)
+- `-priority <p>`: Filter by priority <p> (urgent|high|medium|low|none or 0..4) (repeatable)
 - `-text <q>`: Filter by text <q> match in title or description
 - `-limit N`: Maximum number N of issues to return
-- `-sort <order>`: Sort order <order> (created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc)
+- `-sort <order>`: Sort order <order> (created_at_asc, created_at_desc, updated_at_asc, updated_at_desc, title_asc, title_desc, priority_asc, priority_desc, position_asc, position_desc, estimate_asc, estimate_desc)
 - `-json`: Output result as JSON
 
 #### Examples

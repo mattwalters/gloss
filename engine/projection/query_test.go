@@ -585,3 +585,108 @@ func TestLabelMatchingByNameAndID(t *testing.T) {
 	}
 }
 
+func TestIssuesPriorityEstimatePosition(t *testing.T) {
+	db, err := projection.Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open(:memory:): %v", err)
+	}
+	defer db.Close()
+
+	rawDB := db.DB()
+	// iss-u: priority 1 (urgent), estimate 2.5, position 0|b:
+	insertObject(t, rawDB, "iss-u", "issue", 1, "op-u", "A", "a@example.com", 1000, 1000)
+	execSQL(t, rawDB, "INSERT INTO issues (object_id, title, description, state, reason, priority, estimate, position, position_op_id) VALUES (?, ?, ?, ?, '', ?, ?, ?, ?)",
+		"iss-u", "Urgent", "", "open", 1, 2.5, "0|b:", "op-u")
+
+	// iss-h: priority 2 (high), estimate 1.0, position 0|a:
+	insertObject(t, rawDB, "iss-h", "issue", 1, "op-h", "A", "a@example.com", 1010, 1010)
+	execSQL(t, rawDB, "INSERT INTO issues (object_id, title, description, state, reason, priority, estimate, position, position_op_id) VALUES (?, ?, ?, ?, '', ?, ?, ?, ?)",
+		"iss-h", "High", "", "open", 2, 1.0, "0|a:", "op-h")
+
+	// iss-n: priority 0 (none), estimate NULL, position 0|c:
+	insertObject(t, rawDB, "iss-n", "issue", 1, "op-n", "A", "a@example.com", 1020, 1020)
+	execSQL(t, rawDB, "INSERT INTO issues (object_id, title, description, state, reason, priority, estimate, position, position_op_id) VALUES (?, ?, ?, ?, '', ?, NULL, ?, ?)",
+		"iss-n", "None", "", "open", 0, "0|c:", "op-n")
+
+	// 1. Single lookup Issue(objectID)
+	issU, err := db.Issue("iss-u")
+	if err != nil {
+		t.Fatalf("Issue(iss-u): %v", err)
+	}
+	if issU.Issue.Priority != 1 {
+		t.Errorf("iss-u priority = %d, want 1", issU.Issue.Priority)
+	}
+	if issU.Issue.Estimate == nil || *issU.Issue.Estimate != 2.5 {
+		t.Errorf("iss-u estimate = %v, want 2.5", issU.Issue.Estimate)
+	}
+	if issU.Issue.Position != "0|b:" {
+		t.Errorf("iss-u position = %q, want '0|b:'", issU.Issue.Position)
+	}
+
+	issN, err := db.Issue("iss-n")
+	if err != nil {
+		t.Fatalf("Issue(iss-n): %v", err)
+	}
+	if issN.Issue.Priority != 0 {
+		t.Errorf("iss-n priority = %d, want 0", issN.Issue.Priority)
+	}
+	if issN.Issue.Estimate != nil {
+		t.Errorf("iss-n estimate = %v, want nil", issN.Issue.Estimate)
+	}
+
+	// 2. Filter by priority
+	filtered, err := db.Issues(projection.IssueFilter{Priority: []int{1, 2}})
+	if err != nil {
+		t.Fatalf("Issues(Priority: [1,2]): %v", err)
+	}
+	if len(filtered) != 2 {
+		t.Fatalf("expected 2 issues with priority 1 or 2, got %d", len(filtered))
+	}
+
+	// 3. OrderByPriorityDesc: urgent (1) > high (2) > none (0)
+	pDesc, err := db.Issues(projection.IssueFilter{OrderBy: projection.OrderByPriorityDesc})
+	if err != nil {
+		t.Fatalf("Issues(OrderByPriorityDesc): %v", err)
+	}
+	if len(pDesc) != 3 || pDesc[0].ObjectID != "iss-u" || pDesc[1].ObjectID != "iss-h" || pDesc[2].ObjectID != "iss-n" {
+		t.Errorf("OrderByPriorityDesc unexpected order: %v, %v, %v", pDesc[0].ObjectID, pDesc[1].ObjectID, pDesc[2].ObjectID)
+	}
+
+	// 4. OrderByPriorityAsc: none (0) < high (2) < urgent (1)
+	pAsc, err := db.Issues(projection.IssueFilter{OrderBy: projection.OrderByPriorityAsc})
+	if err != nil {
+		t.Fatalf("Issues(OrderByPriorityAsc): %v", err)
+	}
+	if len(pAsc) != 3 || pAsc[0].ObjectID != "iss-n" || pAsc[1].ObjectID != "iss-h" || pAsc[2].ObjectID != "iss-u" {
+		t.Errorf("OrderByPriorityAsc unexpected order: %v, %v, %v", pAsc[0].ObjectID, pAsc[1].ObjectID, pAsc[2].ObjectID)
+	}
+
+	// 5. OrderByEstimateAsc: 1.0 (iss-h) < 2.5 (iss-u), then NULL (iss-n)
+	eAsc, err := db.Issues(projection.IssueFilter{OrderBy: projection.OrderByEstimateAsc})
+	if err != nil {
+		t.Fatalf("Issues(OrderByEstimateAsc): %v", err)
+	}
+	if len(eAsc) != 3 || eAsc[0].ObjectID != "iss-h" || eAsc[1].ObjectID != "iss-u" || eAsc[2].ObjectID != "iss-n" {
+		t.Errorf("OrderByEstimateAsc unexpected order: %v, %v, %v", eAsc[0].ObjectID, eAsc[1].ObjectID, eAsc[2].ObjectID)
+	}
+
+	// 6. OrderByEstimateDesc: 2.5 (iss-u) > 1.0 (iss-h), then NULL (iss-n)
+	eDesc, err := db.Issues(projection.IssueFilter{OrderBy: projection.OrderByEstimateDesc})
+	if err != nil {
+		t.Fatalf("Issues(OrderByEstimateDesc): %v", err)
+	}
+	if len(eDesc) != 3 || eDesc[0].ObjectID != "iss-u" || eDesc[1].ObjectID != "iss-h" || eDesc[2].ObjectID != "iss-n" {
+		t.Errorf("OrderByEstimateDesc unexpected order: %v, %v, %v", eDesc[0].ObjectID, eDesc[1].ObjectID, eDesc[2].ObjectID)
+	}
+
+	// 7. OrderByPositionAsc: 0|a: (iss-h) < 0|b: (iss-u) < 0|c: (iss-n)
+	posAsc, err := db.Issues(projection.IssueFilter{OrderBy: projection.OrderByPositionAsc})
+	if err != nil {
+		t.Fatalf("Issues(OrderByPositionAsc): %v", err)
+	}
+	if len(posAsc) != 3 || posAsc[0].ObjectID != "iss-h" || posAsc[1].ObjectID != "iss-u" || posAsc[2].ObjectID != "iss-n" {
+		t.Errorf("OrderByPositionAsc unexpected order: %v, %v, %v", posAsc[0].ObjectID, posAsc[1].ObjectID, posAsc[2].ObjectID)
+	}
+}
+
+

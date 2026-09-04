@@ -24,9 +24,10 @@ func TestOpenCloseMemory(t *testing.T) {
 	// conscious edit, because it is what makes an existing checkout rebuild
 	// its cache. WRIT-104 took it to 9 for workflow_states table. WRIT-109
 	// took it to 10 for labels table. WRIT-105 took it to 11 for document
-	// and section tables.
-	if v := projection.SchemaVersion(); v != 11 {
-		t.Fatalf("expected schema version 11, got %d", v)
+	// and section tables. WRIT-106 took it to 12 for issue priority,
+	// estimate, and position columns.
+	if v := projection.SchemaVersion(); v != 12 {
+		t.Fatalf("expected schema version 12, got %d", v)
 	}
 
 	var version string

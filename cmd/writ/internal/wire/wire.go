@@ -127,6 +127,9 @@ type IssueSummary struct {
 	ObjectID  string    `json:"object_id"`
 	Title     string    `json:"title"`
 	State     string    `json:"state"`
+	Priority  int       `json:"priority"`
+	Estimate  *float64  `json:"estimate,omitempty"`
+	Position  string    `json:"position,omitempty"`
 	Author    Author    `json:"author"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -146,6 +149,9 @@ type Issue struct {
 	Description string          `json:"description,omitempty"`
 	State       string          `json:"state"`
 	Reason      string          `json:"reason,omitempty"`
+	Priority    int             `json:"priority"`
+	Estimate    *float64        `json:"estimate,omitempty"`
+	Position    string          `json:"position,omitempty"`
 	Author      Author          `json:"author"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
@@ -368,6 +374,9 @@ func FromIssueResultSummary(r writ.IssueResult) IssueSummary {
 		ObjectID:  r.ObjectID,
 		Title:     r.Issue.Title,
 		State:     r.Issue.State,
+		Priority:  r.Issue.Priority,
+		Estimate:  r.Issue.Estimate,
+		Position:  r.Issue.Position,
 		Author:    Author{Name: r.Author.Name, Email: r.Author.Email},
 		CreatedAt: r.CreatedAt.UTC(),
 		UpdatedAt: r.UpdatedAt.UTC(),
@@ -426,6 +435,9 @@ func FromIssueResult(r writ.IssueResult, threads []state.CommentThread) Issue {
 		Description: r.Issue.Description,
 		State:       r.Issue.State,
 		Reason:      r.Issue.Reason,
+		Priority:    r.Issue.Priority,
+		Estimate:    r.Issue.Estimate,
+		Position:    r.Issue.Position,
 		Author:      Author{Name: r.Author.Name, Email: r.Author.Email},
 		CreatedAt:   r.CreatedAt.UTC(),
 		UpdatedAt:   r.UpdatedAt.UTC(),

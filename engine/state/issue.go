@@ -87,6 +87,40 @@ func FoldIssue(ops []codec.Op) (Issue, error) {
 			if d, ok := body["description"].(string); ok {
 				state.Description = d
 			}
+			if p, ok := body["priority"]; ok && p != nil {
+				switch val := p.(type) {
+				case float64:
+					state.Priority = int(val)
+				case int:
+					state.Priority = val
+				case int64:
+					state.Priority = int(val)
+				case json.Number:
+					if i, err := val.Int64(); err == nil {
+						state.Priority = int(i)
+					}
+				}
+			}
+			if e, ok := body["estimate"]; ok && e != nil {
+				switch val := e.(type) {
+				case float64:
+					est := val
+					state.Estimate = &est
+				case int:
+					est := float64(val)
+					state.Estimate = &est
+				case int64:
+					est := float64(val)
+					state.Estimate = &est
+				case json.Number:
+					if f, err := val.Float64(); err == nil {
+						state.Estimate = &f
+					}
+				}
+			}
+			if pos, ok := body["position"].(string); ok {
+				state.Position = pos
+			}
 
 		case "set-state":
 			hasKnownOp = true
@@ -96,6 +130,9 @@ func FoldIssue(ops []codec.Op) (Issue, error) {
 			}
 			if r, ok := body["reason"].(string); ok {
 				state.Reason = r
+			}
+			if pos, ok := body["position"].(string); ok {
+				state.Position = pos
 			}
 
 		case "assign":
@@ -221,10 +258,17 @@ func IssueRules() []Rule {
 	return []Rule{
 		{OpType: "create", OpVersion: 1, Field: "title", Strategy: "lww"},
 		{OpType: "create", OpVersion: 1, Field: "description", Strategy: "lww"},
+		{OpType: "create", OpVersion: 1, Field: "priority", Strategy: "lww"},
+		{OpType: "create", OpVersion: 1, Field: "estimate", Strategy: "lww"},
+		{OpType: "create", OpVersion: 1, Field: "position", Strategy: "lww"},
 		{OpType: "update", OpVersion: 1, Field: "title", Strategy: "lww"},
 		{OpType: "update", OpVersion: 1, Field: "description", Strategy: "lww"},
+		{OpType: "update", OpVersion: 1, Field: "priority", Strategy: "lww"},
+		{OpType: "update", OpVersion: 1, Field: "estimate", Strategy: "lww"},
+		{OpType: "update", OpVersion: 1, Field: "position", Strategy: "lww"},
 		{OpType: "set-state", OpVersion: 1, Field: "state", Strategy: "lww"},
 		{OpType: "set-state", OpVersion: 1, Field: "reason", Strategy: "lww"},
+		{OpType: "set-state", OpVersion: 1, Field: "position", Strategy: "lww"},
 		{OpType: "assign", OpVersion: 1, Field: "add", Strategy: "set-observed-remove", Normalize: &NormalizeRule{Items: "person"}},
 		{OpType: "assign", OpVersion: 1, Field: "remove", Strategy: "set-observed-remove", Normalize: &NormalizeRule{Items: "person"}},
 		{OpType: "label", OpVersion: 1, Field: "add", Strategy: "set-observed-remove"},

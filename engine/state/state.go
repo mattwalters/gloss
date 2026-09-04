@@ -166,6 +166,9 @@ type Issue struct {
 	Description string      `json:"description,omitempty"`
 	State       string      `json:"state,omitempty"`
 	Reason      string      `json:"reason,omitempty"`
+	Priority    int         `json:"priority,omitempty"`
+	Estimate    *float64    `json:"estimate,omitempty"`
+	Position    string      `json:"position,omitempty"`
 	Assignees   []string    `json:"assignees,omitempty"`
 	Labels      []string    `json:"labels,omitempty"`
 	Links       []Link      `json:"links,omitempty"`

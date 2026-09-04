@@ -1,0 +1,15 @@
+{
+  "objects": [
+    {
+      "object_id": "i-fields-and-rank",
+      "issue": {
+        "title": "Issue Fields and Rank",
+        "description": "Testing priority, estimate, and manual rank",
+        "state": "open",
+        "priority": 1,
+        "estimate": 5,
+        "position": "V"
+      }
+    }
+  ]
+}

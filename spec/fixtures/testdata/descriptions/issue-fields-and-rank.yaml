@@ -1,0 +1,59 @@
+name: issue-fields-and-rank
+description: >
+  Issue object i-fields-and-rank exercises initial creation with priority, estimate,
+  and position 'V', followed by concurrent branch updates from Alice and Bob setting
+  different priorities, estimates, and ranks at position 'V' at the same timestamp.
+  Demonstrates deterministic LWW reconciliation and tiebreak ordering by op_id ASC.
+
+refs:
+  - name: refs/writ/0123456789abcdef/issue
+    history:
+      - commits:
+          - id: alice-create
+            author: alice
+            timestamp: 2026-01-01T00:00:00Z
+            op:
+              object_id: i-fields-and-rank
+              object_type: issue
+              op_type: create
+              op_version: 1
+              body:
+                title: "Issue Fields and Rank"
+                description: "Testing priority, estimate, and manual rank"
+                priority: 3
+                estimate: 2.5
+                position: "V"
+            expect: accept
+
+          - id: alice-rank-v
+            parents: [alice-create]
+            author: alice
+            timestamp: 2026-01-01T00:01:00Z
+            op:
+              object_id: i-fields-and-rank
+              object_type: issue
+              op_type: update
+              op_version: 1
+              body:
+                priority: 1
+                estimate: 5.0
+                position: "V"
+            expect: accept
+
+  - name: refs/writ/fedcba9876543210/issue
+    history:
+      - commits:
+          - id: bob-rank-v
+            parents: [alice-create]
+            author: bob
+            timestamp: 2026-01-01T00:01:00Z
+            op:
+              object_id: i-fields-and-rank
+              object_type: issue
+              op_type: update
+              op_version: 1
+              body:
+                priority: 2
+                estimate: 8.0
+                position: "V"
+            expect: accept

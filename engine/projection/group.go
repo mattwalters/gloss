@@ -12,6 +12,7 @@ type GroupKey string
 const (
 	GroupByState    GroupKey = "state"
 	GroupByAssignee GroupKey = "assignee"
+	GroupByPriority GroupKey = "priority"
 )
 
 // Group represents a collection of issues belonging to a single group key.
@@ -25,10 +26,15 @@ type Group struct {
 // For GroupByState, issues are grouped by their state string.
 // For GroupByAssignee, issues are grouped by assignee, with unassigned issues under key "",
 // and multiply-assigned issues appearing under each of their assignees.
-// Groups are returned sorted by Key ascending.
+// For GroupByPriority, issues are grouped by priority bucket in semantic order (urgent -> high -> medium -> low -> none).
+// Groups are returned sorted by Key ascending (or semantic order for priority).
 func (d *DB) GroupIssues(by GroupKey, f IssueFilter) ([]Group, error) {
 	if d == nil || d.db == nil {
 		return nil, fmt.Errorf("projection: database is closed")
+	}
+
+	if (by == GroupByState || by == GroupByPriority) && f.OrderBy == "" {
+		f.OrderBy = OrderByPositionAsc
 	}
 
 	issues, err := d.Issues(f)
@@ -174,7 +180,46 @@ func (d *DB) GroupIssues(by GroupKey, f IssueFilter) ([]Group, error) {
 		}
 		return groups, nil
 
+	case GroupByPriority:
+		buckets := []int{1, 2, 3, 4, 0}
+		groupsMap := make(map[int][]IssueResult)
+		for _, iss := range issues {
+			p := iss.Issue.Priority
+			if p < 0 || p > 4 {
+				p = 0
+			}
+			groupsMap[p] = append(groupsMap[p], iss)
+		}
+
+		var groups []Group
+		for _, p := range buckets {
+			list := groupsMap[p]
+			if len(list) > 0 {
+				groups = append(groups, Group{
+					Key:    formatPriority(p),
+					Count:  len(list),
+					Issues: list,
+				})
+			}
+		}
+		return groups, nil
+
 	default:
 		return nil, fmt.Errorf("projection: unsupported group key %q", by)
+	}
+}
+
+func formatPriority(priority int) string {
+	switch priority {
+	case 1:
+		return "urgent"
+	case 2:
+		return "high"
+	case 3:
+		return "medium"
+	case 4:
+		return "low"
+	default:
+		return "none"
 	}
 }

@@ -1,0 +1,57 @@
+{
+  "refs": [
+    {
+      "name": "refs/writ/0123456789abcdef/issue",
+      "commit": "d2362d7dae2c0c2b4531d7996baa6be8561b3287"
+    },
+    {
+      "name": "refs/writ/fedcba9876543210/issue",
+      "commit": "884e20d734933619f0916df008ef003d55b028d7"
+    }
+  ],
+  "generations": [
+    {
+      "ref": "refs/writ/0123456789abcdef/issue",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "fa095289b14d38a396f9c4cacb231760de1a5a39",
+          "tree": "5b0ee43e38bb5eeeeb095df228b3bc4be2089335",
+          "parents": [],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:00:00Z",
+          "message": "writ: create issue/i-fields-and-rank\n",
+          "signed": true
+        },
+        {
+          "sha": "d2362d7dae2c0c2b4531d7996baa6be8561b3287",
+          "tree": "b617a9760dedd2666dc43c4f795f484c0f34223d",
+          "parents": [
+            "fa095289b14d38a396f9c4cacb231760de1a5a39"
+          ],
+          "author": "Alice Example \u003calice@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: update issue/i-fields-and-rank\n",
+          "signed": true
+        }
+      ]
+    },
+    {
+      "ref": "refs/writ/fedcba9876543210/issue",
+      "index": 0,
+      "commits": [
+        {
+          "sha": "884e20d734933619f0916df008ef003d55b028d7",
+          "tree": "1bfcd3319b68bb73aea3fa561ef917d3e893b822",
+          "parents": [
+            "fa095289b14d38a396f9c4cacb231760de1a5a39"
+          ],
+          "author": "Bob Example \u003cbob@example.test\u003e",
+          "timestamp": "2026-01-01T00:01:00Z",
+          "message": "writ: update issue/i-fields-and-rank\n",
+          "signed": true
+        }
+      ]
+    }
+  ]
+}

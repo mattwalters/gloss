@@ -120,7 +120,7 @@ var commentDeleteCmd = &command{
 
 var issueCmd = &command{
 	Name:      "issue",
-	Short:     "Manage issues (create, status, comment, assign, list, link, label)",
+	Short:     "Manage issues (create, update, status, comment, assign, list, link, label)",
 	UsageLine: "Usage: writ issue [-C <dir>] <subcommand> [arguments]",
 	Long:      "Manage issues.",
 	Flags: []flagSpec{
@@ -132,6 +132,7 @@ var issueCmd = &command{
 	},
 	Subs: []*command{
 		issueCreateCmd,
+		issueUpdateCmd,
 		issueStatusCmd,
 		issueCommentCmd,
 		issueAssignCmd,
@@ -144,30 +145,53 @@ var issueCmd = &command{
 var issueCreateCmd = &command{
 	Name:      "create",
 	Short:     "Create a new issue",
-	UsageLine: "Usage: writ issue create [-C <dir>] -title <t> [-description <d>] [-state <s>] [-fixes <ref>]... [-relates <ref>]...",
+	UsageLine: "Usage: writ issue create [-C <dir>] -title <t> [-description <d>] [-state <s>] [-priority <p>] [-estimate <e>] [-position <pos>] [-fixes <ref>]... [-relates <ref>]...",
 	Long:      "Create a new issue.",
 	Flags: []flagSpec{
 		{Name: "C"},
 		{Name: "title"},
 		{Name: "description"},
 		{Name: "state"},
+		{Name: "priority", Values: spec.IssuePriorityNames()},
+		{Name: "estimate"},
+		{Name: "position"},
 		{Name: "fixes", Repeatable: true},
 		{Name: "relates", Repeatable: true},
 	},
 	Examples: []string{
 		`writ issue create -title "Fix memory leak"`,
-		`writ issue create -title "Bug in parser" -fixes 01J8ABC`,
+		`writ issue create -title "Bug in parser" -priority urgent -estimate 3 -fixes 01J8ABC`,
+	},
+}
+
+var issueUpdateCmd = &command{
+	Name:      "update",
+	Short:     "Update an existing issue",
+	UsageLine: "Usage: writ issue update [-C <dir>] <id> [-title <t>] [-description <d>] [-priority <p>] [-estimate <e>] [-position <pos>]",
+	Long:      "Update an existing issue.",
+	Flags: []flagSpec{
+		{Name: "C"},
+		{Name: "title"},
+		{Name: "description"},
+		{Name: "priority", Values: spec.IssuePriorityNames()},
+		{Name: "estimate"},
+		{Name: "position"},
+	},
+	Examples: []string{
+		`writ issue update 01J8ABC -title "Updated title"`,
+		`writ issue update 01J8ABC -priority urgent -estimate 5`,
 	},
 }
 
 var issueStatusCmd = &command{
 	Name:      "status",
 	Short:     "View or update issue status",
-	UsageLine: "Usage: writ issue status [-C <dir>] <id> [<state>] [-reason <r>] [--json]",
+	UsageLine: "Usage: writ issue status [-C <dir>] <id> [<state>] [-reason <r>] [-position <pos>] [--json]",
 	Long:      "View or update issue status.",
 	Flags: []flagSpec{
 		{Name: "C"},
 		{Name: "reason"},
+		{Name: "position"},
 		{Name: "json"},
 	},
 	Examples: []string{
@@ -216,7 +240,7 @@ var issueAssignCmd = &command{
 var issueListCmd = &command{
 	Name:      "list",
 	Short:     "List issues",
-	UsageLine: "Usage: writ issue list [-C <dir>] [-state <s>]... [-assignee <a>]... [-label <l>]... [-author <a>]... [-text <q>] [-limit N] [-sort <order>] [--json]",
+	UsageLine: "Usage: writ issue list [-C <dir>] [-state <s>]... [-assignee <a>]... [-label <l>]... [-author <a>]... [-priority <p>]... [-text <q>] [-limit N] [-sort <order>] [--json]",
 	Long:      "List issues.",
 	Flags: []flagSpec{
 		{Name: "C"},
@@ -224,9 +248,17 @@ var issueListCmd = &command{
 		{Name: "assignee", Repeatable: true},
 		{Name: "label", Repeatable: true},
 		{Name: "author", Repeatable: true},
+		{Name: "priority", Values: spec.IssuePriorityNames(), Repeatable: true},
 		{Name: "text"},
 		{Name: "limit"},
-		{Name: "sort", Values: []string{"created_at_asc", "created_at_desc", "updated_at_asc", "updated_at_desc", "title_asc", "title_desc"}},
+		{Name: "sort", Values: []string{
+			"created_at_asc", "created_at_desc",
+			"updated_at_asc", "updated_at_desc",
+			"title_asc", "title_desc",
+			"priority_asc", "priority_desc",
+			"position_asc", "position_desc",
+			"estimate_asc", "estimate_desc",
+		}},
 		{Name: "json"},
 	},
 	Examples: []string{
@@ -874,6 +906,7 @@ func init() {
 		"comment edit":   func() *flag.FlagSet { fs, _ := newCommentEditFlagSet(""); return fs },
 		"comment delete": func() *flag.FlagSet { fs, _ := newCommentDeleteFlagSet(""); return fs },
 		"issue create":   func() *flag.FlagSet { fs, _ := newIssueCreateFlagSet(""); return fs },
+		"issue update":   func() *flag.FlagSet { fs, _ := newIssueUpdateFlagSet(""); return fs },
 		"issue status":   func() *flag.FlagSet { fs, _ := newIssueStatusFlagSet(""); return fs },
 		"issue comment":  func() *flag.FlagSet { fs, _ := newIssueCommentFlagSet(""); return fs },
 		"issue assign":   func() *flag.FlagSet { fs, _ := newIssueAssignFlagSet(""); return fs },
