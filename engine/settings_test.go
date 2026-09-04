@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/writtendev/writ/engine"
+	"github.com/writtendev/writ/engine/codec"
+	"github.com/writtendev/writ/engine/state"
 )
 
 func TestSettingsGetDefaults(t *testing.T) {
@@ -214,5 +216,76 @@ func TestSettingsWorkspaceRouting(t *testing.T) {
 	}
 	if projSett.Name != "Workspace via Project" || projSett.Identifier != "PROJ" {
 		t.Errorf("unexpected settings in project store: %+v", projSett)
+	}
+}
+
+func TestSettingsSetCausalParentsFrontier(t *testing.T) {
+	ctx := context.Background()
+	repoDir, _ := setupTestRepoWithID(t, "alice", "alice@writ.dev")
+
+	sA, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open Alice failed: %v", err)
+	}
+	defer sA.Close()
+
+	name1 := "Alice Settings"
+	if err := sA.Settings.Set(ctx, writ.SettingsEdit{Name: &name1}); err != nil {
+		t.Fatalf("Alice Settings.Set failed: %v", err)
+	}
+
+	// Switch writer to Bob in the same repository
+	runGitCmd(t, repoDir, "config", "writ.writerId", "fedcba9876543210")
+	runGitCmd(t, repoDir, "config", "user.name", "bob")
+	runGitCmd(t, repoDir, "config", "user.email", "bob@writ.dev")
+	runGitCmd(t, repoDir, "config", "gpg.format", "ssh")
+	runGitCmd(t, repoDir, "config", "user.signingKey", "key::ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGbob")
+
+	sB, err := writ.Open(repoDir, writ.WithSigner(dummySigner()))
+	if err != nil {
+		t.Fatalf("Open Bob failed: %v", err)
+	}
+	defer sB.Close()
+
+	name2 := "Bob Settings"
+	if err := sB.Settings.Set(ctx, writ.SettingsEdit{Name: &name2}); err != nil {
+		t.Fatalf("Bob Settings.Set failed: %v", err)
+	}
+
+	enumRes, err := writ.StoreDAGStore(sB).Enumerate()
+	if err != nil {
+		t.Fatalf("Enumerate failed: %v", err)
+	}
+
+	ops := enumRes.Ops[state.DefaultSettingsObjectID]
+	if len(ops) < 2 {
+		t.Fatalf("expected at least 2 settings ops, got %d", len(ops))
+	}
+
+	var aliceOp, bobOp codec.Op
+	for _, op := range ops {
+		if op.Author.Name == "alice" {
+			aliceOp = op
+		} else if op.Author.Name == "bob" {
+			bobOp = op
+		}
+	}
+
+	if aliceOp.ID == "" {
+		t.Fatalf("aliceOp not found")
+	}
+	if bobOp.ID == "" {
+		t.Fatalf("bobOp not found")
+	}
+
+	found := false
+	for _, p := range bobOp.Parents {
+		if p == aliceOp.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("bobOp.Parents = %v, want to contain aliceOp.ID %s", bobOp.Parents, aliceOp.ID)
 	}
 }

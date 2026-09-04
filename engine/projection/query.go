@@ -2418,7 +2418,8 @@ func (d *DB) Settings() (SettingsResult, error) {
 	)
 
 	row := d.db.QueryRow(
-		"SELECT object_id, name, identifier, timezone, estimate_scale, allow_zero_estimates, cycles_enabled, cycle_duration_weeks, cycle_start_day, cycle_cooldown_weeks, triage_enabled, unknown_keys, updated_at FROM settings LIMIT 1",
+		"SELECT object_id, name, identifier, timezone, estimate_scale, allow_zero_estimates, cycles_enabled, cycle_duration_weeks, cycle_start_day, cycle_cooldown_weeks, triage_enabled, unknown_keys, updated_at FROM settings ORDER BY CASE WHEN object_id = ? THEN 0 ELSE 1 END, object_id ASC LIMIT 1",
+		state.DefaultSettingsObjectID,
 	)
 	err := row.Scan(
 		&objectID, &name, &identifier, &timezone, &estimateScale,

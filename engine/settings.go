@@ -136,6 +136,15 @@ func (s *SettingsService) Set(ctx context.Context, edit SettingsEdit) error {
 		return fmt.Errorf("writ: marshal settings body: %w", err)
 	}
 
+	if err := target.maybeAutoRefresh(ctx); err != nil {
+		return fmt.Errorf("writ: auto refresh: %w", err)
+	}
+
+	frontier, err := target.projection.Frontier(state.DefaultSettingsObjectID)
+	if err != nil {
+		return fmt.Errorf("writ: get frontier: %w", err)
+	}
+
 	env := codec.Envelope{
 		ObjectID:   state.DefaultSettingsObjectID,
 		ObjectType: "settings",
@@ -144,7 +153,7 @@ func (s *SettingsService) Set(ctx context.Context, edit SettingsEdit) error {
 		Body:       bodyBytes,
 	}
 
-	if _, err := target.dagStore.Append(ctx, env, nil); err != nil {
+	if _, err := target.dagStore.Append(ctx, env, frontier); err != nil {
 		return fmt.Errorf("writ: append settings: %w", err)
 	}
 
