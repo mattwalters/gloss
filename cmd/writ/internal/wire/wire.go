@@ -18,25 +18,31 @@ const CurrentSchemaVersion = 1
 
 // Envelope kinds for plumbing commands.
 const (
-	KindReviewList   = "review.list"
-	KindReviewStatus = "review.status"
-	KindIssueList    = "issue.list"
-	KindIssueStatus  = "issue.status"
-	KindIssueLabel   = "issue.label"
-	KindIssueLabels  = "issue.label"
-	KindSyncStatus    = "sync.status"
-	KindSyncResult    = "sync.result"
-	KindCommentEdit   = "comment.edit"
-	KindCommentDelete = "comment.delete"
-	KindStateList     = "state.list"
-	KindLabelList     = "label.list"
-	KindDocList       = "doc.list"
-	KindDocShow       = "doc.show"
-	KindDocCreate     = "doc.create"
-	KindDocEdit       = "doc.edit"
-	KindDocLink       = "doc.link"
-	KindDocSection    = "doc.section"
-	KindSettings      = "settings"
+	KindReviewList     = "review.list"
+	KindReviewStatus   = "review.status"
+	KindIssueList      = "issue.list"
+	KindIssueStatus    = "issue.status"
+	KindIssueLabel     = "issue.label"
+	KindIssueLabels    = "issue.label"
+	KindSyncStatus     = "sync.status"
+	KindSyncResult     = "sync.result"
+	KindCommentEdit    = "comment.edit"
+	KindCommentDelete  = "comment.delete"
+	KindStateList      = "state.list"
+	KindLabelList      = "label.list"
+	KindDocList        = "doc.list"
+	KindDocShow        = "doc.show"
+	KindDocCreate      = "doc.create"
+	KindDocEdit        = "doc.edit"
+	KindDocLink        = "doc.link"
+	KindDocSection     = "doc.section"
+	KindSettings       = "settings"
+	KindProjectList    = "project.list"
+	KindProjectShow    = "project.show"
+	KindProjectCreate  = "project.create"
+	KindProjectUpdate  = "project.update"
+	KindProjectStatus  = "project.status"
+	KindProjectMembers = "project.members"
 )
 
 // Envelope wraps all machine-readable output in a single versioned container.
@@ -855,6 +861,66 @@ func FromDocumentResults(docs []writ.DocumentResult) []DocumentSummary {
 	return res
 }
 
+// ProjectSummary represents a project in a list view.
+type ProjectSummary struct {
+	ObjectID  string    `json:"object_id"`
+	Title     string    `json:"title"`
+	Status    string    `json:"status"`
+	Author    Author    `json:"author"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Issues    int       `json:"issues"`
+}
+
+// Project is the full detail view of a project collaborative object.
+type Project struct {
+	ObjectID    string    `json:"object_id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description,omitempty"`
+	Status      string    `json:"status,omitempty"`
+	Reason      string    `json:"reason,omitempty"`
+	Author      Author    `json:"author"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Issues      []string  `json:"issues"`
+}
+
+// FromProjectResult converts a domain ProjectResult to a wire Project detail view.
+func FromProjectResult(p writ.ProjectResult) Project {
+	issues := p.Project.Issues
+	if issues == nil {
+		issues = []string{}
+	}
+	return Project{
+		ObjectID:    p.ObjectID,
+		Title:       p.Project.Title,
+		Description: p.Project.Description,
+		Status:      p.Project.Status,
+		Reason:      p.Project.Reason,
+		Author:      Author{Name: p.Author.Name, Email: p.Author.Email},
+		CreatedAt:   p.CreatedAt,
+		UpdatedAt:   p.UpdatedAt,
+		Issues:      issues,
+	}
+}
+
+// FromProjectResults converts a slice of domain ProjectResults to wire ProjectSummaries.
+func FromProjectResults(projects []writ.ProjectResult) []ProjectSummary {
+	res := make([]ProjectSummary, len(projects))
+	for i, p := range projects {
+		res[i] = ProjectSummary{
+			ObjectID:  p.ObjectID,
+			Title:     p.Project.Title,
+			Status:    p.Project.Status,
+			Author:    Author{Name: p.Author.Name, Email: p.Author.Email},
+			CreatedAt: p.CreatedAt,
+			UpdatedAt: p.UpdatedAt,
+			Issues:    len(p.Project.Issues),
+		}
+	}
+	return res
+}
+
 // SettingsWire represents workspace settings in JSON plumbing output.
 type SettingsWire struct {
 	ObjectID           string         `json:"object_id"`
@@ -888,4 +954,3 @@ func FromSettingsResult(res writ.SettingsResult) SettingsWire {
 		UnknownKeys:        res.Settings.UnknownKeys,
 	}
 }
-

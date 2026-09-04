@@ -47,6 +47,9 @@ func flagEnumChoices(flagName string, cmdPath []string) string {
 		if p == "review list" {
 			return strings.Join(spec.ReviewStatuses(), " ")
 		}
+		if p == "project list" {
+			return strings.Join(spec.ProjectStatuses(), " ")
+		}
 		return ""
 	case "verdict":
 		return strings.Join(spec.ApprovalVerdicts(), " ")

@@ -268,6 +268,33 @@ func resolveDocumentID(ctx context.Context, store *writ.Store, prefix string) (s
 	return matches[0], nil
 }
 
+func resolveProjectID(ctx context.Context, store *writ.Store, prefix string) (string, error) {
+	if prefix == "" {
+		return "", fmt.Errorf("project ID required")
+	}
+
+	projects, err := store.Query.Projects(writ.ProjectFilter{})
+	if err != nil {
+		return "", err
+	}
+
+	var matches []string
+	for _, p := range projects {
+		if strings.HasPrefix(p.ObjectID, prefix) {
+			matches = append(matches, p.ObjectID)
+		}
+	}
+
+	if len(matches) == 0 {
+		return "", notFoundError{kind: "project", id: prefix}
+	}
+	if len(matches) > 1 {
+		return "", fmt.Errorf("ambiguous project ID prefix %q matches %d projects (%s)", prefix, len(matches), strings.Join(matches, ", "))
+	}
+
+	return matches[0], nil
+}
+
 func resolveSectionID(ctx context.Context, store *writ.Store, prefix string) (string, error) {
 	if prefix == "" {
 		return "", fmt.Errorf("section ID required")

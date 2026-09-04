@@ -260,6 +260,11 @@ type NewLabel struct {
 	Description string `json:"description,omitempty"`
 }
 
+type NewProject struct {
+	Title string `json:"title"`
+	Description string `json:"description,omitempty"`
+}
+
 type NewReview struct {
 	Title string `json:"title"`
 	Description string `json:"description,omitempty"`
@@ -301,6 +306,24 @@ type OrderBy = projection.OrderBy
 
 type Project = state.Project
 
+type ProjectEdit struct {
+	Title *string `json:"title,omitempty"`
+	Description *string `json:"description,omitempty"`
+}
+
+type ProjectFilter = projection.ProjectFilter
+
+type ProjectResult = projection.ProjectResult
+
+type Projects struct {
+	// unexported fields
+}
+func (*Projects) AddIssue(ctx context.Context, id, issueRef string) error
+func (*Projects) Create(ctx context.Context, np NewProject) (string, error)
+func (*Projects) RemoveIssue(ctx context.Context, id, issueRef string) error
+func (*Projects) SetStatus(ctx context.Context, id, status, reason string) error
+func (*Projects) Update(ctx context.Context, id string, edit ProjectEdit) error
+
 type Query struct {
 	// unexported fields
 }
@@ -314,6 +337,8 @@ func (*Query) Label(id string) (LabelResult, error)
 func (*Query) Labels(f LabelFilter) ([]LabelResult, error)
 func (*Query) Object(id string) (ObjectResult, error)
 func (*Query) Objects(f ObjectFilter) ([]ObjectResult, error)
+func (*Query) Project(id string) (ProjectResult, error)
+func (*Query) Projects(f ProjectFilter) ([]ProjectResult, error)
 func (*Query) Review(id string) (ReviewResult, error)
 func (*Query) Reviews(f ReviewFilter) ([]ReviewResult, error)
 func (*Query) Section(id string) (SectionResult, error)
@@ -414,6 +439,7 @@ type Store struct {
 	WorkflowStates *WorkflowStates
 	Labels *Labels
 	Documents *Documents
+	Projects *Projects
 	Settings *SettingsService
 	// unexported fields
 }
@@ -879,6 +905,8 @@ func (*DB) LocalDB() *sql.DB
 func (*DB) MarkRead(objectID, lastReadOpID string, readAt time.Time) error
 func (*DB) Object(objectID string) (ObjectResult, error)
 func (*DB) Objects(f ObjectFilter) ([]ObjectResult, error)
+func (*DB) Project(objectID string) (ProjectResult, error)
+func (*DB) Projects(f ProjectFilter) ([]ProjectResult, error)
 func (*DB) ReadMarks(objectIDs ...string) (map[string]ReadMark, error)
 func (*DB) Rebuild(store *dag.Store, opts ...Option) (Stats, error)
 func (*DB) Refresh(store *dag.Store, opts ...Option) (Stats, error)
@@ -1000,6 +1028,22 @@ type OpenOption func(*openConfig)
 type Option func(*refreshConfig)
 
 type OrderBy string
+
+type ProjectFilter struct {
+	Status []string
+	Text string
+	OrderBy OrderBy
+	Limit int
+	Offset int
+}
+
+type ProjectResult struct {
+	ObjectID string `json:"object_id"`
+	Author Author `json:"author"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Project state.Project `json:"project"`
+}
 
 type ReadMark struct {
 	ObjectID string `json:"object_id"`

@@ -54,6 +54,12 @@ type (
 	// DocumentResult represents a document object along with its authorship, timestamps, and ordered sections.
 	DocumentResult = projection.DocumentResult
 
+	// ProjectFilter specifies filter criteria when querying projects.
+	ProjectFilter = projection.ProjectFilter
+
+	// ProjectResult represents a project object along with its authorship and timestamps.
+	ProjectResult = projection.ProjectResult
+
 	// SectionResult represents a document section object along with its authorship and timestamps.
 	SectionResult = projection.SectionResult
 
@@ -305,6 +311,28 @@ func (q *Query) Section(id string) (SectionResult, error) {
 		return SectionResult{}, err
 	}
 	return q.store.projection.Section(id)
+}
+
+// Projects executes a list and filter query over projects.
+func (q *Query) Projects(f ProjectFilter) ([]ProjectResult, error) {
+	if q == nil || q.store == nil {
+		return nil, fmt.Errorf("writ: store is nil")
+	}
+	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
+		return nil, err
+	}
+	return q.store.projection.Projects(f)
+}
+
+// Project fetches a single project by its object ID, returning ErrNotFound if not found.
+func (q *Query) Project(id string) (ProjectResult, error) {
+	if q == nil || q.store == nil {
+		return ProjectResult{}, fmt.Errorf("writ: store is nil")
+	}
+	if err := q.store.maybeAutoRefresh(context.Background()); err != nil {
+		return ProjectResult{}, err
+	}
+	return q.store.projection.Project(id)
 }
 
 // Settings returns the current repository settings.
