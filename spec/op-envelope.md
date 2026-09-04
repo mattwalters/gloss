@@ -119,7 +119,7 @@ content addressing never depend on encoder quirks.
 
 - `object_id` (string, required) — identifier of the collaborative
   object this op belongs to. Opaque at this layer: printable non-space
-  ASCII (`^[\x21-\x7e]+$`), 1–256 characters. The workspace-global id
+  ASCII (`^[\x21-\x7e]+$`), 1–256 characters. The globally unique id
   format and cross-repo references are specified in
   [`spec/identifiers.md`](identifiers.md) (WRIT-16); nothing in this envelope
   depends on the id's internal structure, and the envelope schema is
@@ -252,7 +252,7 @@ cannot live in fold, and this document does not define when it runs.
 - Per-op-type body schemas and vocabularies: review family ([`spec/review-ops.md`](review-ops.md)), comment ([`spec/comments.md`](comments.md)), issue ([`spec/issue-ops.md`](issue-ops.md)), project/cycle ([`spec/project-cycle.md`](project-cycle.md)), repo registry ([`spec/repo-ops.md`](repo-ops.md)).
 - Fold semantics, ordering, and concurrency tiebreaks: [`spec/fold.md`](fold.md).
 - Unknown-op handling and forward-compatibility rules: [`spec/forward-compatibility.md`](forward-compatibility.md).
-- Workspace-global object-id format and cross-repo references: [`spec/identifiers.md`](identifiers.md) (**WRIT-16**).
+- Globally unique object-id format and cross-repo references: [`spec/identifiers.md`](identifiers.md) (**WRIT-16**).
 - Signature verification mechanics, trust store, and outcomes: [`spec/signing.md`](signing.md).
 
 ## Conformance data

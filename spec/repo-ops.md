@@ -41,10 +41,10 @@ arrive exclusively via `add-remote`. This mirrors `spec/issue-ops.md` (where
 `assign` and `label`) and `spec/review-ops.md`.
 
 #### 3. `is_workspace` is `create-once`
-A repository either is or is not the workspace repository; `spec/identifiers.md`
-establishes that a repository belongs to at most one workspace. The merge strategy
-for `is_workspace` is `create-once` (`spec/fold.md` §5.2): the first-written value
-persists and cannot be toggled. There is no `set-workspace` operation in v1.
+A repository either is or is not the workspace repository, and that fact does
+not change once set. The merge strategy for `is_workspace` is `create-once`
+(`spec/fold.md` §5.2): the first-written value persists and cannot be
+toggled. There is no `set-workspace` operation in v1.
 
 #### 4. Deliberate Omissions (v1)
 Per VISION.md §Non-goals and `spec/identifiers.md` §Out of scope:

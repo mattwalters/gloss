@@ -514,7 +514,7 @@ identities:
 | Concept | Format | Scope | Purpose |
 | --- | --- | --- | --- |
 | **`writer-id`** | 16 lowercase hex characters (`^[0-9a-f]{16}$`) | Device-scoped `(user, device)` | Git ref namespace (`refs/writ/<writer-id>/`) for append-only concurrent writes without locking. |
-| **`person-id`** | `scheme ":" value`, normalized | Scoped to the team or the repository that mints it | Collaborative actor identity (assignee, reviewer, voter) across multiple devices and repositories. |
+| **`person-id`** | `scheme ":" value`, normalized | Minted by a team or repository; stable across that actor's devices and repositories | Collaborative actor identity (assignee, reviewer, voter) across multiple devices and repositories. |
 
 A single person (e.g. `email:alice@example.com`) may author ops from multiple
 machines and devices, each with its own distinct `writer-id` (e.g. laptop
@@ -525,9 +525,9 @@ one would be a bare identifier, which is invalid.
 
 A producer MUST NOT write a `writer-id` where a `person-id` is expected, and
 MUST NOT derive one identifier from the other. The format objection above is
-not the only one: the two identifiers have different scopes. A `person-id`
-names one collaborative actor across all of that actor's devices, scoped to
-the team or the repository that mints it, while a `writer-id` names
+not the only one: the two identifiers have different scopes. A `person-id`,
+minted by a team or repository, names one collaborative actor across all of
+that actor's devices and repositories, while a `writer-id` names
 `(user, device)` — so the person above holds two of them. Substituting a
 `writer-id` therefore splits one human into two collaborative actors: two
 assignees, two voters, and — because
