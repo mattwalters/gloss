@@ -200,6 +200,37 @@ func stringSlice(raw any) []string {
 	return nil
 }
 
+func stringSliceOrString(raw any) []string {
+	switch v := raw.(type) {
+	case string:
+		return []string{v}
+	case []string:
+		return v
+	case []any:
+		res := make([]string, 0, len(v))
+		for _, it := range v {
+			if s, ok := it.(string); ok {
+				res = append(res, s)
+			}
+		}
+		return res
+	}
+	return nil
+}
+
+func extractRawSetAdds(body map[string]any) []string {
+	var adds []string
+	if m, ok := body["add"].(map[string]any); ok {
+		adds = append(adds, stringSliceOrString(m["add"])...)
+	} else if body["add"] != nil {
+		adds = append(adds, stringSliceOrString(body["add"])...)
+	}
+	if m, ok := body["remove"].(map[string]any); ok {
+		adds = append(adds, stringSliceOrString(m["add"])...)
+	}
+	return adds
+}
+
 type keyedLWWItem struct {
 	Key   []string
 	Value any
@@ -275,7 +306,7 @@ func commentRules() []writ.Rule {
 // 2. Declared Shape Projections
 // --------------------------------------------------------------------------
 
-func projectReview(generic writ.ObjectState, ops []codec.Op, mode string) state.Review {
+func projectReview(generic writ.ObjectState, ops []codec.Op, _ string) state.Review {
 	rev := state.Review{
 		Title:       stringVal(generic.State["title"]),
 		Description: stringVal(generic.State["description"]),
@@ -285,19 +316,35 @@ func projectReview(generic writ.ObjectState, ops []codec.Op, mode string) state.
 		UnknownOps:  toStateUnknownOps(generic.UnknownOps),
 	}
 
-	bases := stringSlice(generic.State["base"])
-	heads := stringSlice(generic.State["head"])
-	n := len(bases)
-	if len(heads) < n {
-		n = len(heads)
+	unknownMap := make(map[string]bool, len(generic.UnknownOps))
+	for _, u := range generic.UnknownOps {
+		unknownMap[u.Commit] = true
 	}
-	if n > 0 {
-		revs := make([]state.Revision, n)
-		for i := 0; i < n; i++ {
-			revs[i] = state.Revision{Base: bases[i], Head: heads[i]}
+	opMap := make(map[string]codec.Op, len(ops))
+	for _, o := range ops {
+		opMap[o.ID] = o
+	}
+
+	var revs []state.Revision
+	for _, ref := range generic.TotalOrder {
+		if unknownMap[ref.Commit] {
+			continue
 		}
-		rev.Revisions = revs
+		o, ok := opMap[ref.Commit]
+		if !ok {
+			continue
+		}
+		if o.ObjectType == "review" && o.OpVersion == 1 && o.OpType == "revision" {
+			var bm map[string]any
+			if len(o.Body) > 0 {
+				_ = json.Unmarshal(o.Body, &bm)
+			}
+			base, _ := bm["base"].(string)
+			head, _ := bm["head"].(string)
+			revs = append(revs, state.Revision{Base: base, Head: head})
+		}
 	}
+	rev.Revisions = revs
 
 	verdictItems := parseKeyedLWW(generic.State["verdict"])
 	messageItems := parseKeyedLWW(generic.State["message"])
@@ -332,29 +379,40 @@ func projectReview(generic writ.ObjectState, ops []codec.Op, mode string) state.
 	})
 	rev.Approvals = approvals
 
-	stateItems := parseKeyedLWW(generic.State["state"])
+	stateMap := makeKeyedMap(parseKeyedLWW(generic.State["state"]))
 	urlMap := makeKeyedMap(parseKeyedLWW(generic.State["url"]))
 	descMap := makeKeyedMap(parseKeyedLWW(generic.State["ci_description"]))
 	startMap := makeKeyedMap(parseKeyedLWW(generic.State["started_at"]))
 	compMap := makeKeyedMap(parseKeyedLWW(generic.State["completed_at"]))
 	extMap := makeKeyedMap(parseKeyedLWW(generic.State["external_id"]))
-	var ciStatuses []state.CIStatus
-	for _, it := range stateItems {
-		if len(it.Key) >= 2 {
-			revision := it.Key[0]
-			name := it.Key[1]
-			k := revision + ":" + name
-			ciStatuses = append(ciStatuses, state.CIStatus{
-				Revision:    revision,
-				Name:        name,
-				State:       stringVal(it.Value),
-				URL:         urlMap[k],
-				Description: descMap[k],
-				StartedAt:   startMap[k],
-				CompletedAt: compMap[k],
-				ExternalID:  extMap[k],
-			})
+
+	type ciKey struct {
+		revision string
+		name     string
+	}
+	ciKeySet := make(map[ciKey]bool)
+	ciFields := []string{"name", "state", "url", "ci_description", "started_at", "completed_at", "external_id"}
+	for _, f := range ciFields {
+		for _, it := range parseKeyedLWW(generic.State[f]) {
+			if len(it.Key) >= 2 {
+				ciKeySet[ciKey{revision: it.Key[0], name: it.Key[1]}] = true
+			}
 		}
+	}
+
+	var ciStatuses []state.CIStatus
+	for k := range ciKeySet {
+		keyStr := k.revision + ":" + k.name
+		ciStatuses = append(ciStatuses, state.CIStatus{
+			Revision:    k.revision,
+			Name:        k.name,
+			State:       stateMap[keyStr],
+			URL:         urlMap[keyStr],
+			Description: descMap[keyStr],
+			StartedAt:   startMap[keyStr],
+			CompletedAt: compMap[keyStr],
+			ExternalID:  extMap[keyStr],
+		})
 	}
 	sort.Slice(ciStatuses, func(i, j int) bool {
 		if ciStatuses[i].Revision != ciStatuses[j].Revision {
@@ -364,25 +422,27 @@ func projectReview(generic writ.ObjectState, ops []codec.Op, mode string) state.
 	})
 	rev.CIStatuses = ciStatuses
 
-	relItems := parseKeyedLWW(generic.State["relation"])
-	targetTypeMap := make(map[string]string)
-	for _, it := range parseKeyedLWW(generic.State["target_type"]) {
-		if len(it.Key) >= 1 {
-			targetTypeMap[it.Key[0]] = stringVal(it.Value)
+	relMap := makeKeyedMap(parseKeyedLWW(generic.State["relation"]))
+	targetTypeMap := makeKeyedMap(parseKeyedLWW(generic.State["target_type"]))
+
+	allTargets := make(map[string]bool)
+	for _, f := range []string{"target", "target_type", "relation"} {
+		for _, it := range parseKeyedLWW(generic.State[f]) {
+			if len(it.Key) >= 1 && it.Key[0] != "" {
+				allTargets[it.Key[0]] = true
+			}
 		}
 	}
+
 	var links []state.Link
-	for _, it := range relItems {
-		if len(it.Key) >= 1 {
-			target := it.Key[0]
-			rel := stringVal(it.Value)
-			if rel != "" && rel != "none" {
-				links = append(links, state.Link{
-					Target:     target,
-					TargetType: targetTypeMap[target],
-					Relation:   rel,
-				})
-			}
+	for target := range allTargets {
+		rel := relMap[target]
+		if rel != "" && rel != "none" {
+			links = append(links, state.Link{
+				Target:     target,
+				TargetType: targetTypeMap[target],
+				Relation:   rel,
+			})
 		}
 	}
 	sort.Slice(links, func(i, j int) bool {
@@ -390,35 +450,63 @@ func projectReview(generic writ.ObjectState, ops []codec.Op, mode string) state.
 	})
 	rev.Links = links
 
-	addItems := stringSlice(generic.State["add"])
-	if mode == "assign" {
-		rev.Assignees = addItems
-	} else if mode == "label" {
-		rev.Labels = addItems
-	} else {
-		hasAssign := false
-		hasLabel := false
-		for _, o := range ops {
-			if o.OpType == "assign" {
-				hasAssign = true
-			}
-			if o.OpType == "label" {
-				hasLabel = true
-			}
+	assignIntroduced := make(map[string]bool)
+	labelIntroduced := make(map[string]bool)
+	for _, o := range ops {
+		if unknownMap[o.ID] {
+			continue
 		}
-		if hasAssign && !hasLabel {
-			rev.Assignees = addItems
-		} else if hasLabel && !hasAssign {
-			rev.Labels = addItems
+		var bm map[string]any
+		if len(o.Body) > 0 {
+			_ = json.Unmarshal(o.Body, &bm)
+		}
+		if bm == nil {
+			continue
+		}
+		if o.OpType == "assign" {
+			adds := extractRawSetAdds(bm)
+			for _, it := range adds {
+				if norm := state.NormalizePerson(it); norm != "" {
+					assignIntroduced[norm] = true
+				}
+			}
+		} else if o.OpType == "label" {
+			adds := extractRawSetAdds(bm)
+			for _, it := range adds {
+				if it != "" {
+					labelIntroduced[it] = true
+				}
+			}
 		}
 	}
+
+	var assignees []string
+	var labels []string
+	for _, it := range stringSlice(generic.State["add"]) {
+		if assignIntroduced[it] {
+			assignees = append(assignees, it)
+		}
+		if labelIntroduced[it] {
+			labels = append(labels, it)
+		}
+	}
+	rev.Assignees = assignees
+	rev.Labels = labels
 
 	return rev
 }
 
-func projectIssue(generic writ.ObjectState, ops []codec.Op, mode string) state.Issue {
+func projectIssue(generic writ.ObjectState, ops []codec.Op, _ string) state.Issue {
+	unknownMap := make(map[string]bool, len(generic.UnknownOps))
+	for _, u := range generic.UnknownOps {
+		unknownMap[u.Commit] = true
+	}
+
 	hasKnownOp := false
 	for _, o := range ops {
+		if unknownMap[o.ID] {
+			continue
+		}
 		if o.ObjectType == "issue" && o.OpVersion == 1 {
 			switch o.OpType {
 			case "create", "update", "set-state", "assign", "label", "link":
@@ -440,25 +528,27 @@ func projectIssue(generic writ.ObjectState, ops []codec.Op, mode string) state.I
 		UnknownOps:  toStateUnknownOps(generic.UnknownOps),
 	}
 
-	relItems := parseKeyedLWW(generic.State["relation"])
-	targetTypeMap := make(map[string]string)
-	for _, it := range parseKeyedLWW(generic.State["target_type"]) {
-		if len(it.Key) >= 1 {
-			targetTypeMap[it.Key[0]] = stringVal(it.Value)
+	relMap := makeKeyedMap(parseKeyedLWW(generic.State["relation"]))
+	targetTypeMap := makeKeyedMap(parseKeyedLWW(generic.State["target_type"]))
+
+	allTargets := make(map[string]bool)
+	for _, f := range []string{"target", "target_type", "relation"} {
+		for _, it := range parseKeyedLWW(generic.State[f]) {
+			if len(it.Key) >= 1 && it.Key[0] != "" {
+				allTargets[it.Key[0]] = true
+			}
 		}
 	}
+
 	var links []state.Link
-	for _, it := range relItems {
-		if len(it.Key) >= 1 {
-			target := it.Key[0]
-			rel := stringVal(it.Value)
-			if rel != "" && rel != "none" {
-				links = append(links, state.Link{
-					Target:     target,
-					TargetType: targetTypeMap[target],
-					Relation:   rel,
-				})
-			}
+	for target := range allTargets {
+		rel := relMap[target]
+		if rel != "" && rel != "none" {
+			links = append(links, state.Link{
+				Target:     target,
+				TargetType: targetTypeMap[target],
+				Relation:   rel,
+			})
 		}
 	}
 	sort.Slice(links, func(i, j int) bool {
@@ -466,28 +556,48 @@ func projectIssue(generic writ.ObjectState, ops []codec.Op, mode string) state.I
 	})
 	iss.Links = links
 
-	addItems := stringSlice(generic.State["add"])
-	if mode == "assign" {
-		iss.Assignees = addItems
-	} else if mode == "label" {
-		iss.Labels = addItems
-	} else {
-		hasAssign := false
-		hasLabel := false
-		for _, o := range ops {
-			if o.OpType == "assign" {
-				hasAssign = true
-			}
-			if o.OpType == "label" {
-				hasLabel = true
-			}
+	assignIntroduced := make(map[string]bool)
+	labelIntroduced := make(map[string]bool)
+	for _, o := range ops {
+		if unknownMap[o.ID] {
+			continue
 		}
-		if hasAssign && !hasLabel {
-			iss.Assignees = addItems
-		} else if hasLabel && !hasAssign {
-			iss.Labels = addItems
+		var bm map[string]any
+		if len(o.Body) > 0 {
+			_ = json.Unmarshal(o.Body, &bm)
+		}
+		if bm == nil {
+			continue
+		}
+		if o.OpType == "assign" {
+			adds := extractRawSetAdds(bm)
+			for _, it := range adds {
+				if norm := state.NormalizePerson(it); norm != "" {
+					assignIntroduced[norm] = true
+				}
+			}
+		} else if o.OpType == "label" {
+			adds := extractRawSetAdds(bm)
+			for _, it := range adds {
+				if it != "" {
+					labelIntroduced[it] = true
+				}
+			}
 		}
 	}
+
+	var assignees []string
+	var labels []string
+	for _, it := range stringSlice(generic.State["add"]) {
+		if assignIntroduced[it] {
+			assignees = append(assignees, it)
+		}
+		if labelIntroduced[it] {
+			labels = append(labels, it)
+		}
+	}
+	iss.Assignees = assignees
+	iss.Labels = labels
 
 	return iss
 }
@@ -908,52 +1018,124 @@ func generateAbstractSyntheticStream(rng *rand.Rand) ([]codec.Op, []writ.Rule) {
 		if rng.Intn(2) == 0 {
 			body["field_lww"] = randomValue(rng, 0)
 		}
-		// Create-once
+		// Create-once: string, number, bool, object, array, null, absent
 		if rng.Intn(2) == 0 {
-			body["field_create_once"] = interestingStrings[rng.Intn(len(interestingStrings))]
+			body["field_create_once"] = randomValue(rng, 0)
 		}
-		// Set-union (strings, empty strings, arrays of strings)
+		// Set-union: string, number, bool, object, array, null, absent (WRIT-126)
 		if rng.Intn(2) == 0 {
-			if rng.Intn(2) == 0 {
+			switch rng.Intn(3) {
+			case 0:
 				body["field_set_union"] = interestingStrings[rng.Intn(len(interestingStrings))]
-			} else {
-				items := []string{
+			case 1:
+				body["field_set_union"] = []string{
 					interestingStrings[rng.Intn(len(interestingStrings))],
 					interestingStrings[rng.Intn(len(interestingStrings))],
 				}
-				body["field_set_union"] = items
+			case 2:
+				body["field_set_union"] = randomValue(rng, 0)
 			}
 		}
-		// Set-observed-remove (add / remove, flat and nested shapes, causal vs concurrent)
+		// Set-observed-remove: string, number, bool, object, array, null, absent (flat strings/arrays, nested maps, and non-strings/null)
 		if rng.Intn(2) == 0 {
-			item := fmt.Sprintf("item-%d", rng.Intn(5))
-			if rng.Intn(2) == 0 {
-				body["add"] = item
-			} else {
-				body["remove"] = item
+			switch rng.Intn(4) {
+			case 0:
+				item := fmt.Sprintf("item-%d", rng.Intn(5))
+				if rng.Intn(2) == 0 {
+					body["add"] = item
+				} else {
+					body["remove"] = item
+				}
+			case 1:
+				items := []string{
+					fmt.Sprintf("item-%d", rng.Intn(5)),
+					interestingStrings[rng.Intn(len(interestingStrings))],
+				}
+				if rng.Intn(2) == 0 {
+					body["add"] = items
+				} else {
+					body["remove"] = items
+				}
+			case 2:
+				nested := make(map[string]any)
+				if rng.Intn(2) == 0 {
+					nested["add"] = []string{fmt.Sprintf("item-%d", rng.Intn(5))}
+				}
+				if rng.Intn(2) == 0 {
+					nested["remove"] = []string{fmt.Sprintf("item-%d", rng.Intn(5))}
+				}
+				if rng.Intn(2) == 0 {
+					body["add"] = nested
+				} else {
+					body["remove"] = nested
+				}
+			case 3:
+				if rng.Intn(2) == 0 {
+					body["add"] = randomValue(rng, 0)
+				} else {
+					body["remove"] = randomValue(rng, 0)
+				}
 			}
 		}
-		// Append
+		// Append: string, number, bool, object, array, null, absent
 		if rng.Intn(2) == 0 {
-			if rng.Intn(3) == 0 {
-				body["field_append"] = []string{} // empty array append preserves []
-			} else {
+			switch rng.Intn(4) {
+			case 0:
+				body["field_append"] = []any{} // empty array append preserves []
+			case 1:
+				// Heterogeneous slice
+				body["field_append"] = []any{
+					interestingStrings[rng.Intn(len(interestingStrings))],
+					rng.Intn(1000),
+					rng.Intn(2) == 1,
+				}
+			case 2:
+				body["field_append"] = randomValue(rng, 0)
+			case 3:
 				body["field_append"] = interestingStrings[rng.Intn(len(interestingStrings))]
 			}
 		}
-		// Tombstone
-		if rng.Intn(4) == 0 {
-			body["deleted"] = (rng.Intn(2) == 1)
+		// Tombstone: bool, and non-bool value types (string, number, object, array, null), absent
+		if rng.Intn(3) == 0 {
+			if rng.Intn(2) == 0 {
+				body["deleted"] = (rng.Intn(2) == 1)
+			} else {
+				body["deleted"] = randomValue(rng, 0)
+			}
 		}
-		// Lattice
+		// Lattice: string in/out of lattice, and non-string value types (number, bool, object, array, null), absent
 		if rng.Intn(2) == 0 {
-			body["field_lattice"] = latticeVals[rng.Intn(len(latticeVals))]
+			if rng.Intn(2) == 0 {
+				body["field_lattice"] = latticeVals[rng.Intn(len(latticeVals))]
+			} else {
+				body["field_lattice"] = randomValue(rng, 0)
+			}
 		}
-		// Keyed-LWW
+		// Keyed-LWW: string, number, bool, object, array, null, absent for value, and string, absent, non-string keys (WRIT-124)
 		if rng.Intn(2) == 0 {
-			body["k1"] = fmt.Sprintf("group-%d", rng.Intn(3))
-			body["k2"] = fmt.Sprintf("sub-%d", rng.Intn(3))
-			body["field_keyed"] = interestingStrings[rng.Intn(len(interestingStrings))]
+			switch rng.Intn(4) {
+			case 0:
+				body["k1"] = fmt.Sprintf("group-%d", rng.Intn(3))
+			case 1:
+				body["k1"] = interestingStrings[rng.Intn(len(interestingStrings))]
+			case 2:
+				body["k1"] = randomValue(rng, 0)
+			case 3:
+				// absent
+			}
+
+			switch rng.Intn(4) {
+			case 0:
+				body["k2"] = fmt.Sprintf("sub-%d", rng.Intn(3))
+			case 1:
+				body["k2"] = interestingStrings[rng.Intn(len(interestingStrings))]
+			case 2:
+				body["k2"] = randomValue(rng, 0)
+			case 3:
+				// absent
+			}
+
+			body["field_keyed"] = randomValue(rng, 0)
 		}
 
 		ops[i].Body, _ = json.Marshal(body)
@@ -966,10 +1148,6 @@ func generateReviewStream(rng *rand.Rand) ([]codec.Op, []writ.Rule, string) {
 	numOps := 6 + rng.Intn(12)
 	ops := generateDAGSkeleton(rng, numOps, "r-property", "review")
 	rules := writ.ReviewRules()
-	mode := "label"
-	if rng.Intn(2) == 0 {
-		mode = "assign"
-	}
 
 	// First op: create
 	createBody := map[string]any{
@@ -1005,12 +1183,19 @@ func generateReviewStream(rng *rand.Rand) ([]codec.Op, []writ.Rule, string) {
 				"reason":       interestingStrings[rng.Intn(len(interestingStrings))],
 			})
 		case 2:
-			// revision
+			// revision: test both symmetric and asymmetric (base only or head only) writes
 			ops[i].OpType = "revision"
-			ops[i].Body, _ = json.Marshal(map[string]any{
-				"base": fmt.Sprintf("base-%d", i),
-				"head": fmt.Sprintf("head-%d", i),
-			})
+			b := make(map[string]any)
+			switch rng.Intn(3) {
+			case 0:
+				b["base"] = fmt.Sprintf("base-%d", i)
+				b["head"] = fmt.Sprintf("head-%d", i)
+			case 1:
+				b["base"] = fmt.Sprintf("base-%d", i)
+			case 2:
+				b["head"] = fmt.Sprintf("head-%d", i)
+			}
+			ops[i].Body, _ = json.Marshal(b)
 		case 3:
 			// approval
 			ops[i].OpType = "approval"
@@ -1029,29 +1214,44 @@ func generateReviewStream(rng *rand.Rand) ([]codec.Op, []writ.Rule, string) {
 			}
 			ops[i].Body, _ = json.Marshal(b)
 		case 4:
-			// ci-status
+			// ci-status: test presence and absence of state and other fields
 			ops[i].OpType = "ci-status"
-			ops[i].Body, _ = json.Marshal(map[string]any{
-				"revision":    "head-1",
-				"name":        fmt.Sprintf("check-%d", rng.Intn(3)),
-				"state":       []string{"pending", "success", "failure"}[rng.Intn(3)],
-				"url":         "https://ci.example.com",
-				"description": "ci run",
-			})
+			b := map[string]any{
+				"revision": "head-1",
+				"name":     fmt.Sprintf("check-%d", rng.Intn(3)),
+			}
+			if rng.Intn(4) > 0 {
+				b["state"] = []string{"pending", "success", "failure"}[rng.Intn(3)]
+			}
+			if rng.Intn(2) == 0 {
+				b["url"] = "https://ci.example.com"
+			}
+			if rng.Intn(2) == 0 {
+				b["description"] = "ci run"
+			}
+			ops[i].Body, _ = json.Marshal(b)
 		case 5:
-			// link
+			// link: test presence and absence of relation and target_type
 			ops[i].OpType = "link"
-			ops[i].Body, _ = json.Marshal(map[string]any{
-				"target":      fmt.Sprintf("issue-%d", rng.Intn(3)),
-				"target_type": "issue",
-				"relation":    []string{"fixes", "relates-to", "none", ""}[rng.Intn(4)],
-			})
+			b := map[string]any{
+				"target": fmt.Sprintf("issue-%d", rng.Intn(3)),
+			}
+			if rng.Intn(2) == 0 {
+				b["target_type"] = "issue"
+			}
+			if rng.Intn(4) > 0 {
+				b["relation"] = []string{"fixes", "relates-to", "none", ""}[rng.Intn(4)]
+			}
+			ops[i].Body, _ = json.Marshal(b)
 		case 6:
-			// label or assign (depending on mode)
-			ops[i].OpType = mode
-			item := fmt.Sprintf("tag-%d", rng.Intn(4))
-			if mode == "assign" {
+			// label and assign can both appear in the same review stream
+			opType := []string{"assign", "label"}[rng.Intn(2)]
+			ops[i].OpType = opType
+			var item string
+			if opType == "assign" {
 				item = fmt.Sprintf("email:user%d@example.com", rng.Intn(4))
+			} else {
+				item = fmt.Sprintf("tag-%d", rng.Intn(4))
 			}
 			b := make(map[string]any)
 			if rng.Intn(2) == 0 {
@@ -1071,17 +1271,13 @@ func generateReviewStream(rng *rand.Rand) ([]codec.Op, []writ.Rule, string) {
 		}
 	}
 
-	return ops, rules, mode
+	return ops, rules, ""
 }
 
 func generateIssueStream(rng *rand.Rand) ([]codec.Op, []writ.Rule, string) {
 	numOps := 5 + rng.Intn(10)
 	ops := generateDAGSkeleton(rng, numOps, "iss-property", "issue")
 	rules := writ.IssueRules()
-	mode := "label"
-	if rng.Intn(2) == 0 {
-		mode = "assign"
-	}
 
 	ops[0].OpType = "create"
 	ops[0].Body, _ = json.Marshal(map[string]any{
@@ -1112,16 +1308,24 @@ func generateIssueStream(rng *rand.Rand) ([]codec.Op, []writ.Rule, string) {
 			})
 		case 2:
 			ops[i].OpType = "link"
-			ops[i].Body, _ = json.Marshal(map[string]any{
-				"target":      fmt.Sprintf("rev-%d", rng.Intn(3)),
-				"target_type": "review",
-				"relation":    []string{"fixed-by", "relates-to", "none"}[rng.Intn(3)],
-			})
+			b := map[string]any{
+				"target": fmt.Sprintf("rev-%d", rng.Intn(3)),
+			}
+			if rng.Intn(2) == 0 {
+				b["target_type"] = "review"
+			}
+			if rng.Intn(4) > 0 {
+				b["relation"] = []string{"fixed-by", "relates-to", "none", ""}[rng.Intn(4)]
+			}
+			ops[i].Body, _ = json.Marshal(b)
 		case 3:
-			ops[i].OpType = mode
-			item := fmt.Sprintf("label-%d", rng.Intn(3))
-			if mode == "assign" {
+			opType := []string{"assign", "label"}[rng.Intn(2)]
+			ops[i].OpType = opType
+			var item string
+			if opType == "assign" {
 				item = fmt.Sprintf("email:dev%d@example.com", rng.Intn(3))
+			} else {
+				item = fmt.Sprintf("label-%d", rng.Intn(3))
 			}
 			b := make(map[string]any)
 			if rng.Intn(2) == 0 {
@@ -1133,7 +1337,7 @@ func generateIssueStream(rng *rand.Rand) ([]codec.Op, []writ.Rule, string) {
 		}
 	}
 
-	return ops, rules, mode
+	return ops, rules, ""
 }
 
 func generateCommentStream(rng *rand.Rand) ([]codec.Op, []writ.Rule) {
