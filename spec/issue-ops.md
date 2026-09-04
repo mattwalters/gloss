@@ -16,7 +16,7 @@ described in RFC 2119.
 ## Scope & Object Model
 
 An issue is represented in Writ as a workspace-scoped collaborative object with
-`object_type: "issue"`. Issues live in the designated workspace repository
+`object_type: "issue"`. Issues live in the repository the client is operating on
 (ARCHITECTURE.md §Object types, `spec/identifiers.md`) and can reference or be
 referenced by reviews and other collaborative objects across repositories in the
 workspace.
@@ -89,7 +89,7 @@ Public issue intake is externalized to downstream intake bridges and bots:
   writer with its own `writer-id` and push credentials. It accepts bug reports
   from external interfaces (webhooks, public web forms, email, or forge issues
   such as GitHub Issues) and commits standard `create` and `comment` operations
-  into the workspace repository.
+  into the repository the client is operating on.
 - **Truthful attribution via `user:` person identifiers:** When attributing
   external reporters (for example in description headers, comments, or assignees),
   intake bots MUST use scheme-prefixed person identifiers per
@@ -434,7 +434,7 @@ A Linear `Issue` maps to an `issue` collaborative object (`object_type: "issue"`
 #### 2. Workflow States
 
 A Linear `WorkflowState` maps to a `workflow-state` collaborative object
-(WRIT-104) in the workspace repository:
+(WRIT-104) in the repository the client is operating on:
 
 - `name` (string, `lww`): State display name (e.g. `"Backlog"`, `"In Progress"`, `"Done"`).
 - `type` (string, `lww`): One of the five canonical state types (`backlog`,

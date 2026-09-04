@@ -37,7 +37,7 @@ into two collaborative object types:
    - `deleted`: Soft deletion status (tombstone, `tombstone`).
 
 Documents and sections are workspace-scoped collaborative objects (ARCHITECTURE.md
-§Object homing, WRIT-113) homed in the workspace repository.
+§Object homing, WRIT-113) homed in the repository the client is operating on.
 
 ### 1.1. Why Sections Are First-Class Collaborative Objects
 
