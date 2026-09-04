@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,9 +12,13 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/writtendev/writ/engine"
+	"github.com/writtendev/writ/engine/codec"
+	"github.com/writtendev/writ/engine/dag"
 	"github.com/writtendev/writ/engine/identity"
 	"github.com/writtendev/writ/engine/sync"
 )
@@ -952,20 +958,114 @@ func openReviewWithComment(t *testing.T, dir string) (reviewID, commentID string
 	return reviewID, commentID
 }
 
-// resolveUnattributed sets a comment's resolution through the public engine
-// API with no ResolvedBy, which is what the spec permits and what a bridge, an
-// importer, or an older client writes.
+// resolveUnattributed writes an unattributed resolve op directly to the DAG
+// store without ResolvedBy, simulating a legacy client, importer, or bridge
+// before WRIT-142 made resolved_by mandatory on resolve ops.
 func resolveUnattributed(t *testing.T, dir, commentID string, resolved bool) {
 	t.Helper()
 
-	store, err := writ.Open(dir)
+	ctx := context.Background()
+	ident, err := identity.Load(ctx, dir)
 	if err != nil {
-		t.Fatalf("open store: %v", err)
+		t.Fatalf("identity.Load: %v", err)
 	}
-	defer store.Close()
+	dagStore, err := dag.Open(dir, ident)
+	if err != nil {
+		t.Fatalf("dag.Open: %v", err)
+	}
 
-	if err := store.Comments.Resolve(context.Background(), commentID, writ.CommentResolve{Resolved: resolved}); err != nil {
-		t.Fatalf("resolve %s: %v", commentID, err)
+	enumRes, err := dagStore.Enumerate()
+	if err != nil {
+		t.Fatalf("dagStore.Enumerate: %v", err)
+	}
+
+	ops := enumRes.Ops[commentID]
+	if len(ops) == 0 {
+		t.Fatalf("no ops found for comment %s", commentID)
+	}
+
+	hasChild := make(map[string]bool)
+	for _, op := range ops {
+		for _, p := range op.Parents {
+			hasChild[p] = true
+		}
+	}
+	var frontier []string
+	for _, op := range ops {
+		if !hasChild[op.ID] {
+			frontier = append(frontier, op.ID)
+		}
+	}
+
+	refName := dag.LocalRefName(ident.WriterID, "comment")
+	oldRef, err := dagStore.Storer().Reference(refName)
+	if err != nil && !errors.Is(err, plumbing.ErrReferenceNotFound) {
+		t.Fatalf("lookup ref %s: %v", refName, err)
+	}
+
+	var parents []string
+	if oldRef != nil {
+		parents = append(parents, oldRef.Hash().String())
+	}
+	parents = append(parents, frontier...)
+
+	bodyBytes, err := json.Marshal(map[string]any{
+		"resolved": resolved,
+	})
+	if err != nil {
+		t.Fatalf("marshal resolve body: %v", err)
+	}
+
+	env := codec.Envelope{
+		ObjectID:   commentID,
+		ObjectType: "comment",
+		OpType:     "resolve",
+		OpVersion:  1,
+		Body:       bodyBytes,
+	}
+
+	raw, err := codec.EncodePayload(env)
+	if err != nil {
+		t.Fatalf("codec.EncodePayload: %v", err)
+	}
+
+	utcAuthor := codec.Identity{
+		Name:  ident.Author.Name,
+		Email: ident.Author.Email,
+		When:  time.Now().UTC(),
+	}
+
+	commit := &codec.Commit{
+		Parents:   parents,
+		Author:    utcAuthor,
+		Committer: utcAuthor,
+		Message:   codec.Message(env),
+		Tree: []codec.TreeEntry{
+			{
+				Name: "op.json",
+				Mode: "100644",
+				Data: raw,
+			},
+		},
+	}
+
+	var signer codec.Signer
+	if ident.Key.Value != "" {
+		s, err := codec.NewSigner(ident.Key)
+		if err != nil {
+			t.Fatalf("codec.NewSigner: %v", err)
+		}
+		signer = s
+	}
+
+	commitHash, err := codec.WriteCommit(ctx, dagStore.Storer(), commit, signer)
+	if err != nil {
+		t.Fatalf("codec.WriteCommit: %v", err)
+	}
+
+	newRef := plumbing.NewHashReference(refName, commitHash)
+	if err := dagStore.Storer().SetReference(newRef); err != nil {
+		t.Fatalf("SetReference %s: %v", refName, err)
 	}
 }
 

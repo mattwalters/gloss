@@ -47,6 +47,10 @@
     "kind": "schema",
     "reason": "subject object_type must be a valid lowercase type name"
   },
+  "missing-resolved-by-on-resolve.json": {
+    "kind": "schema",
+    "reason": "resolve body requires resolved_by when resolved is true"
+  },
   "missing-resolved-in-resolve.json": {
     "kind": "schema",
     "reason": "resolve body requires resolved"
@@ -82,5 +86,9 @@
   "subject-on-edit.json": {
     "kind": "schema",
     "reason": "edit body must not carry subject"
+  },
+  "unresolve-with-resolved-by.json": {
+    "kind": "schema",
+    "reason": "resolve body must not carry resolved_by when resolved is false"
   }
 }

@@ -2,7 +2,6 @@ package writ_test
 
 import (
 	"context"
-	"encoding/json"
 	"math/rand"
 	"path/filepath"
 	"reflect"
@@ -343,9 +342,9 @@ func TestCommentsResolveWorkflow(t *testing.T) {
 	}
 }
 
-// TestCommentsResolveWhitespaceResolvedByOmitsKey guards against emitting a
-// schema-invalid empty "resolved_by" (person ids have minLength 1) when the
-// caller supplies a whitespace-only person identifier.
+// TestCommentsResolveWhitespaceResolvedByOmitsKey verifies that empty or
+// whitespace-only ResolvedBy is rejected by Comments.Resolve when Resolved is true,
+// and that non-empty ResolvedBy is rejected when Resolved is false.
 func TestCommentsResolveWhitespaceResolvedByOmitsKey(t *testing.T) {
 	repoDir, _ := setupConfiguredRepo(t)
 
@@ -372,13 +371,31 @@ func TestCommentsResolveWhitespaceResolvedByOmitsKey(t *testing.T) {
 		t.Fatalf("Comment failed: %v", err)
 	}
 
+	// Whitespace-only ResolvedBy on Resolved: true must be rejected.
 	if err := s.Comments.Resolve(ctx, commentID, writ.CommentResolve{
 		Resolved:   true,
 		ResolvedBy: "   ",
-	}); err != nil {
-		t.Fatalf("Resolve failed: %v", err)
+	}); err == nil {
+		t.Fatal("expected error for whitespace ResolvedBy on resolved: true, got nil")
 	}
 
+	// Empty ResolvedBy on Resolved: true must be rejected.
+	if err := s.Comments.Resolve(ctx, commentID, writ.CommentResolve{
+		Resolved:   true,
+		ResolvedBy: "",
+	}); err == nil {
+		t.Fatal("expected error for empty ResolvedBy on resolved: true, got nil")
+	}
+
+	// Non-empty ResolvedBy on Resolved: false must be rejected.
+	if err := s.Comments.Resolve(ctx, commentID, writ.CommentResolve{
+		Resolved:   false,
+		ResolvedBy: "user:alice",
+	}); err == nil {
+		t.Fatal("expected error for non-empty ResolvedBy on resolved: false, got nil")
+	}
+
+	// Ensure no resolve ops were written to the DAG store.
 	ident, _ := identity.ParseWriterID("0123456789abcdef")
 	dagStore, err := dag.Open(repoDir, identity.Identity{WriterID: ident})
 	if err != nil {
@@ -389,22 +406,10 @@ func TestCommentsResolveWhitespaceResolvedByOmitsKey(t *testing.T) {
 		t.Fatalf("dagStore.Enumerate failed: %v", err)
 	}
 
-	var resolveOps int
 	for _, op := range enumRes.Ops[commentID] {
-		if op.OpType != "resolve" {
-			continue
+		if op.OpType == "resolve" {
+			t.Errorf("expected no resolve op to be written, got: %+v", op)
 		}
-		resolveOps++
-		var body map[string]json.RawMessage
-		if err := json.Unmarshal(op.Body, &body); err != nil {
-			t.Fatalf("unmarshal resolve body: %v", err)
-		}
-		if _, ok := body["resolved_by"]; ok {
-			t.Errorf("expected no resolved_by key for whitespace-only input, got body %s", op.Body)
-		}
-	}
-	if resolveOps != 1 {
-		t.Fatalf("expected 1 resolve op, got %d", resolveOps)
 	}
 
 	comments, err := s.Query.Comments(writ.CommentFilter{SubjectID: reviewID})
@@ -414,11 +419,8 @@ func TestCommentsResolveWhitespaceResolvedByOmitsKey(t *testing.T) {
 	if len(comments) != 1 {
 		t.Fatalf("expected 1 comment, got %d", len(comments))
 	}
-	if !comments[0].Comment.IsResolved() {
-		t.Errorf("expected comment to be resolved")
-	}
-	if comments[0].Comment.ResolvedBy != "" {
-		t.Errorf("expected empty resolved_by, got %q", comments[0].Comment.ResolvedBy)
+	if comments[0].Comment.IsResolved() {
+		t.Errorf("expected comment to remain unresolved")
 	}
 }
 

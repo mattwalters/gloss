@@ -72,7 +72,7 @@ The comment vocabulary defines four operations:
 | `create`  | Brings the comment into existence | `subject`, `text`, optional `in_reply_to`, optional `anchor` |
 | `edit`    | Replacement markdown text | `text` |
 | `delete`  | Tombstone withdrawing the comment | `{}` |
-| `resolve` | Sets thread resolution state (resolve/unresolve) | `resolved`, optional `resolved_by` |
+| `resolve` | Sets thread resolution state (resolve/unresolve) | `resolved`, conditional `resolved_by` |
 
 ### 1. `create`
 
@@ -199,18 +199,24 @@ A `resolve` op records or updates the resolution state of a comment thread.
 - `resolved` (boolean, required) — resolution status of the thread:
   - `true`: marks the thread as resolved.
   - `false`: marks the thread as unresolved (reopened).
-- `resolved_by` (person identifier per [`spec/identifiers.md`](identifiers.md), optional) —
+- `resolved_by` (person identifier per [`spec/identifiers.md`](identifiers.md), conditional) —
   scheme-prefixed person identifier (`email:alice@example.com`, `user:alice`) on
   whose behalf the resolution is recorded. Normalized (scheme lowercased; value
   trimmed and case-folded) and bounded (a scheme of at most 32 characters, a
   value of at most 320 code points) per
   [`spec/identifiers.md`](identifiers.md). A bare, colonless identifier is not a
-  person identifier. `resolved_by` is optional even when `resolved` is `true`.
-  It names the person who **resolved** the thread, not the person who last
-  changed its resolution state; because `resolved` and `resolved_by` fold as
-  independent `lww` accumulators, an unresolve op (`resolved: false`) SHOULD
-  omit `resolved_by`, so a previously recorded resolver is preserved rather
-  than overwritten by someone who only reopened the thread.
+  person identifier.
+  - When `resolved` is `true`: `resolved_by` is **required**. An unattributed
+    resolution cannot be written by conforming producers or pass schema validation.
+    Requiring `resolved_by` whenever `resolved` is `true` ensures the field is
+    always sourced from the op that resolves the thread, eliminating interleaving
+    misattribution across producers.
+  - When `resolved` is `false` (unresolve): `resolved_by` **MUST NOT** be present.
+    An unresolve operation reopens the thread; thread reopening attribution is
+    supplied by commit metadata in the op DAG (author identity, writer ID,
+    timestamp, and cryptographic signature) rather than a body field. Prohibiting
+    `resolved_by` on unresolve prevents an unresolve author from being recorded as
+    the resolver under independent LWW field reduction.
 
 #### Target & Threading Invariants
 
@@ -293,7 +299,13 @@ treated as unknown data, preserved in the DAG, and ignored during fold.
 
 #### Resolution Semantics
 
-- A `resolve` op updates `resolved` (and optional `resolved_by`) via `lww`.
+- A `resolve` op updates `resolved` (and `resolved_by`) via `lww`.
+- Conforming producers MUST include `resolved_by` when `resolved: true` and
+  MUST NOT include `resolved_by` when `resolved: false`.
+- Conforming readers and fold implementations (`FoldComment` / `spec.Fold`)
+  MUST continue to tolerate and fold legacy operations written without
+  `resolved_by` on `resolved: true`, or with `resolved_by` on `resolved: false`,
+  under standard LWW reduction.
 - If concurrent `resolve` and unresolve ops are authored across branches,
   deterministic LWW total order tiebreaks decide the winning resolution state.
 - In folded state, a comment object records `resolved: true/false` and
