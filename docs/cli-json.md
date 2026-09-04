@@ -189,7 +189,7 @@ Lists issues matching optional filters.
 |---|---|---|
 | `object_id` | string | 32-character lowercase hex identifier for the issue. |
 | `title` | string | Title of the issue. |
-| `state` | string | Lifecycle state (`open`, `closed`). |
+| `state` | string | Workflow-state object ID, or `""` if the issue has no `set-state` op yet. |
 | `author` | object | Creator identity: `{ "name": string, "email": string }`. |
 | `created_at` | string | Creation timestamp in RFC 3339 UTC (`...Z`). |
 | `updated_at` | string | Last modification timestamp in RFC 3339 UTC (`...Z`). |
@@ -204,7 +204,7 @@ Lists issues matching optional filters.
     {
       "object_id": "0123456789abcdef0123456789abcdef",
       "title": "Login form rejects valid emails",
-      "state": "open",
+      "state": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "author": {
         "name": "Alice",
         "email": "alice@example.com"
@@ -232,7 +232,7 @@ Fetches detailed status and folded state for a single issue.
 | `object_id` | string | 32-character lowercase hex identifier for the issue. |
 | `title` | string | Title of the issue. |
 | `description` | string (optional) | Extended issue description. |
-| `state` | string | Lifecycle state (`open`, `closed`). |
+| `state` | string | Workflow-state object ID, or `""` if the issue has no `set-state` op yet. |
 | `reason` | string (optional) | Reason text supplied with the last state change. |
 | `author` | object | Creator identity: `{ "name": string, "email": string }`. |
 | `created_at` | string | Creation timestamp in RFC 3339 UTC. |
@@ -253,7 +253,7 @@ Fetches detailed status and folded state for a single issue.
     "object_id": "0123456789abcdef0123456789abcdef",
     "title": "Login form rejects valid emails",
     "description": "RFC 5321 plus-addressing is rejected by the client-side regex",
-    "state": "open",
+    "state": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "author": {
       "name": "Alice",
       "email": "alice@example.com"
@@ -522,7 +522,7 @@ writ review status <id> --json | jq -r '.data.revisions[-1].head'
 
 ### List open issues
 ```bash
-writ issue list --json | jq -r '.data[] | select(.state == "open") | "\(.object_id) \(.title)"'
+writ issue list -state open --json | jq -r '.data[] | "\(.object_id) \(.title)"'
 ```
 
 ### Check if an issue is assigned to a user

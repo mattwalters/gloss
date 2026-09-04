@@ -95,7 +95,7 @@ func newIssueCreateFlagSet(defaultDir string) (*flag.FlagSet, *issueCreateOpts) 
 	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in `<dir>`")
 	fs.StringVar(&opts.title, "title", "", "Issue title `<t>` (required)")
 	fs.StringVar(&opts.description, "description", "", "Issue description `<d>`")
-	fs.StringVar(&opts.stateVal, "state", "", "Initial issue state `<state>` (open or closed)")
+	fs.StringVar(&opts.stateVal, "state", "", "Initial issue state `<state>` (workflow-state name or ID)")
 	fs.StringVar(&opts.priority, "priority", "", "Issue priority `<p>` (urgent|high|medium|low|none or 0..4)")
 	fs.StringVar(&opts.estimate, "estimate", "", "Issue estimate `<e>` (non-negative number)")
 	fs.StringVar(&opts.position, "position", "", "Issue position `<pos>` (fractional index)")
@@ -172,8 +172,6 @@ func runIssueCreate(ctx context.Context, defaultDir string, args []string, stdou
 		resolvedID, err := resolveStateID(ctx, store, opts.stateVal)
 		if err == nil {
 			targetStateID = resolvedID
-		} else if opts.stateVal == "open" || opts.stateVal == "closed" {
-			targetStateID = opts.stateVal
 		} else {
 			fmt.Fprintf(stderr, "writ issue create: invalid state %q\n", opts.stateVal)
 			fs.Usage()
@@ -233,7 +231,7 @@ func runIssueCreate(ctx context.Context, defaultDir string, args []string, stdou
 
 	dispState := opts.stateVal
 	if dispState == "" {
-		dispState = "open"
+		dispState = "-"
 	}
 	if targetStateID != "" {
 		ws, err := store.Query.WorkflowState(targetStateID)
@@ -439,7 +437,12 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 		return 2
 	}
 
-	if len(posArgs) == 1 && opts.position == "" {
+	if len(posArgs) == 1 {
+		// No explicit new state: view mode (no -position) and
+		// reposition-only mode (-position set) both leave -reason with
+		// nothing to attach to. Reject it here, before the reposition-only
+		// path is chosen below, so the flag's validity does not depend on
+		// whether this issue happens to already have a folded state.
 		if opts.reason != "" {
 			fmt.Fprintln(stderr, "writ issue status: -reason is only valid when setting status")
 			fs.Usage()
@@ -472,8 +475,6 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 		resolvedID, err := resolveStateID(ctx, store, rawState)
 		if err == nil {
 			newState = resolvedID
-		} else if rawState == "open" || rawState == "closed" {
-			newState = rawState
 		} else {
 			fmt.Fprintf(stderr, "writ issue status: invalid status %q\n", rawState)
 			fs.Usage()
@@ -521,7 +522,7 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 
 		stateVal := res.Issue.State
 		if stateVal == "" {
-			stateVal = "open"
+			stateVal = "-"
 		} else {
 			ws, err := store.Query.WorkflowState(stateVal)
 			if err == nil && ws.WorkflowState.Name != "" {
@@ -613,9 +614,6 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 			return renderErr(stderr, err)
 		}
 		newState = currentIssue.Issue.State
-		if newState == "" {
-			newState = "open"
-		}
 	}
 
 	var posPtr *string
@@ -623,17 +621,28 @@ func runIssueStatus(ctx context.Context, defaultDir string, args []string, stdou
 		posPtr = &opts.position
 	}
 
-	if err := store.Issues.SetState(ctx, issueID, writ.IssueState{
-		State:    newState,
-		Reason:   opts.reason,
-		Position: posPtr,
-	}); err != nil {
-		return renderErr(stderr, err)
+	if newState == "" {
+		// Reposition-only path (len(posArgs) == 1) on an issue that has
+		// never had a set-state op: there is no state to pass through,
+		// and SetState rejects "". Move the position via the update op
+		// instead of forcing a state onto an issue that has none.
+		if err := store.Issues.Update(ctx, issueID, writ.IssueEdit{Position: posPtr}); err != nil {
+			return renderErr(stderr, err)
+		}
+	} else {
+		if err := store.Issues.SetState(ctx, issueID, writ.IssueState{
+			State:    newState,
+			Reason:   opts.reason,
+			Position: posPtr,
+		}); err != nil {
+			return renderErr(stderr, err)
+		}
 	}
 
 	dispState := newState
-	ws, err := store.Query.WorkflowState(newState)
-	if err == nil && ws.WorkflowState.Name != "" {
+	if dispState == "" {
+		dispState = "-"
+	} else if ws, err := store.Query.WorkflowState(newState); err == nil && ws.WorkflowState.Name != "" {
 		dispState = ws.WorkflowState.Name
 	}
 
@@ -1069,7 +1078,7 @@ func runIssueList(ctx context.Context, defaultDir string, args []string, stdout,
 		}
 		stateVal := iss.Issue.State
 		if stateVal == "" {
-			stateVal = "open"
+			stateVal = "-"
 		} else if name, ok := stateNames[stateVal]; ok && name != "" {
 			stateVal = name
 		}

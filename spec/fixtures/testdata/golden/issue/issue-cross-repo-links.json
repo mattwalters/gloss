@@ -5,7 +5,6 @@
       "issue": {
         "title": "Cross Repo Links Issue — Revised",
         "description": "Testing cross repo links and retraction",
-        "state": "open",
         "links": [
           {
             "target": "repo-backend#fedcba9876543210fedcba9876543210",

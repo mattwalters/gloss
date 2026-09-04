@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/writtendev/writ/cmd/writ/internal/wire"
-	"github.com/writtendev/writ/engine"
 )
 
 func TestLabel_CLI_Commands(t *testing.T) {
@@ -187,77 +186,5 @@ func TestLabel_CLI_Commands(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), `label "nonexistent" not found`) {
 		t.Errorf("expected 'label \"nonexistent\" not found' in stderr, got: %s", stderr.String())
-	}
-}
-
-func TestLabel_Migrate(t *testing.T) {
-	env := setupTestCLIEnv(t)
-	setupSigningKey(t, env.repoDir)
-
-	var stdout, stderr bytes.Buffer
-	code := run(context.Background(), []string{"init", "-C", env.repoDir}, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("writ init failed with %d; stderr: %s", code, stderr.String())
-	}
-
-	commitFile(t, env.repoDir, "README.md", "# Hello", "initial commit")
-
-	store, err := openStore(env.repoDir)
-	if err != nil {
-		t.Fatalf("openStore failed: %v", err)
-	}
-
-	// Create issue directly with legacy bare string label "legacy-tag"
-	issID, err := store.Issues.Create(context.Background(), writ.NewIssue{Title: "Legacy Issue"})
-	if err != nil {
-		t.Fatalf("store.Issues.Create failed: %v", err)
-	}
-	if err := store.Issues.Label(context.Background(), issID, []string{"legacy-tag"}, nil); err != nil {
-		t.Fatalf("store.Issues.Label legacy failed: %v", err)
-	}
-	_ = store.Close()
-
-	// Verify issue has legacy-tag before migrate
-	stdout.Reset()
-	stderr.Reset()
-	code = run(context.Background(), []string{"issue", "status", "-C", env.repoDir, issID}, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("issue status failed: %s", stderr.String())
-	}
-	if !strings.Contains(stdout.String(), "legacy-tag") {
-		t.Fatalf("expected legacy-tag before migrate, got: %s", stdout.String())
-	}
-
-	// Run writ label migrate
-	stdout.Reset()
-	stderr.Reset()
-	code = run(context.Background(), []string{"label", "migrate", "-C", env.repoDir}, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("label migrate failed with %d; stderr: %s", code, stderr.String())
-	}
-	if !strings.Contains(stdout.String(), "Migrated 1 legacy label(s)") {
-		t.Fatalf("unexpected migrate output: %s", stdout.String())
-	}
-
-	// Verify label was created
-	stdout.Reset()
-	stderr.Reset()
-	code = run(context.Background(), []string{"label", "list", "-C", env.repoDir}, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("label list failed: %s", stderr.String())
-	}
-	if !strings.Contains(stdout.String(), "legacy-tag") {
-		t.Fatalf("expected legacy-tag in label list, got: %s", stdout.String())
-	}
-
-	// Verify second migrate is idempotent (0 migrated)
-	stdout.Reset()
-	stderr.Reset()
-	code = run(context.Background(), []string{"label", "migrate", "-C", env.repoDir}, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("second label migrate failed: %s", stderr.String())
-	}
-	if !strings.Contains(stdout.String(), "Migrated 0 legacy label(s)") {
-		t.Fatalf("expected 0 migrated on second run, got: %s", stdout.String())
 	}
 }

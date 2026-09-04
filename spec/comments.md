@@ -302,10 +302,6 @@ treated as unknown data, preserved in the DAG, and ignored during fold.
 - A `resolve` op updates `resolved` (and `resolved_by`) via `lww`.
 - Conforming producers MUST include `resolved_by` when `resolved: true` and
   MUST NOT include `resolved_by` when `resolved: false`.
-- Conforming readers and fold implementations (`FoldComment` / `spec.Fold`)
-  MUST continue to tolerate and fold legacy operations written without
-  `resolved_by` on `resolved: true`, or with `resolved_by` on `resolved: false`,
-  under standard LWW reduction.
 - If concurrent `resolve` and unresolve ops are authored across branches,
   deterministic LWW total order tiebreaks decide the winning resolution state.
 - In folded state, a comment object records `resolved: true/false` and

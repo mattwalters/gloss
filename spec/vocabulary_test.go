@@ -36,11 +36,6 @@ func TestVocabularyEnumsExtractedFromSchemas(t *testing.T) {
 			want: []string{"fixes", "relates", "none"},
 		},
 		{
-			name: "IssueStates",
-			got:  spec.IssueStates(),
-			want: []string{"open", "closed"},
-		},
-		{
 			name: "ProjectStatuses",
 			got:  spec.ProjectStatuses(),
 			want: []string{"planned", "active", "paused", "completed", "canceled"},

@@ -40,7 +40,6 @@ slug: "cli"
 - [`writ label list`](#writ-label-list)
 - [`writ label create`](#writ-label-create)
 - [`writ label edit`](#writ-label-edit)
-- [`writ label migrate`](#writ-label-migrate)
 - [`writ settings get`](#writ-settings-get)
 - [`writ settings set`](#writ-settings-set)
 - [`writ sync`](#writ-sync)
@@ -305,7 +304,7 @@ Create a new issue.
 - `-C <dir>`: Run as if writ was started in <dir>
 - `-title <t>`: Issue title <t> (required)
 - `-description <d>`: Issue description <d>
-- `-state <state>`: Initial issue state <state> (open or closed)
+- `-state <state>`: Initial issue state <state> (workflow-state name or ID)
 - `-priority <p>`: Issue priority <p> (urgent|high|medium|low|none or 0..4)
 - `-estimate <e>`: Issue estimate <e> (non-negative number)
 - `-position <pos>`: Issue position <pos> (fractional index)
@@ -938,32 +937,6 @@ Edit an existing label.
 ```bash
 writ label edit 01J8ABC -color "#e2b93c"
 writ label edit bug -name defect
-```
-
-### `writ label migrate`
-
-Migrate legacy bare-string labels to collaborative label objects
-
-#### Synopsis
-
-```console
-Usage: writ label migrate [-C <dir>] [--json]
-```
-
-#### Description
-
-Migrate legacy bare-string labels across issues and reviews into collaborative label objects.
-
-#### Flags
-
-- `-C string`: Run as if writ was started in <dir>
-- `-json`: Output machine-readable JSON
-
-#### Examples
-
-```bash
-writ label migrate
-writ label migrate --json
 ```
 
 ### `writ settings get`

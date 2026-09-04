@@ -555,7 +555,7 @@ var stateUpdateCmd = &command{
 
 var labelCmd = &command{
 	Name:      "label",
-	Short:     "Manage labels (list, create, edit, migrate)",
+	Short:     "Manage labels (list, create, edit)",
 	UsageLine: "Usage: writ label [-C <dir>] <subcommand> [arguments]",
 	Long:      "Manage labels.",
 	Flags: []flagSpec{
@@ -569,7 +569,6 @@ var labelCmd = &command{
 		labelListCmd,
 		labelCreateCmd,
 		labelEditCmd,
-		labelMigrateCmd,
 	},
 }
 
@@ -619,21 +618,6 @@ var labelEditCmd = &command{
 	Examples: []string{
 		`writ label edit 01J8ABC -color "#e2b93c"`,
 		`writ label edit bug -name defect`,
-	},
-}
-
-var labelMigrateCmd = &command{
-	Name:      "migrate",
-	Short:     "Migrate legacy bare-string labels to collaborative label objects",
-	UsageLine: "Usage: writ label migrate [-C <dir>] [--json]",
-	Long:      "Migrate legacy bare-string labels across issues and reviews into collaborative label objects.",
-	Flags: []flagSpec{
-		{Name: "C"},
-		{Name: "json"},
-	},
-	Examples: []string{
-		"writ label migrate",
-		"writ label migrate --json",
 	},
 }
 
@@ -1028,7 +1012,6 @@ func init() {
 		"label list":           func() *flag.FlagSet { fs, _ := newLabelListFlagSet(""); return fs },
 		"label create":         func() *flag.FlagSet { fs, _ := newLabelCreateFlagSet(""); return fs },
 		"label edit":           func() *flag.FlagSet { fs, _ := newLabelEditFlagSet(""); return fs },
-		"label migrate":        func() *flag.FlagSet { fs, _ := newLabelMigrateFlagSet(""); return fs },
 		"doc create":           func() *flag.FlagSet { fs, _ := newDocCreateFlagSet(""); return fs },
 		"doc list":             func() *flag.FlagSet { fs, _ := newDocListFlagSet(""); return fs },
 		"doc show":             func() *flag.FlagSet { fs, _ := newDocShowFlagSet(""); return fs },

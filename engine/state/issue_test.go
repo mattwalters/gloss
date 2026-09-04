@@ -141,7 +141,7 @@ func TestFoldIssueLifecycle(t *testing.T) {
 	}
 }
 
-func TestFoldIssueDefaultStateOpen(t *testing.T) {
+func TestFoldIssueDefaultStateEmpty(t *testing.T) {
 	now := time.Unix(100, 0).UTC()
 
 	createOp := codec.Op{
@@ -164,8 +164,8 @@ func TestFoldIssueDefaultStateOpen(t *testing.T) {
 		t.Fatalf("FoldIssue failed: %v", err)
 	}
 
-	if state.State != "open" {
-		t.Errorf("expected default state 'open', got %q", state.State)
+	if state.State != "" {
+		t.Errorf("expected default state '' (no state), got %q", state.State)
 	}
 }
 

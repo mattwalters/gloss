@@ -5,7 +5,6 @@
       "issue": {
         "title": "Empty Set Items Issue",
         "description": "Empty elements must not enter set-valued folds",
-        "state": "open",
         "assignees": [
           "email:alice@example.test"
         ],

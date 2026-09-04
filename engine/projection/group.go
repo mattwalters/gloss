@@ -97,31 +97,6 @@ func (d *DB) GroupIssues(by GroupKey, f IssueFilter) ([]Group, error) {
 				knownStateIssues[ws.ObjectID] = append(knownStateIssues[ws.ObjectID], iss)
 				continue
 			}
-			if strings.EqualFold(stateRef, "open") {
-				var matchedID string
-				for _, ws := range knownStates {
-					if strings.EqualFold(ws.WorkflowState.Name, "open") || ws.WorkflowState.Type == "unstarted" {
-						matchedID = ws.ObjectID
-						break
-					}
-				}
-				if matchedID != "" {
-					knownStateIssues[matchedID] = append(knownStateIssues[matchedID], iss)
-					continue
-				}
-			} else if strings.EqualFold(stateRef, "closed") {
-				var matchedID string
-				for _, ws := range knownStates {
-					if strings.EqualFold(ws.WorkflowState.Name, "closed") || ws.WorkflowState.Type == "completed" {
-						matchedID = ws.ObjectID
-						break
-					}
-				}
-				if matchedID != "" {
-					knownStateIssues[matchedID] = append(knownStateIssues[matchedID], iss)
-					continue
-				}
-			}
 
 			unknownIssues = append(unknownIssues, iss)
 		}

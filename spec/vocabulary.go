@@ -13,7 +13,6 @@ type vocabulary struct {
 	approvalVerdicts   []string
 	ciStatusStates     []string
 	linkRelations      []string
-	issueStates        []string
 	projectStatuses    []string
 	workflowStateTypes []string
 	estimateScales     []string
@@ -60,7 +59,6 @@ var vocabOnce = sync.OnceValue(func() vocabulary {
 		approvalVerdicts:   parseSchemaEnum("review-ops.schema.json", "$defs", "approval_body", "properties", "verdict", "enum"),
 		ciStatusStates:     parseSchemaEnum("review-ops.schema.json", "$defs", "ci_status_body", "properties", "state", "enum"),
 		linkRelations:      parseSchemaEnum("review-ops.schema.json", "$defs", "link_body", "properties", "relation", "enum"),
-		issueStates:        []string{"open", "closed"},
 		projectStatuses:    parseSchemaEnum("project-ops.schema.json", "$defs", "set_status_body", "properties", "status", "enum"),
 		workflowStateTypes: parseSchemaEnum("workflow-state-ops.schema.json", "$defs", "state_type", "enum"),
 		estimateScales:     parseSchemaEnum("settings-ops.schema.json", "$defs", "set_body", "properties", "estimate_scale", "enum"),
@@ -85,11 +83,6 @@ func CIStatusStates() []string {
 // LinkRelations returns the accepted link relation enum values defined in review-ops.schema.json.
 func LinkRelations() []string {
 	return slices.Clone(vocabOnce().linkRelations)
-}
-
-// IssueStates returns the accepted issue state enum values defined in issue-ops.schema.json.
-func IssueStates() []string {
-	return slices.Clone(vocabOnce().issueStates)
 }
 
 // ProjectStatuses returns the accepted project status enum values defined in project-ops.schema.json.

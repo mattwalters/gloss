@@ -32,10 +32,16 @@ workspace.
   captures the core problem statement. State, assignees, labels, and links
   arrive as their own operations, ensuring that "opened and immediately
   triaged" and "triaged later" share one uniform append pipeline and fold path.
-  Absent any `set-state` op, the folded issue state defaults to `"open"`.
+  Absent any `set-state` op, the folded issue state defaults to the empty
+  string; clients render this as "no state". Fold is pure and per-object and
+  cannot know a workspace's default unstarted state — a conforming client
+  seeding the default starter workflow states at repository initialization
+  (see [`workflow-state-ops.md`](workflow-state-ops.md) §7) and picking one
+  of them on `issue create` are what give a real repo's issues a real state
+  from birth.
 - **`set-state` is `lww`, not `lattice`:** Issues reopen; state transitions
-  (`open` $\leftrightarrow$ `closed`) are not monotone, so a join-semilattice
-  would be incorrect. Last-writer-wins in the fold's total order resolves
+  (unstarted $\leftrightarrow$ completed workflow states) are not monotone, so
+  a join-semilattice would be incorrect. Last-writer-wins in the fold's total order resolves
   concurrent state transitions deterministically. The optional `reason` field
   is a free string carrying external reasons (such as GitHub's `state_reason`:
   `"completed"`, `"not_planned"`) or human-provided explanations without
@@ -125,7 +131,7 @@ The issue family defines six operation types for `op_version: 1`:
 | `update` | `{"title"?: string, "description"?: string, "priority"?: integer, "estimate"?: number, "position"?: string}` | Metadata edits (title, description, priority, estimate, position). |
 | `set-state` | `{"state": reference, "reason"?: string, "position"?: string}` | State transitions, optional reason, and optional destination position. |
 | `assign` | `{"add"?: [person-id], "remove"?: [person-id]}` | Add or remove assignees. |
-| `label` | `{"add"?: [reference], "remove"?: [string]}` | Add or remove labels (referencing label object IDs, FC-16; remove accepts legacy strings). |
+| `label` | `{"add"?: [reference], "remove"?: [string]}` | Add or remove labels (referencing label object IDs, FC-16). |
 | `link` | `{"target": reference, "target_type"?: string, "relation": "fixes"\|"relates"\|"none"}` | Associate or retract cross-references. |
 
 ### 1. `create`
@@ -154,7 +160,7 @@ Initializes an issue object.
 - `estimate` (number, optional): Unconstrained non-negative numeric estimate (`minimum: 0`).
 - `position` (string, optional): Fractional index position string per [`spec/ordering.md`](ordering.md).
 
-Absent any subsequent `set-state` op, the folded state of an issue is `"open"`. Absent an explicit priority, the folded priority is `0` ("none").
+Absent any subsequent `set-state` op, the folded state of an issue is the empty string, which clients render as "no state". Absent an explicit priority, the folded priority is `0` ("none").
 
 ### 2. `update`
 
@@ -186,7 +192,7 @@ An empty `{}` update body is invalid.
 
 ### 3. `set-state`
 
-Transitions the issue state to reference a `workflow-state` collaborative object (or legacy string `"open"` or `"closed"`), optionally updating manual rank position in the destination column.
+Transitions the issue state to reference a `workflow-state` collaborative object, optionally updating manual rank position in the destination column.
 
 ```jsonc
 {
@@ -203,7 +209,7 @@ Transitions the issue state to reference a `workflow-state` collaborative object
 ```
 
 - `state` (reference string, required): Reference string targeting a `workflow-state`
-  collaborative object ID (per [`spec/identifiers.md`](identifiers.md)), or legacy `"open"` / `"closed"`.
+  collaborative object ID (per [`spec/identifiers.md`](identifiers.md)).
 - `reason` (string, optional): Explanation for the state change (e.g. `"completed"`,
   `"not_planned"`, or a free-form human string).
 - `position` (string, optional): Fractional index position string in the destination column per [`spec/ordering.md`](ordering.md).
@@ -245,7 +251,7 @@ evaluated. Byte-exact equality after normalisation determines element identity.
 
 ### 5. `label`
 
-Adds or removes labels on the issue. In v1, label operations reference collaborative `label` object identifiers (`spec/identifiers.md#reference`). Unknown or unfetched label references fold cleanly without rejection per `spec/forward-compatibility.md` rule `FC-16`. Historical bare-string labels fold normally under the OR-set as legacy references.
+Adds or removes labels on the issue. In v1, label operations reference collaborative `label` object identifiers (`spec/identifiers.md#reference`). Unknown or unfetched label references fold cleanly without rejection per `spec/forward-compatibility.md` rule `FC-16`.
 
 ```jsonc
 {
@@ -261,7 +267,7 @@ Adds or removes labels on the issue. In v1, label operations reference collabora
 ```
 
 - `add` (array of label references, optional): Label object identifiers or references to add.
-- `remove` (array of non-empty strings, optional): Label object identifiers, references, or legacy bare strings to remove.
+- `remove` (array of non-empty strings, optional): Label object identifiers or references to remove, matching the stored value byte-exactly.
 
 At least one of `add` or `remove` MUST be present and contain at least one item.
 An empty `{}` body or empty arrays (`"remove": []`) are invalid.
@@ -317,7 +323,7 @@ Folded issue state is `Issue{title, description, state, reason, priority, estima
 | `update` | `priority` | `lww` | Last writer wins |
 | `update` | `estimate` | `lww` | Last writer wins |
 | `update` | `position` | `lww` | Last writer wins |
-| `set-state` | `state` | `lww` | Last writer wins; default is `"open"` |
+| `set-state` | `state` | `lww` | Last writer wins |
 | `set-state` | `reason` | `lww` | Last writer wins |
 | `set-state` | `position` | `lww` | Last writer wins |
 | `assign` | `add` | `set-observed-remove` | Add-wins OR-set over normalized person identifiers (`spec/identifiers.md`) |
@@ -345,8 +351,9 @@ Folded issue state is `Issue{title, description, state, reason, priority, estima
   not conflict. A link is retracted by emitting `relation: "none"`, causing the
   link for that `target` to present as absent in materialized state while the
   operation remains preserved in the DAG.
-- **Deletion:** Issues are never deleted in v1. Status transitions such as
-  `"closed"` represent lifecycle state, not object deletion.
+- **Deletion:** Issues are never deleted in v1. Status transitions into a
+  `completed`- or `canceled`-type workflow state represent lifecycle state,
+  not object deletion.
 
 ## Forward Compatibility & Unknown Fields
 
@@ -371,7 +378,7 @@ illustrate these mappings.
 | --- | --- |
 | `title` | `create.title` / `update.title` (`lww`) |
 | `body` | `create.description` / `update.description` (`lww`) |
-| `state` (`"open"`, `"closed"`) | `set-state.state` (`"open"`, `"closed"`) (`lww`) |
+| `state` (`"open"`, `"closed"`) | `set-state.state` referencing a `workflow-state` object: `open` maps to a state of type `unstarted`, `closed` maps to a state of type `completed` (`state_reason: "not_planned"` steers to a `canceled`-type state where the workspace has one). The bridge resolves against the workspace's workflow states; a conforming client seeds the default starter set at repository initialization (see [`workflow-state-ops.md`](workflow-state-ops.md) §7), guaranteeing they exist. (`lww`) |
 | `state_reason` (`"completed"`, `"not_planned"`) | `set-state.reason` (`lww`) |
 | `assignees` (added / removed) | `assign.add` / `assign.remove` (`set-observed-remove`) |
 | `labels` (added / removed) | `label.add` / `label.remove` (`set-observed-remove`) |
@@ -412,12 +419,12 @@ A Linear `Issue` maps to an `issue` collaborative object (`object_type: "issue"`
 | --- | --- | --- | --- |
 | `title` | `create.title` / `update.title` | `lww` | Issue title. |
 | `description` | `create.description` / `update.description` | `lww` | Markdown body, with Linear-specific XML tags rewritten per §Markdown Dialect Rewriting. |
-| `state` | `set-state.state` | `lww` | Target `workflow-state` object ID (WRIT-104). For basic v1 schema compatibility (where `state` is `"open"` or `"closed"`), Linear states of type `completed` or `canceled` map to `"closed"`, and states of type `backlog`, `unstarted`, or `started` map to `"open"`. |
+| `state` | `set-state.state` | `lww` | Target `workflow-state` object ID (WRIT-104). |
 | `priority` | `priority` | `lww` | Numeric priority (WRIT-106): 0 = None, 1 = Urgent, 2 = High, 3 = Medium, 4 = Low. |
 | `estimate` | `estimate` | `lww` | Numeric estimate value (WRIT-106). Scale interpretation (Fibonacci, exponential, linear, T-shirt) is left to workspace settings and client display (WRIT-110). |
 | `sortOrder` | position string | `lww` | Fractional indexing position string per WRIT-106 and WRIT-108. |
 | `assignee` / `assignees` | `assign.add` / `assign.remove` | `set-observed-remove` | Scheme-prefixed person identifiers per §Identity Mapping. |
-| `labels` | `label.add` / `label.remove` | `set-observed-remove` | Label name strings. |
+| `labels` | `label.add` / `label.remove` | `set-observed-remove` | `label` object IDs the importer creates or resolves by name. |
 | `relations` (`blocks`, `relatedTo`, `duplicateOf`) | `link` op | `keyed-lww` | Target `link` relation: `"blocks"`, `"relates"`, `"duplicate"`. For basic v1 schema compatibility (where `relation` is constrained to `"fixes"`, `"relates"`, `"none"`), relations other than `"fixes"` MUST degrade to `"relates"`. |
 | `parent` / `sub-issues` | `link` op | `keyed-lww` | Target `link` relation: `"parent"` on child issue targeting parent issue ID. For basic v1 schema compatibility, `relation` MUST degrade to `"relates"`. |
 | `identifier` (e.g. `WRIT-93`) | `linear:<identifier>` label & description header | `set-observed-remove` / `lww` | Preserved via `linear:<identifier>` label and description provenance header per §Identifier Preservation. |

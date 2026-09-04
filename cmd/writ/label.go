@@ -29,8 +29,6 @@ func runLabel(ctx context.Context, defaultDir string, args []string, stdout, std
 		return runLabelCreate(ctx, defaultDir, args[1:], stdout, stderr)
 	case "edit", "update":
 		return runLabelEdit(ctx, defaultDir, args[1:], stdout, stderr)
-	case "migrate":
-		return runLabelMigrate(ctx, defaultDir, args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "writ label: unknown command %q\n\n", args[0])
 		renderUsage(stderr, []string{"label"}, labelCmd)
@@ -277,19 +275,6 @@ func runLabelEdit(ctx context.Context, defaultDir string, args []string, stdout,
 	return 0
 }
 
-type labelMigrateOpts struct {
-	dir      string
-	jsonMode bool
-}
-
-func newLabelMigrateFlagSet(defaultDir string) (*flag.FlagSet, *labelMigrateOpts) {
-	fs := flag.NewFlagSet("label migrate", flag.ContinueOnError)
-	opts := &labelMigrateOpts{}
-	fs.StringVar(&opts.dir, "C", defaultDir, "Run as if writ was started in <dir>")
-	fs.BoolVar(&opts.jsonMode, "json", false, "Output machine-readable JSON")
-	return fs, opts
-}
-
 func isCanonicalHexID(s string) bool {
 	if len(s) != 32 {
 		return false
@@ -306,160 +291,6 @@ func isCanonicalHexID(s string) bool {
 func isQualifiedID(s string) bool {
 	parts := strings.Split(s, "#")
 	return len(parts) == 2 && isCanonicalHexID(parts[1])
-}
-
-func isLegacyBareLabel(s string) bool {
-	return !isCanonicalHexID(s) && !isQualifiedID(s)
-}
-
-func runLabelMigrate(ctx context.Context, defaultDir string, args []string, stdout, stderr io.Writer) int {
-	fs, opts := newLabelMigrateFlagSet(defaultDir)
-	fs.SetOutput(stderr)
-
-	posArgs, err := parseArgs(fs, args)
-	if err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return 0
-		}
-		return 2
-	}
-
-	if len(posArgs) > 0 {
-		fmt.Fprintf(stderr, "writ label migrate: unexpected arguments: %s\n", strings.Join(posArgs, " "))
-		fs.Usage()
-		return 2
-	}
-
-	targetDir := opts.dir
-	if targetDir == "" {
-		targetDir = "."
-	}
-
-	store, err := openStore(targetDir)
-	if err != nil {
-		return renderErr(stderr, err)
-	}
-	defer store.Close()
-
-	existingLabels, err := store.Query.Labels(writ.LabelFilter{})
-	if err != nil {
-		return renderErr(stderr, err)
-	}
-
-	existingByName := make(map[string]string)
-	existingByID := make(map[string]bool)
-	for _, l := range existingLabels {
-		existingByName[strings.ToLower(l.Label.Name)] = l.ObjectID
-		existingByID[l.ObjectID] = true
-	}
-
-	issues, err := store.Query.Issues(writ.IssueFilter{})
-	if err != nil {
-		return renderErr(stderr, err)
-	}
-
-	reviews, err := store.Query.Reviews(writ.ReviewFilter{})
-	if err != nil {
-		return renderErr(stderr, err)
-	}
-
-	// 1. Collect distinct bare strings across all issues and reviews
-	distinctBare := make(map[string]string) // lower -> canonical case
-	for _, iss := range issues {
-		for _, lbl := range iss.Issue.Labels {
-			if isLegacyBareLabel(lbl) && !existingByID[lbl] {
-				low := strings.ToLower(lbl)
-				if _, ok := distinctBare[low]; !ok {
-					distinctBare[low] = lbl
-				}
-			}
-		}
-	}
-	for _, rev := range reviews {
-		for _, lbl := range rev.Review.Labels {
-			if isLegacyBareLabel(lbl) && !existingByID[lbl] {
-				low := strings.ToLower(lbl)
-				if _, ok := distinctBare[low]; !ok {
-					distinctBare[low] = lbl
-				}
-			}
-		}
-	}
-
-	// 2. Create missing label objects
-	labelsCreated := 0
-	for low, rawName := range distinctBare {
-		if _, ok := existingByName[low]; !ok {
-			id, err := store.Labels.Create(ctx, writ.NewLabel{Name: rawName})
-			if err != nil {
-				return renderErr(stderr, fmt.Errorf("writ label migrate: create label %q: %w", rawName, err))
-			}
-			existingByName[low] = id
-			existingByID[id] = true
-			labelsCreated++
-		}
-	}
-
-	// 3. Migrate issues
-	migratedIssues := 0
-	for _, iss := range issues {
-		var toAdd []string
-		var toRemove []string
-		for _, lbl := range iss.Issue.Labels {
-			if isLegacyBareLabel(lbl) && !existingByID[lbl] {
-				targetID := existingByName[strings.ToLower(lbl)]
-				if targetID != "" {
-					toRemove = append(toRemove, lbl)
-					toAdd = append(toAdd, targetID)
-				}
-			}
-		}
-		if len(toRemove) > 0 {
-			if err := store.Issues.Label(ctx, iss.ObjectID, toAdd, toRemove); err != nil {
-				return renderErr(stderr, fmt.Errorf("writ label migrate: update issue %s: %w", iss.ObjectID, err))
-			}
-			migratedIssues++
-		}
-	}
-
-	// 4. Migrate reviews
-	migratedReviews := 0
-	for _, rev := range reviews {
-		var toAdd []string
-		var toRemove []string
-		for _, lbl := range rev.Review.Labels {
-			if isLegacyBareLabel(lbl) && !existingByID[lbl] {
-				targetID := existingByName[strings.ToLower(lbl)]
-				if targetID != "" {
-					toRemove = append(toRemove, lbl)
-					toAdd = append(toAdd, targetID)
-				}
-			}
-		}
-		if len(toRemove) > 0 {
-			if err := store.Reviews.Label(ctx, rev.ObjectID, toAdd, toRemove); err != nil {
-				return renderErr(stderr, fmt.Errorf("writ label migrate: update review %s: %w", rev.ObjectID, err))
-			}
-			migratedReviews++
-		}
-	}
-
-	if opts.jsonMode {
-		payload := map[string]any{
-			"labels_created":   labelsCreated,
-			"issues_migrated":  migratedIssues,
-			"reviews_migrated": migratedReviews,
-		}
-		if err := emitJSON(stdout, "label.migrate", payload); err != nil {
-			fmt.Fprintf(stderr, "writ label migrate: marshal json: %v\n", err)
-			return 1
-		}
-		return 0
-	}
-
-	fmt.Fprintf(stdout, "Migrated %d legacy label(s) across %d issue(s) and %d review(s)\n",
-		labelsCreated, migratedIssues, migratedReviews)
-	return 0
 }
 
 func resolveLabelID(ctx context.Context, store *writ.Store, target string) (string, error) {
@@ -516,7 +347,7 @@ func resolveLabelsForModification(ctx context.Context, store *writ.Store, curren
 			resolvedRemove = append(resolvedRemove, id)
 			removedAny = true
 		}
-		// Also if current object carries r verbatim (e.g. legacy string), remove that too
+		// Also if current object carries r verbatim (e.g. an unresolvable reference), remove that too
 		foundVerbatim := false
 		for _, cur := range currentLabels {
 			if cur == r {

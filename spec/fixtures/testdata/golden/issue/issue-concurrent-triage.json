@@ -5,7 +5,6 @@
       "issue": {
         "title": "Concurrent Triage Issue",
         "description": "Testing concurrent triage operations",
-        "state": "open",
         "assignees": [
           "user:alice",
           "user:charlie"

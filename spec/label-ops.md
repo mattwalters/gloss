@@ -166,20 +166,3 @@ locally:
 3. When the defining `label` object operations arrive in a subsequent fetch,
    the reference resolves and automatically renders the label's defined display
    name and color.
-
----
-
-## 6. Migration from Bare Strings
-
-In early versions of Writ, labels were stored as bare strings on issues and
-reviews. To maintain backwards compatibility:
-
-1. **Projection Tolerance:** Historical ops containing bare strings fold
-   normally under the OR-set as legacy references. Projections render the raw
-   string when no matching `label` collaborative object exists.
-2. **Migration Path:** The `writ label migrate` command scans distinct
-   bare-string labels across issues and reviews, creates a corresponding `label`
-   collaborative object for each distinct string, and appends a `label` op on
-   each referencing object with `remove: ["<bare-string>"], add: ["<label-id>"]`.
-   This cleanly transitions history to first-class collaborative object
-   references via standard `set-observed-remove` fold semantics.

@@ -115,10 +115,11 @@ func TestQueryFullSuite(t *testing.T) {
 		t.Errorf("expected ErrNotFound for missing review, got: %v", err)
 	}
 
-	// Test Query.Issues
-	openIssues, err := s.Query.Issues(writ.IssueFilter{State: []string{"open"}})
+	// Test Query.Issues: i1 never had a set-state op, so it folds with the
+	// empty default state (no legacy "open" blessing).
+	openIssues, err := s.Query.Issues(writ.IssueFilter{State: []string{""}})
 	if err != nil {
-		t.Fatalf("Query.Issues open: %v", err)
+		t.Fatalf("Query.Issues empty state: %v", err)
 	}
 	if len(openIssues) != 1 || openIssues[0].ObjectID != i1 {
 		t.Errorf("expected issue i1, got %+v", openIssues)

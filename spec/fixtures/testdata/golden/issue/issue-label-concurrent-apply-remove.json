@@ -4,7 +4,6 @@
       "object_id": "iss-lbl-conc",
       "issue": {
         "title": "Vulnerability in auth",
-        "state": "open",
         "labels": [
           "lbl-sec"
         ]

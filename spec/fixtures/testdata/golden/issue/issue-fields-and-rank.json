@@ -5,7 +5,6 @@
       "issue": {
         "title": "Alice Issue",
         "description": "Testing priority, estimate, and manual rank",
-        "state": "open",
         "priority": 2,
         "estimate": 5,
         "position": "V"
@@ -16,7 +15,6 @@
       "issue": {
         "title": "Bob Issue Renamed",
         "description": "Concurrent rank insertion at same slot",
-        "state": "open",
         "priority": 4,
         "estimate": 10,
         "position": "V"

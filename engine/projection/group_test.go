@@ -130,6 +130,63 @@ func TestGroupIssuesInvalidKey(t *testing.T) {
 	}
 }
 
+// TestGroupIssuesByStateUnresolvedStateLandsUnknown proves FC-16 tolerance at
+// the grouping layer: an issue whose state reference matches no known
+// workflow-state (by object ID or by name) falls through to the "Unknown"
+// group. It must never be silently coerced into a real workflow state, since
+// this ticket (WRIT-183) removes the "open"/"closed" bridging that used to
+// do exactly that.
+func TestGroupIssuesByStateUnresolvedStateLandsUnknown(t *testing.T) {
+	db, err := projection.Open(":memory:")
+	if err != nil {
+		t.Fatalf("Open(:memory:): %v", err)
+	}
+	defer db.Close()
+
+	rawDB := db.DB()
+
+	insertObject(t, rawDB, "ws-todo", "workflow-state", 1, "op-ws-1", "A", "a@example.com", 900, 900)
+	execSQL(t, rawDB, "INSERT INTO workflow_states (object_id, name, type, position, color, description, op_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		"ws-todo", "Todo", "unstarted", "V", "", "", "op-ws-1")
+	insertObject(t, rawDB, "ws-done", "workflow-state", 1, "op-ws-2", "A", "a@example.com", 910, 910)
+	execSQL(t, rawDB, "INSERT INTO workflow_states (object_id, name, type, position, color, description, op_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		"ws-done", "Done", "completed", "s", "", "", "op-ws-2")
+
+	insertObject(t, rawDB, "iss-known", "issue", 1, "op-1", "A", "a@example.com", 1000, 1000)
+	execSQL(t, rawDB, "INSERT INTO issues (object_id, title, description, state, reason) VALUES (?, ?, ?, ?, ?)",
+		"iss-known", "Known state issue", "", "ws-todo", "")
+
+	insertObject(t, rawDB, "iss-unresolved", "issue", 1, "op-2", "A", "a@example.com", 1010, 1010)
+	execSQL(t, rawDB, "INSERT INTO issues (object_id, title, description, state, reason) VALUES (?, ?, ?, ?, ?)",
+		"iss-unresolved", "Unresolved state issue", "", "not-a-real-state", "")
+
+	groups, err := db.GroupIssues(projection.GroupByState, projection.IssueFilter{})
+	if err != nil {
+		t.Fatalf("GroupIssues(GroupByState): %v", err)
+	}
+
+	if len(groups) != 2 {
+		t.Fatalf("expected 2 groups (Todo, Unknown), got %d: %+v", len(groups), groups)
+	}
+
+	var todoGroup, unknownGroup *projection.Group
+	for i := range groups {
+		switch groups[i].Key {
+		case "Todo":
+			todoGroup = &groups[i]
+		case "Unknown":
+			unknownGroup = &groups[i]
+		}
+	}
+
+	if todoGroup == nil || todoGroup.Count != 1 || todoGroup.Issues[0].ObjectID != "iss-known" {
+		t.Errorf("expected Todo group with iss-known, got %+v", todoGroup)
+	}
+	if unknownGroup == nil || unknownGroup.Count != 1 || unknownGroup.Issues[0].ObjectID != "iss-unresolved" {
+		t.Errorf("expected Unknown group with iss-unresolved (not coerced into a real state), got %+v", unknownGroup)
+	}
+}
+
 func TestGroupIssuesByPriority(t *testing.T) {
 	db, err := projection.Open(":memory:")
 	if err != nil {

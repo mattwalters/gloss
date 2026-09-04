@@ -521,24 +521,9 @@ func projectIssue(generic writ.ObjectState, ops []codec.Op, _ string) state.Issu
 		unknownMap[u.Commit] = true
 	}
 
-	hasKnownOp := false
-	for _, o := range ops {
-		if unknownMap[o.ID] {
-			continue
-		}
-		if o.ObjectType == "issue" && o.OpVersion == 1 {
-			switch o.OpType {
-			case "create", "update", "set-state", "assign", "label", "link":
-				hasKnownOp = true
-			}
-		}
-	}
-
 	var st string
 	if stateVal, ok := generic.State["state"]; ok {
 		st = stringVal(stateVal)
-	} else if hasKnownOp {
-		st = "open"
 	}
 
 	var priority int
